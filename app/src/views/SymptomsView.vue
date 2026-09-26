@@ -14,6 +14,7 @@ import { errorText, normalizeForSearch } from '../utils/format'
 
 // 按症状修：先搜症状，再逐步检查。查出问题（建议处理、需要人工）的那一步给出对应的修复；
 // 没查清楚（没查出来、出错）的那一步不急着修，先让用户再查一次。
+// 正常的那一步也可能带一句提示和按钮（例如代理软件开着：「网页打不开的话，先把它退出」），照样显示。
 
 // ── 搜索 ──
 
@@ -197,6 +198,27 @@ const stepViews = computed(() =>
 const fixCount = computed(() => stepViews.value.filter((v) => v.kind === 'fix').length)
 const unclearCount = computed(() => stepViews.value.filter((v) => v.kind === 'unclear').length)
 
+/** 正常（或不适用）的那一步带的提示：结果里的 next 和按钮 */
+function hasHint(v: { kind: string | null; result: CheckResult | null }): boolean {
+  return v.kind === null && v.result !== null && (v.result.next !== null || hintLinks(v.result).length > 0)
+}
+
+/** 正常那一步的按钮：去掉指回这个症状自己的「去修」 */
+function hintLinks(r: CheckResult): string[] {
+  const self = detail.value ? `symptom:${detail.value.id}` : null
+  return r.links.filter((l) => l !== self)
+}
+
+/** 都正常时的那句话：只查了一步时不说「几项」；有提示时让用户看看提示 */
+const allOkText = computed(() => {
+  const checked = stepViews.value.filter((v) => v.result !== null)
+  const hints = stepViews.value.some(hasHint)
+  const first = checked.length === 1 ? '查过了，这一项正常。' : '查过的几项都正常。'
+  const guide = detail.value?.guide ? '照着下面的手动步骤试试' : ''
+  if (hints) return `${first}问题还在的话，先看看下面的提示${guide ? `，再${guide}` : ''}。`
+  return guide ? `${first}问题还在的话，${guide}。` : first
+})
+
 /** 每一步的 id：再查一次以后按钮没了，焦点交给这一步 */
 const stepIdBase = useId()
 function stepId(index: number): string {
@@ -322,9 +344,7 @@ watch(
           </div>
 
           <p v-if="checkedOnce && !checking" class="muted" role="status">
-            <template v-if="fixCount === 0 && unclearCount === 0">
-              查过的几项都正常。{{ detail.guide ? '问题还在的话，照着下面的手动步骤试试。' : '' }}
-            </template>
+            <template v-if="fixCount === 0 && unclearCount === 0">{{ allOkText }}</template>
             <template v-else>
               查完了。<template v-if="fixCount">亮橙灯、红灯的那几步，下面有可以试的办法。</template>
               <template v-if="unclearCount">灰灯的那几步没查清楚，可以再查一次。</template>
@@ -378,6 +398,12 @@ watch(
                   <p v-else class="muted small">
                     这一步小药箱没有自动修复的办法{{ detail.guide ? '，可以看看下面的手动步骤' : '' }}。
                   </p>
+                </div>
+
+                <!-- 正常（或不适用），但结果里有提示：照样显示，不列修复办法 -->
+                <div v-else-if="v.result && hasHint(v)" class="step-fix">
+                  <p v-if="v.result.next" class="small"><span class="muted">提示：</span>{{ v.result.next }}</p>
+                  <ResultLinks :links="hintLinks(v.result)" @preview="(featureId) => openPreview(featureId, v.index)" />
                 </div>
 
                 <!-- 没查清楚：不给修复，先再查一次 -->

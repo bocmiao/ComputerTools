@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onDeactivated } from 'vue'
 import type { ToolSummary } from '../api/types'
 import { toolLinkLabel } from '../labels'
 import { findFeature, findSymptom, findTool, openSymptom, openTool } from '../state'
@@ -14,6 +14,7 @@ import BusySpinner from './BusySpinner.vue'
 // - tool:<id>     打开系统工具、「设置」页面的：直接打开，在下面说一句打开了没有；
 //                 看信息、一键处理的：跳到「小工具」页并定位到这个小工具
 // 目录里没有的小工具不显示按钮（例如数据比界面新）。
+// 打开以后的那句话，换到别的页面再回来时就不显示了（和小工具页一样）。
 
 const props = withDefaults(defineProps<{ links: string[]; kinds?: LinkKind[] }>(), {
   kinds: () => ['symptom', 'feature', 'tool'],
@@ -55,6 +56,8 @@ function featureButtonText(id: string): string {
 // ── 打开系统工具 ──
 
 const opener = useToolOpen()
+// 「已经打开了」过一会儿就不是真的了：换到别的页面时清掉（页面在 KeepAlive 里，回来时卡片还在）
+onDeactivated(opener.reset)
 const openTools = computed(() => tools.value.filter((t) => t.group === 'open'))
 
 /** 打开以后的那句话。同一张卡片里有好几个能打开的工具时，前面带上是哪一个 */

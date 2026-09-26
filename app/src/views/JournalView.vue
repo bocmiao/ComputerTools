@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, reactive, ref } from 'vue'
 import { journalList, journalUndo, journalUndoSession } from '../api'
-import type { JournalEntryView, JournalSession, UndoResult } from '../api/types'
+import type { JournalEntryView, JournalSession, Reboot, UndoResult } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import ExplorerRestart from '../components/ExplorerRestart.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import PathText from '../components/PathText.vue'
 import TagPill from '../components/TagPill.vue'
+import { rebootLabel, rebootWeight } from '../labels'
 import { findFeature, markHealthStale } from '../state'
 import { rememberFocus, restoreFocus, vAutofocus } from '../utils/dialogs'
 import { errorText, formatClock, formatDateTime, formatDay } from '../utils/format'
 
 // 修改日志：每一步修改都记在这里，逐条或整次恢复原状。
+// 恢复以后和执行以后一样，有的要重启资源管理器、注销或重启才看得到变化：照 UndoResult.reboot 说一句，
+// 不然用户看不到变化，会以为没恢复成。
 
 const sessions = ref<JournalSession[]>([])
 const loaded = ref(false)
@@ -98,7 +102,7 @@ function sessionTitle(s: JournalSession): string {
 const busyEntry = ref<string | null>(null)
 const busySession = ref<string | null>(null)
 const busy = computed(() => busyEntry.value !== null || busySession.value !== null)
-const notices = reactive<Record<string, { ok: boolean; text: string }>>({})
+const notices = reactive<Record<string, { ok: boolean; text: string; reboot: Reboot }>>({})
 
 /** 撤销时发现被改过：问一下用户 */
 const drift = ref<{ entry: JournalEntryView; message: string } | null>(null)
@@ -121,10 +125,10 @@ async function undoEntry(entry: JournalEntryView, force: boolean): Promise<void>
     }
     if (r.ok) markHealthStale()
     notices[entry.id] = r.ok
-      ? { ok: true, text: r.message || '已经恢复原状。' }
-      : { ok: false, text: [r.message, r.error].filter(Boolean).join(' ') || '没能恢复。' }
+      ? { ok: true, text: r.message || '已经恢复原状。', reboot: r.reboot ?? 'none' }
+      : { ok: false, text: [r.message, r.error].filter(Boolean).join(' ') || '没能恢复。', reboot: 'none' }
   } catch (e) {
-    notices[entry.id] = { ok: false, text: `没能恢复：${errorText(e)}` }
+    notices[entry.id] = { ok: false, text: `没能恢复：${errorText(e)}`, reboot: 'none' }
   } finally {
     // 读完再放开按钮，免得在旧列表上又点一次
     if (reload) await load()
@@ -180,6 +184,16 @@ function resultLabel(r: UndoResult): { text: string; tone: 'ok' | 'advice' | 'ma
 }
 
 const driftSkipped = computed(() => sessionResult.value?.results.some((r) => r.drift) ?? false)
+
+/** 整次撤销以后最「重」的要求，只说一次（没恢复成的，后端给的都是 none） */
+const sessionReboot = computed<Reboot>(() => {
+  let strongest: Reboot = 'none'
+  for (const r of sessionResult.value?.results ?? []) {
+    const need = r.ok ? (r.reboot ?? 'none') : 'none'
+    if (rebootWeight[need] > rebootWeight[strongest]) strongest = need
+  }
+  return strongest
+})
 </script>
 
 <template>
@@ -255,14 +269,16 @@ const driftSkipped = computed(() => sessionResult.value?.results.some((r) => r.d
             </p>
             <p v-else-if="!e.ok && !e.pending && e.undone" class="small muted">没改成的部分已经自动退回原样。</p>
             <p v-if="noUndo" class="small muted">{{ noUndo }}</p>
-            <p
-              v-if="notices[e.id]"
-              class="small"
-              :class="notices[e.id]?.ok ? 'success-text' : 'danger-text'"
-              role="status"
-            >
-              {{ notices[e.id]?.text }}
-            </p>
+            <div v-if="notices[e.id]" role="status">
+              <p class="small" :class="notices[e.id]?.ok ? 'success-text' : 'danger-text'">
+                {{ notices[e.id]?.text }}
+              </p>
+              <p v-if="notices[e.id]?.ok && notices[e.id]?.reboot !== 'none'" class="small">
+                <strong>{{ rebootLabel[notices[e.id]?.reboot ?? 'none'] }}</strong>，之后才能看到效果。
+              </p>
+            </div>
+            <!-- 只是重启资源管理器的话，直接给按钮（放在 role=status 外面：按钮和它的结果自己会读） -->
+            <ExplorerRestart v-if="notices[e.id]?.ok && notices[e.id]?.reboot === 'explorer'" />
           </div>
 
           <div v-if="e.canUndo" class="entry-side">
@@ -336,6 +352,11 @@ const driftSkipped = computed(() => sessionResult.value?.results.some((r) => r.d
       </div>
       <p v-else-if="sessionResult.results.length === 0">这次的修改都已经恢复过了，没有需要撤销的。</p>
       <template v-else>
+        <div v-if="sessionReboot !== 'none'" class="session-reboot">
+          <p><strong>{{ rebootLabel[sessionReboot] }}</strong>，之后才能看到全部效果。</p>
+          <!-- 最重的要求只是重启资源管理器时，直接给按钮（要注销、重启的话，那时资源管理器会跟着重开） -->
+          <ExplorerRestart v-if="sessionReboot === 'explorer'" />
+        </div>
         <ol class="results">
           <li v-for="r in sessionResult.results" :key="r.entryId" class="result-row">
             <TagPill :tone="resultLabel(r).tone" dot>{{ resultLabel(r).text }}</TagPill>
@@ -506,6 +527,12 @@ const driftSkipped = computed(() => sessionResult.value?.results.some((r) => r.d
 
 .result-title {
   font-weight: 600;
+}
+
+.session-reboot {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--color-surface-2);
 }
 
 /* 整次撤销的确认框：要恢复哪些项 */

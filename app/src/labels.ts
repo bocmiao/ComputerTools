@@ -157,7 +157,10 @@ export const settingsCategories = [
 
 // ── 小工具 ──
 
-/** 小工具结果（ToolResult.status）的配色；小工具的 na 也显示出来（例如「这台电脑没有无线网卡」），用灰色 */
+/**
+ * 小工具结果（ToolResult.status）的配色。小工具的结果不管是什么都显示出来，na 也不藏，用灰色。
+ * （目前目录里的小工具都不用 na：像「这台电脑没有无线网卡」这样查不了的情况是 ok，由结论那句话说明原因。）
+ */
 export const toolStatusTone: Record<Status, Tone> = {
   ok: 'ok',
   advice: 'advice',

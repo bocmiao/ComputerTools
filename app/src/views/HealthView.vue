@@ -11,6 +11,8 @@ import { catalog, health } from '../state'
 import { errorText } from '../utils/format'
 
 // 体检：只读，不改任何东西。不打分，不说「发现 N 个问题」；没问题就说一切正常。
+// 「没查出来」不等于有问题（例如硬盘接在 RAID 控制器上，读不到健康信息）：单独放一组，
+// 没有要处理的项目时照样说一切正常，只是补一句有几项没查出来。
 // 体检以后在别的页面改过或撤销过设置，结果就可能过期了：提示一下，给「重新体检」。
 
 const PROFILE_ID = 'healthcheck'
@@ -41,8 +43,11 @@ const shown = computed<ShownResult[]>(() =>
     .sort((a, b) => statusOrder[a.r.status] - statusOrder[b.r.status] || a.i - b.i)
     .map((x) => x.r),
 )
-const attention = computed(() => shown.value.filter((r) => r.status !== 'ok'))
+/** 需要留意的：需要人工、建议处理 */
+const attention = computed(() => shown.value.filter((r) => r.status === 'manual' || r.status === 'advice'))
+const unknown = computed(() => shown.value.filter((r) => r.status === 'unknown'))
 const normal = computed(() => shown.value.filter((r) => r.status === 'ok'))
+/** 没有要处理的项目（没查出来的不算） */
 const allOk = computed(() => results.value !== null && attention.value.length === 0)
 
 function stopTimer(): void {
@@ -139,8 +144,13 @@ onBeforeUnmount(stopTimer)
         <div class="all-ok">
           <span class="all-ok-icon"><AppIcon name="check" :size="30" /></span>
           <div>
-            <p class="all-ok-title">一切正常</p>
-            <p class="muted">查了 {{ shown.length }} 项，都没有问题，平时照常用就好。</p>
+            <p class="all-ok-title">
+              一切正常<template v-if="unknown.length">（有 {{ unknown.length }} 项没查出来）</template>
+            </p>
+            <p v-if="unknown.length" class="muted">
+              查了 {{ shown.length }} 项，没有发现要处理的问题，平时照常用就好。没查出来的不一定有毛病，放在下面了，想弄清楚可以展开看看。
+            </p>
+            <p v-else class="muted">查了 {{ shown.length }} 项，都没有问题，平时照常用就好。</p>
           </div>
         </div>
         <button type="button" class="btn btn-secondary" @click="start">重新体检</button>
@@ -149,7 +159,9 @@ onBeforeUnmount(stopTimer)
       <template v-else>
         <div class="summary">
           <p class="summary-title">体检做完了</p>
-          <p class="muted">需要留意的排在前面，正常的放在后面。修不修由你决定，看不懂的就跳过。</p>
+          <p class="muted">
+            需要留意的排在前面，{{ unknown.length ? '然后是没查出来的，正常的放在最后' : '正常的放在后面' }}。修不修由你决定，看不懂的就跳过。
+          </p>
         </div>
         <button type="button" class="btn btn-secondary" @click="start">重新体检</button>
       </template>
@@ -176,8 +188,18 @@ onBeforeUnmount(stopTimer)
         />
       </section>
 
+      <section v-if="unknown.length" class="group" aria-labelledby="health-unknown-title">
+        <h2 id="health-unknown-title" class="group-title">这些没查出来</h2>
+        <CheckResultCard
+          v-for="r in unknown"
+          :key="r.id"
+          :result="r"
+          @preview="(featureId) => openPreview(featureId, r.id)"
+        />
+      </section>
+
       <section v-if="normal.length" class="group" aria-labelledby="health-normal-title">
-        <h2 v-if="attention.length" id="health-normal-title" class="group-title">这些都正常</h2>
+        <h2 v-if="attention.length || unknown.length" id="health-normal-title" class="group-title">这些都正常</h2>
         <h2 v-else id="health-normal-title" class="visually-hidden">检查过的项目</h2>
         <CheckResultCard
           v-for="r in normal"

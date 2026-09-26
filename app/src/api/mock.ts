@@ -12,6 +12,9 @@
  *   ?win10      这台电脑是 Win10（只有 Win11 能用的功能会标成「这台电脑用不了」）
  *   ?openfail   「打开系统工具」「打开设置里的页面」都打不开（像精简系统那样，工具被删掉了）
  *   ?toolfail   「看信息」「一键处理」的小工具命令本身出错（reject 一个字符串）
+ *   ?explorerfail  「重启资源管理器」关掉以后没有自己重新打开（结果带「下一步」和「打开任务管理器」按钮）
+ *   ?raid       硬盘接在 RAID 控制器上，「硬盘健康」没查出来（和 ?allok 一起用：一切正常，但有一项没查出来）
+ *   ?proxyalive 系统代理指向本机一个正在运行的代理软件：「代理设置」正常，但带一句「下一步」
  *
  * 默认场景里也有演示用的情况：
  *   - 「关闭任务栏上的资讯和兴趣（Win10）」在这台 Win11 上用不了
@@ -50,6 +53,9 @@ const DEMO_NOT_ADMIN = params.has('notadmin')
 const DEMO_WIN10 = params.has('win10')
 const DEMO_OPEN_FAIL = params.has('openfail')
 const DEMO_TOOL_FAIL = params.has('toolfail')
+const DEMO_EXPLORER_FAIL = params.has('explorerfail')
+const DEMO_RAID = params.has('raid')
+const DEMO_PROXY_ALIVE = params.has('proxyalive')
 
 // ─────────────────────────── 辅助函数 ───────────────────────────
 
@@ -180,12 +186,20 @@ type FeatureInput = Partial<Omit<FeatureSummary, 'applicable' | 'notApplicableRe
   Pick<FeatureSummary, 'id' | 'title' | 'description' | 'category'>
 
 /** 这台示例电脑用不了的原因（说法和引擎一样）；能用时为 null */
+/** Win11 的第一个版本号 */
+const WIN11_BUILD = 22000
+
 function notApplicableReason(minBuild?: number, maxBuild?: number): string | null {
+  // 说法和引擎一样：最常见的「只有 Win11 有」「只有 Win10 有」说人话，其余的才报版本号
   if (minBuild !== undefined && SYSTEM.build < minBuild) {
-    return `需要系统版本号 ${minBuild} 或更新（这台是 ${SYSTEM.build}）`
+    return minBuild === WIN11_BUILD && SYSTEM.build < WIN11_BUILD
+      ? '只适用于 Windows 11，这台电脑装的是 Windows 10'
+      : `要先把系统更新到版本号 ${minBuild} 或更新（这台是 ${SYSTEM.build}）`
   }
   if (maxBuild !== undefined && SYSTEM.build > maxBuild) {
-    return `只适用于版本号 ${maxBuild} 及以前的系统（这台是 ${SYSTEM.build}）`
+    return maxBuild < WIN11_BUILD && SYSTEM.build >= WIN11_BUILD
+      ? '只适用于 Windows 10，这台电脑装的是 Windows 11'
+      : `只适用于版本号 ${maxBuild} 及以前的系统（这台是 ${SYSTEM.build}）`
   }
   return null
 }
@@ -707,6 +721,16 @@ const CHECKS: Record<string, MockCheck> = {
   'network.proxy-dead': {
     title: '代理设置',
     evaluate: () => {
+      if (DEMO_PROXY_ALIVE) {
+        return {
+          status: 'ok',
+          resultCode: 'alive',
+          message:
+            '系统代理指向本机 127.0.0.1:7890，那里有程序在运行（一般是代理软件或加速器）。这只说明软件开着，不保证一定能上网。',
+          next: '如果网页打不开，可以先把这个代理软件或加速器正常退出，再试试。',
+          facts: { proxy_enabled: true, proxy_server: '127.0.0.1:7890', listening: true },
+        }
+      }
       if (DEMO_ALL_OK || valueOf(T.proxyEnable) === 'DWORD 0') {
         return { status: 'ok', message: '没有设置代理，浏览器直接上网。', facts: { proxy_enabled: false } }
       }
@@ -820,6 +844,15 @@ const CHECKS: Record<string, MockCheck> = {
   'hardware.disk-health': {
     title: '硬盘健康',
     evaluate: () => {
+      if (DEMO_RAID) {
+        return {
+          status: 'unknown',
+          resultCode: null,
+          message: '硬盘接在 RAID（磁盘阵列）控制器上，系统读不到它的健康信息，小药箱没法判断。',
+          next: '这不代表硬盘有问题。想确认的话，可以请懂哥用品牌自带的管理软件看看。',
+          facts: { bus_type: 'RAID' },
+        }
+      }
       if (DEMO_ALL_OK) {
         return {
           status: 'ok',
@@ -871,15 +904,18 @@ const CHECKS: Record<string, MockCheck> = {
   },
   'security.bitlocker': {
     title: 'BitLocker 加密',
+    // 说法和 catalog/checks/security/bitlocker-status.yaml 一样：开着加密只是说明情况，不算要处理（计划书原则 7）
     evaluate: () => {
-      if (DEMO_ALL_OK) return { status: 'ok', message: '系统盘没有加密。', facts: { protection: 'off' } }
+      if (DEMO_ALL_OK) {
+        return { status: 'ok', resultCode: 'off', message: '硬盘没有开启 BitLocker 加密，重装系统时不需要恢复密钥。', facts: { protection: 'off' } }
+      }
       return {
-        status: 'advice',
-        resultCode: 'on-key-unknown',
-        message: '系统盘开启了 BitLocker 设备加密。以后重装系统或换主板时，要用恢复密钥才能打开硬盘。',
-        fixer: 'user',
-        next: '在手机或别的电脑上登录 account.microsoft.com/devices/recoverykey，找到这台电脑的恢复密钥，抄下来放在安全的地方。',
-        facts: { protection: 'on', method: 'XTS-AES 128' },
+        status: 'ok',
+        resultCode: 'on',
+        message:
+          '硬盘分区 C: 已开启 BitLocker 加密，数据更安全，平时用电脑不受影响。只是重装系统、换主板或刷 BIOS 以后，开机可能要求输入 48 位恢复密钥，输不出来就打不开硬盘。',
+        next: '现在不用做什么，也不用关掉加密。有空的时候确认一下恢复密钥已经备份：用手机或电脑打开 aka.ms/myrecoverykey，登录你的微软账户就能看到（家庭版的恢复密钥一般就存在当初登录这台电脑的那个微软账户里）。专业版还可以在开始菜单搜索「管理 BitLocker」，点「备份恢复密钥」存到 U 盘或打印出来。家庭版在微软账户里找不到的话，请懂哥帮忙用管理员命令查出恢复密钥抄下来。重装系统、换主板或刷 BIOS 之前，一定要先备份好恢复密钥。',
+        facts: { protection: 'on', encrypted_volumes: 'C:', method: 'XTS-AES 128' },
       }
     },
   },
@@ -1249,19 +1285,27 @@ function driftResult(entry: JournalEntryView, skipped: boolean): UndoResult {
       ? `「${entry.featureTitle}」后来被改过（现在是 ${now}，不是小药箱改成的 ${entry.after}），已跳过。`
       : `现在的值是 ${now}，不是小药箱当初改成的 ${entry.after}。`,
     error: null,
+    reboot: 'none',
   }
 }
 
 function undoOne(entry: JournalEntryView, force: boolean, inSession: boolean): UndoResult {
   if (entry.undone) {
-    return { entryId: entry.id, ok: false, drift: false, message: '这一项已经恢复过了。', error: null }
+    return { entryId: entry.id, ok: false, drift: false, message: '这一项已经恢复过了。', error: null, reboot: 'none' }
   }
   if (!canUndo(entry)) {
     const f = FEATURES.get(entry.feature)
     if (f && !f.summary.reversible) {
-      return { entryId: entry.id, ok: false, drift: false, message: '这一项不能撤销。', error: f.summary.irreversibleReason }
+      return {
+        entryId: entry.id,
+        ok: false,
+        drift: false,
+        message: '这一项不能撤销。',
+        error: f.summary.irreversibleReason,
+        reboot: 'none',
+      }
     }
-    return { entryId: entry.id, ok: false, drift: false, message: '这一项当初就没有改成，不需要恢复。', error: null }
+    return { entryId: entry.id, ok: false, drift: false, message: '这一项当初就没有改成，不需要恢复。', error: null, reboot: 'none' }
   }
   // 状态不确定的记录直接按修改前的值恢复，不核对
   if (!force && !entry.pending) {
@@ -1281,7 +1325,9 @@ function undoOne(entry: JournalEntryView, force: boolean, inSession: boolean): U
   if (inSession) message = `已恢复：${entry.featureTitle}`
   else if (entry.pending) message = `已按修改前的记录恢复：${entry.target} 设为 ${entry.before}。`
   else message = `已恢复原状：${entry.target} 改回了 ${entry.before}。`
-  return { entryId: entry.id, ok: true, drift: false, message, error: null }
+  // 和执行时一样：恢复以后要重启资源管理器、注销……才看得到变化
+  const reboot = FEATURES.get(entry.feature)?.summary.reboot ?? 'none'
+  return { entryId: entry.id, ok: true, drift: false, message, error: null, reboot }
 }
 
 // ─────────────────────────── 诊断报告 ───────────────────────────
@@ -1555,11 +1601,21 @@ const TOOL_LIST: MockTool[] = [
         '资源管理器会关掉再重新打开：桌面和任务栏会消失几秒钟，已经打开的文件夹窗口会关掉。正在复制或移动文件的话，先等它做完再点。',
     },
     {
-      run: () => ({
-        status: 'ok',
-        resultCode: 'done',
-        message: '资源管理器已经重新打开了。任务栏和桌面要是还没出来，再等几秒钟。',
-      }),
+      // 说法和 catalog/tools/system/restart-explorer.yaml 一样
+      run: () =>
+        DEMO_EXPLORER_FAIL
+          ? {
+              status: 'advice',
+              resultCode: 'not-restarted',
+              message: '资源管理器关掉以后，等了 15 秒还没有自己重新打开，所以桌面和任务栏暂时不见了。',
+              next: '点下面的按钮（或者按 Ctrl + Shift + Esc）打开任务管理器，点「运行新任务」（Windows 10 在「文件」菜单里），输入 explorer，按回车。「以系统管理权限创建此任务」不要勾。',
+              links: ['tool:open.task-manager'],
+            }
+          : {
+              status: 'ok',
+              resultCode: 'restarted',
+              message: '资源管理器已经重新打开了。桌面和任务栏要是还没出来，稍等几秒钟。',
+            },
       slowMs: 1500,
     },
   ),
@@ -1719,9 +1775,9 @@ function openMockTool(id: string): null {
   const title = t.summary.title
   if (t.summary.group !== 'open') throw `「${title}」不是用来打开的工具`
   if (DEMO_OPEN_FAIL) {
-    // ShellExecute 返回 2：找不到「设置」
+    // ShellExecuteEx 失败，GetLastError 是 2（说法和引擎一样）
     throw t.summary.opens === 'settings'
-      ? `没能打开「${title}」：打开「设置」失败（错误 2）`
+      ? `没能打开「${title}」：系统没有响应（错误代码 2）。可以点开始菜单里的齿轮图标，自己打开「设置」找这一项`
       : `这台电脑上没有「${title}」（找不到 ${t.target ?? id}），可能被精简系统删掉了。`
   }
   return null
