@@ -87,7 +87,7 @@ references:
 
 | 名字 | 事实 | 结果代码 |
 |---|---|---|
-| `cpu-features` | `popcnt`、`sse42`（布尔值） | `ok`（都支持）、`missing`（缺任意一项） |
+| `cpu-features` | `popcnt`、`sse42`、`windows11`（布尔值） | `ok`（都支持）、`missing`（缺任意一项，而且装的是 Windows 11）、`missing-win10`（缺，但装的是 Windows 10 或服务器版，只做提示） |
 
 ## 4. 功能（`catalog/features/**/*.yaml`）
 

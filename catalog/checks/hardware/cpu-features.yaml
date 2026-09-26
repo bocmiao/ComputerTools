@@ -1,6 +1,9 @@
 # CPU 是否支持 Windows 11 24H2 起必需的指令。内置检测（Rust 实现，见 crates/medkit-core/src/builtin.rs），
-# 没有脚本。事实：popcnt、sse42（布尔值）；结果：ok（都支持）/ missing（缺任意一项）。
+# 没有脚本。事实：popcnt、sse42、windows11（布尔值）。
+# 结果：ok（都支持）/ missing（缺任意一项，而且已经装了 Windows 11）/ missing-win10（缺，但装的是 Windows 10）。
 # 24H2 起缺这两条指令的 CPU 会在启动时报「无效指令」蓝屏或开不了机，任何绕过检查的办法都没用。
+# 和 security.tpm 的口径一样：只有已经装了 Windows 11 的电脑才算「建议处理」（以后的大版本更新装不上）；
+# Windows 10（和服务器版）上只提示以后没法升级，状态 ok。
 id: hardware.cpu-features
 schema_version: 1
 title: { zh-CN: CPU 是否支持新版 Windows 11 }
@@ -18,10 +21,14 @@ results:
   missing:
     status: advice
     message:
-      zh-CN: CPU 太老，不支持 Windows 11 24H2 起必需的 POPCNT 或 SSE4.2 指令，就算绕过安装检查也装不上、开不了机。
+      zh-CN: CPU 太老，不支持 Windows 11 24H2 起必需的 POPCNT 或 SSE4.2 指令。这台电脑现在的 Windows 11 以后没法更新到 24H2 及更新的版本，就算绕过安装检查也装不上、开不了机。
     fixer: hardware
     next:
-      zh-CN: 这台电脑只能继续用 Windows 10（记得登记扩展安全更新）。想用新版 Windows，需要换 CPU 或换电脑。
+      zh-CN: 现在的版本过了支持期，就收不到安全更新了（体检里「系统是否还在支持期」那一项说的「安装最新的功能更新」，在这台电脑上装不上）。想继续安全地用下去，长远看需要换电脑；拿不准的话请懂哥看看。
+  missing-win10:
+    status: ok
+    message:
+      zh-CN: CPU 不支持 Windows 11 24H2 起必需的 POPCNT 或 SSE4.2 指令，不影响现在使用 Windows 10；只是以后没法升级到新版 Windows 11（就算绕过安装检查也装不上）。
 references:
   - https://support.microsoft.com/en-us/windows/windows-11-system-requirements-86c11283-ea52-4782-9efd-7674389a7ba3
   - https://download.microsoft.com/download/7/8/8/788bf5ab-0751-4928-a22c-dffdc23c27f2/Minimum%20Hardware%20Requirements%20for%20Windows%2011.pdf
