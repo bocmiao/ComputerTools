@@ -23,7 +23,7 @@ CI 在 Windows Server 虚拟机上跑脚本和往返测试，能发现大部分�
 
 | 修复 | 要确认什么 | 怎么验证 |
 | --- | --- | --- |
-| `network.proxy-off` | WinINet 实际读的是 `Internet Settings\Connections\DefaultConnectionSettings` 这个二进制值，只改 `ProxyEnable` 可能不生效，或者被 WinINet 用二进制值改回来 | 用梯子制造「代理残留」后执行修复：浏览器能否马上上网、重开浏览器后能否上网、「设置 → 网络 → 代理」里显示什么、重启电脑后是否又被打开 |
+| `network.proxy-off` | 现在会同时改 `ProxyEnable` 和 WinINet 实际读取的二进制值 `Internet Settings\Connections\DefaultConnectionSettings`（清掉标志 0x02、计数器加 1，其余字节不动；这个格式是社区逆向出来的）。还要确认两件事：改完是否立刻生效（脚本没法通知正在运行的程序，已打开的浏览器可能还在用旧设置）；重启电脑后是否保持关闭（没有被 `SavedLegacySettings` 或别的程序改回来） | 用梯子制造「代理残留」后执行修复：已打开的浏览器能否马上上网、重开浏览器后能否上网、「设置 → 网络 → 代理」里显示什么；重启电脑后再运行 `network.proxy-dead`，看 `legacy_proxy_enabled`、`blob_proxy_enabled` 是否仍为「否」 |
 | `start.disable-web-search` | 微软文档列出的适用版本是专业版、企业版、教育版，社区测试说家庭版直接写注册表也有效；只重启资源管理器够不够 | 在家庭中文版上执行，注销再登录后在开始菜单搜索 |
 | `taskbar.align-left` | 是否不用重启资源管理器就立刻生效（现在保守地写了 `reboot: explorer`） | 执行后观察任务栏 |
 | `explorer.classic-context-menu` | 写到登录用户的 `HKU\<SID>\Software\Classes`（它链接到 `HKU\<SID>_Classes`）是否生效；新版本 Win11 是否还支持 | 执行后重启资源管理器，右键桌面 |

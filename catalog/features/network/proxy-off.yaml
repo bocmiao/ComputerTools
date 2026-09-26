@@ -1,17 +1,25 @@
-# 关掉失效的系统代理。HKCU\…\Internet Settings 的 ProxyEnable：0 = 不用代理服务器（系统默认）。
-# 只关「使用代理服务器」开关，不删 ProxyServer 里的地址，也不动 PAC 自动配置脚本（AutoConfigURL）。
-# 要修的故障状态不是系统默认状态，所以另外写了 break_actions：代理开着、指向 127.0.0.1:9
-# （discard 端口，平时没有程序监听），检测 network.proxy-dead 会判断为 dead。
-# windows_default 和 actions 相同：系统默认就是不开代理。
-# 给引擎的备注（待真机验证）：WinINet 实际读的是 Internet Settings\Connections\DefaultConnectionSettings
-# 这个二进制值，ProxyEnable 是它的「旧式」副本；直接改注册表后，要等 WinINet 下次重新读取设置时才同步过去。
-# 建议写完后调用 InternetSetOption(INTERNET_OPTION_SETTINGS_CHANGED / INTERNET_OPTION_REFRESH) 通知系统，
-# 并在真机上确认浏览器能立刻恢复。已经打开的浏览器可能要重开。
+# 关掉失效的系统代理（脚本类功能）。脚本在 scripts/features/network/ 下：
+#   proxy-off-detect.ps1  两处都没开代理 → applied；两处都开着 → not-applied；只有一处开着 → partial
+#                         （二进制值不存在时只看 ProxyEnable）
+#   proxy-off-run.ps1     先记下原状态 before = { proxy_enable, dcs（十六进制）}，再改：
+#                         1. Internet Settings\ProxyEnable 设为 DWORD 0；
+#                         2. Internet Settings\Connections\DefaultConnectionSettings（WinINet 和 .NET
+#                            实际读取的二进制值）存在且不少于 12 字节、偏移 8 的标志里有 0x02 时，
+#                            清掉 0x02，偏移 4 的计数器加 1，写回 REG_BINARY。
+#                         ProxyServer、ProxyOverride、AutoConfigURL、SavedLegacySettings 都不动。
+#   proxy-off-undo.ps1    按 -Before 原样写回两个值；原来不存在的就删掉，不会新建空的 Connections 键
+#   proxy-off-break.ps1   只在测试中使用：ProxyEnable = 1、ProxyServer = 127.0.0.1:9（discard 端口，
+#                         平时没有程序监听），二进制值存在时把代理标志和代理地址也改成同样的状态
+# 修完用 network.proxy-dead 复查（verify），引擎据此判断是否修好。
+# 二进制值的格式是社区逆向出来的，微软没有公开；脚本只改标志位和计数器，其余字节原样保留。
+# 已知限制：已经在运行的程序会继续用它缓存的代理设置，脚本没法通知它们（不用 Add-Type 就调不了
+# InternetSetOption），所以要提醒用户重开浏览器。改完是否立刻生效、重启后是否保持，见
+# docs/real-machine-checklist.md。
 id: network.proxy-off
 schema_version: 1
 title: { zh-CN: 关掉失效的系统代理 }
 description:
-  zh-CN: 关闭 Windows 的「使用代理服务器」开关，让浏览器直接上网。梯子、加速器卸载或崩溃后，经常把这个开关留在打开状态，导致网页打不开。改完以后，已经打开的浏览器可能要关掉重开才会生效；以后再用梯子时，它会自己重新打开代理。
+  zh-CN: 关闭 Windows 的「使用代理服务器」开关，让浏览器不再经过那个已经失效的代理。系统里记录这个开关的两个地方会一起改，代理地址、例外列表和自动配置脚本都不动。已经打开的浏览器可能要关掉重开才会生效；如果之后网页还是打不开，说明还有别的原因。以后再用梯子时，它会自己重新打开代理。
 category: network
 risk: safe
 level: light
@@ -20,33 +28,19 @@ subjective: false
 requires_admin: false
 reboot: none
 target: current-user
-actions:
-  - registry:
-      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings
-      name: ProxyEnable
-      type: dword
-      value: 0
-windows_default:
-  - registry:
-      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings
-      name: ProxyEnable
-      type: dword
-      value: 0
-break_actions:
-  - registry:
-      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings
-      name: ProxyEnable
-      type: dword
-      value: 1
-  - registry:
-      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings
-      name: ProxyServer
-      type: string
-      value: "127.0.0.1:9"
-undo: auto
+detect:
+  script: features/network/proxy-off-detect.ps1
+run:
+  script: features/network/proxy-off-run.ps1
+undo:
+  script: features/network/proxy-off-undo.ps1
+break:
+  script: features/network/proxy-off-break.ps1
 verify: network.proxy-dead
 references:
   - https://learn.microsoft.com/en-us/windows/win32/wininet/enabling-internet-functionality
   - https://learn.microsoft.com/en-us/windows/win32/wininet/setting-and-retrieving-internet-options
+  - https://learn.microsoft.com/en-us/previous-versions/troubleshoot/browsers/connectivity-navigation/no-internet-connectivity-internet-explorer-not-started
   - https://learn.microsoft.com/en-us/archive/blogs/ieinternals/understanding-web-proxy-configuration
+  - https://www.spad.uk/posts/how-does-proxysettingsperuser-work/
   - https://support.microsoft.com/en-us/windows/use-a-proxy-server-in-windows-03096c53-0554-4ffe-b6ab-8b1deee8dae1

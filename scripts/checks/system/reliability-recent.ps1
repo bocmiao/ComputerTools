@@ -21,13 +21,17 @@ $ErrorActionPreference = 'Stop'
 $days = 7
 $appProblemThreshold = 3
 
-# ManagementDateTimeConverter lives in System.Management, which Windows PowerShell
-# does not always load before the first WMI call.
-Add-Type -AssemblyName System.Management
+# WMI datetime (DMTF) literal "yyyyMMddHHmmss.ffffff+UUU", written in UTC with a
+# +000 offset: the same instant ManagementDateTimeConverter.ToDmtfDateTime would
+# give (it uses the local offset instead), without loading the System.Management
+# assembly (scripts must not compile or load types).
 $since = (Get-Date).AddDays(-$days)
-$dmtf = [System.Management.ManagementDateTimeConverter]::ToDmtfDateTime($since)
+$dmtf = $since.ToUniversalTime().ToString('yyyyMMddHHmmss', [System.Globalization.CultureInfo]::InvariantCulture) + '.000000+000'
 
 $records = @(Get-CimInstance -ClassName Win32_ReliabilityRecords -Filter ("TimeGenerated >= '{0}'" -f $dmtf))
+# Filter again on the converted DateTime, in case the provider compares the
+# literal differently.
+$records = @($records | Where-Object { ($null -ne $_.TimeGenerated) -and ($_.TimeGenerated -ge $since) })
 
 $crashes = 0
 $hangs = 0

@@ -1,5 +1,7 @@
 # 最近 7 天的程序崩溃和蓝屏。脚本：scripts/checks/system/reliability-recent.ps1
-# 数据来源：Win32_ReliabilityRecords（「可靠性监视器」背后的数据），按 TimeGenerated 过滤最近 7 天：
+# 数据来源：Win32_ReliabilityRecords（「可靠性监视器」背后的数据），按 TimeGenerated 过滤最近 7 天
+# （WMI 日期字面量直接按 UTC 拼成 DMTF 格式「yyyyMMddHHmmss.000000+000」，不加载 System.Management——
+# 脚本里不允许 Add-Type；查回来以后再按转换后的时间过滤一遍）：
 #   Application Error / 1000：程序崩溃        Application Hang / 1002：程序无响应
 #   Microsoft-Windows-WER-SystemErrorReporting / 1001：蓝屏
 #   EventLog / 6008：意外关机（只作为事实 unexpected_shutdowns，不参与判断）
@@ -31,4 +33,4 @@ results:
       zh-CN: "总是同一个程序出问题的话，先把它更新到最新版或者重装。出现过蓝屏的，可能是驱动、内存或硬盘的问题，把诊断报告发给懂哥看看。想自己看详情，可以在开始菜单搜索「可靠性」，打开「查看可靠性历史记录」。"
 references:
   - https://learn.microsoft.com/en-us/previous-versions/windows/desktop/racwmiprov/win32-reliabilityrecords
-  - https://learn.microsoft.com/en-us/dotnet/api/system.management.managementdatetimeconverter.todmtfdatetime
+  - https://learn.microsoft.com/en-us/windows/win32/wmisdk/cim-datetime

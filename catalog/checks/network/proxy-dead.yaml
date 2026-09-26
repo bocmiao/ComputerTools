@@ -1,14 +1,18 @@
 # 系统代理是否指向一个已经不在运行的本机程序。脚本：scripts/checks/network/proxy-dead.ps1
-# 读登录用户（-UserHive）的 Software\Microsoft\Windows\CurrentVersion\Internet Settings：
-#   ProxyEnable、ProxyServer、AutoConfigURL
-# ProxyServer 可能是「127.0.0.1:7890」，也可能按协议写「http=127.0.0.1:7890;https=…;socks=…」，
-# 有时还带「http://」前缀。指向本机（127.x、localhost、::1）时，用 TcpClient 试连端口，超时 500 毫秒；
-# 本机的任意一个端口能连上就算 alive。
+# 读登录用户（-UserHive）的两处设置：
+#   1. Internet Settings\Connections\DefaultConnectionSettings（二进制值，WinINet 和 .NET 实际读的是它）：
+#      存在且不少于 16 字节时解析——偏移 8 的 DWORD 是标志，0x02 表示开了手动代理；偏移 12 的 DWORD 是
+#      代理地址的长度 N，后面跟 N 字节的 ANSI 文本。格式是社区逆向出来的，微软没有公开。
+#   2. 旧式的 Internet Settings\ProxyEnable、ProxyServer（WinINet 会同步，很多软件也直接写它们）。
+# 两处任意一处开着代理就算开着；试连的地址优先用二进制值里的（它开着且有地址时），否则用 ProxyServer。
+# 地址可能是「127.0.0.1:7890」，也可能按协议写「http=127.0.0.1:7890;https=…;socks=…」，有时还带「http://」。
+# 指向本机（127.x、localhost、::1）时，用 TcpClient 试连端口，超时 500 毫秒；本机任意一个端口能连上就算 alive。
 # 结果：none（没开代理）/ remote（代理在别的机器上）/ alive（本机代理在运行）/ dead（本机代理没人监听）。
+# 事实：proxy_enabled、proxy_server（实际用来判断的地址）、proxy_source（blob 或 legacy）、
+#       legacy_proxy_enabled、blob_proxy_enabled（二进制值存在时）、settings_mismatch（两处开关不一致，
+#       或者都开着但地址不同时为 true，一致时不出现）、pac_url、proxy_address。
 # AutoConfigURL（PAC 自动配置脚本）只作为事实 pac_url，不参与判断：修复 network.proxy-off 只关手动代理。
 # 所以「没开手动代理、但 PAC 指向本机失效端口」目前也显示 none，以后可以单独做一个检测和修复。
-# 已知限制（待真机验证）：WinINet 实际读的是 Connections\DefaultConnectionSettings 这个二进制值，
-# ProxyEnable 等是同步出来的副本；一般两者一致，但极少数软件只改其中一个。
 id: network.proxy-dead
 schema_version: 1
 title: { zh-CN: 失效的系统代理 }

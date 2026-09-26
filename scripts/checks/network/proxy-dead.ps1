@@ -1,25 +1,38 @@
 # Check: network.proxy-dead
 # Does the system proxy point at a program on this PC that is no longer running?
 # That is what VPN tools and game accelerators leave behind when they are
-# uninstalled or crash: ProxyEnable = 1, ProxyServer = 127.0.0.1:7890, and
+# uninstalled or crash: the proxy is on, it points at 127.0.0.1:7890, and
 # nothing listens on that port, so web pages stop loading.
-# Reads the logged-in user's Internet Settings (via -UserHive):
-#   ProxyEnable, ProxyServer, AutoConfigURL
-# ProxyServer is either "host:port" or per protocol, "http=host:port;https=host:port;socks=host:port",
-# sometimes with a scheme ("http://127.0.0.1:7890"). For local endpoints
-# (127.0.0.0/8, localhost, ::1) a TCP connection is attempted with a 500 ms timeout.
+#
+# Two places hold the per-user proxy setting (read via -UserHive):
+#   1. Internet Settings\Connections\DefaultConnectionSettings (REG_BINARY).
+#      This is what WinINet and .NET actually use. Layout (little-endian DWORDs):
+#        offset 0  version, offset 4 change counter, offset 8 flags
+#        (0x02 = manual proxy server in use), offset 12 length N of the proxy
+#        server string, then N bytes of ANSI text.
+#   2. The legacy values Internet Settings\ProxyEnable / ProxyServer, which
+#      WinINet keeps in sync and which many tools write directly.
+# The blob is used when it exists and is at least 16 bytes. The proxy counts as
+# on if either place says so; the endpoint that is tested comes from the blob
+# when the blob has the proxy on with a server string, otherwise from the legacy
+# values.
+# ProxyServer / the blob string is either "host:port" or per protocol,
+# "http=host:port;https=host:port;socks=host:port", sometimes with a scheme
+# ("http://127.0.0.1:7890"). For local endpoints (127.0.0.0/8, localhost, ::1)
+# a TCP connection is attempted with a 500 ms timeout.
 # AutoConfigURL (PAC script) is reported as a fact only: the fix
-# (network.proxy-off) only turns off the fixed proxy.
+# (network.proxy-off) only turns off the manual proxy.
 # Read-only. Result codes: none / remote / alive / dead.
 
 [CmdletBinding()]
 param(
-    [string]$UserHive
+    [string]$UserHive = 'HKCU:'
 )
 
 $ErrorActionPreference = 'Stop'
 
 $connectTimeoutMs = 500
+$proxyFlag = 2
 
 function Get-PropertyText {
     param($Object, [string]$Name)
@@ -33,7 +46,25 @@ function Get-PropertyText {
     return ([string]$prop.Value).Trim()
 }
 
-# Splits a ProxyServer value into endpoints: @{ Protocol; Host; Port }.
+# Returns the raw value, or $null when the key or the value does not exist.
+function Get-RegistryValue {
+    param([string]$Path, [string]$Name)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+    $item = Get-ItemProperty -LiteralPath $Path
+    if ($null -eq $item) {
+        return $null
+    }
+    $prop = $item.PSObject.Properties[$Name]
+    if ($null -eq $prop) {
+        return $null
+    }
+    # The unary comma keeps a byte[] from being unrolled into single bytes.
+    return , $prop.Value
+}
+
+# Splits a proxy server string into endpoints: @{ Protocol; Host; Port }.
 function Get-ProxyEndpoints {
     param([string]$Text)
     $list = New-Object System.Collections.Generic.List[object]
@@ -180,34 +211,78 @@ function Test-LocalPort {
     return $false
 }
 
-$root = $UserHive
-if ([string]::IsNullOrWhiteSpace($root)) {
-    $root = 'HKCU:'
+if ([string]::IsNullOrWhiteSpace($UserHive)) {
+    $UserHive = 'HKCU:'
 }
-$keyPath = Join-Path $root 'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
-$settings = Get-ItemProperty -LiteralPath $keyPath
+$settingsPath = Join-Path $UserHive 'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+$connectionsPath = Join-Path $UserHive 'Software\Microsoft\Windows\CurrentVersion\Internet Settings\Connections'
 
+# Legacy values.
+$settings = Get-ItemProperty -LiteralPath $settingsPath
 $enableText = Get-PropertyText $settings 'ProxyEnable'
-$enabled = $false
+$legacyEnabled = $false
 if ($enableText.Length -gt 0) {
-    $enabled = ([int]$enableText -eq 1)
+    $legacyEnabled = ([int]$enableText -eq 1)
 }
-$server = Get-PropertyText $settings 'ProxyServer'
+$legacyServer = Get-PropertyText $settings 'ProxyServer'
 $pac = Get-PropertyText $settings 'AutoConfigURL'
 
-$facts = [ordered]@{
-    proxy_enabled = $enabled
-    proxy_server  = $server
-    pac_url       = $pac
+# DefaultConnectionSettings.
+$blobPresent = $false
+$blobEnabled = $false
+$blobServer = ''
+$raw = Get-RegistryValue -Path $connectionsPath -Name 'DefaultConnectionSettings'
+if (($null -ne $raw) -and ($raw -is [byte[]]) -and ($raw.Length -ge 16)) {
+    $blob = [byte[]]$raw
+    $blobPresent = $true
+    $flags = [System.BitConverter]::ToUInt32($blob, 8)
+    $blobEnabled = (($flags -band $proxyFlag) -ne 0)
+    $length = [System.BitConverter]::ToUInt32($blob, 12)
+    if (($length -gt 0) -and ((16 + [long]$length) -le $blob.Length)) {
+        $blobServer = [System.Text.Encoding]::Default.GetString($blob, 16, [int]$length).Trim([char]0).Trim()
+    }
 }
 
-if ((-not $enabled) -or ($server.Length -eq 0)) {
+# Which setting decides: the blob when it has the proxy on with a server string,
+# otherwise the legacy values.
+$source = ''
+$server = ''
+if ($blobPresent -and $blobEnabled -and ($blobServer.Length -gt 0)) {
+    $source = 'blob'
+    $server = $blobServer
+}
+elseif ($legacyEnabled -and ($legacyServer.Length -gt 0)) {
+    $source = 'legacy'
+    $server = $legacyServer
+}
+
+$facts = [ordered]@{
+    proxy_enabled        = ($source.Length -gt 0)
+    proxy_server         = $server
+    legacy_proxy_enabled = $legacyEnabled
+}
+if ($blobPresent) {
+    $facts['blob_proxy_enabled'] = $blobEnabled
+    $mismatch = ($legacyEnabled -ne $blobEnabled)
+    if ((-not $mismatch) -and $legacyEnabled -and ($legacyServer.Length -gt 0) -and ($blobServer.Length -gt 0) -and ($legacyServer -ne $blobServer)) {
+        $mismatch = $true
+    }
+    if ($mismatch) {
+        $facts['settings_mismatch'] = $true
+    }
+}
+if ($source.Length -gt 0) {
+    $facts['proxy_source'] = $source
+}
+$facts['pac_url'] = $pac
+
+if ($source.Length -eq 0) {
     $result = 'none'
 }
 else {
     $endpoints = @(Get-ProxyEndpoints $server)
     if ($endpoints.Count -eq 0) {
-        throw ("Cannot parse the ProxyServer value '{0}'" -f $server)
+        throw ("Cannot parse the proxy server value '{0}'" -f $server)
     }
     $local = @($endpoints | Where-Object { Test-LocalHost $_.Host })
     if ($local.Count -eq 0) {
