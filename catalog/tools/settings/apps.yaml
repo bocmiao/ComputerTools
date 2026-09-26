@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:appsfeatures，由系统打开。
+id: settings.apps
+schema_version: 1
+group: open
+title: { zh-CN: 已安装的应用 }
+description:
+  zh-CN: 打开「设置」里的应用列表：卸载不用的软件，也可以按大小排序，看看哪个软件最占地方。
+category: settings
+open: { settings: appsfeatures }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

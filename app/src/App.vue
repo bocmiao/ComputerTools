@@ -8,11 +8,13 @@ import JournalView from './views/JournalView.vue'
 import ReportView from './views/ReportView.vue'
 import SettingsView from './views/SettingsView.vue'
 import SymptomsView from './views/SymptomsView.vue'
+import ToolsView from './views/ToolsView.vue'
 
 const views = {
   health: HealthView,
   symptoms: SymptomsView,
   settings: SettingsView,
+  tools: ToolsView,
   journal: JournalView,
   report: ReportView,
 } satisfies Record<PageId, unknown>

@@ -7,6 +7,7 @@ import { errorText } from '../utils/format'
 import { vAutofocus } from '../utils/dialogs'
 import AppIcon from './AppIcon.vue'
 import BusySpinner from './BusySpinner.vue'
+import ExplorerRestart from './ExplorerRestart.vue'
 import ModalDialog from './ModalDialog.vue'
 import StatusLamp, { type LampState } from './StatusLamp.vue'
 
@@ -117,6 +118,8 @@ function close(): void {
       <p v-if="reboot !== 'none'">
         <strong>{{ rebootLabel[reboot] }}</strong>，之后才能看到全部效果。
       </p>
+      <!-- 最重的要求只是重启资源管理器时，直接给按钮（要注销、重启的话，那时资源管理器会跟着重开） -->
+      <ExplorerRestart v-if="reboot === 'explorer'" />
     </div>
 
     <ol class="items">

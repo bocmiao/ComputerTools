@@ -1,0 +1,12 @@
+# 打开系统信息（open，给懂哥用）。引擎启动 System32\msinfo32.exe。
+id: open.system-information
+schema_version: 1
+group: open
+title: { zh-CN: 系统信息 }
+description:
+  zh-CN: Windows 自带的详细系统清单，硬件、驱动、服务、启动项都在里面，比「电脑配置」更全，适合懂哥排查问题。里面有电脑名、用户名等信息，截图发给别人之前记得遮一下。
+category: system
+audience: helper
+open: { program: system-information }
+references:
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/msinfo32

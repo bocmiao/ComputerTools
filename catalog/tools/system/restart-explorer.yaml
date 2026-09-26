@@ -1,0 +1,54 @@
+# 重启资源管理器（action）。脚本：scripts/tools/system/restart-explorer.ps1
+# 为什么这样做：小药箱以管理员身份运行，脚本如果自己去启动 explorer.exe，新的桌面就会带着管理员权限运行，
+# 从桌面打开的每个程序也都是管理员权限，这很危险。所以脚本只负责结束资源管理器，由系统（Winlogon）按登录用户的身份
+# 把它重新拉起来：AutoRestartShell 为 1（系统默认）时，桌面进程意外结束（强制结束的退出码不是 0，算意外），
+# Winlogon 会自动重新启动它。
+#   - 只结束和小药箱在同一个会话里的 explorer.exe，不碰别的已登录用户的；
+#   - 结束后最多等 15 秒（每半秒看一次），出现了新的 explorer.exe（进程号是新的，或者启动时间不一样）就算重启好了；
+#   - AutoRestartShell 被改成 0 的电脑上，结束了就不会自己回来，所以什么都不做（auto-restart-off）；
+#   - 没回来（not-restarted）或本来就没在运行（not-running）时，教用户从任务管理器里手动启动，任务管理器会按用户身份启动它。
+# 事实：stopped（结束了几个进程）、waited_sec（等了几秒）。
+# 待真机验证：Win10、Win11 上强制结束后是否都会自动重启、要多久，见 docs/real-machine-checklist.md。
+id: system.restart-explorer
+schema_version: 1
+group: action
+title: { zh-CN: 重启资源管理器 }
+description:
+  zh-CN: 任务栏、开始菜单或桌面卡住不动、点了没反应时，重启一下资源管理器往往就好了；有些设置改完也要重启它才生效。其他正在运行的软件不受影响。
+category: system
+requires_admin: true
+timeout_sec: 30
+run:
+  script: tools/system/restart-explorer.ps1
+confirm:
+  zh-CN: 资源管理器会关掉再重新打开：桌面和任务栏会消失几秒钟，已经打开的文件夹窗口会关掉。正在复制或移动文件的话，先等它做完再点。
+results:
+  restarted:
+    status: ok
+    message:
+      zh-CN: 资源管理器已经重新打开了。桌面和任务栏要是还没出来，稍等几秒钟。
+  not-restarted:
+    status: advice
+    message:
+      zh-CN: "资源管理器关掉以后，等了 {waited_sec} 秒还没有自己重新打开，所以桌面和任务栏暂时不见了。"
+    next:
+      zh-CN: 点下面的按钮（或者按 Ctrl + Shift + Esc）打开任务管理器，点「运行新任务」（Windows 10 在「文件」菜单里），输入 explorer，按回车。「以系统管理权限创建此任务」不要勾。
+    links: ["tool:open.task-manager"]
+  not-running:
+    status: advice
+    message:
+      zh-CN: 资源管理器现在没有在运行，所以桌面和任务栏都不见了。
+    next:
+      zh-CN: 点下面的按钮（或者按 Ctrl + Shift + Esc）打开任务管理器，点「运行新任务」（Windows 10 在「文件」菜单里），输入 explorer，按回车。「以系统管理权限创建此任务」不要勾。
+    links: ["tool:open.task-manager"]
+  auto-restart-off:
+    status: advice
+    message:
+      zh-CN: 这台电脑设置了资源管理器关掉后不会自动重新打开。为了不让桌面和任务栏消失，小药箱没有关掉它。
+    next:
+      zh-CN: 可以点下面的按钮打开任务管理器，在「进程」里找到「Windows 资源管理器」，右键选「重新启动」。
+    links: ["tool:open.task-manager"]
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/cc939703(v=technet.10)
+  - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/stop-process
+  - https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.sessionid

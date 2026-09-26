@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:network-status，由系统打开。
+id: settings.network
+schema_version: 1
+group: open
+title: { zh-CN: 网络和 Internet }
+description:
+  zh-CN: 打开「设置」里的网络页面：看看现在连的是哪个网络、有没有连上，管理 WiFi、网线和代理设置。
+category: settings
+open: { settings: network-status }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

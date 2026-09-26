@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:storagesense，由系统打开。
+id: settings.storage
+schema_version: 1
+group: open
+title: { zh-CN: 存储 }
+description:
+  zh-CN: 打开「设置 → 系统 → 存储」：看看 C 盘被什么占满了，清理临时文件，还能打开「存储感知」，让系统定期自动清理。
+category: settings
+open: { settings: storagesense }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

@@ -628,7 +628,10 @@ fn open_settings(page: &str) -> PResult<()> {
     if r as isize > 32 {
         Ok(())
     } else {
-        Err(PlatformError::Other(format!("打开「设置」失败（错误 {}）", r as isize)))
+        Err(PlatformError::Other(format!(
+            "系统没有打开「设置」（错误代码 {}）。可以点开始菜单里的齿轮图标，自己打开「设置」找这一项",
+            r as isize
+        )))
     }
 }
 

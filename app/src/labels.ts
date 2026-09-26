@@ -1,5 +1,6 @@
 import type {
   ApplyResult,
+  Audience,
   FeatureStateKind,
   Fixer,
   Maturity,
@@ -7,6 +8,7 @@ import type {
   Recommend,
   Risk,
   Status,
+  ToolSummary,
 } from './api/types'
 
 /** 标签的配色，对应 styles/tokens.css 里的 --tone-* 变量 */
@@ -152,3 +154,41 @@ export const settingsCategories = [
   { id: 'start', title: '开始菜单' },
   { id: 'power', title: '电源' },
 ] as const
+
+// ── 小工具 ──
+
+/** 小工具结果（ToolResult.status）的配色；小工具的 na 也显示出来（例如「这台电脑没有无线网卡」），用灰色 */
+export const toolStatusTone: Record<Status, Tone> = {
+  ok: 'ok',
+  advice: 'advice',
+  manual: 'manual',
+  unknown: 'unknown',
+  na: 'neutral',
+}
+
+/** audience 是 helper 的小工具上的标签；everyone 不显示 */
+export const audienceLabel: Record<Audience, string> = {
+  everyone: '',
+  helper: '给懂哥',
+}
+
+/** 打开系统工具、「设置」页面以后的提示：窗口常常弹在小药箱后面 */
+export const toolOpenedText = '已经打开了。窗口可能在小药箱后面。'
+
+/** 中文和英文、数字之间留一个空格：「打开 Windows 更新」 */
+function joinWords(a: string, b: string): string {
+  return /^[A-Za-z0-9]/.test(b) ? `${a} ${b}` : `${a}${b}`
+}
+
+/** 打开系统工具的按钮：「打开磁盘清理」「打开「存储」设置」 */
+export function toolOpenLabel(t: ToolSummary): string {
+  return t.opens === 'settings' ? `打开「${t.title}」设置` : joinWords('打开', t.title)
+}
+
+/**
+ * 检测结果里 tool: 链接的按钮。open 的直接打开；看信息、一键处理的跳到「小工具」页。
+ * 小工具的名字本身可能就是动词（「刷新 DNS 缓存」「查看 WiFi 密码」），所以不再加「查看」「去做」这类字。
+ */
+export function toolLinkLabel(t: ToolSummary): string {
+  return t.group === 'open' ? toolOpenLabel(t) : `用小工具：${t.title}`
+}

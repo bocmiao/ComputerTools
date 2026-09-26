@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:sound，由系统打开。
+id: settings.sound
+schema_version: 1
+group: open
+title: { zh-CN: 声音 }
+description:
+  zh-CN: 打开「设置」里的声音页面：选用哪个扬声器或耳机放声音、用哪个麦克风，调节音量。电脑没声音、麦克风没声音时，先来这里看看选对了没有。
+category: settings
+open: { settings: sound }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

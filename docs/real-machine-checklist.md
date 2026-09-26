@@ -31,6 +31,18 @@ CI 在 Windows Server 虚拟机上跑脚本和往返测试，能发现大部分�
 | `taskbar.align-left` | 是否不用重启资源管理器就立刻生效（现在保守地写了 `reboot: explorer`） | 执行后观察任务栏 |
 | `explorer.classic-context-menu` | 写到登录用户的 `HKU\<SID>\Software\Classes`（它链接到 `HKU\<SID>_Classes`）是否生效；新版本 Win11 是否还支持 | 执行后重启资源管理器，右键桌面 |
 
+## 小工具
+
+| 小工具 | 要确认什么 | 怎么验证 |
+| --- | --- | --- |
+| `system.hardware-info` 显存 | 显卡驱动注册表项里的 `HardwareInformation.qwMemorySize` 是不是各家驱动都写、单位是不是字节；`HardwareInformation.MemorySize` 微软文档写的是 MB，实际驱动写的是字节（脚本按「小于 1 MB 就当 MB」处理）；核显显示的是专用显存（常见 128 MB 到 2 GB），用户会不会误会 | 在 NVIDIA（6 GB 以上）、AMD 独显、Intel 核显、AMD 核显的电脑上运行，对照任务管理器「性能 → GPU」里的「专用 GPU 内存」 |
+| `system.hardware-info` 基本显示适配器 | 没装显卡驱动时，是否一定能按名字（英文或「Microsoft 基本显示适配器」）或 `InfFilename = display.inf` 认出来 | 在刚装完系统、还没装显卡驱动的电脑（或虚拟机）上运行 |
+| `system.hardware-info` 内存条 | 各品牌内存的 `Manufacturer` 是可读名字、JEDEC 代码还是乱码（代码和乱码不显示）；板载 LPDDR 内存报的类型、频率；插槽数是否可信 | 在台式机（金士顿、三星、海力士、长鑫等内存条）、板载内存的轻薄本上运行，对照 CPU-Z 的 SPD 页 |
+| `system.hardware-info` 其他 | 激活查询（SoftwareLicensingProduct）在老电脑上要几秒，是否在 60 秒超时以内；联想电脑的型号名（Win32_ComputerSystemProduct.Version）；安装日期在装过大版本更新的电脑上显示的是更新日期 | 在机械硬盘的老电脑上计时；在联想笔记本上运行；对照「设置 → 系统 → 系统信息」 |
+| `network.wifi-passwords` | 在保存过 WiFi（包括中文名字的 WiFi）的电脑上，导出的 XML 编码是否正确、中文名字显示是否正常；有无线网卡但一个 WiFi 都没保存过时 netsh 的退出码（脚本按 0 处理，不是 0 会显示「没能读出来」）；用户名里有空格或中文时 `folder=` 参数能否正常传给 netsh；杀毒软件会不会拦截导出、或者锁住文件导致删不掉 | 在连过多个 WiFi（含中文名、隐藏网络、单位的企业网络）的笔记本上运行，对照手机上看到的密码；删掉所有 WiFi 后再运行；运行后确认 `%TEMP%` 下没有留下 `medkit-wifi-*` 文件夹 |
+| `system.restart-explorer` | 强制结束 explorer.exe 以后，Win10 和 Win11 是否都由 Winlogon 自动重新启动、一般要几秒（脚本最多等 15 秒）；重新启动的资源管理器是普通权限还是管理员权限（应该是普通权限：从新桌面打开的程序不应该带管理员盾牌）；开着「在单独的进程中打开文件夹窗口」时是否也正常 | 在 Win10 22H2、Win11 24H2 上运行，看任务栏回来的时间；在任务管理器「详细信息」里给 explorer.exe 加上「提升」列，确认是「否」 |
+| `network.flush-dns` | `Clear-DnsClientCache` 在家庭版上是否正常；清掉的条数和 `ipconfig /displaydns` 是否大致一致；hosts 文件里的条目清掉后是否立即恢复 | 在家庭中文版上运行两次，第二次条数应该很少；在 hosts 里加一条再运行，确认仍然生效 |
+
 ## 引擎和外壳
 
 | 项目 | 要确认什么 |

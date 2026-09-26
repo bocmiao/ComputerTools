@@ -5,6 +5,7 @@ export type IconName =
   | 'health'
   | 'symptoms'
   | 'settings'
+  | 'tools'
   | 'journal'
   | 'report'
   | 'close'
@@ -14,6 +15,7 @@ export type IconName =
   | 'chevron-down'
   | 'copy'
   | 'undo'
+  | 'external'
 
 withDefaults(defineProps<{ name: IconName; size?: number }>(), { size: 20 })
 </script>
@@ -47,6 +49,12 @@ withDefaults(defineProps<{ name: IconName; size?: number }>(), { size: 20 })
       <circle cx="15" cy="7" r="2" />
       <circle cx="9" cy="17" r="2" />
     </template>
+    <!-- 扳手：开口朝右上 -->
+    <path
+      v-else-if="name === 'tools'"
+      transform="translate(-0.5 0.5) rotate(45 12 12)"
+      d="M10.3 2.09A5.2 5.2 0 0 0 10 11.8V20A2 2 0 0 0 14 20V11.8A5.2 5.2 0 0 0 13.7 2.09V5.6A1.7 1.7 0 0 1 10.3 5.6Z"
+    />
     <template v-else-if="name === 'journal'">
       <path d="M9 6h11M9 12h11M9 18h11" />
       <circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none" />
@@ -72,6 +80,12 @@ withDefaults(defineProps<{ name: IconName; size?: number }>(), { size: 20 })
     <template v-else-if="name === 'undo'">
       <path d="M9 14 4 9l5-5" />
       <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </template>
+    <!-- 在新窗口里打开 -->
+    <template v-else-if="name === 'external'">
+      <path d="M14 4h6v6" />
+      <path d="m20 4-8.5 8.5" />
+      <path d="M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4" />
     </template>
   </svg>
 </template>

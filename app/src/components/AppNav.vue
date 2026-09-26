@@ -8,6 +8,7 @@ const items: { id: PageId; label: string; icon: IconName }[] = [
   { id: 'health', label: '体检', icon: 'health' },
   { id: 'symptoms', label: '按症状修', icon: 'symptoms' },
   { id: 'settings', label: '常用设置', icon: 'settings' },
+  { id: 'tools', label: '小工具', icon: 'tools' },
   { id: 'journal', label: '修改日志', icon: 'journal' },
   { id: 'report', label: '诊断报告', icon: 'report' },
 ]

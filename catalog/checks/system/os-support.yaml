@@ -43,21 +43,24 @@ results:
       zh-CN: "你的系统是 Windows 10，微软已在 {end_date} 停止常规支持，不登记的话就收不到安全更新了。"
     fixer: user
     next:
-      zh-CN: "可以免费登记「扩展安全更新」，继续收到安全补丁到 {esu_end}：打开「设置 → 更新和安全 → Windows 更新」，按页面上的提示登记（需要登录微软账户）。电脑配置够的话，也可以免费升级到 Windows 11。"
+      zh-CN: "可以免费登记「扩展安全更新」，继续收到安全补丁到 {esu_end}：打开「设置 → 更新和安全 → Windows 更新」（点下面的按钮就能直接打开），按页面上的提示登记（需要登录微软账户）。电脑配置够的话，也可以免费升级到 Windows 11。"
+    links: ["tool:settings.windows-update"]
   expired:
     status: advice
     message:
       zh-CN: "你的系统（{os} {version}）已经停止支持，微软不再提供安全更新。"
     fixer: user
     next:
-      zh-CN: "先打开「设置 → 更新和安全 → Windows 更新」，把系统更新到 Windows 10 22H2，再按页面上的提示免费登记「扩展安全更新」，就能继续收到安全补丁到 {esu_end}（需要登录微软账户）。电脑配置够的话，也可以免费升级到 Windows 11。"
+      zh-CN: "先打开「设置 → 更新和安全 → Windows 更新」（点下面的按钮就能直接打开），把系统更新到 Windows 10 22H2，再按页面上的提示免费登记「扩展安全更新」，就能继续收到安全补丁到 {esu_end}（需要登录微软账户）。电脑配置够的话，也可以免费升级到 Windows 11。"
+    links: ["tool:settings.windows-update"]
   expired-win11:
     status: advice
     message:
       zh-CN: "你的系统（{os} {version}）已经停止支持，微软不再提供安全更新。"
     fixer: user
     next:
-      zh-CN: 打开「设置 → Windows 更新」，安装最新的功能更新（大版本更新），装好以后就能继续收到安全更新。如果提示这台电脑不满足要求，请懂哥或售后帮忙看看。
+      zh-CN: 打开「设置 → Windows 更新」（点下面的按钮就能直接打开），安装最新的功能更新（大版本更新），装好以后就能继续收到安全更新。如果提示这台电脑不满足要求，请懂哥或售后帮忙看看。
+    links: ["tool:settings.windows-update"]
   expired-no-esu:
     status: advice
     message:

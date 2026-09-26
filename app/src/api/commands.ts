@@ -7,6 +7,7 @@ import type {
   Preview,
   SymptomDetail,
   SystemInfo,
+  ToolResult,
   UndoResult,
 } from './types'
 
@@ -30,6 +31,8 @@ export type CommandMap = {
   journal_undo: { args: { entryId: string; force: boolean }; result: UndoResult }
   journal_undo_session: { args: { sessionId: string }; result: UndoResult[] }
   report_generate: { args: NoArgs; result: string }
+  tool_run: { args: { id: string }; result: ToolResult }
+  tool_open: { args: { id: string }; result: null }
 }
 
 export type CommandName = keyof CommandMap

@@ -24,7 +24,8 @@ results:
       zh-CN: "内存只有 {total_gb} GB，同时开浏览器、微信和办公软件就会很卡。"
     fixer: hardware
     next:
-      zh-CN: "主板有 {slots_total} 个内存插槽，已经插了 {slots_used} 条，还空着 {free_slots} 个。有空插槽的话，加一条内存（加到 8 GB 或以上）是提速最明显的办法；插槽都满了，就换成容量更大的内存条。笔记本的内存有时是焊在主板上的，加之前先问懂哥或售后。"
+      zh-CN: "主板有 {slots_total} 个内存插槽，已经插了 {slots_used} 条，还空着 {free_slots} 个。有空插槽的话，加一条内存（加到 8 GB 或以上）是提速最明显的办法；插槽都满了，就换成容量更大的内存条。笔记本的内存有时是焊在主板上的，加之前先问懂哥或售后。买内存条之前，可以点下面的「电脑配置」看看现在的内存条是什么规格（DDR4 还是 DDR5、频率多少），买同样规格的。"
+    links: ["tool:system.hardware-info"]
 references:
   - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-physicalmemory
   - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-physicalmemoryarray

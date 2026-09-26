@@ -195,7 +195,50 @@ steps:
 - `maturity`：`one-click`（能一键修）、`semi`（部分要用户动手）、`guide`（只有图文指引，这时必须写 `guide`）。
 - `stop_on`：这一步的结论在列表里时，就不再往下查。
 
-## 4. 在本地验证
+## 4. 写一个小工具
+
+小工具（`catalog/tools/`，格式见[架构文档第 11 节](architecture.md)）是一次性的操作：看信息（`info`）、一键处理（`action`）、打开系统自带的工具或「设置」里的一页（`open`）。
+
+### 4.1 小工具还是功能？
+
+- **小工具从不改设置**。它不进修改日志，也没有撤销，所以只能做没有持久影响的事：读信息、清缓存、重启一个进程、打开一个窗口。
+- 会改注册表、服务、文件的（哪怕能撤销），一律做成功能（第 2 节）。拿不准就问自己：「做完以后，电脑和之前有什么不一样？」答案不是「没有」，就是功能。
+- `action` 会打断用户正在做的事时（比如重启资源管理器会关掉文件夹窗口），写 `confirm`，说清楚会发生什么。
+- `open` 不写脚本，只能从 `crates/medkit-core/src/tools.rs` 的名单里选程序或「设置」页面；名单外的要改代码、过代码审核。
+
+### 4.2 info 小工具：表格和标签
+
+脚本除了 `result`、`facts`，再输出 `sections`：
+
+```powershell
+$rows = New-Object System.Collections.Generic.List[object]
+$rows.Add([ordered]@{ id = 'size'; value = '466 GB' })       # 原样显示
+$rows.Add([ordered]@{ id = 'type'; code = 'ssd' })           # 显示 labels.values.ssd
+$sections.Add([ordered]@{ id = 'disk'; name = $friendlyName; rows = $rows.ToArray() })
+```
+
+- 表格标题、行名、代码对应的文字都写在 YAML 的 `labels` 里（脚本里不能有中文）。**每个 id 和 code 都要有标签**，缺了界面会报错，CI 的冒烟测试也会拦住。`labels.values` 是一张表，不同的行用同一个 code 时文字也一样，取名时注意。
+- id 用小写加下划线（`install_date`），code 用小写加短横线（`not-activated`）。
+- 没有值的行不要输出（`value` 为空或 `$null` 的行会被丢掉并报错）；读不到的整张表就不输出。
+- 数组用 `.ToArray()` 或 `@(...)` 转成真正的数组再输出。注意：在一些 PowerShell 7 版本里，对 `List[object]` 变量直接写 `@($list)` 会报「Argument types do not match」，所以对 List 一律用 `.ToArray()`。
+- 每一块单独 `try` / `catch`：一个 WMI 类坏了，只少那一张表（可以用一个 `partial` 之类的结果代码告诉用户），全都读不出来才 `throw`。
+- 数字格式用 `[System.Globalization.CultureInfo]::InvariantCulture`，日期输出成 `yyyy-MM-dd` 字符串。
+
+### 4.3 密码和个人信息
+
+- 密码这类值加 `secret = $true`：界面默认遮住，点「显示」才看得到，也不会被「复制全部」带上。
+- **不输出序列号、UUID、MAC 地址、IP 地址、电脑名、用户名、产品密钥**：用户会点「复制全部」发给别人。读 WMI 时只取要显示的属性；Windows 激活状态只查 `LicenseStatus`。
+- 密码不能出现在 `facts` 和报错信息里。要把机密写到磁盘上的（比如 `netsh wlan export profile key=clear`），参考 `scripts/tools/network/wifi-passwords.ps1`：随机名字的临时文件夹，导出之前先设成只有 SYSTEM 和 Administrators 能访问，`finally` 里删掉，删不掉就报错；报错信息里的临时目录路径（里面有用户名）换成 `%TEMP%`。
+- 脚本以管理员身份运行。不要从脚本里启动用户要用的程序（比如 `explorer.exe`），否则它也带着管理员权限；参考 `scripts/tools/system/restart-explorer.ps1`，交给系统按用户身份启动。
+
+### 4.4 测试
+
+- `cargo run -p medkit-data -- check` 会检查分组规则、标签的键、结果代码、`tool:` 链接和 open 名单。
+- 在 Linux 上可以用 pwsh 模拟：先定义同名的假函数（`Get-CimInstance`、`Get-PhysicalDisk`、`Get-NetAdapter`、`Get-Process`……，函数优先于 cmdlet），原生命令用一个假的可执行文件代替，然后运行脚本，检查每个结果代码、每个失败路径，以及输出里每个 id 和 code 都有标签。
+- 在 Windows 上直接运行脚本看输出：`powershell.exe -NoProfile -File scripts\tools\system\hardware-info.ps1 | ConvertTo-Json -Depth 6`；`cargo test -p medkit-core --test windows -- --include-ignored` 会用 PowerShell 5.1 真跑所有 info、action 小工具（包括重启资源管理器），并检查表格里没有电脑名和用户名。
+- 依赖具体硬件、没法在 CI 上确认的地方，写进[《真机验证清单》](real-machine-checklist.md)。
+
+## 5. 在本地验证
 
 ```sh
 cargo run -p medkit-data -- check     # 格式、引用、黑名单、脚本检查
@@ -217,11 +260,12 @@ cargo test -p medkit-core --test windows -- --include-ignored
 
 CI 会在 Windows 上跑同样的测试。CI 的 Windows 机器是服务器版虚拟机，个别检测在那里本来就查不了（比如只判断桌面版支持期限的检测），这些检测的 ID 列在 `.github/workflows/ci.yml` 的 `MEDKIT_SMOKE_EXPECTED_FAILURES` 里，并写明原因；它们报的脚本错误只提示、不算失败。超时、脚本宿主出错、返回了没定义的结果代码，不管在不在名单里都算失败。
 
-## 5. 提交前检查清单
+## 6. 提交前检查清单
 
 - [ ] 写了 `references`，而且链接能打开。
 - [ ] 脚本只有 ASCII，能在 PowerShell 5.1 上运行。
 - [ ] 检测脚本可能返回的每个结果代码，在 YAML 里都有定义。
+- [ ] 小工具输出的每个表格、行和代码在 `labels` 里都有文字；不改设置；不输出序列号、电脑名、用户名这类信息。
 - [ ] 修复能撤销；不能撤销的写了 `irreversible_reason`。
 - [ ] 界面文字是写给普通人看的，没有术语堆砌，也没有吓唬人的说法。
 - [ ] `cargo run -p medkit-data -- check` 通过。

@@ -30,8 +30,8 @@ results:
       zh-CN: "{boot_when} 那次开机，从按下电源到出现桌面用了 {desktop_sec} 秒，有点慢（正常在 1 分钟以内）。"
     fixer: user
     next:
-      zh-CN: 打开「开机慢」，看看是哪些东西拖慢了开机。
-    links: ["symptom:slow-boot"]
+      zh-CN: 打开「开机慢」，看看是哪些东西拖慢了开机。最常见的原因是开机自动启动的软件太多：可以打开任务管理器，在「启动应用」（Windows 10 是「启动」选项卡）里把不需要一开机就用的软件禁用。
+    links: ["symptom:slow-boot", "tool:open.task-manager"]
   after-update:
     status: ok
     message:

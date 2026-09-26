@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:windowsupdate，由系统打开。
+id: settings.windows-update
+schema_version: 1
+group: open
+title: { zh-CN: Windows 更新 }
+description:
+  zh-CN: 打开「设置」里的 Windows 更新：检查和安装系统更新，看看有没有等着重启的更新。Windows 10 登记免费的扩展安全更新（ESU）也在这里。
+category: settings
+open: { settings: windowsupdate }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

@@ -1,0 +1,12 @@
+# 打开系统还原（open）。引擎启动 System32\rstrui.exe。系统还原被关掉、没有还原点时，向导里会直接说明。
+id: open.system-restore
+schema_version: 1
+group: open
+title: { zh-CN: 系统还原 }
+description:
+  zh-CN: 把系统退回到以前的某个还原点，适合装了某个软件、驱动或更新以后电脑出问题的情况。文档、照片这些个人文件不受影响，但那个还原点之后装的软件和驱动会被删掉。
+category: system
+open: { program: system-restore }
+references:
+  - https://support.microsoft.com/en-us/windows/experience/backup-recovery/system-restore
+  - https://support.microsoft.com/en-us/windows/system-protection-e9126e6e-fa64-4f5f-874d-9db90e57645a

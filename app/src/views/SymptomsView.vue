@@ -5,6 +5,7 @@ import type { ApplyResult, CheckResult, SymptomDetail, SymptomSummary } from '..
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
+import ResultLinks from '../components/ResultLinks.vue'
 import StatusLamp, { type LampState } from '../components/StatusLamp.vue'
 import TagPill from '../components/TagPill.vue'
 import { fixerLabel, maturityLabel, riskLabel, riskTone } from '../labels'
@@ -349,6 +350,8 @@ watch(
                   <p v-if="v.result?.error" class="muted small">出错信息：{{ v.result.error }}</p>
                   <p v-if="v.result?.fixer" class="small"><span class="muted">谁能修：</span>{{ fixerLabel[v.result.fixer] }}</p>
                   <p v-if="v.result?.next" class="small"><span class="muted">下一步：</span>{{ v.result.next }}</p>
+                  <!-- 这一步的修复办法列在下面；检测结果里只再加上小工具的按钮（去修、预览修复在这里都是重复的） -->
+                  <ResultLinks v-if="v.result" :links="v.result.links" :kinds="['tool']" />
 
                   <ul v-if="v.step.fixes.length" class="fixes">
                     <li v-for="fix in v.step.fixes" :key="fix.id" class="fix">
@@ -386,6 +389,7 @@ watch(
                   </p>
                   <p v-if="v.result?.error" class="muted small">出错信息：{{ v.result.error }}</p>
                   <p v-if="v.result?.next" class="small"><span class="muted">下一步：</span>{{ v.result.next }}</p>
+                  <ResultLinks v-if="v.result" :links="v.result.links" :kinds="['tool']" />
                   <div>
                     <button
                       type="button"

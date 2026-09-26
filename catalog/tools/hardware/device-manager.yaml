@@ -1,0 +1,12 @@
+# 打开设备管理器（open）。引擎启动 System32\mmc.exe devmgmt.msc。
+id: open.device-manager
+schema_version: 1
+group: open
+title: { zh-CN: 设备管理器 }
+description:
+  zh-CN: 列出电脑里所有的硬件和它们的驱动。某个设备旁边有黄色感叹号，说明它的驱动有问题；没声音、连不上网、摄像头打不开时，可以来这里看看。
+category: hardware
+open: { program: device-manager }
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/using-device-manager
+  - https://support.microsoft.com/en-us/windows/update-drivers-through-device-manager-in-windows-ec62f46c-ff14-c91d-eead-d7126dc1f7b6

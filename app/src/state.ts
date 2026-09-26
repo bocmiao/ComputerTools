@@ -1,15 +1,16 @@
 import { computed, reactive, ref } from 'vue'
 import { catalogSummary, systemInfo } from './api'
-import type { CatalogSummary, FeatureSummary, SymptomSummary, SystemInfo } from './api/types'
+import type { CatalogSummary, FeatureSummary, SymptomSummary, SystemInfo, ToolSummary } from './api/types'
 import { errorText } from './utils/format'
 
 // 整个界面共用的一点状态。页面不多，用不着路由和状态管理库。
 
-export type PageId = 'health' | 'symptoms' | 'settings' | 'journal' | 'report'
+export type PageId = 'health' | 'symptoms' | 'settings' | 'tools' | 'journal' | 'report'
 
-export const nav = reactive<{ page: PageId; symptomId: string | null }>({
+export const nav = reactive<{ page: PageId; symptomId: string | null; toolId: string | null }>({
   page: 'health',
   symptomId: null,
+  toolId: null,
 })
 
 export function goTo(page: PageId): void {
@@ -20,6 +21,15 @@ export function goTo(page: PageId): void {
 export function openSymptom(id: string): void {
   nav.symptomId = id
   nav.page = 'symptoms'
+}
+
+/**
+ * 跳到「小工具」并定位到某个小工具（检测结果里 tool: 链接的按钮用）。
+ * 小工具页会滚到这张卡片、把焦点放上去；「看信息」的小工具顺便查一次。
+ */
+export function openTool(id: string): void {
+  nav.toolId = id
+  nav.page = 'tools'
 }
 
 // ── 功能目录 ──
@@ -50,6 +60,18 @@ export function findFeature(id: string): FeatureSummary | undefined {
 export function findSymptom(id: string): SymptomSummary | undefined {
   return catalog.value?.symptoms.find((s) => s.id === id)
 }
+
+/** 目录里的小工具（后端比界面旧、没有 tools 时当作没有） */
+export function catalogTools(): ToolSummary[] {
+  return catalog.value?.tools ?? []
+}
+
+export function findTool(id: string): ToolSummary | undefined {
+  return catalogTools().find((t) => t.id === id)
+}
+
+/** 改完「需要重启资源管理器」的设置以后，对话框里直接给这个小工具的按钮 */
+export const RESTART_EXPLORER_TOOL = 'system.restart-explorer'
 
 // ── 系统信息 ──
 

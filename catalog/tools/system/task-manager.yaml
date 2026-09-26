@@ -1,0 +1,12 @@
+# 打开任务管理器（open）。引擎按绝对路径启动 System32\Taskmgr.exe（名单见 crates/medkit-core/src/tools.rs）。
+id: open.task-manager
+schema_version: 1
+group: open
+title: { zh-CN: 任务管理器 }
+description:
+  zh-CN: 看看哪个程序占着处理器、内存和硬盘，把卡死、没有响应的程序结束掉。左边的「启动应用」（Windows 10 是上面的「启动」选项卡）里还能关掉开机自动启动的软件。
+category: system
+open: { program: task-manager }
+references:
+  - https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows
+  - https://support.microsoft.com/en-us/windows/configure-startup-applications-in-windows-115a420a-0bff-4a6f-90e0-1934c844e473

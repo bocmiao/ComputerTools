@@ -8,13 +8,17 @@
  * 地址栏参数可以切换演示场景（可以组合）：
  *   ?allok      体检全部正常
  *   ?mismatch   用别的管理员账户运行（显示提示条）
- *   ?notadmin   没有以管理员身份运行
+ *   ?notadmin   没有以管理员身份运行（「查看 WiFi 密码」「刷新 DNS 缓存」这两个小工具会查不出来 / 做不了）
  *   ?win10      这台电脑是 Win10（只有 Win11 能用的功能会标成「这台电脑用不了」）
+ *   ?openfail   「打开系统工具」「打开设置里的页面」都打不开（像精简系统那样，工具被删掉了）
+ *   ?toolfail   「看信息」「一键处理」的小工具命令本身出错（reject 一个字符串）
  *
  * 默认场景里也有演示用的情况：
  *   - 「关闭任务栏上的资讯和兴趣（Win10）」在这台 Win11 上用不了
  *   - 「切换到高性能电源计划」执行一定失败（已退回，reboot 为 none）
  *   - 「打印机共享 0x0000011b 兼容设置」执行后复查没确认生效（ok 但 verified 不是 applied）
+ *   - 体检和症状检查的结果里有 tool: 链接（打开「存储」设置、设备管理器、可靠性历史记录，
+ *     查看电脑配置，刷新 DNS 缓存）
  */
 import type { CommandArgs, CommandName, CommandResult } from './commands'
 import type {
@@ -30,6 +34,10 @@ import type {
   Status,
   SymptomDetail,
   SystemInfo,
+  ToolResult,
+  ToolRow,
+  ToolSection,
+  ToolSummary,
   UndoResult,
 } from './types'
 
@@ -40,8 +48,10 @@ const DEMO_ALL_OK = params.has('allok')
 const DEMO_MISMATCH = params.has('mismatch')
 const DEMO_NOT_ADMIN = params.has('notadmin')
 const DEMO_WIN10 = params.has('win10')
+const DEMO_OPEN_FAIL = params.has('openfail')
+const DEMO_TOOL_FAIL = params.has('toolfail')
 
-// ─────────────────────────── 小工具 ───────────────────────────
+// ─────────────────────────── 辅助函数 ───────────────────────────
 
 const ID_RE = /^[a-z0-9]+([.-][a-z0-9]+)*$/
 const MINUTE = 60_000
@@ -405,6 +415,8 @@ const FEATURE_LIST: MockFeature[] = [
       notes: ['以后还要用那个代理软件的话，重新打开它，它会自己把代理设置回去。'],
     },
   ),
+  // 以前的版本把「刷新 DNS 缓存」做成了功能，现在它是小工具 network.flush-dns（清缓存不改设置）。
+  // 这里还留着，是因为修改日志里有当时的记录。
   defineFeature(
     {
       id: 'network.dns-flush',
@@ -601,7 +613,7 @@ const CHECKS: Record<string, MockCheck> = {
         message: `C 盘只剩 ${num(free)} GB（${num(pct)}%），可能影响更新和软件运行。`,
         fixer: 'medkit',
         next: '打开「C 盘满了」，看看哪些东西可以清理或搬走。',
-        links: ['symptom:disk-full'],
+        links: ['symptom:disk-full', 'tool:settings.storage'],
         facts,
       }
     },
@@ -687,6 +699,7 @@ const CHECKS: Record<string, MockCheck> = {
         message: '网址解析不太稳定：试了 6 次，有 2 次没解析出来，网页会时好时坏。',
         fixer: 'medkit',
         next: '先试试「刷新 DNS 缓存」；还不行，可以改用国内公共 DNS。',
+        links: ['tool:network.flush-dns'],
         facts: { tries: 6, failures: 2, server: '宽带自动分配' },
       }
     },
@@ -820,6 +833,7 @@ const CHECKS: Record<string, MockCheck> = {
         message: '这块机械硬盘出现了 12 个重新分配的扇区，这是硬盘开始老化的迹象。',
         fixer: 'hardware',
         next: '尽快把重要的文件备份到别的硬盘或网盘，然后考虑换一块固态硬盘。',
+        links: ['tool:system.hardware-info'],
         facts: {
           model: 'WDC WD10EZEX-08WN4A0',
           media: '机械硬盘',
@@ -850,6 +864,7 @@ const CHECKS: Record<string, MockCheck> = {
         message: '最近 7 天有 5 次程序崩溃，大部分是「WPS Office」。',
         fixer: 'helper',
         next: '先把 WPS 更新到最新版；还是经常崩溃的话，把诊断报告发给懂哥看看。',
+        links: ['tool:open.reliability'],
         facts: { crashes_7d: 5, top_app: 'WPS Office', update_failures_7d: 0 },
       }
     },
@@ -891,6 +906,7 @@ const CHECKS: Record<string, MockCheck> = {
         message: '显卡驱动没装好，现在用的是「Microsoft 基本显示适配器」。屏幕分辨率可能不对，看视频、玩游戏会卡。',
         fixer: 'system',
         next: '打开「设置 → Windows 更新 → 高级选项 → 可选更新」，看看里面有没有显卡驱动；没有的话，到电脑品牌官网按型号下载。',
+        links: ['tool:settings.windows-update', 'tool:open.device-manager'],
         facts: { problem_devices: 1, device: 'Microsoft 基本显示适配器', problem_code: 28 },
       }
     },
@@ -990,7 +1006,8 @@ const SYMPTOMS: MockSymptom[] = [
       { check: 'network.ip-address', fixes: [] },
       { check: 'network.gateway', fixes: [] },
       { check: 'network.internet', fixes: [] },
-      { check: 'network.dns', fixes: ['network.dns-flush', 'network.dns-public'] },
+      // 刷新 DNS 缓存现在是小工具，从检测结果里的 tool: 链接过去（docs/architecture.md 第 11 节）
+      { check: 'network.dns', fixes: ['network.dns-public'] },
       { check: 'network.proxy-dead', fixes: ['network.proxy-off'] },
       { check: 'network.winsock', fixes: ['network.winsock-reset'] },
       { check: 'network.time', fixes: [] },
@@ -1332,6 +1349,384 @@ function buildReport(): string {
   return lines.join('\n')
 }
 
+// ─────────────────────────── 小工具 ───────────────────────────
+//
+// 引擎返回的 ToolResult 已经按数据文件里的 labels 渲染成中文，这里直接写渲染好的样子。
+// 和真的脚本一样，不输出序列号、MAC 地址、电脑名、用户名。
+
+type ToolOutcome = Pick<ToolResult, 'status' | 'message'> &
+  Partial<Pick<ToolResult, 'resultCode' | 'next' | 'links' | 'sections' | 'error'>>
+
+type ToolInput = Pick<ToolSummary, 'id' | 'title' | 'description' | 'category' | 'group'> &
+  Partial<Pick<ToolSummary, 'opens' | 'audience' | 'confirm'>>
+
+interface MockTool {
+  summary: ToolSummary
+  /** info、action 小工具：跑一次的结果 */
+  run?: () => ToolOutcome
+  /** open 小工具实际打开的东西（程序名或 ms-settings: 页面），只用来编出错信息 */
+  target?: string
+  /** 没用管理员身份运行时做不了 */
+  requiresAdmin?: boolean
+  /** 比一般的命令多等一会儿（毫秒），好看清「正在…」的样子 */
+  slowMs?: number
+}
+
+function defineTool(summary: ToolInput, rest: Omit<MockTool, 'summary'> = {}): MockTool {
+  return { summary: { opens: null, audience: 'everyone', confirm: null, ...summary }, ...rest }
+}
+
+function openTool(
+  id: string,
+  title: string,
+  description: string,
+  category: string,
+  opens: 'program' | 'settings',
+  target: string,
+  audience: ToolSummary['audience'] = 'everyone',
+): MockTool {
+  return defineTool({ id, title, description, category, group: 'open', opens, audience }, { target })
+}
+
+function row(label: string, value: string, secret = false): ToolRow {
+  return { label, value, secret }
+}
+
+function hardwareSections(): ToolSection[] {
+  const osName = SYSTEM.osCaption.replace(/^Microsoft\s+/, '')
+  // 默认场景里显卡驱动没装好、系统盘是一块老化的机械硬盘（和体检结果对得上）
+  const gpu: ToolSection = DEMO_ALL_OK
+    ? {
+        title: '显卡：Intel(R) UHD Graphics 630',
+        rows: [row('显存', '共用内存，最多 8 GB'), row('驱动版本', '31.0.101.2127'), row('驱动日期', '2024-02-06')],
+      }
+    : {
+        title: '显卡：Microsoft 基本显示适配器',
+        rows: [row('显存', '共用内存'), row('驱动版本', '10.0.26100.1'), row('驱动日期', '2006-06-21')],
+      }
+  const systemDisk: ToolSection = DEMO_ALL_OK
+    ? {
+        title: '硬盘：Samsung SSD 980 1TB',
+        rows: [row('容量', '932 GB'), row('类型', '固态硬盘'), row('接口', 'NVMe'), row('分区', 'C:、D:')],
+      }
+    : {
+        title: '硬盘：WDC WD10EZEX-08WN4A0',
+        rows: [row('容量', '932 GB'), row('类型', '机械硬盘'), row('接口', 'SATA'), row('分区', 'C:、D:')],
+      }
+  return [
+    { title: '电脑', rows: [row('制造商', 'LENOVO'), row('型号', 'ThinkCentre M720t'), row('类型', '台式机')] },
+    {
+      title: '系统',
+      rows: [
+        row('名称', osName),
+        row('版本', DEMO_WIN10 ? '22H2（19045.6332）' : '24H2（26100.4946）'),
+        row('位数', '64 位'),
+        row('安装日期', '2024-03-18'),
+      ],
+    },
+    {
+      title: '处理器',
+      rows: [
+        row('型号', 'Intel(R) Core(TM) i5-10400 CPU @ 2.90GHz'),
+        row('核心', '6 核 12 线程'),
+        row('基准频率', '2.9 GHz'),
+      ],
+    },
+    { title: '主板', rows: [row('制造商', 'LENOVO'), row('型号', '3136'), row('BIOS 版本', 'M1UKT4BA（2023-05-12）')] },
+    {
+      title: '内存',
+      rows: [
+        row('总容量', '16 GB'),
+        row('插槽', '一共 4 个，用了 2 个'),
+        row('内存条', '8 GB DDR4 2666 MHz（Samsung，插在 DIMM1）'),
+        row('内存条', '8 GB DDR4 2666 MHz（Kingston，插在 DIMM3）'),
+      ],
+    },
+    gpu,
+    systemDisk,
+    {
+      title: '硬盘：Samsung SSD 870 EVO 500GB',
+      rows: [row('容量', '466 GB'), row('类型', '固态硬盘'), row('接口', 'SATA'), row('分区', 'E:')],
+    },
+    {
+      title: '网卡：Realtek PCIe GbE Family Controller',
+      rows: [row('类型', '有线'), row('状态', '已连接'), row('速度', '1 Gbps')],
+    },
+    {
+      title: '网卡：Intel(R) Wi-Fi 6 AX201 160MHz',
+      rows: [row('类型', '无线'), row('状态', '没有连接')],
+    },
+  ]
+}
+
+const WIFI_SECTIONS: ToolSection[] = [
+  {
+    title: 'WiFi：我家的WiFi-5G',
+    rows: [row('密码', 'Lin1990@home', true), row('加密方式', 'WPA2 个人'), row('自动连接', '是')],
+  },
+  {
+    title: 'WiFi：CMCC-WEB',
+    rows: [row('密码', '没有密码（开放的网络，谁都能连）'), row('加密方式', '不加密'), row('自动连接', '否')],
+  },
+  {
+    title: 'WiFi：eduroam',
+    rows: [
+      row('密码', '用个人账号登录，没有统一的 WiFi 密码'),
+      row('加密方式', 'WPA2 企业'),
+      row('自动连接', '是'),
+    ],
+  },
+]
+
+/** 刷新 DNS 缓存：第一次清掉的多，之后没多少可清 */
+let dnsFlushed = false
+
+const TOOL_LIST: MockTool[] = [
+  // ── 看信息 ──
+  defineTool(
+    {
+      id: 'system.hardware-info',
+      title: '电脑配置',
+      description: '看看这台电脑的处理器、内存、显卡、硬盘都是什么型号。升级内存、买软件、找人帮忙时用得上。',
+      category: 'hardware',
+      group: 'info',
+    },
+    {
+      run: () => ({
+        status: 'ok',
+        resultCode: 'ok',
+        message: '已经读出这台电脑的配置。',
+        sections: hardwareSections(),
+      }),
+      slowMs: 1200,
+    },
+  ),
+  defineTool(
+    {
+      id: 'network.wifi-passwords',
+      title: '查看 WiFi 密码',
+      description: '忘了 WiFi 密码？这里能看到这台电脑连过的 WiFi 和它们的密码，方便给手机或新电脑连上。',
+      category: 'network',
+      group: 'info',
+    },
+    {
+      run: () => ({
+        status: 'ok',
+        resultCode: 'ok',
+        message: `这台电脑记住了 ${WIFI_SECTIONS.length} 个 WiFi。密码默认遮住，点「显示」才能看到。`,
+        sections: WIFI_SECTIONS,
+      }),
+      requiresAdmin: true,
+    },
+  ),
+
+  // ── 一键处理 ──
+  defineTool(
+    {
+      id: 'network.flush-dns',
+      title: '刷新 DNS 缓存',
+      description: '清掉电脑记住的网址解析结果。换了网络、改了路由器以后某些网站打不开时，先试试这个。',
+      category: 'network',
+      group: 'action',
+    },
+    {
+      run: () => {
+        const entries = dnsFlushed ? randomInt(3, 30) : 236
+        dnsFlushed = true
+        return {
+          status: 'ok',
+          resultCode: 'done',
+          message: `已经刷新了 DNS 缓存（清掉了 ${entries} 条记录）。`,
+          next: '网页还是打不开的话，把浏览器关掉再打开试试；还不行，去「上不了网」里一步一步查。',
+          links: ['symptom:network'],
+        }
+      },
+      requiresAdmin: true,
+    },
+  ),
+  defineTool(
+    {
+      id: 'system.restart-explorer',
+      title: '重启资源管理器',
+      description: '任务栏点不动、桌面图标不见了、文件夹窗口卡住时，把资源管理器关掉再重新打开，不用重启电脑。',
+      category: 'system',
+      group: 'action',
+      confirm:
+        '资源管理器会关掉再重新打开：桌面和任务栏会消失几秒钟，已经打开的文件夹窗口会关掉。正在复制或移动文件的话，先等它做完再点。',
+    },
+    {
+      run: () => ({
+        status: 'ok',
+        resultCode: 'done',
+        message: '资源管理器已经重新打开了。任务栏和桌面要是还没出来，再等几秒钟。',
+      }),
+      slowMs: 1500,
+    },
+  ),
+
+  // ── 打开系统工具 ──
+  openTool(
+    'open.task-manager',
+    '任务管理器',
+    '看看哪个程序占着 CPU 和内存，结束卡死的程序，管理开机自动启动的软件。',
+    'system',
+    'program',
+    'Taskmgr.exe',
+  ),
+  openTool(
+    'open.device-manager',
+    '设备管理器',
+    '看看有没有设备带黄色感叹号（驱动没装好），网卡、声卡、显卡是不是都认到了。',
+    'hardware',
+    'program',
+    'devmgmt.msc',
+  ),
+  openTool(
+    'open.disk-cleanup',
+    '磁盘清理',
+    'Windows 自带的清理工具，可以删掉临时文件、回收站和旧的更新文件。',
+    'disk',
+    'program',
+    'cleanmgr.exe',
+  ),
+  openTool(
+    'open.system-restore',
+    '系统还原',
+    '把系统退回到以前某个还原点的样子。文档和照片不受影响，但之后装的软件可能要重新装。',
+    'system',
+    'program',
+    'rstrui.exe',
+  ),
+  openTool(
+    'open.reliability',
+    '可靠性历史记录',
+    '按日期列出程序崩溃、更新失败这些问题，看看电脑是从哪天开始不对劲的。',
+    'system',
+    'program',
+    'perfmon.exe',
+  ),
+  openTool(
+    'open.memory-diagnostic',
+    'Windows 内存诊断',
+    '检查内存条有没有问题。要重启电脑才能检查，大约要 10 到 20 分钟。',
+    'hardware',
+    'program',
+    'MdSched.exe',
+  ),
+  openTool(
+    'open.disk-management',
+    '磁盘管理',
+    '查看和调整硬盘分区、给新硬盘分区。操作不当会丢数据，不熟悉的话别动里面的东西。',
+    'disk',
+    'program',
+    'diskmgmt.msc',
+    'helper',
+  ),
+  openTool(
+    'open.system-information',
+    '系统信息',
+    '最全的硬件和系统信息。懂哥帮你远程查问题时，可能会让你打开它看看。',
+    'system',
+    'program',
+    'msinfo32.exe',
+    'helper',
+  ),
+
+  // ── 打开「设置」里的页面 ──
+  openTool(
+    'settings.windows-update',
+    'Windows 更新',
+    '检查和安装更新，看看有没有装好了、等着重启的更新。',
+    'settings',
+    'settings',
+    'ms-settings:windowsupdate',
+  ),
+  openTool('settings.storage', '存储', '看看 C 盘被什么占满了，开启存储感知自动清理。', 'settings', 'settings', 'ms-settings:storagesense'),
+  openTool(
+    'settings.apps',
+    '已安装的应用',
+    '卸载不用的软件，看看每个软件占了多少空间。',
+    'settings',
+    'settings',
+    'ms-settings:appsfeatures',
+  ),
+  openTool(
+    'settings.default-apps',
+    '默认应用',
+    '设置用哪个浏览器打开网页、用哪个软件看图片和视频。',
+    'settings',
+    'settings',
+    'ms-settings:defaultapps',
+  ),
+  openTool(
+    'settings.network',
+    '网络和 Internet',
+    '看看网络连上了没有，设置 WiFi 和代理，网络实在不行时可以在这里重置网络。',
+    'settings',
+    'settings',
+    'ms-settings:network-status',
+  ),
+  openTool(
+    'settings.printers',
+    '打印机和扫描仪',
+    '添加或删除打印机，设置默认打印机，看看卡在队列里的打印任务。',
+    'settings',
+    'settings',
+    'ms-settings:printers',
+  ),
+  openTool('settings.sound', '声音', '选择从哪个喇叭或耳机出声、用哪个麦克风，调整音量。', 'settings', 'settings', 'ms-settings:sound'),
+]
+
+const TOOLS = new Map(TOOL_LIST.map((t) => [t.summary.id, t]))
+
+function getTool(id: string): MockTool {
+  const t = TOOLS.get(requireId(id))
+  if (!t) throw `找不到小工具：${id}`
+  return t
+}
+
+function runMockTool(id: string): ToolResult {
+  const t = getTool(id)
+  // 说法都和引擎一样
+  if (!t.run) throw `「${t.summary.title}」不用运行，直接打开就行`
+  if (DEMO_TOOL_FAIL) throw `「${t.summary.title}」的脚本运行超时（30 秒），已经停下来了。`
+  // 和检测一样：没有管理员权限时不跑脚本，结果算「没查出来」
+  const o: ToolOutcome =
+    t.requiresAdmin && !SYSTEM.isAdmin
+      ? {
+          status: 'unknown',
+          resultCode: null,
+          message: t.summary.group === 'info' ? '没能读出来。' : '没能完成。',
+          error: '这一项需要管理员权限',
+        }
+      : t.run()
+  return {
+    id,
+    title: t.summary.title,
+    status: o.status,
+    resultCode: o.resultCode === undefined ? (o.status === 'ok' ? 'ok' : null) : o.resultCode,
+    message: o.message,
+    next: o.next ?? null,
+    links: o.links ?? [],
+    sections: o.sections ?? [],
+    error: o.error ?? null,
+    durationMs: randomInt(200, 2400),
+  }
+}
+
+function openMockTool(id: string): null {
+  const t = getTool(id)
+  const title = t.summary.title
+  if (t.summary.group !== 'open') throw `「${title}」不是用来打开的工具`
+  if (DEMO_OPEN_FAIL) {
+    // ShellExecute 返回 2：找不到「设置」
+    throw t.summary.opens === 'settings'
+      ? `没能打开「${title}」：打开「设置」失败（错误 2）`
+      : `这台电脑上没有「${title}」（找不到 ${t.target ?? id}），可能被精简系统删掉了。`
+  }
+  return null
+}
+
 // ─────────────────────────── 命令 ───────────────────────────
 
 type Handlers = { [K in CommandName]: (args: CommandArgs<K>) => CommandResult<K> }
@@ -1343,6 +1738,7 @@ const handlers: Handlers = {
     profiles: Object.entries(PROFILES).map(([id, p]) => ({ id, title: p.title, checkCount: p.checks.length })),
     symptoms: SYMPTOMS.map((s) => ({ id: s.id, title: s.title, summary: s.summary, keywords: s.keywords, maturity: s.maturity })),
     features: FEATURE_LIST.map((f) => f.summary),
+    tools: TOOL_LIST.map((t) => t.summary),
   }),
 
   symptom_detail: ({ id }): SymptomDetail => {
@@ -1481,11 +1877,22 @@ const handlers: Handlers = {
   },
 
   report_generate: () => buildReport(),
+
+  tool_run: ({ id }) => runMockTool(id),
+
+  tool_open: ({ id }) => openMockTool(id),
+}
+
+/** 个别小工具要多等一会儿（读电脑配置、重启资源管理器），好看清「正在…」的样子 */
+function extraDelay(cmd: CommandName, args: unknown): number {
+  if (cmd !== 'tool_run' || typeof args !== 'object' || args === null || !('id' in args)) return 0
+  const id = args.id
+  return typeof id === 'string' ? (TOOLS.get(id)?.slowMs ?? 0) : 0
 }
 
 /** 和 Tauri 的 invoke 用法一样：等 300–800 毫秒后返回结果的副本；出错时 reject 一个字符串 */
 export async function mockInvoke<K extends CommandName>(cmd: K, args: CommandArgs<K>): Promise<CommandResult<K>> {
-  await sleep(randomInt(300, 800))
+  await sleep(randomInt(300, 800) + extraDelay(cmd, args))
   const handler: (a: CommandArgs<K>) => CommandResult<K> = handlers[cmd]
   return clone(handler(args))
 }

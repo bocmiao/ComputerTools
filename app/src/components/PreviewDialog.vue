@@ -14,6 +14,7 @@ import {
 import { vAutofocus } from '../utils/dialogs'
 import { errorText } from '../utils/format'
 import BusySpinner from './BusySpinner.vue'
+import ExplorerRestart from './ExplorerRestart.vue'
 import ModalDialog from './ModalDialog.vue'
 import PathText from './PathText.vue'
 import TagPill from './TagPill.vue'
@@ -207,6 +208,8 @@ onMounted(load)
           <dd>
             <strong>{{ rebootLabel[result.reboot] }}</strong>
             <span class="muted">，之后才能看到效果。</span>
+            <!-- 只是重启资源管理器的话，直接给按钮 -->
+            <ExplorerRestart v-if="result.reboot === 'explorer'" />
           </dd>
         </template>
         <template v-if="result.error">

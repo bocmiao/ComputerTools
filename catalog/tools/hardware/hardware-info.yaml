@@ -1,0 +1,116 @@
+# 电脑配置（info）。脚本：scripts/tools/system/hardware-info.ps1
+# 按下面的顺序输出表格。每一块单独读取：某一块读不出来只少这一块（结果 partial），全都读不出来才报错。
+#   computer（电脑）：Win32_ComputerSystem 的厂商、型号。联想的 Model 是机器型号（如 20L7S0G800），好认的型号名在
+#                    Win32_ComputerSystemProduct.Version 里，两个都有时写成「ThinkPad T480 (20L7S0G800)」。
+#   os（系统）：名称（Win32_OperatingSystem.Caption，系统自己翻译好的，如「Microsoft Windows 11 家庭中文版」）；
+#              版本（注册表 CurrentVersion 的 DisplayVersion，老版本 Win10 用 ReleaseId，再加 CurrentBuild.UBR，如「24H2 (26100.4652)」）；
+#              系统类型（Session Manager\Environment 的 PROCESSOR_ARCHITECTURE，是系统本身的，不受 32 位进程影响）；
+#              安装日期（和「设置 → 系统 → 系统信息」里的一样：装完大版本更新后会变成那次更新的日子）；
+#              激活状态（SoftwareLicensingProduct 里 Windows 那一项、装了密钥的，LicenseStatus 为 1 就是已激活；
+#              只读 LicenseStatus，不读产品密钥；这个查询要几秒钟，查不出来显示「没查出来」，不影响别的部分）。
+#   cpu（处理器）：每个处理器一张表：核心数、线程数、主频（MaxClockSpeed）。
+#   board（主板）：Win32_BaseBoard 的厂商、型号，Win32_BIOS 的版本、日期。
+#   memory（内存）：总容量（各条内存相加；虚拟机里拿不到内存条时用系统可用内存）、插槽（已用 / 总数，
+#                  拿不到或是 0 时不显示）、每条内存一行：容量、类型（SMBIOSMemoryType）、标称频率（Speed，没有时用
+#                  ConfiguredClockSpeed）、厂商（只显示看得懂的名字，JEDEC 代码和乱码不显示）。
+#   gpu（显卡）：每块显卡一张表。显存：Win32_VideoController.AdapterRAM 是 32 位的，4 GB 以上会封顶，所以先读显卡驱动的
+#               注册表项（Enum\<PNPDeviceID> 的 Driver 指向 Control\Class\{4d36e968-…}\NNNN）里的
+#               HardwareInformation.qwMemorySize，再读 HardwareInformation.MemorySize，最后才用 AdapterRAM；
+#               32 位的值封顶了就不显示。驱动版本、驱动日期、当前分辨率和刷新率。
+#               用的是「Microsoft 基本显示适配器」（按名字或 display.inf 认出来，说明没装显卡驱动）时，加一行提示，不显示显存。
+#   disk（硬盘）：每块物理硬盘（Get-PhysicalDisk）一张表：容量（按 1024 换算，和资源管理器显示的一样）、
+#                类型（MediaType 是 SSD / HDD 才写，其余显示「没查出来」，不猜）、接口（BusType）。
+#   network（网卡）：每块物理网卡（Get-NetAdapter -Physical）一张表：类型（无线 / 有线 / 其他）、状态。
+# 厂商没填的占位文字（System manufacturer、To be filled by O.E.M.、Default string 等）不显示。
+# 不输出序列号、UUID、MAC 地址、IP 地址、电脑名、用户名、产品密钥：界面有「复制全部」，用户会把它发给别人。
+# 待真机验证：显存、内存条厂商、激活查询的用时、基本显示适配器的识别，见 docs/real-machine-checklist.md。
+id: system.hardware-info
+schema_version: 1
+group: info
+title: { zh-CN: 电脑配置 }
+description:
+  zh-CN: 看看这台电脑的处理器、内存、显卡、硬盘是什么型号，以及系统版本、有没有激活。买二手电脑验机、加内存换硬盘之前，或者懂哥问「你电脑什么配置」时用得上。
+category: hardware
+requires_admin: true
+timeout_sec: 60
+run:
+  script: tools/system/hardware-info.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 这是这台电脑的配置。点「复制全部」可以发给懂哥或售后，里面没有序列号、电脑名这类个人信息。
+  partial:
+    status: ok
+    message:
+      zh-CN: 有几项配置没读出来，下面只列出了读到的部分。
+    next:
+      zh-CN: 点「复制全部」可以把读到的配置发给懂哥或售后。每次都读不出来的话，可能是系统组件出了问题，可以请懂哥看看。
+labels:
+  sections:
+    computer: { zh-CN: 电脑 }
+    os: { zh-CN: 系统 }
+    cpu: { zh-CN: 处理器 }
+    board: { zh-CN: 主板 }
+    memory: { zh-CN: 内存 }
+    gpu: { zh-CN: 显卡 }
+    disk: { zh-CN: 硬盘 }
+    network: { zh-CN: 网卡 }
+  rows:
+    maker: { zh-CN: 厂商 }
+    model: { zh-CN: 型号 }
+    name: { zh-CN: 名称 }
+    version: { zh-CN: 版本 }
+    arch: { zh-CN: 系统类型 }
+    install_date: { zh-CN: 安装日期 }
+    activation: { zh-CN: 激活状态 }
+    cores: { zh-CN: 核心数 }
+    threads: { zh-CN: 线程数 }
+    clock: { zh-CN: 主频 }
+    bios_version: { zh-CN: BIOS 版本 }
+    bios_date: { zh-CN: BIOS 日期 }
+    total: { zh-CN: 总容量 }
+    slots: { zh-CN: 插槽（已用 / 总数） }
+    module: { zh-CN: 内存条 }
+    driver_status: { zh-CN: 驱动 }
+    vram: { zh-CN: 专用显存 }
+    driver_version: { zh-CN: 驱动版本 }
+    driver_date: { zh-CN: 驱动日期 }
+    resolution: { zh-CN: 当前分辨率 }
+    size: { zh-CN: 容量 }
+    type: { zh-CN: 类型 }
+    bus: { zh-CN: 接口 }
+    kind: { zh-CN: 类型 }
+    status: { zh-CN: 状态 }
+  values:
+    x64: { zh-CN: 64 位（x64） }
+    arm64: { zh-CN: 64 位（ARM） }
+    x86: { zh-CN: 32 位（x86） }
+    activated: { zh-CN: 已激活 }
+    not-activated: { zh-CN: 没有激活 }
+    unknown: { zh-CN: 没查出来 }
+    basic-driver: { zh-CN: 没装显卡驱动（现在用的是 Windows 自带的基本显示驱动），画面可能不清楚、不流畅。可以运行 Windows 更新，或者到电脑品牌官网下载显卡驱动。 }
+    ssd: { zh-CN: 固态硬盘 }
+    hdd: { zh-CN: 机械硬盘 }
+    wifi: { zh-CN: 无线（WiFi） }
+    ethernet: { zh-CN: 有线（网线） }
+    other: { zh-CN: 其他 }
+    up: { zh-CN: 已连接 }
+    down: { zh-CN: 没连接 }
+    disabled: { zh-CN: 已禁用 }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-computersystem
+  - https://learn.microsoft.com/en-us/archive/blogs/alex_semi/computer-make-model-with-lenovo-real-models
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-operatingsystem
+  - https://learn.microsoft.com/en-us/previous-versions/windows/desktop/sppwmi/softwarelicensingproduct
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-processor
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-baseboard
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-bios
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-physicalmemory
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-physicalmemoryarray
+  - https://www.dmtf.org/standards/smbios
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-videocontroller
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/display/registering-hardware-information
+  - https://support.microsoft.com/en-us/windows/microsoft-basic-display-adapter-in-windows-fd1c777c-d4d5-f05a-edb1-0dc7031fd677
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/storage/msft-physicaldisk
+  - https://learn.microsoft.com/en-us/windows/win32/fwp/wmi/netadaptercimprov/msft-netadapter

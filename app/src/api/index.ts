@@ -9,6 +9,7 @@ import type {
   Preview,
   SymptomDetail,
   SystemInfo,
+  ToolResult,
   UndoResult,
 } from './types'
 
@@ -39,7 +40,7 @@ export function systemInfo(): Promise<SystemInfo> {
   return call('system_info', {})
 }
 
-/** 所有检测清单、症状、功能的摘要 */
+/** 所有检测清单、症状、功能、小工具的摘要 */
 export function catalogSummary(): Promise<CatalogSummary> {
   return call('catalog_summary', {})
 }
@@ -92,4 +93,14 @@ export function journalUndoSession(sessionId: string): Promise<UndoResult[]> {
 /** 生成已脱敏的纯文本诊断报告 */
 export function reportGenerate(): Promise<string> {
   return call('report_generate', {})
+}
+
+/** 跑一个「看信息」或「一键处理」小工具。不改设置，也不记进修改日志 */
+export function toolRun(id: string): Promise<ToolResult> {
+  return call('tool_run', { id })
+}
+
+/** 打开一个系统自带的工具，或「设置」里的一页。打不开时 reject 一句说明（例如这台电脑上没有这个工具） */
+export function toolOpen(id: string): Promise<null> {
+  return call('tool_open', { id })
 }

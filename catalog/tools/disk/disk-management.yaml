@@ -1,0 +1,12 @@
+# 打开磁盘管理（open，给懂哥用）。引擎启动 System32\mmc.exe diskmgmt.msc。点错了会丢数据，所以 audience 是 helper。
+id: open.disk-management
+schema_version: 1
+group: open
+title: { zh-CN: 磁盘管理 }
+description:
+  zh-CN: 查看每块硬盘分成了几个区、每个分区多大，也能给新硬盘分区、改盘符。点错了可能把整个分区的数据弄丢，适合懂哥使用。
+category: disk
+audience: helper
+open: { program: disk-management }
+references:
+  - https://learn.microsoft.com/en-us/windows-server/storage/disk-management/overview-of-disk-management

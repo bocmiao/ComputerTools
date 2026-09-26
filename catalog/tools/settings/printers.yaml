@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:printers，由系统打开。
+id: settings.printers
+schema_version: 1
+group: open
+title: { zh-CN: 打印机和扫描仪 }
+description:
+  zh-CN: 打开「设置」里的打印机页面：添加打印机、设置默认打印机、查看正在排队的打印任务。打印机不出纸时，可以先在这里看看它是不是「脱机」了。
+category: settings
+open: { settings: printers }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

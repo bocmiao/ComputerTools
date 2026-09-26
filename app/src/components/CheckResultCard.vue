@@ -2,13 +2,14 @@
 import { computed, ref, useId } from 'vue'
 import type { CheckResult } from '../api/types'
 import { fixerLabel, statusLabel, type ShownStatus } from '../labels'
-import { findFeature, findSymptom, openSymptom } from '../state'
-import { parseLink, simpleFacts } from '../utils/format'
+import { simpleFacts } from '../utils/format'
 import AppIcon from './AppIcon.vue'
 import FactsTable from './FactsTable.vue'
+import ResultLinks from './ResultLinks.vue'
 import TagPill from './TagPill.vue'
 
-// 体检结果的一张卡片。结论和说明直接显示；谁能修、下一步、详细数据、出错信息展开后才显示。
+// 体检结果的一张卡片。结论、说明和跳转按钮（去修、预览修复、小工具）直接显示；
+// 谁能修、下一步、详细数据、出错信息展开后才显示。
 
 const props = defineProps<{ result: CheckResult & { status: ShownStatus } }>()
 const emit = defineEmits<{ preview: [featureId: string] }>()
@@ -16,20 +17,8 @@ const emit = defineEmits<{ preview: [featureId: string] }>()
 const expanded = ref(false)
 const detailsId = useId()
 
-const links = computed(() => props.result.links.map(parseLink).filter((l) => l !== null))
-const symptomLinks = computed(() => links.value.filter((l) => l.kind === 'symptom'))
-const featureLinks = computed(() => links.value.filter((l) => l.kind === 'feature'))
 const hasFacts = computed(() => simpleFacts(props.result.facts).length > 0)
 const hasDetails = computed(() => !!(props.result.fixer || props.result.next || props.result.error || hasFacts.value))
-
-function symptomTitle(id: string): string {
-  return findSymptom(id)?.title ?? '相关症状'
-}
-
-function featureButtonText(id: string): string {
-  if (featureLinks.value.length <= 1) return '预览修复'
-  return `预览修复：${findFeature(id)?.title ?? id}`
-}
 </script>
 
 <template>
@@ -51,27 +40,7 @@ function featureButtonText(id: string): string {
     </div>
     <p class="message">{{ result.message }}</p>
 
-    <div v-if="links.length" class="actions">
-      <button
-        v-for="link in symptomLinks"
-        :key="`s-${link.id}`"
-        type="button"
-        class="btn btn-secondary btn-small"
-        @click="openSymptom(link.id)"
-      >
-        去修：{{ symptomTitle(link.id) }}
-      </button>
-      <button
-        v-for="link in featureLinks"
-        :key="`f-${link.id}`"
-        type="button"
-        class="btn btn-primary btn-small"
-        :title="findFeature(link.id)?.title"
-        @click="emit('preview', link.id)"
-      >
-        {{ featureButtonText(link.id) }}
-      </button>
-    </div>
+    <ResultLinks :links="result.links" @preview="(featureId) => emit('preview', featureId)" />
 
     <div v-show="expanded" :id="detailsId" class="details">
       <dl class="kv">
@@ -137,13 +106,6 @@ function featureButtonText(id: string): string {
 
 .title {
   font-size: var(--text-large);
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
 }
 
 .toggle {

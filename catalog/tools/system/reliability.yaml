@@ -1,0 +1,12 @@
+# 打开可靠性历史记录（open）。引擎启动 System32\perfmon.exe /rel（可靠性监视器）。
+id: open.reliability
+schema_version: 1
+group: open
+title: { zh-CN: 可靠性历史记录 }
+description:
+  zh-CN: 按天列出程序崩溃、蓝屏和系统更新的记录，能看出电脑是从哪天开始出问题的。出现红色叉号的那一天，点一下就能看到是哪个程序出了什么问题。
+category: system
+open: { program: reliability }
+references:
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/perfmon
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-r2-and-2008/cc748864(v=ws.10)

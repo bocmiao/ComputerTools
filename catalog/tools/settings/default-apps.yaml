@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:defaultapps，由系统打开。
+id: settings.default-apps
+schema_version: 1
+group: open
+title: { zh-CN: 默认应用 }
+description:
+  zh-CN: 打开「设置」里的默认应用：选用哪个浏览器打开网页、用哪个软件看图片、视频和 PDF。默认浏览器被别的软件改掉时，在这里改回来。
+category: settings
+open: { settings: defaultapps }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

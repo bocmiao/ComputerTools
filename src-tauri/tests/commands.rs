@@ -147,9 +147,15 @@ fn every_command_is_reachable_and_well_shaped() {
     for t in tools {
         has_keys(t, &["id", "title", "description", "category", "group", "opens", "audience", "confirm"]);
     }
-    let of_group = |g: &str| tools.iter().find(|t| t["group"] == g).map(|t| t["id"].as_str().unwrap().to_owned());
+    let of_group = |g: &str| {
+        tools
+            .iter()
+            .find(|t| t["group"] == g)
+            .map(|t| t["id"].as_str().unwrap().to_owned())
+            .unwrap_or_else(|| panic!("应该有 {g} 小工具"))
+    };
     // info / action：假系统上脚本会失败，但返回的是完整的结果结构，不是命令错误
-    for id in ["info", "action"].into_iter().filter_map(of_group) {
+    for id in ["info", "action"].map(of_group) {
         let r = ok(&win, "tool_run", json!({ "id": id }));
         has_keys(
             &r,
@@ -157,9 +163,7 @@ fn every_command_is_reachable_and_well_shaped() {
         );
     }
     // open：假系统上直接成功，返回 null
-    if let Some(id) = of_group("open") {
-        assert!(ok(&win, "tool_open", json!({ "id": id })).is_null());
-    }
+    assert!(ok(&win, "tool_open", json!({ "id": of_group("open") })).is_null());
 }
 
 #[test]

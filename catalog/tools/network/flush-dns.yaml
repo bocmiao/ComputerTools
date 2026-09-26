@@ -1,0 +1,36 @@
+# 刷新 DNS 缓存（action）。脚本：scripts/tools/network/flush-dns.ps1
+# 先用 Get-DnsClientCache 数一下缓存里有多少条（事实 entries；数不了就返回 done-no-count），
+# 再用 Clear-DnsClientCache 清空（等同于 ipconfig /flushdns）。这个命令没有或者出错时（它经过 WMI，WMI 坏了的电脑上会失败），
+# 改用 System32\ipconfig.exe /flushdns，按退出码判断成没成功，不解析它的输出文字。
+# 缓存里也有从 hosts 文件预先读进来的条目，清掉后系统会马上重新读 hosts，hosts 本身不受影响。
+# 只是让电脑忘掉记下的「网址 → 服务器地址」，不改任何设置，所以做成小工具，不进修改日志，也不用撤销。
+id: network.flush-dns
+schema_version: 1
+group: action
+title: { zh-CN: 刷新 DNS 缓存 }
+description:
+  zh-CN: 清掉电脑记下的网站地址（DNS 缓存），下次打开网页时重新查询，不会改任何设置。某个网站打不开、别的网站都正常，或者网站刚换了地址时，可以先试试这个。
+category: network
+requires_admin: true
+timeout_sec: 30
+run:
+  script: tools/network/flush-dns.ps1
+results:
+  done:
+    status: ok
+    message:
+      zh-CN: "已经刷新了 DNS 缓存，清掉了 {entries} 条记录。这只是让电脑忘掉之前记下的网站地址，没有改任何设置。"
+    next:
+      zh-CN: 现在再打开网页试试。还是打不开的话，可以用「上不了网」一步步排查。
+    links: ["symptom:network"]
+  done-no-count:
+    status: ok
+    message:
+      zh-CN: 已经刷新了 DNS 缓存。这只是让电脑忘掉之前记下的网站地址，没有改任何设置。
+    next:
+      zh-CN: 现在再打开网页试试。还是打不开的话，可以用「上不了网」一步步排查。
+    links: ["symptom:network"]
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/dnsclient/clear-dnsclientcache
+  - https://learn.microsoft.com/en-us/powershell/module/dnsclient/get-dnsclientcache
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig

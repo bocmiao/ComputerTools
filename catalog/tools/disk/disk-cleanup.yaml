@@ -1,0 +1,12 @@
+# 打开磁盘清理（open）。引擎启动 System32\cleanmgr.exe。
+id: open.disk-cleanup
+schema_version: 1
+group: open
+title: { zh-CN: 磁盘清理 }
+description:
+  zh-CN: Windows 自带的清理工具，能删掉临时文件、系统更新留下的缓存和回收站里的文件，给 C 盘腾出地方。点「清理系统文件」能清得更多，勾选之前看清楚每一项是什么。
+category: disk
+open: { program: disk-cleanup }
+references:
+  - https://support.microsoft.com/en-us/windows/free-up-drive-space-in-windows-85529ccb-c365-490d-b548-831022bc9b32
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cleanmgr

@@ -1,0 +1,11 @@
+# 打开 Windows 内存诊断（open）。引擎启动 System32\MdSched.exe；打开后由用户选择立即重启检查还是下次开机检查。
+id: open.memory-diagnostic
+schema_version: 1
+group: open
+title: { zh-CN: Windows 内存诊断 }
+description:
+  zh-CN: 检查内存条有没有问题，经常蓝屏、死机时可以查一查。它要重启电脑再检查，大约 15 分钟，期间不能用电脑，所以先保存好手头的文件；检查完电脑会自己重启，登录后就能看到结果。
+category: hardware
+open: { program: memory-diagnostic }
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/technet-magazine/ff700221(v=msdn.10)

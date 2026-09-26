@@ -26,7 +26,7 @@ results:
     fixer: system
     next:
       zh-CN: "打开「C 盘满了」，看看哪些东西可以清理、哪些可以搬到别的盘。"
-    links: ["symptom:disk-full"]
+    links: ["symptom:disk-full", "tool:open.disk-cleanup", "tool:settings.storage"]
   critical:
     status: advice
     message:
@@ -34,7 +34,7 @@ results:
     fixer: system
     next:
       zh-CN: "请尽快清理：打开「C 盘满了」，先删临时文件，再把下载文件夹、桌面上的大文件搬到别的盘。"
-    links: ["symptom:disk-full"]
+    links: ["symptom:disk-full", "tool:open.disk-cleanup", "tool:settings.storage"]
 references:
   - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-logicaldisk
   - https://support.microsoft.com/en-us/windows/free-up-drive-space-in-windows-85529ccb-c365-490d-b548-831022bc9b32

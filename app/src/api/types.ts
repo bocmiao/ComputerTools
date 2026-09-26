@@ -24,7 +24,10 @@ export interface FeatureSummary {
   applicable: boolean                  // 这台电脑能不能用（系统版本、Windows 版本不对就不能）
   notApplicableReason: string | null   // 不能用的原因，给用户看
 }
-export interface CatalogSummary { profiles: ProfileSummary[]; symptoms: SymptomSummary[]; features: FeatureSummary[] }
+export interface CatalogSummary {
+  profiles: ProfileSummary[]; symptoms: SymptomSummary[]; features: FeatureSummary[]
+  tools: ToolSummary[]
+}
 export interface SymptomStep { check: string; checkTitle: string; stopOn: Status[]; fixes: FeatureSummary[] }
 export interface SymptomDetail extends SymptomSummary { causes: string[]; guide: string | null; steps: SymptomStep[] }
 export interface CheckResult {
@@ -55,3 +58,23 @@ export interface JournalEntryView {
 }
 export interface JournalSession { id: string; startedAt: string; entries: JournalEntryView[] }
 export interface UndoResult { entryId: string; ok: boolean; drift: boolean; message: string; error: string | null }
+
+// 小工具（第 11 节）
+export type ToolGroup = 'info' | 'action' | 'open'
+export type ToolOpens = 'program' | 'settings'
+export type Audience = 'everyone' | 'helper'
+export interface ToolSummary {
+  id: string; title: string; description: string; category: string
+  group: ToolGroup
+  opens: ToolOpens | null      // 只有 open 有值：打开的是系统工具，还是「设置」里的一页
+  audience: Audience           // helper：给懂哥用的，界面上标出来
+  confirm: string | null       // 只有 action 可能有：执行前要用户确认的说明
+}
+export interface ToolRow { label: string; value: string; secret: boolean }   // secret：默认遮住，不进「复制全部」
+export interface ToolSection { title: string; rows: ToolRow[] }
+export interface ToolResult {
+  id: string; title: string
+  status: Status; resultCode: string | null; message: string; next: string | null; links: string[]
+  sections: ToolSection[]      // 只有 info 有内容
+  error: string | null; durationMs: number
+}
