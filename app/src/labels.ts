@@ -1,4 +1,5 @@
 import type {
+  ApplyResult,
   FeatureStateKind,
   Fixer,
   Maturity,
@@ -70,12 +71,15 @@ export const maturityLabel: Record<Maturity, string> = {
   'one-click': '一键修复',
 }
 
-/** 常用设置里「当前状态」 */
+/**
+ * 常用设置里「当前状态」。不用「开启 / 未开启」：功能名常常是「关闭××」，
+ * 「关闭快速启动 · 未开启」会被读反。
+ */
 export const featureStateLabel: Record<FeatureStateKind, string> = {
-  applied: '已开启',
-  'not-applied': '未开启',
-  partial: '部分开启',
-  unknown: '未知',
+  applied: '已设置好',
+  'not-applied': '还没设置',
+  partial: '只设置了一部分',
+  unknown: '没查出来',
 }
 
 export const featureStateTone: Record<FeatureStateKind, Tone> = {
@@ -98,6 +102,30 @@ export const verifiedTone: Record<FeatureStateKind, Tone> = {
   'not-applied': 'advice',
   partial: 'advice',
   unknown: 'unknown',
+}
+
+/**
+ * 执行一个功能的结果，界面按这四种分开显示（docs/architecture.md 第 9 节）：
+ * - done：改好了，复查也确认生效
+ * - unverified：改了，但复查没确认生效（message 里有说明）
+ * - unchanged：本来就是好的，什么都没改
+ * - failed：没改成（引擎已经尽量退回，message 里说明退没退干净）
+ */
+export type ApplyOutcome = 'done' | 'unverified' | 'unchanged' | 'failed'
+
+export function applyOutcome(r: ApplyResult): ApplyOutcome {
+  if (!r.ok) return 'failed'
+  // 没确认生效时，不管有没有改动都要让用户知道，所以先于「不用改」判断
+  if (r.verified !== 'applied') return 'unverified'
+  return r.entryIds.length === 0 ? 'unchanged' : 'done'
+}
+
+/** 标题；颜色见 PreviewDialog / BulkApplyDialog 里的 .result-{done,unverified,unchanged,failed} */
+export const applyOutcomeTitle: Record<ApplyOutcome, string> = {
+  done: '已经改好了',
+  unverified: '改了，但还没确认生效',
+  unchanged: '不用改',
+  failed: '没有改成',
 }
 
 /** 改完以后还要做什么；none 时不显示 */

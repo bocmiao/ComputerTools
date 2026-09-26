@@ -2,7 +2,7 @@
 import { computed, onMounted, useTemplateRef, watch } from 'vue'
 import AppIcon from './components/AppIcon.vue'
 import AppNav from './components/AppNav.vue'
-import { catalogError, loadCatalog, loadSystemInfo, nav, system, type PageId } from './state'
+import { loadCatalog, loadSystemInfo, nav, startupError, system, type PageId } from './state'
 import HealthView from './views/HealthView.vue'
 import JournalView from './views/JournalView.vue'
 import ReportView from './views/ReportView.vue'
@@ -30,6 +30,9 @@ onMounted(() => {
   void loadSystemInfo()
   void loadCatalog()
 })
+
+// 引擎没能启动时（startupError），各页都用不了，只显示原因和处理办法。
+// 不给「再试一次」：后端只在启动时组装一次引擎，之后每个命令都返回同一个原因，重试不会有用。
 </script>
 
 <template>
@@ -47,16 +50,31 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="catalogError" class="banner banner-error" role="alert">
-          <div>
-            <p class="banner-title">没能读出功能目录</p>
-            <p>{{ catalogError }}</p>
-            <button type="button" class="btn btn-secondary btn-small retry" @click="loadCatalog">重试</button>
+        <section v-if="startupError" class="page startup-error" aria-labelledby="startup-error-title">
+          <header class="page-header">
+            <h1 id="startup-error-title" class="page-title" tabindex="-1">小药箱没能启动</h1>
+            <p class="page-lead">小药箱自己的核心部分没有准备好，现在查不了也改不了；这台电脑没有被改动。</p>
+          </header>
+
+          <div class="banner banner-error" role="alert">
+            <div>
+              <p class="banner-title">原因</p>
+              <p class="pre-text">{{ startupError }}</p>
+            </div>
           </div>
-        </div>
+
+          <div class="card startup-steps">
+            <h2 class="section-title">可以这样试试</h2>
+            <ol>
+              <li>关掉小药箱，再重新打开。</li>
+              <li>还不行的话，重启电脑，再打开小药箱。</li>
+              <li>一直这样的话，把上面的原因拍下来或者抄下来，发给懂哥看看。</li>
+            </ol>
+          </div>
+        </section>
 
         <!-- 换页时保留各页的状态（例如体检结果） -->
-        <KeepAlive>
+        <KeepAlive v-else>
           <component :is="current" />
         </KeepAlive>
       </div>
@@ -88,8 +106,17 @@ onMounted(() => {
   font-size: var(--text-base);
 }
 
-.retry {
-  margin-top: 8px;
+.startup-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.startup-steps ol {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 1.4em;
 }
 
 @media (max-width: 980px) {

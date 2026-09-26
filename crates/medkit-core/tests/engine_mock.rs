@@ -876,6 +876,8 @@ fn script_entries_without_a_recorded_state_cannot_be_undone() {
     Journal::open(&w.journal_path).unwrap().append(&Record::Apply(rec.clone())).unwrap();
     let e = &w.engine.journal_list().unwrap()[0].entries[0];
     assert!(e.pending && !e.can_undo, "{e:?}");
+    // 位置一栏说人话，不显示功能 ID（功能名界面上单独显示）
+    assert_eq!(e.target, "小药箱脚本改的设置");
     assert!(w.engine.journal_undo(&rec.id, false).is_err());
     assert!(w.runner.calls().is_empty(), "不应该去跑撤销脚本");
 }

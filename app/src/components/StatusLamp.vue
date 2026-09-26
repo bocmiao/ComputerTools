@@ -6,7 +6,8 @@ import BusySpinner from './BusySpinner.vue'
 /** 症状检查里每一步的「灯」 */
 export type LampState = 'pending' | 'running' | 'error' | Status
 
-const props = defineProps<{ state: LampState }>()
+/** label：给读屏软件念的文字，不写时按 state 念（批量应用里的灯表示的是执行结果，要换说法） */
+const props = defineProps<{ state: LampState; label?: string }>()
 
 const text: Record<LampState, string> = {
   pending: '等待检查',
@@ -42,7 +43,7 @@ const toneClass = computed(() => {
   <span class="lamp-wrap">
     <BusySpinner v-if="state === 'running'" size="small" />
     <span v-else class="lamp" :class="toneClass" aria-hidden="true"></span>
-    <span class="visually-hidden">{{ text[state] }}</span>
+    <span class="visually-hidden">{{ label ?? text[state] }}</span>
   </span>
 </template>
 

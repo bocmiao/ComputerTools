@@ -2,24 +2,27 @@
 import { computed, reactive, ref } from 'vue'
 import { featureApply } from '../api'
 import type { ApplyResult, FeatureSummary, Reboot } from '../api/types'
-import { rebootLabel, rebootWeight } from '../labels'
+import { applyOutcome, applyOutcomeTitle, rebootLabel, rebootWeight, type ApplyOutcome } from '../labels'
 import { errorText } from '../utils/format'
 import { vAutofocus } from '../utils/dialogs'
 import AppIcon from './AppIcon.vue'
 import BusySpinner from './BusySpinner.vue'
 import ModalDialog from './ModalDialog.vue'
-import StatusLamp from './StatusLamp.vue'
+import StatusLamp, { type LampState } from './StatusLamp.vue'
 
 // 「只应用推荐项」：一个一个预览太繁琐，这里列出汇总，确认后依次执行。
+// 每一项按四种结果显示（已经改好 / 改了但没确认生效 / 不用改 / 没改成）；一项没改成不影响后面的项。
 
 const props = defineProps<{ features: FeatureSummary[] }>()
-const emit = defineEmits<{ close: []; finished: [] }>()
+/** finished 的参数：这次有没有真的改过东西（改过的话，体检结果可能已经过期） */
+const emit = defineEmits<{ close: []; finished: [changed: boolean] }>()
 
-type ItemStatus = 'waiting' | 'running' | 'ok' | 'failed'
+type ItemStatus = 'waiting' | 'running' | ApplyOutcome
 interface Item {
   feature: FeatureSummary
   status: ItemStatus
   result: ApplyResult | null
+  /** 执行命令本身出错、没拿到结果时的原因 */
   error: string | null
 }
 
@@ -29,10 +32,29 @@ const currentIndex = ref(0)
 
 const withRestorePoint = computed(() => items.filter((i) => i.feature.risk !== 'safe').length)
 const irreversible = computed(() => items.filter((i) => !i.feature.reversible))
-const okCount = computed(() => items.filter((i) => i.status === 'ok').length)
-const failedCount = computed(() => items.filter((i) => i.status === 'failed').length)
 
-/** 所有成功的项目里最「重」的重启要求 */
+const counts = computed(() => {
+  const c: Record<ApplyOutcome, number> = { done: 0, unverified: 0, unchanged: 0, failed: 0 }
+  for (const i of items) if (i.status !== 'waiting' && i.status !== 'running') c[i.status]++
+  return c
+})
+
+/** 汇总的颜色：有没改成的算红，有没确认生效的算橙，否则绿 */
+const summaryTone = computed<ApplyOutcome>(() =>
+  counts.value.failed ? 'failed' : counts.value.unverified ? 'unverified' : 'done',
+)
+
+const summaryTitle = computed(() => {
+  const c = counts.value
+  if (!c.failed && !c.unverified) return '推荐的设置都应用好了'
+  const parts: string[] = []
+  if (c.done + c.unchanged) parts.push(`${c.done + c.unchanged} 项已经好了`)
+  if (c.unverified) parts.push(`${c.unverified} 项改了但还没确认生效`)
+  if (c.failed) parts.push(`${c.failed} 项没有改成`)
+  return parts.join('，')
+})
+
+/** 真的改过东西的项目里最「重」的重启要求（没改成的、本来就好的，后端给的都是 none） */
 const reboot = computed<Reboot>(() => {
   let strongest: Reboot = 'none'
   for (const i of items) {
@@ -42,20 +64,23 @@ const reboot = computed<Reboot>(() => {
   return strongest
 })
 
-function lamp(i: Item) {
-  switch (i.status) {
-    case 'running':
-      return 'running' as const
-    case 'ok':
-      return 'ok' as const
-    case 'failed':
-      return 'advice' as const
-    default:
-      return 'pending' as const
-  }
+const lampState: Record<ItemStatus, LampState> = {
+  waiting: 'pending',
+  running: 'running',
+  done: 'ok',
+  unchanged: 'ok',
+  unverified: 'advice',
+  failed: 'manual',
+}
+
+function lampLabel(i: Item): string {
+  if (i.status === 'waiting') return '等待应用'
+  if (i.status === 'running') return '正在应用'
+  return applyOutcomeTitle[i.status]
 }
 
 async function start(): Promise<void> {
+  if (phase.value !== 'confirm') return
   phase.value = 'applying'
   for (const [index, item] of items.entries()) {
     currentIndex.value = index
@@ -63,8 +88,7 @@ async function start(): Promise<void> {
     try {
       const r = await featureApply(item.feature.id)
       item.result = r
-      item.status = r.ok ? 'ok' : 'failed'
-      if (!r.ok) item.error = r.error ?? r.message
+      item.status = applyOutcome(r)
     } catch (e) {
       item.status = 'failed'
       item.error = errorText(e)
@@ -74,7 +98,7 @@ async function start(): Promise<void> {
 }
 
 function close(): void {
-  if (phase.value === 'done') emit('finished')
+  if (phase.value === 'done') emit('finished', items.some((i) => (i.result?.entryIds.length ?? 0) > 0))
   emit('close')
 }
 </script>
@@ -82,15 +106,14 @@ function close(): void {
 <template>
   <ModalDialog title="只应用推荐项" :busy="phase === 'applying'" wide @close="close">
     <template v-if="phase === 'confirm'">
-      <p>下面这 {{ items.length }} 项推荐设置还没有开启，确认后会一项一项地应用：</p>
+      <p>下面这 {{ items.length }} 项推荐设置还没有设置好，确认后会一项一项地应用：</p>
     </template>
     <p v-else-if="phase === 'applying'" class="loading-line" role="status">
       <BusySpinner size="small" />正在应用第 {{ currentIndex + 1 }} 项（共 {{ items.length }} 项）…
     </p>
-    <div v-else class="result" :class="failedCount ? 'result-mixed' : 'result-ok'" role="status">
-      <p class="result-title">
-        {{ failedCount ? `完成了 ${okCount} 项，有 ${failedCount} 项没有改成` : '推荐的设置都应用好了' }}
-      </p>
+    <div v-else class="result" :class="`result-${summaryTone}`" role="status">
+      <p class="result-title">{{ summaryTitle }}</p>
+      <p v-if="counts.unchanged">其中 {{ counts.unchanged }} 项本来就是好的，没有改动。</p>
       <p v-if="reboot !== 'none'">
         <strong>{{ rebootLabel[reboot] }}</strong>，之后才能看到全部效果。
       </p>
@@ -98,17 +121,23 @@ function close(): void {
 
     <ol class="items">
       <li v-for="item in items" :key="item.feature.id" class="item">
-        <StatusLamp :state="lamp(item)" />
+        <StatusLamp :state="lampState[item.status]" :label="lampLabel(item)" />
         <div class="item-body">
           <p class="item-title">{{ item.feature.title }}</p>
           <p class="muted small">{{ item.feature.description }}</p>
           <p v-if="item.feature.reboot !== 'none' && phase === 'confirm'" class="muted small">
             改完{{ rebootLabel[item.feature.reboot] }}
           </p>
-          <p v-if="item.status === 'ok'" class="small success-text">
-            <AppIcon name="check" :size="14" /> {{ item.result?.message || '已经改好了' }}
+          <p v-if="item.status === 'done' || item.status === 'unchanged'" class="small success-text">
+            <AppIcon name="check" :size="14" /> {{ item.result?.message || applyOutcomeTitle[item.status] }}
           </p>
-          <p v-if="item.status === 'failed'" class="small danger-text">没有改成：{{ item.error }}</p>
+          <p v-else-if="item.status === 'unverified'" class="small warn-text">
+            {{ applyOutcomeTitle.unverified }}。{{ item.result?.message }}
+          </p>
+          <template v-else-if="item.status === 'failed'">
+            <p class="small danger-text">{{ item.result?.message || `没有改成：${item.error ?? '原因不明'}` }}</p>
+            <p v-if="item.result?.error" class="small muted">出错信息：{{ item.result.error }}</p>
+          </template>
           <ul v-if="item.result && item.result.notes.length" class="notes small muted">
             <li v-for="(n, i) in item.result.notes" :key="i">{{ n }}</li>
           </ul>
@@ -179,13 +208,22 @@ function close(): void {
   border-radius: var(--radius);
 }
 
-.result-ok {
+.result-done {
   background: var(--tone-ok-bg);
   color: var(--tone-ok-text);
 }
 
-.result-mixed {
+.result-unverified {
   background: var(--tone-advice-bg);
+  color: var(--tone-advice-text);
+}
+
+.result-failed {
+  background: var(--tone-manual-bg);
+  color: var(--tone-manual-text);
+}
+
+.warn-text {
   color: var(--tone-advice-text);
 }
 

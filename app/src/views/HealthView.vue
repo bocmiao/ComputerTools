@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { runCheck, runProfile } from '../api'
 import type { CheckResult } from '../api/types'
 import BusySpinner from '../components/BusySpinner.vue'
@@ -7,11 +7,16 @@ import CheckResultCard from '../components/CheckResultCard.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import AppIcon from '../components/AppIcon.vue'
 import { statusOrder, type ShownStatus } from '../labels'
+import { catalog, health } from '../state'
 import { errorText } from '../utils/format'
 
 // 体检：只读，不改任何东西。不打分，不说「发现 N 个问题」；没问题就说一切正常。
+// 体检以后在别的页面改过或撤销过设置，结果就可能过期了：提示一下，给「重新体检」。
 
 const PROFILE_ID = 'healthcheck'
+
+/** 体检清单一共几项（从目录里读，不写死） */
+const checkCount = computed(() => catalog.value?.profiles.find((p) => p.id === PROFILE_ID)?.checkCount ?? null)
 
 type ShownResult = CheckResult & { status: ShownStatus }
 
@@ -50,12 +55,15 @@ async function start(): Promise<void> {
   running.value = true
   error.value = null
   elapsed.value = 0
+  // 开始时就清掉：体检进行中又改了设置的话，会重新标成过期
+  health.stale = false
   const startedAt = Date.now()
   timer = setInterval(() => {
     elapsed.value = Math.floor((Date.now() - startedAt) / 1000)
   }, 500)
   try {
     results.value = await runProfile(PROFILE_ID)
+    health.lastRunAt = new Date().toISOString()
   } catch (e) {
     error.value = errorText(e)
   } finally {
@@ -81,13 +89,19 @@ async function onApplied(): Promise<void> {
   }
 }
 
+// 报告页点了「重新体检」
+watch(
+  () => health.runRequest,
+  () => void start(),
+)
+
 onBeforeUnmount(stopTimer)
 </script>
 
 <template>
   <div class="page">
     <header class="page-header">
-      <h1 class="page-title">体检</h1>
+      <h1 class="page-title" tabindex="-1">体检</h1>
       <p class="page-lead">只看不改，大约半分钟。没坏的别修，看不懂的就跳过。</p>
     </header>
 
@@ -113,7 +127,9 @@ onBeforeUnmount(stopTimer)
       </template>
 
       <template v-else-if="results === null">
-        <p class="hero-text">检查 C 盘空间、网络、系统文件、更新、硬盘健康等常见问题。</p>
+        <p class="hero-text">
+          把这台电脑常见的毛病查一遍{{ checkCount ? `（共 ${checkCount} 项）` : '' }}，查完告诉你哪些正常、哪些需要留意。
+        </p>
         <button type="button" class="btn btn-primary btn-big" @click="start">
           <AppIcon name="health" :size="24" />开始体检
         </button>
@@ -138,6 +154,17 @@ onBeforeUnmount(stopTimer)
         <button type="button" class="btn btn-secondary" @click="start">重新体检</button>
       </template>
     </section>
+
+    <div v-if="health.stale && results && !running" class="banner banner-warning" role="status">
+      <AppIcon name="warning" :size="20" />
+      <div class="stale">
+        <p class="banner-title">下面的体检结果可能已经过期</p>
+        <p>体检以后，你在「按症状修」「常用设置」或「修改日志」里改过或撤销过设置。重新体检一次，看到的才是现在的情况。</p>
+        <div>
+          <button type="button" class="btn btn-secondary btn-small" @click="start">重新体检</button>
+        </div>
+      </div>
+    </div>
 
     <template v-if="results && !running">
       <section v-if="attention.length" class="group" aria-label="需要留意的项目">
@@ -229,5 +256,15 @@ onBeforeUnmount(stopTimer)
   margin-top: 8px;
   font-size: var(--text-base);
   color: var(--color-text-muted);
+}
+
+.stale {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stale .btn {
+  margin-top: 4px;
 }
 </style>

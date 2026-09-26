@@ -357,7 +357,8 @@ impl Engine {
                 format!("{root}\\{key} → {name}")
             }
             TargetRef::Service { name } => format!("服务 {name} 的启动类型"),
-            TargetRef::Script { feature, .. } => format!("由脚本完成（{feature}）"),
+            // 界面上功能名是单独显示的，这里不再带功能 ID
+            TargetRef::Script { .. } => "小药箱脚本改的设置".to_owned(),
         }
     }
 
@@ -837,7 +838,7 @@ impl Engine {
                 ok: false,
                 drift: false,
                 message: format!(
-                    "{label} 改的是另一个账户的设置，那个账户现在没有登录，改不到。请让他登录以后再打开小药箱恢复。"
+                    "{label}属于另一个账户，那个账户现在没有登录，改不到。请等那个账户登录以后，再打开小药箱恢复。"
                 ),
                 error: None,
             });

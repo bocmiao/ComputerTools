@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onActivated, reactive, ref } from 'vue'
+import { computed, nextTick, onActivated, reactive, ref } from 'vue'
 import { journalList, journalUndo, journalUndoSession } from '../api'
 import type { JournalEntryView, JournalSession, UndoResult } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
@@ -8,8 +8,8 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import PathText from '../components/PathText.vue'
 import TagPill from '../components/TagPill.vue'
-import { findFeature } from '../state'
-import { vAutofocus } from '../utils/dialogs'
+import { findFeature, markHealthStale } from '../state'
+import { rememberFocus, restoreFocus, vAutofocus } from '../utils/dialogs'
 import { errorText, formatClock, formatDateTime, formatDay } from '../utils/format'
 
 // 修改日志：每一步修改都记在这里，逐条或整次恢复原状。
@@ -24,16 +24,25 @@ const sorted = computed(() =>
   [...sessions.value].sort((a, b) => (Date.parse(b.startedAt) || 0) - (Date.parse(a.startedAt) || 0)),
 )
 
+/** 换页回来、撤销完都会重新读，先发出去的请求可能后回来：只认最后一次 */
+let loadSeq = 0
+
 async function load(): Promise<void> {
+  const seq = ++loadSeq
   loading.value = true
   try {
-    sessions.value = await journalList()
+    const list = await journalList()
+    if (seq !== loadSeq) return
+    sessions.value = list
     loadError.value = null
   } catch (e) {
+    if (seq !== loadSeq) return
     loadError.value = errorText(e)
   } finally {
-    loading.value = false
-    loaded.value = true
+    if (seq === loadSeq) {
+      loading.value = false
+      loaded.value = true
+    }
   }
 }
 
@@ -96,23 +105,33 @@ const drift = ref<{ entry: JournalEntryView; message: string } | null>(null)
 const driftBusy = ref(false)
 
 async function undoEntry(entry: JournalEntryView, force: boolean): Promise<void> {
+  // 恢复成功以后这一条的「恢复原状」按钮就没了：焦点交给这一条，别丢到页面外面
+  const focus = rememberFocus()
   busyEntry.value = entry.id
   delete notices[entry.id]
+  // 除了「被改过，先问用户」，其余情况（成功、没恢复成、命令出错）都重新读一次日志：
+  // 出错时列表也可能已经变了，例如这一项其实已经恢复过了
+  let reload = true
   try {
     const r = await journalUndo(entry.id, force)
     if (r.drift && !force) {
       drift.value = { entry, message: r.message }
+      reload = false
       return
     }
+    if (r.ok) markHealthStale()
     notices[entry.id] = r.ok
       ? { ok: true, text: r.message || '已经恢复原状。' }
       : { ok: false, text: [r.message, r.error].filter(Boolean).join(' ') || '没能恢复。' }
-    await load()
   } catch (e) {
     notices[entry.id] = { ok: false, text: `没能恢复：${errorText(e)}` }
   } finally {
+    // 读完再放开按钮，免得在旧列表上又点一次
+    if (reload) await load()
     busyEntry.value = null
   }
+  await nextTick()
+  if (!document.activeElement || document.activeElement === document.body) restoreFocus(focus)
 }
 
 async function confirmDrift(): Promise<void> {
@@ -134,6 +153,7 @@ async function undoSession(): Promise<void> {
   busySession.value = s.id
   try {
     const results = await journalUndoSession(s.id)
+    if (results.some((r) => r.ok)) markHealthStale()
     sessionResult.value = { session: s, results, error: null }
   } catch (e) {
     sessionResult.value = { session: s, results: [], error: errorText(e) }
@@ -142,6 +162,11 @@ async function undoSession(): Promise<void> {
     confirmSession.value = null
   }
   await load()
+}
+
+/** 整次撤销会处理哪些项目：还能恢复的，按从后往前的顺序（和后端一样） */
+function undoPlan(s: JournalSession): JournalEntryView[] {
+  return s.entries.filter((e) => e.canUndo).reverse()
 }
 
 function entryOf(session: JournalSession, entryId: string): JournalEntryView | undefined {
@@ -160,8 +185,8 @@ const driftSkipped = computed(() => sessionResult.value?.results.some((r) => r.d
 <template>
   <div class="page">
     <header class="page-header">
-      <h1 class="page-title">修改日志</h1>
-      <p class="page-lead">每一步修改都记在这里，随时可以恢复原状</p>
+      <h1 class="page-title" tabindex="-1">修改日志</h1>
+      <p class="page-lead">小药箱做的每一步修改都记在这里，能撤销的随时可以恢复原状。</p>
     </header>
 
     <p v-if="!loaded" class="loading-line" role="status"><BusySpinner size="small" />正在读取修改日志…</p>
@@ -250,17 +275,17 @@ const driftSkipped = computed(() => sessionResult.value?.results.some((r) => r.d
       </ol>
     </section>
 
-    <!-- 被改过，是否仍要恢复 -->
+    <!-- 恢复前核对发现被改过（或者没法核对），是否仍要恢复 -->
     <ConfirmDialog
       v-if="drift"
-      title="这一项后来被改过"
+      title="这一项后来可能被改过"
       confirm-text="仍要恢复"
       cancel-text="先不恢复"
       :busy="driftBusy"
       @confirm="confirmDrift"
       @close="drift = null"
     >
-      <p class="question">这一项后来被别的程序或你自己改过，仍要恢复吗？</p>
+      <p class="question">恢复原状可能会覆盖后来的改动，仍要恢复吗？</p>
       <p v-if="drift.message" class="muted">{{ drift.message }}</p>
       <dl class="kv">
         <dt>功能</dt>
@@ -277,12 +302,28 @@ const driftSkipped = computed(() => sessionResult.value?.results.some((r) => r.d
       v-if="confirmSession"
       title="撤销这次的全部修改？"
       confirm-text="全部恢复原状"
+      wide
       :busy="busySession !== null"
       @confirm="undoSession"
       @close="confirmSession = null"
     >
-      <p>会按从后往前的顺序，把「{{ sessionTitle(confirmSession) }}」里还没恢复的 {{ undoableCount(confirmSession) }} 项逐条恢复原状。</p>
-      <p class="muted">后来被别的程序或你自己改过的项目会跳过，不会硬改；不能撤销的项目不在其中。</p>
+      <p>
+        会按从后往前的顺序，把「{{ sessionTitle(confirmSession) }}」里下面这 {{ undoPlan(confirmSession).length }}
+        项逐条恢复原状：
+      </p>
+      <ol class="plan">
+        <li v-for="e in undoPlan(confirmSession)" :key="e.id" class="plan-row">
+          <p class="plan-title">
+            {{ e.featureTitle }}
+            <TagPill v-if="e.pending" tone="advice">状态不确定，会直接恢复</TagPill>
+          </p>
+          <p class="small muted"><PathText :text="e.target" /></p>
+        </li>
+      </ol>
+      <p class="muted">
+        每一项恢复前都会先核对，后来被别的程序或你自己改过的会跳过，并单独告诉你；
+        程序中途退出、状态不确定的记录没法核对，会直接按修改前的记录恢复。不能撤销的项目不在其中。
+      </p>
     </ConfirmDialog>
 
     <!-- 撤销整次：结果 -->
@@ -307,7 +348,7 @@ const driftSkipped = computed(() => sessionResult.value?.results.some((r) => r.d
           </li>
         </ol>
         <p v-if="driftSkipped" class="muted">
-          标着「已跳过」的项目后来被别的程序或你自己改过，小药箱没有硬改。确定要恢复的话，可以在列表里单独点这一项的「恢复原状」。
+          标着「已跳过」的项目，恢复前核对时发现后来可能被别的程序或你自己改过（或者没法核对），小药箱没有硬改。确定要恢复的话，可以在列表里单独点这一项的「恢复原状」。
         </p>
       </template>
       <template #footer>
@@ -464,6 +505,35 @@ const driftSkipped = computed(() => sessionResult.value?.results.some((r) => r.d
 }
 
 .result-title {
+  font-weight: 600;
+}
+
+/* 整次撤销的确认框：要恢复哪些项 */
+.plan {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.plan-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.plan-row:last-child {
+  border-bottom: none;
+}
+
+.plan-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
 }
 </style>

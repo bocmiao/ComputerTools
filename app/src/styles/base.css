@@ -88,6 +88,11 @@ select {
   font-size: 24px;
 }
 
+/* 页面主标题带 tabindex="-1"：对话框关掉后找不到原来的按钮时，焦点退回到这里。标题本身不用画焦点框 */
+.page-title[tabindex='-1']:focus {
+  outline: none;
+}
+
 .page-lead {
   color: var(--color-text-muted);
 }

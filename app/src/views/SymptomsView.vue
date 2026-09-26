@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
 import { runCheck, symptomDetail } from '../api'
-import type { CheckResult, SymptomDetail, SymptomSummary } from '../api/types'
+import type { ApplyResult, CheckResult, SymptomDetail, SymptomSummary } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import StatusLamp, { type LampState } from '../components/StatusLamp.vue'
 import TagPill from '../components/TagPill.vue'
 import { fixerLabel, maturityLabel, riskLabel, riskTone } from '../labels'
-import { catalog, nav } from '../state'
+import { catalog, markHealthStale, nav } from '../state'
 import { errorText, normalizeForSearch } from '../utils/format'
 
-// 按症状修：先搜症状，再逐步检查，哪一步有问题就给出对应的修复。
+// 按症状修：先搜症状，再逐步检查。查出问题（建议处理、需要人工）的那一步给出对应的修复；
+// 没查清楚（没查出来、出错）的那一步不急着修，先让用户再查一次。
 
 // ── 搜索 ──
 
@@ -30,6 +31,35 @@ function matches(s: SymptomSummary, q: string): boolean {
 
 const symptoms = computed(() => catalog.value?.symptoms ?? [])
 const filtered = computed(() => symptoms.value.filter((s) => matches(s, query.value)))
+
+/** 示例搜索词：从真实症状的关键词里取（每个症状取一个），保证照着搜一定搜得到 */
+function exampleWords(n: number): string[] {
+  return symptoms.value
+    .map((s) => s.keywords[n] ?? s.keywords[0] ?? s.title)
+    .filter((k) => k.trim().length > 0)
+    .slice(0, 3)
+}
+const leadExamples = computed(() => exampleWords(0))
+/** 没搜到时换一批说法 */
+const emptyExamples = computed(() => exampleWords(1))
+
+function quoted(words: string[]): string {
+  return words.map((w) => `「${w}」`).join('')
+}
+
+const leadText = computed(() =>
+  leadExamples.value.length
+    ? `说说电脑哪里不对劲，比如${quoted(leadExamples.value)}。先检查，找到原因再动手。`
+    : '说说电脑哪里不对劲。先检查，找到原因再动手。',
+)
+const placeholder = computed(() =>
+  leadExamples.value[0] ? `输入你遇到的情况，比如：${leadExamples.value[0]}` : '输入你遇到的情况',
+)
+const emptyText = computed(() =>
+  emptyExamples.value.length
+    ? `没找到相关的症状。换个说法试试，比如${quoted(emptyExamples.value)}。`
+    : '没找到相关的症状。换个说法试试。',
+)
 
 // ── 症状详情 ──
 
@@ -86,12 +116,13 @@ async function runStep(index: number, token: number): Promise<void> {
   const step = detail.value?.steps[index]
   const run = runs.value[index]
   if (!step || !run) return
+  // 上一次的结果先留着，查完再换：重新检查时说明和按钮不会一下子消失
   run.state = 'running'
-  run.error = null
   try {
     const r = await runCheck(step.check)
     if (token !== runToken) return
     run.result = r
+    run.error = null
     run.state = 'done'
   } catch (e) {
     if (token !== runToken) return
@@ -128,11 +159,21 @@ function lampOf(run: StepRun | undefined): LampState {
   return run.state === 'running' ? 'running' : 'pending'
 }
 
-/** 这一步查完了、结果不是正常（也不是「不适用」）时，显示它的修复办法 */
-function needsFix(run: StepRun | undefined): boolean {
-  if (!run) return false
-  if (run.state === 'error') return true
-  return run.state === 'done' && !!run.result && run.result.status !== 'ok' && run.result.status !== 'na'
+/**
+ * 这一步查完以后怎么办：
+ * - fix：查出了问题（建议处理、需要人工），列出修复办法
+ * - unclear：没查清楚（没查出来，或者这一步出错了），先别急着修，给「再查一次」
+ * - null：正常、不适用，或者还没查
+ * 重新检查这一步时（running）按上一次的结论显示，按钮不会一下子消失。
+ */
+function outcomeOf(run: StepRun | undefined): 'fix' | 'unclear' | null {
+  if (!run || run.state === 'pending' || run.state === 'skipped') return null
+  if (run.result) {
+    const s = run.result.status
+    if (s === 'advice' || s === 'manual') return 'fix'
+    return s === 'unknown' ? 'unclear' : null
+  }
+  return run.error !== null ? 'unclear' : null
 }
 
 /** 每一步和它的检查结果放在一起，模板里用起来方便 */
@@ -146,12 +187,30 @@ const stepViews = computed(() =>
       result: run?.result ?? null,
       error: run?.error ?? null,
       skipped: run?.state === 'skipped',
-      showFix: needsFix(run),
+      running: run?.state === 'running',
+      kind: outcomeOf(run),
     }
   }),
 )
 
-const problemCount = computed(() => stepViews.value.filter((v) => v.showFix).length)
+const fixCount = computed(() => stepViews.value.filter((v) => v.kind === 'fix').length)
+const unclearCount = computed(() => stepViews.value.filter((v) => v.kind === 'unclear').length)
+
+/** 每一步的 id：再查一次以后按钮没了，焦点交给这一步 */
+const stepIdBase = useId()
+function stepId(index: number): string {
+  return `${stepIdBase}-step-${index}`
+}
+
+/** 没查清楚的那一步单独再查一次 */
+async function recheck(index: number): Promise<void> {
+  if (checking.value) return
+  await runStep(index, runToken)
+  // 查清楚以后「再查一次」按钮就没了，焦点别丢到页面外面去：交给这一步
+  await nextTick()
+  const active = document.activeElement
+  if (!active || active === document.body) document.getElementById(stepId(index))?.focus()
+}
 
 // ── 预览修复 ──
 
@@ -163,8 +222,9 @@ function openPreview(featureId: string, stepIndex: number): void {
   previewStep = stepIndex
 }
 
-/** 修完以后重新查这一步 */
-function onApplied(): void {
+/** 修完以后重新查这一步；真改了东西的话，体检结果可能已经过期 */
+function onApplied(r: ApplyResult): void {
+  if (r.entryIds.length > 0) markHealthStale()
   if (previewStep === null || checking.value) return
   void runStep(previewStep, runToken)
 }
@@ -186,8 +246,8 @@ watch(
     <!-- 症状列表 -->
     <template v-if="!selectedId">
       <header class="page-header">
-        <h1 class="page-title">按症状修</h1>
-        <p class="page-lead">说说电脑哪里不对劲，比如「没网」「C 盘满了」「打印机」。先检查，找到原因再动手。</p>
+        <h1 class="page-title" tabindex="-1">按症状修</h1>
+        <p class="page-lead">{{ leadText }}</p>
       </header>
 
       <div class="search">
@@ -198,15 +258,13 @@ watch(
           v-model="query"
           type="search"
           class="input search-input"
-          placeholder="输入你遇到的情况，比如：没网"
+          :placeholder="placeholder"
           autocomplete="off"
         />
       </div>
 
       <p v-if="!catalog" class="loading-line" role="status"><BusySpinner size="small" />正在读取症状列表…</p>
-      <p v-else-if="filtered.length === 0" class="empty muted" role="status">
-        没找到相关的症状。换个说法试试，比如「上不了网」「C 盘红了」「打印机连不上」。
-      </p>
+      <p v-else-if="filtered.length === 0" class="empty muted" role="status">{{ emptyText }}</p>
       <ul v-else class="symptom-list">
         <li v-for="s in filtered" :key="s.id">
           <button type="button" class="symptom card" @click="open(s.id)">
@@ -263,14 +321,23 @@ watch(
           </div>
 
           <p v-if="checkedOnce && !checking" class="muted" role="status">
-            <template v-if="problemCount === 0">
+            <template v-if="fixCount === 0 && unclearCount === 0">
               查过的几项都正常。{{ detail.guide ? '问题还在的话，照着下面的手动步骤试试。' : '' }}
             </template>
-            <template v-else>查完了。亮橙灯、红灯或灰灯的那几步，下面有可以试的办法。</template>
+            <template v-else>
+              查完了。<template v-if="fixCount">亮橙灯、红灯的那几步，下面有可以试的办法。</template>
+              <template v-if="unclearCount">灰灯的那几步没查清楚，可以再查一次。</template>
+            </template>
           </p>
 
           <ol class="steps">
-            <li v-for="v in stepViews" :key="`${v.step.check}-${v.index}`" class="step">
+            <li
+              v-for="v in stepViews"
+              :key="`${v.step.check}-${v.index}`"
+              class="step"
+              :id="stepId(v.index)"
+              tabindex="-1"
+            >
               <StatusLamp :state="v.lamp" />
               <div class="step-body">
                 <p class="step-title">{{ v.step.checkTitle }}</p>
@@ -278,7 +345,7 @@ watch(
                 <p v-else-if="v.error" class="danger-text small">这一步没能检查：{{ v.error }}</p>
                 <p v-else-if="v.skipped" class="muted small">前面已经找到原因，这一步不用查了。</p>
 
-                <div v-if="v.showFix" class="step-fix">
+                <div v-if="v.kind === 'fix'" class="step-fix">
                   <p v-if="v.result?.error" class="muted small">出错信息：{{ v.result.error }}</p>
                   <p v-if="v.result?.fixer" class="small"><span class="muted">谁能修：</span>{{ fixerLabel[v.result.fixer] }}</p>
                   <p v-if="v.result?.next" class="small"><span class="muted">下一步：</span>{{ v.result.next }}</p>
@@ -291,8 +358,16 @@ watch(
                           <TagPill :tone="riskTone[fix.risk]" dot>{{ riskLabel[fix.risk] }}</TagPill>
                         </p>
                         <p class="muted small">{{ fix.description }}</p>
+                        <p v-if="!fix.applicable" class="small">
+                          这台电脑用不了：{{ fix.notApplicableReason ?? '这台电脑的系统不支持这一项。' }}
+                        </p>
                       </div>
-                      <button type="button" class="btn btn-secondary btn-small" @click="openPreview(fix.id, v.index)">
+                      <button
+                        v-if="fix.applicable"
+                        type="button"
+                        class="btn btn-secondary btn-small"
+                        @click="openPreview(fix.id, v.index)"
+                      >
                         预览
                       </button>
                     </li>
@@ -300,6 +375,27 @@ watch(
                   <p v-else class="muted small">
                     这一步小药箱没有自动修复的办法{{ detail.guide ? '，可以看看下面的手动步骤' : '' }}。
                   </p>
+                </div>
+
+                <!-- 没查清楚：不给修复，先再查一次 -->
+                <div v-else-if="v.kind === 'unclear'" class="step-fix">
+                  <p class="small">
+                    这一步没查清楚，先别急着修。可以再查一次；一直查不清楚的话，{{
+                      detail.guide ? '照着下面的手动步骤试试' : '可以问问懂哥'
+                    }}。
+                  </p>
+                  <p v-if="v.result?.error" class="muted small">出错信息：{{ v.result.error }}</p>
+                  <p v-if="v.result?.next" class="small"><span class="muted">下一步：</span>{{ v.result.next }}</p>
+                  <div>
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-small"
+                      :disabled="checking || v.running"
+                      @click="recheck(v.index)"
+                    >
+                      <BusySpinner v-if="v.running" size="small" />{{ v.running ? '正在查…' : '再查一次' }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </li>

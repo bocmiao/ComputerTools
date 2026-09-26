@@ -11,15 +11,17 @@ withDefaults(
     confirmText: string
     cancelText?: string
     busy?: boolean
+    /** 内容比较多（例如要列出一串项目）时用宽一点的对话框 */
+    wide?: boolean
   }>(),
-  { cancelText: '取消', busy: false },
+  { cancelText: '取消', busy: false, wide: false },
 )
 
 const emit = defineEmits<{ confirm: []; close: [] }>()
 </script>
 
 <template>
-  <ModalDialog :title="title" :busy="busy" @close="emit('close')">
+  <ModalDialog :title="title" :busy="busy" :wide="wide" @close="emit('close')">
     <slot />
     <template #footer>
       <span v-if="busy" class="loading-line"><BusySpinner size="small" />正在处理…</span>

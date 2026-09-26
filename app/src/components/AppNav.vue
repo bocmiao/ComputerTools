@@ -14,9 +14,9 @@ const items: { id: PageId; label: string; icon: IconName }[] = [
 
 const demo = !isTauri()
 
+// 只显示普通人看得懂的：系统名称（已经带着家庭版、专业版这类中文名）、版本号、有没有管理员权限、小药箱版本。
+// edition（注册表里的英文 EditionID）和数据版本（一串哈希）不显示，报告里有。
 const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, '') ?? '')
-/** osCaption 里通常已经带着版本类型，没带时再单独显示 */
-const showEdition = computed(() => !!system.value?.edition && !osName.value.includes(system.value.edition))
 </script>
 
 <template>
@@ -48,15 +48,14 @@ const showEdition = computed(() => !!system.value?.edition && !osName.value.incl
 
       <section v-if="system" class="sys" aria-label="系统信息">
         <p class="sys-os">{{ osName }}</p>
-        <p class="muted small">
-          版本号 {{ system.build }}<template v-if="showEdition"> · {{ system.edition }}</template>
-        </p>
+        <p class="muted small">版本号 {{ system.build }}</p>
         <p class="small" :class="system.isAdmin ? 'admin-yes' : 'admin-no'">
           {{ system.isAdmin ? '已用管理员身份运行' : '没有用管理员身份运行，部分修复做不了' }}
         </p>
-        <p class="muted small">小药箱 {{ system.appVersion }} · 数据 {{ system.catalogVersion }}</p>
+        <p class="muted small">小药箱 {{ system.appVersion }}</p>
       </section>
-      <p v-else-if="systemError" class="muted small">没读出系统信息：{{ systemError }}</p>
+      <!-- 原因在右边的全局错误页里写着，这里只简单说一句 -->
+      <p v-else-if="systemError" class="muted small">没读出系统信息</p>
       <p v-else class="muted small">正在读取系统信息…</p>
     </div>
   </aside>

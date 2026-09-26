@@ -9,6 +9,12 @@
  *   ?allok      体检全部正常
  *   ?mismatch   用别的管理员账户运行（显示提示条）
  *   ?notadmin   没有以管理员身份运行
+ *   ?win10      这台电脑是 Win10（只有 Win11 能用的功能会标成「这台电脑用不了」）
+ *
+ * 默认场景里也有演示用的情况：
+ *   - 「关闭任务栏上的资讯和兴趣（Win10）」在这台 Win11 上用不了
+ *   - 「切换到高性能电源计划」执行一定失败（已退回，reboot 为 none）
+ *   - 「打印机共享 0x0000011b 兼容设置」执行后复查没确认生效（ok 但 verified 不是 applied）
  */
 import type { CommandArgs, CommandName, CommandResult } from './commands'
 import type {
@@ -33,6 +39,7 @@ const params = new URLSearchParams(window.location.search)
 const DEMO_ALL_OK = params.has('allok')
 const DEMO_MISMATCH = params.has('mismatch')
 const DEMO_NOT_ADMIN = params.has('notadmin')
+const DEMO_WIN10 = params.has('win10')
 
 // ─────────────────────────── 小工具 ───────────────────────────
 
@@ -85,8 +92,8 @@ function localTime(ms: number): string {
 // ─────────────────────────── 系统信息 ───────────────────────────
 
 const SYSTEM: SystemInfo = {
-  osCaption: 'Microsoft Windows 11 家庭中文版',
-  build: 26100,
+  osCaption: DEMO_WIN10 ? 'Microsoft Windows 10 家庭中文版' : 'Microsoft Windows 11 家庭中文版',
+  build: DEMO_WIN10 ? 19045 : 26100,
   edition: '家庭中文版',
   isAdmin: !DEMO_NOT_ADMIN,
   interactiveUser: '小明',
@@ -154,11 +161,27 @@ interface MockFeature {
   verifyAs?: FeatureStateKind
   /** 创建还原点失败（系统还原没开） */
   restorePointFails?: boolean
+  /** 适用的系统版本号范围（和引擎的 applies_to 一样）；这台电脑不在范围里就是「用不了」 */
+  minBuild?: number
+  maxBuild?: number
 }
 
-type FeatureInput = Partial<FeatureSummary> & Pick<FeatureSummary, 'id' | 'title' | 'description' | 'category'>
+type FeatureInput = Partial<Omit<FeatureSummary, 'applicable' | 'notApplicableReason'>> &
+  Pick<FeatureSummary, 'id' | 'title' | 'description' | 'category'>
+
+/** 这台示例电脑用不了的原因（说法和引擎一样）；能用时为 null */
+function notApplicableReason(minBuild?: number, maxBuild?: number): string | null {
+  if (minBuild !== undefined && SYSTEM.build < minBuild) {
+    return `需要系统版本号 ${minBuild} 或更新（这台是 ${SYSTEM.build}）`
+  }
+  if (maxBuild !== undefined && SYSTEM.build > maxBuild) {
+    return `只适用于版本号 ${maxBuild} 及以前的系统（这台是 ${SYSTEM.build}）`
+  }
+  return null
+}
 
 function defineFeature(summary: FeatureInput, rest: Omit<MockFeature, 'summary'>): MockFeature {
+  const reason = notApplicableReason(rest.minBuild, rest.maxBuild)
   return {
     summary: {
       risk: 'safe',
@@ -169,6 +192,8 @@ function defineFeature(summary: FeatureInput, rest: Omit<MockFeature, 'summary'>
       reversible: true,
       irreversibleReason: null,
       ...summary,
+      applicable: reason === null,
+      notApplicableReason: reason,
     },
     ...rest,
   }
@@ -205,7 +230,7 @@ const FEATURE_LIST: MockFeature[] = [
   defineFeature(
     {
       id: 'explorer.classic-context-menu',
-      title: '恢复经典右键菜单',
+      title: '恢复经典右键菜单（Win11）',
       description: 'Win11 的右键菜单要再点「显示更多选项」才能看到全部功能。开启后，右键直接显示完整的老式菜单。',
       category: 'explorer',
       subjective: true,
@@ -220,6 +245,7 @@ const FEATURE_LIST: MockFeature[] = [
         },
       ],
       notes: ['以后的 Windows 大版本更新可能让它失效，到时候再开一次就行。'],
+      minBuild: 22000,
     },
   ),
   // ── 常用设置：桌面 ──
@@ -247,7 +273,7 @@ const FEATURE_LIST: MockFeature[] = [
   defineFeature(
     {
       id: 'taskbar.align-left',
-      title: '任务栏图标靠左',
+      title: '任务栏图标靠左（Win11）',
       description: '把 Win11 任务栏上的开始按钮和图标放回左边，和 Win10 的习惯一样。',
       category: 'taskbar',
       subjective: true,
@@ -255,6 +281,23 @@ const FEATURE_LIST: MockFeature[] = [
     {
       changes: [{ target: `${HKCU_ADVANCED}\\TaskbarAl`, initial: ABSENT, planned: 'DWORD 0' }],
       notes: [],
+      minBuild: 22000,
+    },
+  ),
+  // 只有 Win10 有：在默认的 Win11 示例电脑上演示「这台电脑用不了」（推荐项，也不能算进「只应用推荐项」）
+  defineFeature(
+    {
+      id: 'taskbar.hide-news-interests',
+      title: '关闭任务栏上的「资讯和兴趣」（Win10）',
+      description: '任务栏右下角不再显示天气和新闻，鼠标划过时也不会突然弹出一大块资讯。',
+      category: 'taskbar',
+      recommend: 'recommended',
+      reboot: 'explorer',
+    },
+    {
+      changes: [{ target: `${HKCU_CV}\\Feeds\\ShellFeedsTaskbarViewMode`, initial: 'DWORD 0', planned: 'DWORD 2' }],
+      notes: [],
+      maxBuild: 19045,
     },
   ),
   // ── 常用设置：开始菜单 ──
@@ -1347,12 +1390,15 @@ const handlers: Handlers = {
       changes: f.changes.map((c) => ({ target: c.target, current: valueOf(c.target), planned: c.planned })),
       // 本来就是好的功能不用改，也就不建还原点
       willCreateRestorePoint: f.summary.risk !== 'safe' && pendingChanges(f).length > 0,
-      notes: f.notes,
+      // 和引擎一样：用不了的功能在注意事项最前面写上原因
+      notes: f.summary.applicable ? f.notes : [`不能执行：${f.summary.notApplicableReason ?? ''}`, ...f.notes],
     }
   },
 
   feature_apply: ({ id }): ApplyResult => {
     const f = getFeature(id)
+    // 和引擎一样：这台电脑用不了的功能直接报错（Tauri 里是 reject 一个字符串）
+    if (!f.summary.applicable) throw `这项不适用于这台电脑：${f.summary.notApplicableReason ?? ''}`
     const title = f.summary.title
     const todo = pendingChanges(f)
 

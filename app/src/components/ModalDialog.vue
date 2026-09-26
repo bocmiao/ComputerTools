@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import { nextTick, onBeforeMount, onBeforeUnmount, onMounted, useId, useTemplateRef } from 'vue'
-import { focusableIn, isTopDialog, pushDialog, removeDialog } from '../utils/dialogs'
+import {
+  focusableIn,
+  isTopDialog,
+  pushDialog,
+  rememberFocus,
+  removeDialog,
+  restoreFocus,
+  type SavedFocus,
+} from '../utils/dialogs'
 import AppIcon from './AppIcon.vue'
 
-// 通用对话框：按 Esc 或点遮罩关闭（busy 时不能关），Tab 只在对话框里循环，关掉后焦点回到原来的位置。
+// 通用对话框：按 Esc 或点遮罩关闭（busy 时不能关），Tab 只在对话框里循环，
+// 关掉后焦点回到原来的位置；原来的元素不在了或被禁用时，退回到它所在的卡片，再不行退回到页面标题。
 // 用法：父组件用 v-if 控制显示，收到 close 事件时把它去掉。
 
 const props = withDefaults(
@@ -21,7 +30,7 @@ const emit = defineEmits<{ close: [] }>()
 const titleId = useId()
 const panel = useTemplateRef<HTMLElement>('panel')
 let token: symbol | null = null
-let previousFocus: HTMLElement | null = null
+let savedFocus: SavedFocus | null = null
 let pressedOnBackdrop = false
 
 function requestClose(): void {
@@ -68,9 +77,9 @@ function onBackdropClick(e: MouseEvent): void {
   pressedOnBackdrop = false
 }
 
-// 在对话框里的元素抢到焦点之前，先记下原来的焦点，关掉后还给它
+// 在对话框里的元素抢到焦点之前，先记下原来的焦点（和它外面的卡片），关掉后还回去
 onBeforeMount(() => {
-  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  savedFocus = rememberFocus()
 })
 
 onMounted(async () => {
@@ -85,9 +94,11 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
+  // 先解除主界面的 inert，焦点才能回去
   if (token) removeDialog(token)
   token = null
-  if (previousFocus && previousFocus.isConnected) previousFocus.focus()
+  if (savedFocus) restoreFocus(savedFocus)
+  savedFocus = null
 })
 </script>
 

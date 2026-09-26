@@ -3,6 +3,8 @@ import { computed, onMounted, ref, useId } from 'vue'
 import { featureApply, featurePreview } from '../api'
 import type { ApplyResult, Preview } from '../api/types'
 import {
+  applyOutcome,
+  applyOutcomeTitle,
   rebootLabel,
   riskLabel,
   riskTone,
@@ -33,17 +35,34 @@ const changesTitleId = useId()
 const notesTitleId = useId()
 
 const feature = computed(() => preview.value?.feature ?? null)
+/** 这台电脑能不能用这一项（系统版本不对等）；不能用时不给执行 */
+const applicable = computed(() => feature.value?.applicable !== false)
+const notApplicableReason = computed(() => feature.value?.notApplicableReason ?? '这台电脑的系统不支持这一项。')
 /** 🔴「谨慎」级的功能要多勾一下确认 */
-const needsAck = computed(() => feature.value?.risk === 'danger')
-const canApply = computed(() => phase.value === 'ready' && (!needsAck.value || acknowledged.value))
+const needsAck = computed(() => feature.value?.risk === 'danger' && applicable.value)
+const canApply = computed(
+  () => phase.value === 'ready' && applicable.value && (!needsAck.value || acknowledged.value),
+)
 const title = computed(() => feature.value?.title ?? '预览修改')
-/** ok 且没有写日志：这一项本来就是好的，什么也没改 */
-const resultTitle = computed(() => {
-  const r = result.value
-  if (!r) return ''
-  if (!r.ok) return '没有改成'
-  return r.entryIds.length === 0 ? '不用改' : '已经改好了'
+/** 后端在 notes 里也写了一句「不能执行：原因」，上面已经单独显示原因了，这里不再重复 */
+const notes = computed(() => {
+  const all = preview.value?.notes ?? []
+  if (applicable.value) return all
+  return all.filter((n) => n !== `不能执行：${feature.value?.notApplicableReason ?? ''}`)
 })
+
+/** 执行结果按四种分开显示：已经改好 / 改了但没确认生效 / 不用改 / 没改成 */
+const outcome = computed(() => (result.value ? applyOutcome(result.value) : null))
+const resultTitle = computed(() => (outcome.value ? applyOutcomeTitle[outcome.value] : ''))
+/** 后端的说明和标题说的是一回事（例如都是「已经改好了」）时不重复显示 */
+const resultMessage = computed(() => {
+  const m = result.value?.message.trim() ?? ''
+  return m.replace(/[。.！!]+$/, '') === resultTitle.value ? '' : m
+})
+/** 真改了东西、而且能撤销，才提示可以去修改日志里恢复 */
+const canUndoLater = computed(
+  () => !!result.value && result.value.ok && result.value.entryIds.length > 0 && feature.value?.reversible === true,
+)
 const allUnchanged = computed(
   () => !!preview.value && preview.value.changes.length > 0 && preview.value.changes.every((c) => c.current === c.planned),
 )
@@ -98,6 +117,13 @@ onMounted(load)
         <TagPill v-if="feature.subjective" tone="neutral">个人偏好</TagPill>
       </div>
 
+      <div v-if="!applicable" class="banner banner-warning" role="note">
+        <div>
+          <p class="banner-title">这台电脑用不了这一项</p>
+          <p>{{ notApplicableReason }}</p>
+        </div>
+      </div>
+
       <section class="block" :aria-labelledby="changesTitleId">
         <h3 :id="changesTitleId" class="block-title">会改动这些地方</h3>
         <div v-if="preview.changes.length" class="table-wrap">
@@ -144,10 +170,10 @@ onMounted(load)
         </li>
       </ul>
 
-      <section v-if="preview.notes.length" class="block" :aria-labelledby="notesTitleId">
+      <section v-if="notes.length" class="block" :aria-labelledby="notesTitleId">
         <h3 :id="notesTitleId" class="block-title">注意</h3>
         <ul class="notes">
-          <li v-for="(n, i) in preview.notes" :key="i">{{ n }}</li>
+          <li v-for="(n, i) in notes" :key="i">{{ n }}</li>
         </ul>
       </section>
 
@@ -159,9 +185,9 @@ onMounted(load)
 
     <!-- 执行结果 -->
     <template v-else-if="phase === 'done'">
-      <div v-if="result" class="result" :class="result.ok ? 'result-ok' : 'result-fail'" role="status">
+      <div v-if="result && outcome" class="result" :class="`result-${outcome}`" role="status">
         <p class="result-title">{{ resultTitle }}</p>
-        <p v-if="result.message">{{ result.message }}</p>
+        <p v-if="resultMessage">{{ resultMessage }}</p>
       </div>
       <div v-else class="banner banner-error" role="alert">
         <div>
@@ -170,10 +196,13 @@ onMounted(load)
         </div>
       </div>
 
-      <dl v-if="result" class="kv">
-        <dt>修好了没</dt>
-        <dd><TagPill :tone="verifiedTone[result.verified]">{{ verifiedLabel[result.verified] }}</TagPill></dd>
-        <template v-if="result.reboot !== 'none'">
+      <!-- 没改成（已经退回）时，「修好了没」「还要做」都没有意义，不显示 -->
+      <dl v-if="result && (result.ok || result.error)" class="kv">
+        <template v-if="result.ok">
+          <dt>修好了没</dt>
+          <dd><TagPill :tone="verifiedTone[result.verified]">{{ verifiedLabel[result.verified] }}</TagPill></dd>
+        </template>
+        <template v-if="result.ok && result.reboot !== 'none'">
           <dt>还要做</dt>
           <dd>
             <strong>{{ rebootLabel[result.reboot] }}</strong>
@@ -190,7 +219,7 @@ onMounted(load)
         <li v-for="(n, i) in result.notes" :key="i">{{ n }}</li>
       </ul>
 
-      <p v-if="result && result.entryIds.length" class="muted small">
+      <p v-if="canUndoLater" class="muted small">
         这次的改动已经记进「修改日志」，想改回去，可以在那里恢复原状。
       </p>
     </template>
@@ -305,14 +334,25 @@ onMounted(load)
   border-radius: var(--radius);
 }
 
-.result-ok {
+/* 四种结果：已经改好（绿）、不用改（蓝）、改了但没确认生效（橙）、没改成（红） */
+.result-done {
   background: var(--tone-ok-bg);
   color: var(--tone-ok-text);
 }
 
-.result-fail {
+.result-unchanged {
+  background: var(--tone-info-bg);
+  color: var(--tone-info-text);
+}
+
+.result-unverified {
   background: var(--tone-advice-bg);
   color: var(--tone-advice-text);
+}
+
+.result-failed {
+  background: var(--tone-manual-bg);
+  color: var(--tone-manual-text);
 }
 
 .result-title {
