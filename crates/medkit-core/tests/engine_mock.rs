@@ -581,8 +581,9 @@ fn script_feature_passes_before_to_the_undo_script() {
     let r = w.engine.feature_apply("disk.hibernation-reduce").unwrap();
     assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
     let e = &w.engine.journal_list().unwrap()[0].entries[0];
-    assert_eq!(e.before, r#"{"type":"full"}"#);
-    assert_eq!(e.after, r#"{"type":"reduced"}"#);
+    // 脚本自己的数据不给用户看，只说清楚记没记下
+    assert!(e.before.contains("已经记下"), "{}", e.before);
+    assert_eq!(e.after, "已按这一项修改");
 
     assert!(w.engine.journal_undo(&r.entry_ids[0], false).unwrap().ok);
     assert!(!*applied.lock().unwrap());
@@ -792,12 +793,42 @@ fn script_undo_targets_the_user_it_was_applied_to() {
     let mut p = MockPlatform::new();
     p.interactive = Some(UserIdentity { sid: "S-1-5-21-1000-2000-3000-1002".into(), name: "MOCK-PC\\other".into() });
     let runner = Arc::new(MockRunner::new());
+    runner.returns("features/disk/hib-detect.ps1", json!({ "state": "applied" }));
     runner.returns("features/disk/hib-restore.ps1", json!({}));
     let restarted = engine_on(&w.journal_path, Arc::new(p), runner.clone());
     assert!(restarted.journal_undo(&r.entry_ids[0], false).unwrap().ok);
 
-    let (_, args) = runner.calls().into_iter().find(|(s, _)| s.ends_with("hib-restore.ps1")).unwrap();
-    assert_eq!(args["UserHive"], format!("Registry::HKEY_USERS\\{SID}").as_str());
+    // 撤销前的核对和撤销本身，都用执行时那个用户的注册表
+    let hive = format!("Registry::HKEY_USERS\\{SID}");
+    for script in ["hib-detect.ps1", "hib-restore.ps1"] {
+        let (_, args) = runner.calls().into_iter().find(|(s, _)| s.ends_with(script)).unwrap();
+        assert_eq!(args["UserHive"], hive.as_str(), "{script}");
+    }
+}
+
+/// 脚本类修复后来被改掉了（比如用户又开了一个新代理），撤销前要先问，不能直接覆盖。
+#[test]
+fn script_undo_asks_first_when_the_fix_is_no_longer_in_place() {
+    let w = world();
+    let state = Arc::new(Mutex::new("not-applied"));
+    let st = state.clone();
+    w.runner.on("features/disk/hib-detect.ps1", move |_| Ok(json!({ "state": *st.lock().unwrap() })));
+    let st = state.clone();
+    w.runner.on("features/disk/hib-reduce.ps1", move |_| {
+        *st.lock().unwrap() = "applied";
+        Ok(json!({ "before": { "type": "full" }, "after": {} }))
+    });
+    w.runner.returns("features/disk/hib-restore.ps1", json!({}));
+    let r = w.engine.feature_apply("disk.hibernation-reduce").unwrap();
+
+    // 别的程序把它改回去了
+    *state.lock().unwrap() = "not-applied";
+    let u = w.engine.journal_undo(&r.entry_ids[0], false).unwrap();
+    assert!(u.drift && !u.ok, "{u:?}");
+    assert!(!w.runner.calls().iter().any(|(s, _)| s.ends_with("hib-restore.ps1")), "没问就撤销了");
+
+    // 用户确认以后才撤销
+    assert!(w.engine.journal_undo(&r.entry_ids[0], true).unwrap().ok);
 }
 
 /// 那个用户已经注销时，撤销要明确拒绝，不能「成功」了却什么都没改。
@@ -847,4 +878,28 @@ fn script_entries_without_a_recorded_state_cannot_be_undone() {
     assert!(e.pending && !e.can_undo, "{e:?}");
     assert!(w.engine.journal_undo(&rec.id, false).is_err());
     assert!(w.runner.calls().is_empty(), "不应该去跑撤销脚本");
+}
+
+/// 目录里直接标出这台电脑不能用的功能，界面据此禁用，不用等点了执行才报错。
+#[test]
+fn catalog_marks_features_that_do_not_apply_here() {
+    let w = world();
+    let summary = w.engine.catalog_summary();
+    let find = |id: &str| summary.features.iter().find(|f| f.id == id).unwrap().clone();
+    let future = find("test.future-only");
+    assert!(!future.applicable);
+    assert!(future.not_applicable_reason.as_deref().unwrap().contains("99999"), "{future:?}");
+    let ext = find("explorer.show-extensions");
+    assert!(ext.applicable && ext.not_applicable_reason.is_none());
+}
+
+/// 没改成、已经退回的，不能再叫用户去重启。
+#[test]
+fn a_failed_apply_does_not_ask_for_a_restart() {
+    let w = world();
+    w.platform.seed_value(&user(), ADVANCED, "HideFileExt", RegValue::Dword(1));
+    w.platform.fail_write(ADVANCED, "HideFileExt");
+    let r = w.engine.feature_apply("explorer.show-extensions").unwrap();
+    assert!(!r.ok);
+    assert_eq!(r.reboot, medkit_core::model::Reboot::None);
 }

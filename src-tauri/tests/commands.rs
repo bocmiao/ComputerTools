@@ -89,6 +89,8 @@ fn every_command_is_reachable_and_well_shaped() {
             "reboot",
             "reversible",
             "irreversibleReason",
+            "applicable",
+            "notApplicableReason",
         ],
     );
     let symptoms = summary["symptoms"].as_array().unwrap();

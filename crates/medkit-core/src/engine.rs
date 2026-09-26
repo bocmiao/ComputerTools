@@ -92,6 +92,8 @@ pub struct Engine {
     apply_lock: Mutex<()>,
     /// 最近一次跑检测清单的结果，写报告用
     last_results: Mutex<Vec<CheckResult>>,
+    /// 最近一次跑检测清单的时间
+    last_profile_time: Mutex<Option<String>>,
 }
 
 impl Engine {
@@ -114,6 +116,7 @@ impl Engine {
             lang: "zh-CN".to_owned(),
             apply_lock: Mutex::new(()),
             last_results: Mutex::new(Vec::new()),
+            last_profile_time: Mutex::new(None),
         }
     }
 
@@ -172,6 +175,7 @@ impl Engine {
     }
 
     fn feature_summary(&self, f: &Feature) -> FeatureSummary {
+        let reason = self.applicability(f);
         FeatureSummary {
             id: f.id.clone(),
             title: f.title.get(&self.lang).to_owned(),
@@ -184,6 +188,8 @@ impl Engine {
             reboot: f.reboot,
             reversible: f.reversible(),
             irreversible_reason: f.irreversible_reason.as_ref().map(|t| t.get(&self.lang).to_owned()),
+            applicable: reason.is_none(),
+            not_applicable_reason: reason,
         }
     }
 
@@ -227,7 +233,12 @@ impl Engine {
 
     pub fn run_check(&self, id: &str) -> Result<CheckResult> {
         let check = self.catalog.check(id).ok_or_else(|| Error::not_found("检测", id))?;
-        Ok(self.run_check_inner(check))
+        let r = self.run_check_inner(check);
+        // 修完、撤销完再查一次时，报告里的体检结果也要跟着更新
+        if let Some(slot) = self.last_results.lock().unwrap().iter_mut().find(|x| x.id == r.id) {
+            *slot = r.clone();
+        }
+        Ok(r)
     }
 
     fn run_check_inner(&self, check: &Check) -> CheckResult {
@@ -293,6 +304,7 @@ impl Engine {
         let results: Vec<CheckResult> =
             profile.checks.iter().filter_map(|c| self.catalog.check(c)).map(|c| self.run_check_inner(c)).collect();
         *self.last_results.lock().unwrap() = results.clone();
+        *self.last_profile_time.lock().unwrap() = Some(now_rfc3339());
         Ok(results)
     }
 
@@ -475,10 +487,17 @@ impl Engine {
                 })
                 .collect::<Result<Vec<_>>>()?
         } else {
+            // 脚本类功能没有逐个位置可列，用它自己的检测说明现在的状态；要改什么见功能说明
+            let current = match self.detect_inner(f) {
+                Ok((FeatureStateKind::Applied, _)) => "已经是这样了",
+                Ok((FeatureStateKind::NotApplied, _)) => "还没改",
+                Ok((FeatureStateKind::Partial, _)) => "改了一部分",
+                _ => "没查出来",
+            };
             vec![PreviewChange {
-                target: Self::target_label(&TargetRef::Script { feature: f.id.clone(), hive: None }),
-                current: String::new(),
-                planned: f.description.get(&self.lang).to_owned(),
+                target: "由小药箱的脚本完成".to_owned(),
+                current: current.to_owned(),
+                planned: "按上面的说明修改".to_owned(),
             }]
         };
         if f.target == Target::CurrentUser {
@@ -555,7 +574,8 @@ impl Engine {
             ok,
             verified: FeatureStateKind::Unknown,
             message,
-            reboot: f.reboot,
+            // 没改成（已经退回）就不用重启
+            reboot: if ok { f.reboot } else { crate::model::Reboot::None },
             notes,
             error: None,
         }
@@ -822,6 +842,12 @@ impl Engine {
                 error: None,
             });
         }
+        if !force
+            && let TargetRef::Script { feature, hive } = &rec.target
+            && let Some(message) = self.script_drift(feature, hive.as_deref())
+        {
+            return Ok(UndoResult { entry_id: rec.id.clone(), ok: false, drift: true, message, error: None });
+        }
         if !force && let Some(after) = after {
             let drifted = match self.state_now(rec)? {
                 Some(now) => !Self::same_state(&now, after),
@@ -896,6 +922,19 @@ impl Engine {
         let mut args = self.script_args(f, hive);
         args.insert("Before".into(), Value::String(before.to_string()));
         self.runner.run(&undo.script, &args, SCRIPT_FEATURE_TIMEOUT).map(|_| ()).map_err(Error::from)
+    }
+
+    /// 脚本类修改撤销前的核对：用功能自己的检测脚本（不是 verify）看修复还在不在。
+    /// 不在了（被别的程序或用户改过，例如又开了一个新代理）就返回提示；没法核对时也返回提示，由用户决定。
+    fn script_drift(&self, feature: &str, hive: Option<&str>) -> Option<String> {
+        let f = self.catalog.feature(feature)?;
+        let detect = f.detect.as_ref()?;
+        let title = f.title.get(&self.lang);
+        match self.runner.run(&detect.script, &self.script_args(f, hive), SCRIPT_FEATURE_TIMEOUT) {
+            Ok(v) if v.get("state").and_then(Value::as_str) == Some("applied") => None,
+            Ok(_) => Some(format!("「{title}」后来被别的程序或你自己改过，恢复原状会覆盖那次改动。")),
+            Err(e) => Some(format!("没能核对「{title}」现在的状态（{e}），恢复原状可能会覆盖后来的改动。")),
+        }
     }
 
     /// 这条记录改的是哪个用户的注册表（`HKU\<SID>`）；和具体用户无关时返回 `None`。
@@ -1021,31 +1060,21 @@ impl Engine {
                     Some("程序在修改过程中退出，状态不确定；可以尝试恢复原状。".to_owned()),
                 ),
             };
-            let before = match (&e.apply.target, &e.commit) {
-                (TargetRef::Script { .. }, Some(c)) => c
-                    .after
-                    .as_ref()
-                    .and_then(|s| match s {
-                        State::Script { data } => {
-                            data.get("before").map(|b| Self::state_label(&State::Script { data: b.clone() }))
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or_default(),
-                _ => Self::state_label(&e.apply.before),
-            };
-            let after = match (&e.apply.target, &e.commit) {
-                (TargetRef::Script { .. }, Some(c)) => c
-                    .after
-                    .as_ref()
-                    .and_then(|s| match s {
-                        State::Script { data } => {
-                            data.get("after").map(|b| Self::state_label(&State::Script { data: b.clone() }))
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or(after),
-                _ => after,
+            // 脚本类修改的原状态是脚本自己的数据（例如一段十六进制），给用户看没有意义，说清楚记没记下就行
+            let (before, after) = match (&e.apply.target, &e.commit) {
+                (TargetRef::Script { .. }, Some(c)) => {
+                    let recorded = matches!(&c.after, Some(State::Script { data })
+                        if data.get("before").is_some_and(|b| !b.is_null()));
+                    let before = if recorded {
+                        "原来的设置（已经记下，可以恢复）"
+                    } else {
+                        "（没记下原来的设置）"
+                    };
+                    let after = if c.ok { "已按这一项修改" } else { "（没改成）" };
+                    (before.to_owned(), after.to_owned())
+                }
+                (TargetRef::Script { .. }, None) => ("（程序中途退出，没记下原来的设置）".to_owned(), after),
+                _ => (Self::state_label(&e.apply.before), after),
             };
             let view = JournalEntryView {
                 id: e.apply.id.clone(),
@@ -1109,6 +1138,8 @@ impl Engine {
         line(&mut out, "== 最近一次体检 ==");
         if results.is_empty() {
             line(&mut out, "（还没有做过体检）");
+        } else if let Some(t) = self.last_profile_time.lock().unwrap().as_deref() {
+            line(&mut out, &format!("（体检时间：{t}；之后单独重查过的项目已经更新）"));
         }
         for r in results.iter().filter(|r| r.status != Status::Na) {
             let tag = match r.status {

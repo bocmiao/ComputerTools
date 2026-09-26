@@ -341,6 +341,8 @@ export interface FeatureSummary {
   id: string; title: string; description: string; category: string
   risk: Risk; level: Level; recommend: Recommend; subjective: boolean; reboot: Reboot
   reversible: boolean; irreversibleReason: string | null
+  applicable: boolean                  // 这台电脑能不能用（系统版本、Windows 版本不对就不能）
+  notApplicableReason: string | null   // 不能用的原因，给用户看
 }
 export interface CatalogSummary { profiles: ProfileSummary[]; symptoms: SymptomSummary[]; features: FeatureSummary[] }
 export interface SymptomStep { check: string; checkTitle: string; stopOn: Status[]; fixes: FeatureSummary[] }
@@ -358,6 +360,11 @@ export interface ApplyResult {
   feature: string; sessionId: string; entryIds: string[]; ok: boolean
   verified: FeatureStateKind; message: string; reboot: Reboot; notes: string[]; error: string | null
 }
+// ApplyResult 的三种结果，界面要分开显示：
+//   ok && verified === 'applied'   已经改好、复查也确认生效
+//   ok && verified !== 'applied'   改了，但复查没确认生效（message 会说明）
+//   !ok                            没改成，已经退回原样；这时 reboot 一定是 'none'
+// ok && entryIds 为空：本来就是好的，什么都没改
 export interface JournalEntryView {
   id: string; sessionId: string; time: string; feature: string; featureTitle: string
   target: string; before: string; after: string; ok: boolean

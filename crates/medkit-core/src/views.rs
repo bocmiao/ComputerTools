@@ -71,6 +71,10 @@ pub struct FeatureSummary {
     pub reboot: Reboot,
     pub reversible: bool,
     pub irreversible_reason: Option<String>,
+    /// 这台电脑能不能用这一项（系统版本、Windows 版本不对就不能）
+    pub applicable: bool,
+    /// 不能用的原因，给用户看
+    pub not_applicable_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
