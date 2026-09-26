@@ -257,4 +257,6 @@ pub struct UndoResult {
     pub drift: bool,
     pub message: String,
     pub error: Option<String>,
+    /// 恢复以后要做什么才能看到效果（重启资源管理器、注销……）；没恢复成功时是 none
+    pub reboot: Reboot,
 }

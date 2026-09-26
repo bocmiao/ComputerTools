@@ -906,3 +906,70 @@ fn a_failed_apply_does_not_ask_for_a_restart() {
     assert!(!r.ok);
     assert_eq!(r.reboot, medkit_core::model::Reboot::None);
 }
+
+/// 没改成功、自动退回以后也没退干净的那一步（commit 里 left_changes 为 true）：
+/// 修改日志里要能手动恢复，而不是说「当时就没有改成功，不需要恢复」。
+#[test]
+fn a_failed_step_that_left_changes_can_still_be_undone() {
+    use medkit_core::journal::CommitRecord;
+    let w = world();
+    let key = r"SOFTWARE\MedkitTest";
+    // 系统上现在是改了一半的样子：原来没有这个值
+    w.platform.seed_value(&RegRoot::LocalMachine, key, "Half", RegValue::Dword(1));
+    let rec = ApplyRecord {
+        v: RECORD_VERSION,
+        id: new_id(),
+        session: "s1".into(),
+        time: now_rfc3339(),
+        feature: "test.two-steps".into(),
+        action: 1,
+        target: TargetRef::Registry { root: RegRoot::LocalMachine, key: key.into(), name: "Half".into() },
+        before: State::Registry { value: None, created_keys: Vec::new() },
+    };
+    let journal = Journal::open(&w.journal_path).unwrap();
+    journal.append(&Record::Apply(rec.clone())).unwrap();
+    for left_changes in [false, true] {
+        journal
+            .append(&Record::Commit(CommitRecord {
+                v: RECORD_VERSION,
+                reference: rec.id.clone(),
+                time: now_rfc3339(),
+                ok: false,
+                after: None,
+                error: Some("写入后读回的值不对".into()),
+                left_changes,
+            }))
+            .unwrap();
+    }
+    let e = &w.engine.journal_list().unwrap()[0].entries[0];
+    assert!(e.can_undo && !e.ok, "{e:?}");
+    assert!(w.engine.journal_undo(&rec.id, false).unwrap().ok);
+    assert_eq!(w.platform.reg_get(&RegRoot::LocalMachine, key, "Half").unwrap(), None);
+}
+
+/// 恢复原状以后，和当初修改一样要重启资源管理器才看得到效果，结果里要带上。
+#[test]
+fn undo_tells_what_is_needed_to_see_the_change() {
+    use medkit_core::model::Reboot;
+    let w = world();
+    w.platform.seed_value(&user(), ADVANCED, "HideFileExt", RegValue::Dword(1));
+    let r = w.engine.feature_apply("explorer.show-extensions").unwrap();
+    let u = w.engine.journal_undo(&r.entry_ids[0], false).unwrap();
+    assert!(u.ok);
+    assert_eq!(u.reboot, Reboot::Explorer);
+    assert_eq!(serde_json::to_value(&u).unwrap()["reboot"], "explorer");
+}
+
+/// 直接去「按症状修」查过、没做过体检的人，报告里也要有那几项的结论（断网求助时正是这样）。
+#[test]
+fn checks_run_outside_the_health_check_appear_in_the_report() {
+    let w = world();
+    w.runner.returns("checks/system/admin-only.ps1", json!({ "result": "ok", "facts": {} }));
+    w.engine.run_check("system.admin-only").unwrap();
+    let report = w.engine.report_generate().unwrap();
+    assert!(report.contains("单独检查过的项目"), "{report}");
+    assert!(report.contains("需要管理员的检测"), "{report}");
+    // 时间按「年-月-日 时:分」显示（换成本机时间），不是 RFC 3339 原文
+    let generated = report.lines().find(|l| l.starts_with("生成时间：")).unwrap();
+    assert!(!generated.contains('T') && generated.contains(':'), "{generated}");
+}

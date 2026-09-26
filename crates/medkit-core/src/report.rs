@@ -8,6 +8,11 @@ static SID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"S-1-5-21-\d+-\d+-\d+
 static USER_DIR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)([A-Z]:\\Users\\)[^\\\s]+").unwrap());
 static IPV4: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\b(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}\b").unwrap());
+/// 带「::」缩写的 IPv6（完整写法的 8 组也算）。只认带「::」或 8 组的，免得把「12:30:45」这种时间当成地址。
+static IPV6: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b(?:[0-9a-f]{1,4}:){1,7}:(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?|\b[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){7}\b")
+        .unwrap()
+});
 static MAC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b").unwrap());
 static SERIAL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)(serial[_ ]?(number)?|序列号)\s*[:：=]\s*\S+").unwrap());
@@ -29,14 +34,23 @@ pub fn redact(text: &str, secrets: &[String]) -> String {
             if ip.starts_with("127.") || ip == "0.0.0.0" { ip.to_owned() } else { "<IP>".to_owned() }
         })
         .into_owned();
+    out = IPV6.replace_all(&out, "<IP>").into_owned();
     out = MAC.replace_all(&out, "<MAC>").into_owned();
     out = SERIAL.replace_all(&out, "${1}：<已隐藏>").into_owned();
     out
 }
 
+/// 不区分大小写地整词替换：前后紧挨着字母或数字的不算，
+/// 免得用户名叫「Win」「HP」时把「Windows 11」、硬盘型号也改坏。
 fn replace_ignore_case(haystack: &str, needle: &str, with: &str) -> String {
-    let re = Regex::new(&format!("(?i){}", regex::escape(needle))).expect("转义过的正则");
-    re.replace_all(haystack, regex::NoExpand(with)).into_owned()
+    let re =
+        Regex::new(&format!("(?i)(^|[^A-Za-z0-9]){}($|[^A-Za-z0-9])", regex::escape(needle))).expect("转义过的正则");
+    let mut out = haystack.to_owned();
+    // 相邻的两处共用一个分隔符时，一遍替换不完，再来一遍
+    for _ in 0..2 {
+        out = re.replace_all(&out, |c: &regex::Captures<'_>| format!("{}{with}{}", &c[1], &c[2])).into_owned();
+    }
+    out
 }
 
 #[cfg(test)]
@@ -53,5 +67,25 @@ mod tests {
         }
         assert!(out.contains("127.0.0.1:7890"), "本机地址应保留：{out}");
         assert!(out.contains("C:\\Users\\<用户>"));
+    }
+
+    #[test]
+    fn short_names_do_not_damage_other_words() {
+        let out = redact("系统：Windows 11，用户 Win 的硬盘 HP SSD，win", &["Win".into(), "HP".into()]);
+        assert!(out.contains("Windows 11"), "{out}");
+        assert!(!out.contains(" Win ") && !out.ends_with("win"), "{out}");
+        assert!(!out.contains("HP SSD"), "{out}");
+    }
+
+    #[test]
+    fn ipv6_is_redacted_but_times_and_loopback_are_kept() {
+        let out = redact(
+            "地址 fe80::1c2b:3d4e:5f60:7a8b%12，2409:8a55:1234:5678:9abc:def0:1234:5678，时间 12:30:45，本机 ::1",
+            &[],
+        );
+        for leaked in ["fe80::1c2b", "2409:8a55"] {
+            assert!(!out.contains(leaked), "{leaked} 没被去掉：{out}");
+        }
+        assert!(out.contains("12:30:45") && out.contains("::1"), "{out}");
     }
 }

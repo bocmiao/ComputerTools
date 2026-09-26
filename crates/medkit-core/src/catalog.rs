@@ -10,8 +10,8 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
-    Action, Check, Feature, Maturity, Profile, RegistryAction, ResultSpec, Symptom, Target, Text, Tool, ToolGroup,
-    Undo, UndoKeyword,
+    Action, Check, Feature, Maturity, Profile, Recommend, RegistryAction, ResultSpec, Risk, Symptom, Target, Text,
+    Tool, ToolGroup, Undo, UndoKeyword,
 };
 use crate::registry::{RegValue, SpecRoot, split_key};
 use crate::yaml;
@@ -153,9 +153,62 @@ const DENIED_KEYS: &[(&str, &str)] = &[
     (r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options", "不碰 IFEO"),
     (r"HKLM\SYSTEM\CurrentControlSet\Control\SafeBoot", "不改安全模式配置"),
     (r"HKLM\SYSTEM\CurrentControlSet\Services\mrxsmb10", "不开 SMB1（第五节第 22 条）"),
+    // 更新：策略类的开关（禁用自动更新、断开更新服务、改更新源）一律不碰；plan 4.4 的「暂停更新」用系统自带的暂停方式
+    (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "不通过策略禁用或限制更新（第五节第 5 条）"),
+    (r"HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy", "不关防火墙（第五节第 22 条）"),
+    (r"HKLM\SOFTWARE\Policies\Microsoft\WindowsFirewall", "不关防火墙（第五节第 22 条）"),
+    (r"HKLM\SOFTWARE\Policies\Microsoft\Windows Defender Security Center", "不关安全中心（第五节第 4 条）"),
+];
+
+/// 不能往里写值、但可以删值的键：浏览器策略。写进去就是替用户锁主页、装扩展（第五节第 9 条）；
+/// 删掉广告软件写进去的策略是 plan 4.3「浏览器被劫持」的修复，所以 `delete: true` 放行。
+const WRITE_DENIED_KEYS: &[(&str, &str)] = &[
+    (r"HKLM\SOFTWARE\Policies\Microsoft\Edge", "不改浏览器的主页、搜索和扩展（第五节第 9 条）"),
+    (r"HKCU\Software\Policies\Microsoft\Edge", "不改浏览器的主页、搜索和扩展（第五节第 9 条）"),
+    (r"HKLM\SOFTWARE\Policies\Google\Chrome", "不改浏览器的主页、搜索和扩展（第五节第 9 条）"),
+    (r"HKCU\Software\Policies\Google\Chrome", "不改浏览器的主页、搜索和扩展（第五节第 9 条）"),
+    (r"HKLM\SOFTWARE\Policies\Mozilla\Firefox", "不改浏览器的主页、搜索和扩展（第五节第 9 条）"),
+    (r"HKCU\Software\Policies\Mozilla\Firefox", "不改浏览器的主页、搜索和扩展（第五节第 9 条）"),
 ];
 const DENIED_VALUES: &[(&str, &str, &str)] = &[
     (r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "EnableLUA", "不关 UAC（第五节第 22 条）"),
+    (
+        r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
+        "ConsentPromptBehaviorAdmin",
+        "不关 UAC 提示（第五节第 22 条）",
+    ),
+    (
+        r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
+        "ConsentPromptBehaviorUser",
+        "不关 UAC 提示（第五节第 22 条）",
+    ),
+    (
+        r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
+        "PromptOnSecureDesktop",
+        "不关 UAC 提示（第五节第 22 条）",
+    ),
+    (
+        r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer",
+        "SmartScreenEnabled",
+        "不关 SmartScreen（第五节第 22 条）",
+    ),
+    (r"HKCU\Software\Microsoft\Edge\SmartScreenEnabled", "", "不关 SmartScreen（第五节第 22 条）"),
+    // 暂停更新只能用系统自带的暂停方式，不能直接写一个很远的到期时间
+    (
+        r"HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings",
+        "PauseUpdatesExpiryTime",
+        "不延长暂停更新（第五节第 26 条）",
+    ),
+    (
+        r"HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings",
+        "PauseFeatureUpdatesEndTime",
+        "不延长暂停更新（第五节第 26 条）",
+    ),
+    (
+        r"HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings",
+        "PauseQualityUpdatesEndTime",
+        "不延长暂停更新（第五节第 26 条）",
+    ),
     (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoUpdate", "不永久禁用更新（第五节第 5 条）"),
     (
         r"HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings",
@@ -483,6 +536,10 @@ impl Validator<'_> {
             (true, None) => self.err(&file, "必须写 actions 或 run".into()),
         }
 
+        // 计划书 6.2：「只应用推荐项」会一次改好几项，所以推荐的只能是安全、能撤销的
+        if f.recommend == Recommend::Recommended && (f.risk != Risk::Safe || !f.reversible()) {
+            self.err(&file, "recommend 为 recommended 的功能必须是 risk: safe 而且能撤销".into());
+        }
         if !f.reversible() {
             match &f.irreversible_reason {
                 Some(t) => self.text(&file, t, "irreversible_reason"),
@@ -556,6 +613,21 @@ impl Validator<'_> {
         for (k, n, why) in DENIED_VALUES {
             if key_lower == normalize_key(k) && r.name.eq_ignore_ascii_case(n) {
                 self.err(file, format!("{at}：不允许写 {}\\{}：{why}", r.key, r.name));
+            }
+        }
+        // 黑名单里的服务，直接写它的注册表（比如 Start = 4）和用 service 原语是一回事
+        for (name, why) in DENIED_SERVICES {
+            let d = normalize_key(&format!(r"HKLM\SYSTEM\CurrentControlSet\Services\{name}"));
+            if key_lower == d || key_lower.starts_with(&format!("{d}\\")) {
+                self.err(file, format!("{at}：不允许改服务 {name} 的注册表：{why}"));
+            }
+        }
+        if !r.delete {
+            for (denied, why) in WRITE_DENIED_KEYS {
+                let d = normalize_key(denied);
+                if key_lower == d || key_lower.starts_with(&format!("{d}\\")) {
+                    self.err(file, format!("{at}：不允许往 {} 里写值（只能删）：{why}", r.key));
+                }
             }
         }
         match (r.delete, r.value_type, &r.value) {

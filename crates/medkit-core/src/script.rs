@@ -100,16 +100,43 @@ struct HostProc {
     stderr: Arc<Mutex<VecDeque<String>>>,
 }
 
+/// 宿主启动失败以后，这么久之内不再重试：被杀毒软件拦住、PowerShell 被删掉时，
+/// 体检里每一项都重新启动一次、每次等上一分钟，整个体检要卡十几分钟。
+const SPAWN_RETRY_AFTER: Duration = Duration::from_secs(60);
+
 /// 常驻的 PowerShell 宿主。一次只跑一个脚本；超时或崩溃后自动重启。
 pub struct PowerShellHost {
     cfg: HostConfig,
     proc: Mutex<Option<HostProc>>,
     next_id: AtomicU64,
+    /// 最近一次启动失败的时间和原因
+    spawn_failure: Mutex<Option<(Instant, String)>>,
 }
 
 impl PowerShellHost {
     pub fn new(cfg: HostConfig) -> Self {
-        Self { cfg, proc: Mutex::new(None), next_id: AtomicU64::new(1) }
+        Self { cfg, proc: Mutex::new(None), next_id: AtomicU64::new(1), spawn_failure: Mutex::new(None) }
+    }
+
+    /// 启动宿主；刚失败过的话直接报上次的原因，不再重试。
+    fn spawn_or_recent_failure(&self) -> Result<HostProc, ScriptError> {
+        let mut failure = self.spawn_failure.lock().unwrap();
+        if let Some((at, why)) = failure.as_ref()
+            && at.elapsed() < SPAWN_RETRY_AFTER
+        {
+            return Err(ScriptError::Host(format!("{why}（刚才已经启动失败，一分钟内不再重试）")));
+        }
+        match self.spawn() {
+            Ok(p) => {
+                *failure = None;
+                Ok(p)
+            }
+            Err(ScriptError::Host(why)) => {
+                *failure = Some((Instant::now(), why.clone()));
+                Err(ScriptError::Host(why))
+            }
+            Err(e) => Err(e),
+        }
     }
 
     fn spawn(&self) -> Result<HostProc, ScriptError> {
@@ -177,7 +204,10 @@ impl PowerShellHost {
                         RecvTimeoutError::Timeout => format!("{} 秒内没有启动完成", STARTUP_TIMEOUT.as_secs()),
                         RecvTimeoutError::Disconnected => "启动后立即退出了".to_owned(),
                     };
-                    return Err(ScriptError::Host(format!("PowerShell {why}：{}", tail.join(" | "))));
+                    return Err(ScriptError::Host(format!(
+                        "PowerShell {why}，可能被杀毒软件拦住了，或者系统里的 PowerShell 被删掉了：{}",
+                        tail.join(" | ")
+                    )));
                 }
             }
         }
@@ -233,7 +263,7 @@ impl ScriptRunner for PowerShellHost {
         let request = json!({ "id": id, "script": script, "args": args }).to_string();
         let mut slot = self.proc.lock().unwrap();
         if slot.is_none() {
-            *slot = Some(self.spawn()?);
+            *slot = Some(self.spawn_or_recent_failure()?);
         }
         let result = Self::exchange(slot.as_mut().unwrap(), id, &request, timeout);
         if matches!(result, Err(ScriptError::Timeout(_) | ScriptError::Host(_))) {
@@ -307,6 +337,23 @@ mod tests {
         {
             assert!(validate_script_path(bad).is_err(), "{bad} 应该被拒绝");
         }
+    }
+
+    /// PowerShell 起不来时，后面的检测不要每个都再等一次启动超时。
+    #[test]
+    fn a_host_that_cannot_start_is_not_retried_for_every_script() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("host")).unwrap();
+        std::fs::write(dir.path().join("host/Host.ps1"), "").unwrap();
+        let host = PowerShellHost::new(HostConfig {
+            program: dir.path().join("no-such-powershell"),
+            scripts_root: dir.path().to_path_buf(),
+            manifest: None,
+        });
+        let first = host.run("checks/a.ps1", &Map::new(), Duration::from_secs(5)).unwrap_err().to_string();
+        assert!(first.contains("启动") && !first.contains("不再重试"), "{first}");
+        let second = host.run("checks/b.ps1", &Map::new(), Duration::from_secs(5)).unwrap_err().to_string();
+        assert!(second.contains("不再重试"), "{second}");
     }
 
     #[test]

@@ -20,7 +20,7 @@ yaml-rust2 = "0.13"
 sha2 = "0.11"
 hex = "0.4"
 uuid = { version = "1", features = ["v4", "serde"] }
-time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
+time = { version = "0.3", features = ["formatting", "parsing", "macros", "local-offset"] }
 thiserror = "2"
 tempfile = "3"
 

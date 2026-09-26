@@ -34,6 +34,8 @@ use crate::views::{
 };
 
 const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
+/// Windows 11 的第一个版本号
+const WIN11_BUILD: u32 = 22000;
 const RESTORE_POINT_TIMEOUT: Duration = Duration::from_secs(300);
 pub const RESTORE_POINT_SCRIPT: &str = "host/restore-point.ps1";
 
@@ -97,6 +99,10 @@ pub struct Engine {
     last_results: Mutex<Vec<CheckResult>>,
     /// 最近一次跑检测清单的时间
     last_profile_time: Mutex<Option<String>>,
+    /// 不在体检里、单独查过的检测（例如「按症状修」里查的），报告里单列
+    other_results: Mutex<Vec<CheckResult>>,
+    /// 本机时区。启动时读一次：之后多线程时，有的系统上读不到
+    local_offset: Option<time::UtcOffset>,
 }
 
 impl Engine {
@@ -120,6 +126,20 @@ impl Engine {
             apply_lock: Mutex::new(()),
             last_results: Mutex::new(Vec::new()),
             last_profile_time: Mutex::new(None),
+            other_results: Mutex::new(Vec::new()),
+            local_offset: time::UtcOffset::current_local_offset().ok(),
+        }
+    }
+
+    /// 报告里显示的时间：换成本机时间（读不到时区时注明 UTC）。
+    fn local_time(&self, rfc3339: &str) -> String {
+        let Ok(t) = time::OffsetDateTime::parse(rfc3339, &time::format_description::well_known::Rfc3339) else {
+            return rfc3339.to_owned();
+        };
+        let fmt = time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]");
+        match self.local_offset {
+            Some(o) => t.to_offset(o).format(&fmt).unwrap_or_else(|_| rfc3339.to_owned()),
+            None => format!("{}（UTC）", t.to_offset(time::UtcOffset::UTC).format(&fmt).unwrap_or_default()),
         }
     }
 
@@ -238,9 +258,13 @@ impl Engine {
     pub fn run_check(&self, id: &str) -> Result<CheckResult> {
         let check = self.catalog.check(id).ok_or_else(|| Error::not_found("检测", id))?;
         let r = self.run_check_inner(check);
-        // 修完、撤销完再查一次时，报告里的体检结果也要跟着更新
+        // 修完、撤销完再查一次时，报告里的体检结果也要跟着更新；不在体检里的单独记下
         if let Some(slot) = self.last_results.lock().unwrap().iter_mut().find(|x| x.id == r.id) {
             *slot = r.clone();
+        } else {
+            let mut others = self.other_results.lock().unwrap();
+            others.retain(|x| x.id != r.id);
+            others.push(r.clone());
         }
         Ok(r)
     }
@@ -307,6 +331,7 @@ impl Engine {
         let profile = self.catalog.profile(id).ok_or_else(|| Error::not_found("检测清单", id))?;
         let results: Vec<CheckResult> =
             profile.checks.iter().filter_map(|c| self.catalog.check(c)).map(|c| self.run_check_inner(c)).collect();
+        self.other_results.lock().unwrap().retain(|x| results.iter().all(|r| r.id != x.id));
         *self.last_results.lock().unwrap() = results.clone();
         *self.last_profile_time.lock().unwrap() = Some(now_rfc3339());
         Ok(results)
@@ -388,7 +413,8 @@ impl Engine {
                     let mut missing = Vec::new();
                     result.sections = tools::render_sections(v.get("sections"), &tool.labels, &self.lang, &mut missing);
                     if !missing.is_empty() && result.error.is_none() {
-                        result.error = Some(format!("数据文件里缺少这些文字：{}", missing.join("、")));
+                        result.error =
+                            Some(format!("表格里有对不上的地方（脚本或数据文件要改）：{}", missing.join("、")));
                     }
                 }
                 result.result_code = code;
@@ -417,6 +443,7 @@ impl Engine {
             PlatformError::NotFound(file) => {
                 Error::Invalid(format!("这台电脑上没有「{title}」（找不到 {file}），可能被精简系统删掉了。"))
             }
+            PlatformError::Other(msg) => Error::Invalid(format!("没能打开「{title}」：{msg}")),
             other => Error::Invalid(format!("没能打开「{title}」：{other}")),
         })
     }
@@ -430,15 +457,24 @@ impl Engine {
     /// 不适用于这台电脑的原因。
     fn applicability(&self, f: &Feature) -> Option<String> {
         let os = self.platform.os_info();
+        // 说人话：最常见的是「只有 Win11 有」「只有 Win10 有」，其余的才报版本号
         if let Some(min) = f.applies_to.min_build
             && os.build < min
         {
-            return Some(format!("需要系统版本号 {min} 或更新（这台是 {}）", os.build));
+            return Some(if min == WIN11_BUILD && os.build < WIN11_BUILD {
+                "只适用于 Windows 11，这台电脑装的是 Windows 10".to_owned()
+            } else {
+                format!("要先把系统更新到版本号 {min} 或更新（这台是 {}）", os.build)
+            });
         }
         if let Some(max) = f.applies_to.max_build
             && os.build > max
         {
-            return Some(format!("只适用于版本号 {max} 及以前的系统（这台是 {}）", os.build));
+            return Some(if max < WIN11_BUILD && os.build >= WIN11_BUILD {
+                "只适用于 Windows 10，这台电脑装的是 Windows 11".to_owned()
+            } else {
+                format!("只适用于版本号 {max} 及以前的系统（这台是 {}）", os.build)
+            });
         }
         if !f.applies_to.editions.is_empty() && !os.edition.is_some_and(|e| f.applies_to.editions.contains(&e)) {
             return Some(format!("不适用于这个 Windows 版本（{}）", os.edition_id));
@@ -806,6 +842,7 @@ impl Engine {
             ok,
             after: after_state.clone(),
             error: error.clone(),
+            left_changes: false,
         };
         if let Err(e) = self.journal.append(&Record::Commit(commit)) {
             // 改了但记不下来：马上退回，宁可不改也不能留下没有记录的改动
@@ -819,6 +856,18 @@ impl Engine {
                 // 没改成功的这一项也可能改了一半（比如键建好了、值没写进去），按原值退回
                 let _ = self.revert(&rec, None, UndoReason::Rollback, true);
                 let left_changes = self.is_back(&rec) != Some(true);
+                if left_changes {
+                    // 记下「这一项还留着改动」，修改日志里才会给「恢复原状」（原来这一条当时没改成功，不给恢复）
+                    let _ = self.journal.append(&Record::Commit(CommitRecord {
+                        v: RECORD_VERSION,
+                        reference: rec.id.clone(),
+                        time: now_rfc3339(),
+                        ok: false,
+                        after: None,
+                        error: error.clone(),
+                        left_changes: true,
+                    }));
+                }
                 let msg = error.unwrap_or_else(|| "未知错误".to_owned());
                 let error = Error::Invalid(format!("{}：{msg}", Self::target_label(&target)));
                 Err(StepError { entry: Some(rec.id), error, left_changes })
@@ -863,6 +912,7 @@ impl Engine {
             ok,
             after,
             error: error.clone(),
+            left_changes: false,
         }));
         if let Err(e) = committed {
             // 改了但记不下来：马上用撤销脚本按原值退回，宁可不改也不能留下没有记录的改动
@@ -947,6 +997,7 @@ impl Engine {
             && !self.platform.user_hive_loaded(sid)
         {
             return Ok(UndoResult {
+                reboot: crate::model::Reboot::None,
                 entry_id: rec.id.clone(),
                 ok: false,
                 drift: false,
@@ -960,7 +1011,14 @@ impl Engine {
             && let TargetRef::Script { feature, hive } = &rec.target
             && let Some(message) = self.script_drift(feature, hive.as_deref())
         {
-            return Ok(UndoResult { entry_id: rec.id.clone(), ok: false, drift: true, message, error: None });
+            return Ok(UndoResult {
+                reboot: crate::model::Reboot::None,
+                entry_id: rec.id.clone(),
+                ok: false,
+                drift: true,
+                message,
+                error: None,
+            });
         }
         if !force && let Some(after) = after {
             let drifted = match self.state_now(rec)? {
@@ -969,6 +1027,7 @@ impl Engine {
             };
             if drifted {
                 return Ok(UndoResult {
+                    reboot: crate::model::Reboot::None,
                     entry_id: rec.id.clone(),
                     ok: false,
                     drift: true,
@@ -1001,6 +1060,7 @@ impl Engine {
             error: error.clone(),
         }))?;
         Ok(UndoResult {
+            reboot: crate::model::Reboot::None,
             entry_id: rec.id.clone(),
             ok,
             drift: false,
@@ -1133,7 +1193,12 @@ impl Engine {
         // 崩溃在中途、没有 commit 的记录：没法核对，按强制恢复处理
         let after = entry.commit.as_ref().and_then(|c| c.after.as_ref());
         let force = force || entry.is_pending();
-        self.revert(&entry.apply, after, UndoReason::User, force)
+        let mut r = self.revert(&entry.apply, after, UndoReason::User, force)?;
+        if r.ok {
+            // 恢复原状和当初修改一样，要重启资源管理器、注销之后才看得到
+            r.reboot = self.catalog.feature(&entry.apply.feature).map_or_else(Default::default, |f| f.reboot);
+        }
+        Ok(r)
     }
 
     pub fn journal_undo_session(&self, session_id: &str) -> Result<Vec<UndoResult>> {
@@ -1147,6 +1212,7 @@ impl Engine {
             }
             // 一条失败不影响其他条
             results.push(self.undo_entry(entry, false).unwrap_or_else(|e| UndoResult {
+                reboot: crate::model::Reboot::None,
                 entry_id: entry.apply.id.clone(),
                 ok: false,
                 drift: false,
@@ -1236,7 +1302,7 @@ impl Engine {
             out.push('\n');
         };
         line(&mut out, "电脑小药箱诊断报告");
-        line(&mut out, &format!("生成时间：{}", now_rfc3339()));
+        line(&mut out, &format!("生成时间：{}", self.local_time(&now_rfc3339())));
         line(&mut out, &format!("程序版本：{}（数据 {}）", info.app_version, info.catalog_version));
         line(
             &mut out,
@@ -1253,21 +1319,32 @@ impl Engine {
         if results.is_empty() {
             line(&mut out, "（还没有做过体检）");
         } else if let Some(t) = self.last_profile_time.lock().unwrap().as_deref() {
-            line(&mut out, &format!("（体检时间：{t}；之后单独重查过的项目已经更新）"));
+            line(&mut out, &format!("（体检时间：{}；之后单独重查过的项目已经更新）", self.local_time(t)));
         }
-        for r in results.iter().filter(|r| r.status != Status::Na) {
+        let print = |out: &mut String, r: &CheckResult| {
             let tag = match r.status {
                 Status::Ok => "正常",
                 Status::Advice => "建议处理",
                 Status::Manual => "需要人工",
                 Status::Unknown | Status::Na => "没查出来",
             };
-            line(&mut out, &format!("[{tag}] {}：{}", r.title, r.message));
+            line(out, &format!("[{tag}] {}：{}", r.title, r.message));
             if let Some(e) = &r.error {
-                line(&mut out, &format!("    原因：{e}"));
+                line(out, &format!("    原因：{e}"));
             }
+        };
+        for r in results.iter().filter(|r| r.status != Status::Na) {
+            print(&mut out, r);
         }
         line(&mut out, "");
+        let others = self.other_results.lock().unwrap().clone();
+        if !others.is_empty() {
+            line(&mut out, "== 单独检查过的项目（例如在「按症状修」里） ==");
+            for r in others.iter().filter(|r| r.status != Status::Na) {
+                print(&mut out, r);
+            }
+            line(&mut out, "");
+        }
 
         line(&mut out, "== 最近的修改 ==");
         let sessions = self.journal_list()?;
@@ -1277,17 +1354,35 @@ impl Engine {
         }
         for e in recent {
             let status = match (e.ok, e.undone) {
-                (_, true) => "已恢复原状",
+                (true, true) => "已恢复原状",
+                (false, true) => "失败，已自动退回",
                 (true, false) => "成功",
                 (false, false) => "失败",
             };
             line(
                 &mut out,
-                &format!("{} {}（{}）：{} → {}，{status}", e.time, e.feature_title, e.target, e.before, e.after),
+                &format!(
+                    "{} {}（{}）：{} → {}，{status}",
+                    self.local_time(&e.time),
+                    e.feature_title,
+                    e.target,
+                    e.before,
+                    e.after
+                ),
             );
         }
 
         let mut secrets = vec![os.computer_name.clone()];
+        // 检测事实里可能带着单位的代理服务器、自动配置脚本地址、VPN 连接名，一律隐藏（本机地址保留）
+        for r in results.iter().chain(others.iter()) {
+            for key in SENSITIVE_FACTS {
+                if let Some(v) = r.facts.get(*key).and_then(Value::as_str)
+                    && !is_local_address(v)
+                {
+                    secrets.extend(v.split(", ").map(str::to_owned));
+                }
+            }
+        }
         for u in [self.platform.interactive_user(), self.platform.process_user()].into_iter().flatten() {
             secrets.push(u.name.clone());
             if let Some((_, short)) = u.name.rsplit_once('\\') {
@@ -1296,6 +1391,21 @@ impl Engine {
         }
         Ok(redact(&out, &secrets))
     }
+}
+
+/// 值里可能有单位名、学校名、VPN 名的检测事实，写报告时隐藏。
+const SENSITIVE_FACTS: &[&str] =
+    &["proxy_address", "proxy_server", "pac_url", "connection", "dialup_proxy", "dead_dialup"];
+
+/// 指向本机的代理地址（127.x、localhost、::1），说明的是「本机有个代理软件」，不涉及隐私。
+fn is_local_address(v: &str) -> bool {
+    let v = v.trim().to_ascii_lowercase();
+    let v = v.split_once("://").map_or(v.as_str(), |(_, rest)| rest);
+    v.starts_with("127.")
+        || v.starts_with("localhost")
+        || v.starts_with("[::1]")
+        || v.starts_with("::1")
+        || v.is_empty()
 }
 
 #[allow(dead_code)]

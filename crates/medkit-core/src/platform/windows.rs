@@ -36,7 +36,7 @@ use windows_sys::Win32::System::Services::{
     SERVICE_DEMAND_START, SERVICE_DISABLED, SERVICE_NO_CHANGE, SERVICE_QUERY_CONFIG,
 };
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+    GetCurrentProcess, GetCurrentProcessId, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use winreg::RegKey;
 use winreg::enums::{
@@ -90,11 +90,15 @@ fn map_io(context: &str, e: io::Error) -> PlatformError {
     }
 }
 
-pub struct WindowsPlatform;
+pub struct WindowsPlatform {
+    /// 上一次认出来的登录用户。资源管理器刚好在重启（比如用了「重启资源管理器」小工具）时，
+    /// 暂时找不到它，就用这个，免得把登录用户的设置改到管理员账户身上。
+    last_user: std::sync::Mutex<Option<UserIdentity>>,
+}
 
 impl WindowsPlatform {
     pub fn new() -> Self {
-        Self
+        Self { last_user: std::sync::Mutex::new(None) }
     }
 }
 
@@ -325,12 +329,24 @@ fn process_token(process: HANDLE) -> Option<Handle> {
     (unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token) } != 0).then(|| Handle(token))
 }
 
-fn console_explorer_pid() -> Option<u32> {
+/// 登录用户的资源管理器：先找小药箱自己所在的会话（远程桌面、快速切换用户时，控制台上可能是别人），
+/// 找不到再找控制台会话。
+fn user_explorer_pid() -> Option<u32> {
+    let mut own = u32::MAX;
+    // SAFETY: 输出参数是有效指针
+    let ok = unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &mut own) } != 0;
+    if ok && let Some(pid) = explorer_pid_in(own) {
+        return Some(pid);
+    }
     // SAFETY: 无参数
-    let session = unsafe { WTSGetActiveConsoleSessionId() };
-    if session == u32::MAX {
+    let console = unsafe { WTSGetActiveConsoleSessionId() };
+    if console == u32::MAX || (ok && console == own) {
         return None;
     }
+    explorer_pid_in(console)
+}
+
+fn explorer_pid_in(session: u32) -> Option<u32> {
     // SAFETY: 标准的进程快照调用
     let snap = Handle(unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) });
     if snap.0 == INVALID_HANDLE_VALUE {
@@ -507,14 +523,23 @@ impl Platform for WindowsPlatform {
     }
 
     fn interactive_user(&self) -> Option<UserIdentity> {
-        let pid = console_explorer_pid()?;
-        // SAFETY: 只请求查询权限
-        let process = Handle(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) });
-        if process.0.is_null() {
-            return None;
+        let found = user_explorer_pid().and_then(|pid| {
+            // SAFETY: 只请求查询权限
+            let process = Handle(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) });
+            if process.0.is_null() {
+                return None;
+            }
+            let token = process_token(process.0)?;
+            token_user(token.0)
+        });
+        let mut last = self.last_user.lock().unwrap();
+        match found {
+            Some(u) => {
+                *last = Some(u.clone());
+                Some(u)
+            }
+            None => last.clone(),
         }
-        let token = process_token(process.0)?;
-        token_user(token.0)
     }
 
     fn process_user(&self) -> Option<UserIdentity> {
@@ -607,10 +632,11 @@ fn open_program(exe: &str, args: &[&str]) -> PResult<()> {
 
 /// 打开「设置」里的一页（ms-settings:<page>）。「设置」是系统应用，由系统按登录用户打开。
 fn open_settings(page: &str) -> PResult<()> {
+    use windows_sys::Win32::Foundation::GetLastError;
     use windows_sys::Win32::System::Com::{
         COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
     };
-    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::Shell::{SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW};
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
     let uri = wide(format!("ms-settings:{page}"));
@@ -618,19 +644,27 @@ fn open_settings(page: &str) -> PResult<()> {
     // ShellExecute 可能通过 COM 找协议的处理程序，先在这个线程上初始化 COM（微软文档的要求）
     // SAFETY: 参数都是合法值；成功（含 S_FALSE）时要配对调用 CoUninitialize
     let com = unsafe { CoInitializeEx(null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32) };
-    // SAFETY: 字符串都以 NUL 结尾；不需要父窗口
-    let r = unsafe { ShellExecuteW(null_mut(), verb.as_ptr(), uri.as_ptr(), null(), null(), SW_SHOWNORMAL) };
+    // SAFETY: 全零是这个结构体的合法初始值
+    let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+    // NOASYNC：等交接完成再返回（随后就要释放 COM）；FLAG_NO_UI：失败时不再弹系统的错误框，由小药箱自己说明
+    info.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+    info.lpVerb = verb.as_ptr();
+    info.lpFile = uri.as_ptr();
+    info.nShow = SW_SHOWNORMAL;
+    // SAFETY: info 已按文档初始化，字符串以 NUL 结尾且在调用期间有效
+    let ok = unsafe { ShellExecuteExW(&mut info) } != 0;
+    // SAFETY: 紧接在 ShellExecuteExW 之后读取
+    let code = if ok { 0 } else { unsafe { GetLastError() } };
     if com >= 0 {
         // SAFETY: 和上面成功的 CoInitializeEx 配对
         unsafe { CoUninitialize() };
     }
-    // 返回值大于 32 表示成功
-    if r as isize > 32 {
+    if ok {
         Ok(())
     } else {
         Err(PlatformError::Other(format!(
-            "系统没有打开「设置」（错误代码 {}）。可以点开始菜单里的齿轮图标，自己打开「设置」找这一项",
-            r as isize
+            "系统没有响应（错误代码 {code}）。可以点开始菜单里的齿轮图标，自己打开「设置」找这一项"
         )))
     }
 }

@@ -381,7 +381,10 @@ export interface JournalEntryView {
   error: string | null
 }
 export interface JournalSession { id: string; startedAt: string; entries: JournalEntryView[] }
-export interface UndoResult { entryId: string; ok: boolean; drift: boolean; message: string; error: string | null }
+export interface UndoResult {
+  entryId: string; ok: boolean; drift: boolean; message: string; error: string | null
+  reboot: Reboot               // 恢复以后要做什么才看得到效果；没恢复成功时是 'none'
+}
 
 // 小工具（第 11 节）
 export type ToolGroup = 'info' | 'action' | 'open'

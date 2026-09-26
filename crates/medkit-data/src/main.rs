@@ -106,11 +106,12 @@ fn check(root: &Path) -> Option<Bundle> {
         Some(b) => {
             let c = &b.catalog;
             eprintln!(
-                "通过：{} 个检测、{} 个功能、{} 个症状、{} 个检测清单、{} 个脚本；{warnings} 个警告。数据哈希 {}",
+                "通过：{} 个检测、{} 个功能、{} 个症状、{} 个检测清单、{} 个小工具、{} 个脚本；{warnings} 个警告。数据哈希 {}",
                 c.checks.len(),
                 c.features.len(),
                 c.symptoms.len(),
                 c.profiles.len(),
+                c.tools.len(),
                 b.scripts.len(),
                 b.hash
             );

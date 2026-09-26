@@ -94,6 +94,9 @@ pub struct CommitRecord {
     pub after: Option<State>,
     #[serde(default)]
     pub error: Option<String>,
+    /// 没改成功，而且自动退回以后读回来还不是原样：系统上可能留着改了一半的东西，要让用户能手动恢复
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub left_changes: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,7 +135,7 @@ pub struct Entry {
 impl Entry {
     /// 改动是否（可能）已经落到系统上：成功提交，或者没有提交记录（崩溃在中途）。
     pub fn maybe_applied(&self) -> bool {
-        self.commit.as_ref().is_none_or(|c| c.ok)
+        self.commit.as_ref().is_none_or(|c| c.ok || c.left_changes)
     }
 
     pub fn is_pending(&self) -> bool {
@@ -293,6 +296,7 @@ mod tests {
             ok: true,
             after: Some(State::Service { start_type: Some(StartType::Disabled) }),
             error: None,
+            left_changes: false,
         }))
         .unwrap();
         j.append(&apply("b")).unwrap();
