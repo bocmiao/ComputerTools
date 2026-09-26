@@ -695,3 +695,156 @@ fn report_is_redacted() {
         assert!(!report.contains(leaked), "报告里出现了 {leaked}：\n{report}");
     }
 }
+
+// ───────────── 审查发现的问题的回归测试 ─────────────
+
+/// 回滚那一步也失败时，不能告诉用户「已经退回原样」。
+#[test]
+fn rollback_failure_is_reported_honestly() {
+    let w = world();
+    let key = r"SOFTWARE\MedkitTest";
+    w.platform.seed_value(&RegRoot::LocalMachine, key, "First", RegValue::Dword(0));
+    // First 第一次写（执行）成功，第二次写（回滚）失败；Second 一写就失败
+    w.platform.fail_write_after(key, "First", 1);
+    w.platform.fail_write(key, "Second");
+
+    let r = w.engine.feature_apply("test.two-steps").unwrap();
+    assert!(!r.ok);
+    assert!(r.message.contains("没能自动退回"), "回滚失败了却说退回了：{}", r.message);
+    assert_eq!(w.platform.reg_get(&RegRoot::LocalMachine, key, "First").unwrap(), Some(RegValue::Dword(1)));
+    // 这一步还留在系统上，用户要能从修改日志里恢复
+    let first = &w.engine.journal_list().unwrap()[0].entries[0];
+    assert!(first.can_undo && !first.undone, "{first:?}");
+}
+
+/// 断电截断在一个中文字符中间，那一行不是合法 UTF-8：只跳过它，不能整份日志都读不出来。
+#[test]
+fn invalid_utf8_in_the_journal_only_loses_that_line() {
+    let w = world();
+    w.platform.seed_value(&user(), ADVANCED, "HideFileExt", RegValue::Dword(1));
+    let r = w.engine.feature_apply("explorer.show-extensions").unwrap();
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new().append(true).open(&w.journal_path).unwrap();
+    // 「错」的 UTF-8 是 E9 94 99，只写了前两个字节
+    f.write_all(b"{\"kind\":\"commit\",\"error\":\"\xE9\x94").unwrap();
+    drop(f);
+
+    assert_eq!(w.engine.journal_list().unwrap()[0].entries.len(), 1);
+    assert!(w.engine.journal_undo(&r.entry_ids[0], false).unwrap().ok);
+}
+
+/// 上次写到一半的半行没有换行结尾，下一条记录不能和它粘在一起被一起丢掉。
+#[test]
+fn a_torn_line_does_not_swallow_the_next_record() {
+    let w = world();
+    w.platform.seed_value(&user(), ADVANCED, "HideFileExt", RegValue::Dword(1));
+    w.engine.feature_apply("explorer.show-extensions").unwrap();
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new().append(true).open(&w.journal_path).unwrap();
+    f.write_all(b"{\"kind\":\"apply\",\"v\":1,\"id\":\"torn").unwrap();
+    drop(f);
+
+    // 断电以后的下一次修改
+    let r = w.engine.feature_apply("test.deep-key").unwrap();
+    assert!(r.ok, "{r:?}");
+    let entries: Vec<_> = w.engine.journal_list().unwrap().into_iter().flat_map(|s| s.entries).collect();
+    assert_eq!(entries.len(), 2, "新记录被半行吞掉了：{entries:?}");
+    assert!(w.engine.journal_undo(&r.entry_ids[0], false).unwrap().ok);
+}
+
+/// 脚本类功能执行成功、但结果写不进修改日志：必须马上用撤销脚本退回。
+#[test]
+fn script_change_that_cannot_be_recorded_is_undone_immediately() {
+    let w = world();
+    let applied = Arc::new(Mutex::new(false));
+    let journal = w.journal_path.clone();
+    let a = applied.clone();
+    w.runner.on("features/disk/hib-reduce.ps1", move |_| {
+        *a.lock().unwrap() = true;
+        // 模拟磁盘出问题：之后的写日志都会失败
+        std::fs::remove_file(&journal).unwrap();
+        std::fs::create_dir(&journal).unwrap();
+        Ok(json!({ "before": { "type": "full" }, "after": { "type": "reduced" } }))
+    });
+    let a = applied.clone();
+    w.runner.on("features/disk/hib-restore.ps1", move |args| {
+        let before: Value = serde_json::from_str(args["Before"].as_str().unwrap()).unwrap();
+        assert_eq!(before, json!({ "type": "full" }));
+        *a.lock().unwrap() = false;
+        Ok(json!({}))
+    });
+    w.runner.returns("features/disk/hib-detect.ps1", json!({ "state": "not-applied" }));
+
+    assert!(w.engine.feature_apply("disk.hibernation-reduce").is_err());
+    assert!(!*applied.lock().unwrap(), "改动记不下来，却没有退回");
+}
+
+/// 脚本类功能撤销时，要改回当初执行时那个用户的设置，而不是现在登录的用户。
+#[test]
+fn script_undo_targets_the_user_it_was_applied_to() {
+    let w = world();
+    w.runner.returns("features/disk/hib-detect.ps1", json!({ "state": "not-applied" }));
+    w.runner.returns("features/disk/hib-reduce.ps1", json!({ "before": { "type": "full" }, "after": {} }));
+    let r = w.engine.feature_apply("disk.hibernation-reduce").unwrap();
+    assert!(r.ok, "{r:?}");
+
+    // 第二天换了一个人登录，用管理员账户打开小药箱撤销
+    let mut p = MockPlatform::new();
+    p.interactive = Some(UserIdentity { sid: "S-1-5-21-1000-2000-3000-1002".into(), name: "MOCK-PC\\other".into() });
+    let runner = Arc::new(MockRunner::new());
+    runner.returns("features/disk/hib-restore.ps1", json!({}));
+    let restarted = engine_on(&w.journal_path, Arc::new(p), runner.clone());
+    assert!(restarted.journal_undo(&r.entry_ids[0], false).unwrap().ok);
+
+    let (_, args) = runner.calls().into_iter().find(|(s, _)| s.ends_with("hib-restore.ps1")).unwrap();
+    assert_eq!(args["UserHive"], format!("Registry::HKEY_USERS\\{SID}").as_str());
+}
+
+/// 那个用户已经注销时，撤销要明确拒绝，不能「成功」了却什么都没改。
+#[test]
+fn undo_is_refused_while_that_users_settings_are_not_loaded() {
+    let w = world();
+    w.platform.seed_value(&user(), ADVANCED, "HideFileExt", RegValue::Dword(1));
+    let r = w.engine.feature_apply("explorer.show-extensions").unwrap();
+    w.platform.unload_hive(SID);
+
+    let u = w.engine.journal_undo(&r.entry_ids[0], true).unwrap();
+    assert!(!u.ok && !u.drift, "{u:?}");
+    assert!(u.message.contains("没有登录"), "{}", u.message);
+    let e = &w.engine.journal_list().unwrap()[0].entries[0];
+    assert!(!e.undone && e.can_undo, "没改成却被标成已恢复：{e:?}");
+}
+
+/// 清理新建的空键失败只是收尾没做完，值已经恢复了，整条撤销不能算失败。
+#[test]
+fn failing_to_remove_created_keys_does_not_fail_the_undo() {
+    let w = world();
+    let r = w.engine.feature_apply("test.deep-key").unwrap();
+    w.platform.fail_key_delete(r"Software\MedkitTest\Deep\Key");
+
+    let u = w.engine.journal_undo(&r.entry_ids[0], false).unwrap();
+    assert!(u.ok, "{u:?}");
+    assert_eq!(w.platform.reg_get(&user(), r"Software\MedkitTest\Deep\Key", "Flag").unwrap(), None);
+    assert!(w.engine.journal_list().unwrap()[0].entries[0].undone);
+}
+
+/// 执行中途程序退出、脚本类修改没记下原状态的，不给「恢复原状」按钮，而不是点了才报错。
+#[test]
+fn script_entries_without_a_recorded_state_cannot_be_undone() {
+    let w = world();
+    let rec = ApplyRecord {
+        v: RECORD_VERSION,
+        id: new_id(),
+        session: "crashed".into(),
+        time: now_rfc3339(),
+        feature: "disk.hibernation-reduce".into(),
+        action: 0,
+        target: TargetRef::Script { feature: "disk.hibernation-reduce".into(), hive: None },
+        before: State::Script { data: Value::Null },
+    };
+    Journal::open(&w.journal_path).unwrap().append(&Record::Apply(rec.clone())).unwrap();
+    let e = &w.engine.journal_list().unwrap()[0].entries[0];
+    assert!(e.pending && !e.can_undo, "{e:?}");
+    assert!(w.engine.journal_undo(&rec.id, false).is_err());
+    assert!(w.runner.calls().is_empty(), "不应该去跑撤销脚本");
+}

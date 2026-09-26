@@ -88,26 +88,42 @@ $before = [ordered]@{
     dcs          = ConvertTo-HexString $old.Blob
 }
 
-# 2. Change.
-Set-ItemProperty -LiteralPath $settingsPath -Name 'ProxyEnable' -Value 0 -Type DWord
-
+# 2. Change. If anything fails half-way, put back what was already changed
+#    before reporting the error, so that a failed run leaves nothing behind.
 $blobUpdated = $false
-if (($null -ne $old.Blob) -and ($old.Blob.Length -ge 12)) {
-    $flags = [System.BitConverter]::ToUInt32($old.Blob, 8)
-    if (($flags -band $proxyFlag) -ne 0) {
-        $newBlob = [byte[]]$old.Blob.Clone()
-        Set-UInt32 -Bytes $newBlob -Offset 8 -Value ([uint32]($flags - $proxyFlag))
-        $counter = [System.BitConverter]::ToUInt32($old.Blob, 4)
-        if ($counter -eq [uint32]::MaxValue) {
-            $next = [uint32]0
+try {
+    Set-ItemProperty -LiteralPath $settingsPath -Name 'ProxyEnable' -Value 0 -Type DWord
+
+    if (($null -ne $old.Blob) -and ($old.Blob.Length -ge 12)) {
+        $flags = [System.BitConverter]::ToUInt32($old.Blob, 8)
+        if (($flags -band $proxyFlag) -ne 0) {
+            $newBlob = [byte[]]$old.Blob.Clone()
+            Set-UInt32 -Bytes $newBlob -Offset 8 -Value ([uint32]($flags - $proxyFlag))
+            $counter = [System.BitConverter]::ToUInt32($old.Blob, 4)
+            if ($counter -eq [uint32]::MaxValue) {
+                $next = [uint32]0
+            }
+            else {
+                $next = [uint32]($counter + 1)
+            }
+            Set-UInt32 -Bytes $newBlob -Offset 4 -Value $next
+            Set-ItemProperty -LiteralPath $connectionsPath -Name 'DefaultConnectionSettings' -Value $newBlob -Type Binary
+            $blobUpdated = $true
         }
-        else {
-            $next = [uint32]($counter + 1)
-        }
-        Set-UInt32 -Bytes $newBlob -Offset 4 -Value $next
-        Set-ItemProperty -LiteralPath $connectionsPath -Name 'DefaultConnectionSettings' -Value $newBlob -Type Binary
-        $blobUpdated = $true
     }
+}
+catch {
+    $failure = $_
+    if ($null -eq $old.ProxyEnable) {
+        Remove-ItemProperty -LiteralPath $settingsPath -Name 'ProxyEnable' -ErrorAction SilentlyContinue
+    }
+    else {
+        Set-ItemProperty -LiteralPath $settingsPath -Name 'ProxyEnable' -Value $old.ProxyEnable -Type DWord -ErrorAction SilentlyContinue
+    }
+    if ($blobUpdated) {
+        Set-ItemProperty -LiteralPath $connectionsPath -Name 'DefaultConnectionSettings' -Value $old.Blob -Type Binary -ErrorAction SilentlyContinue
+    }
+    throw $failure
 }
 
 # 3. Read back what is there now.

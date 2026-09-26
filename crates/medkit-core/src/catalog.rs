@@ -148,7 +148,6 @@ const DENIED_KEYS: &[(&str, &str)] = &[
     (r"HKLM\SYSTEM\CurrentControlSet\Services\WinDefend", "不关 Defender（第五节第 4 条）"),
     (r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options", "不碰 IFEO"),
     (r"HKLM\SYSTEM\CurrentControlSet\Control\SafeBoot", "不改安全模式配置"),
-    (r"HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters\SMB1", "不开 SMB1（第五节第 22 条）"),
     (r"HKLM\SYSTEM\CurrentControlSet\Services\mrxsmb10", "不开 SMB1（第五节第 22 条）"),
 ];
 const DENIED_VALUES: &[(&str, &str, &str)] = &[
@@ -160,6 +159,8 @@ const DENIED_VALUES: &[(&str, &str, &str)] = &[
         "不延长暂停更新（第五节第 26 条）",
     ),
     (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\System", "EnableSmartScreen", "不关 SmartScreen（第五节第 22 条）"),
+    // 开 SMB1 服务端是在 Parameters 键上写一个名叫 SMB1 的值，不是子键
+    (r"HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters", "SMB1", "不开 SMB1（第五节第 22 条）"),
 ];
 const DENIED_SERVICES: &[(&str, &str)] = &[
     ("WinDefend", "不关 Defender（第五节第 4 条）"),
@@ -168,7 +169,16 @@ const DENIED_SERVICES: &[(&str, &str)] = &[
     ("WaaSMedicSvc", "不禁用 Windows 更新（第五节第 5 条）"),
     ("mpssvc", "不关防火墙（第五节第 22 条）"),
     ("SecurityHealthService", "不关安全中心（第五节第 4 条）"),
+    ("mrxsmb10", "不开 SMB1（第五节第 22 条）"),
 ];
+
+static CONTROL_SET_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^hklm\\system\\controlset\d+\\").unwrap());
+
+/// 黑名单比较用的键名：统一小写；`HKLM\SYSTEM\ControlSet001\…` 这类写法和
+/// `CurrentControlSet` 指向同一处，统一成后者，免得换个写法就绕过去。
+fn normalize_key(key: &str) -> String {
+    CONTROL_SET_RE.replace(&key.to_ascii_lowercase(), r"hklm\system\currentcontrolset\").into_owned()
+}
 
 /// 校验全部数据。`scripts` 是 scripts/ 下所有脚本的相对路径。
 pub fn validate(data: &CatalogData, scripts: &BTreeSet<String>) -> Vec<Problem> {
@@ -446,15 +456,15 @@ impl Validator<'_> {
             }
             Err(e) => self.err(file, format!("{at}：{e}")),
         }
-        let key_lower = r.key.to_ascii_lowercase();
+        let key_lower = normalize_key(&r.key);
         for (denied, why) in DENIED_KEYS {
-            let d = denied.to_ascii_lowercase();
+            let d = normalize_key(denied);
             if key_lower == d || key_lower.starts_with(&format!("{d}\\")) {
                 self.err(file, format!("{at}：不允许写 {}：{why}", r.key));
             }
         }
         for (k, n, why) in DENIED_VALUES {
-            if key_lower == k.to_ascii_lowercase() && r.name.eq_ignore_ascii_case(n) {
+            if key_lower == normalize_key(k) && r.name.eq_ignore_ascii_case(n) {
                 self.err(file, format!("{at}：不允许写 {}\\{}：{why}", r.key, r.name));
             }
         }

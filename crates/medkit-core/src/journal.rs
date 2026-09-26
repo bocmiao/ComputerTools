@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -24,9 +24,21 @@ pub const RECORD_VERSION: u32 = 1;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TargetRef {
-    Registry { root: RegRoot, key: String, name: String },
-    Service { name: String },
-    Script { feature: String },
+    Registry {
+        root: RegRoot,
+        key: String,
+        name: String,
+    },
+    Service {
+        name: String,
+    },
+    Script {
+        feature: String,
+        /// 执行时传给脚本的 `-UserHive`（只对 target: current-user 的功能有）。
+        /// 撤销时原样传回，不能按撤销那一刻的登录用户重新解析，否则会改到别人身上。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hive: Option<String>,
+    },
 }
 
 /// 某个时刻的状态。
@@ -148,34 +160,42 @@ impl Journal {
 
     pub fn append(&self, record: &Record) -> Result<()> {
         let _g = self.lock.lock().unwrap();
-        let line = serde_json::to_string(record).map_err(|e| Error::Journal(e.to_string()))?;
+        let mut line = serde_json::to_string(record).map_err(|e| Error::Journal(e.to_string()))?;
+        line.push('\n');
+        // 上次写到一半断电的话，文件末尾是没有换行的半行。先补一个换行，
+        // 否则这条新记录会和半行粘成一行，读的时候整行被当成坏行跳过，这次修改就没了记录。
+        if !ends_with_newline(&self.path)? {
+            line.insert(0, '\n');
+        }
         let mut f = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
             .map_err(|e| Error::Journal(format!("打不开 {}：{e}", self.path.display())))?;
-        f.write_all(line.as_bytes())
-            .and_then(|()| f.write_all(b"\n"))
-            .and_then(|()| f.sync_data())
-            .map_err(|e| Error::Journal(format!("写入失败：{e}")))
+        f.write_all(line.as_bytes()).and_then(|()| f.sync_data()).map_err(|e| Error::Journal(format!("写入失败：{e}")))
     }
 
     /// 读全部记录。坏掉的行（例如写到一半断电）跳过，返回跳过的行数。
     pub fn read_all(&self) -> Result<(Vec<Record>, usize)> {
         let _g = self.lock.lock().unwrap();
-        let f = match std::fs::File::open(&self.path) {
-            Ok(f) => f,
+        let bytes = match std::fs::read(&self.path) {
+            Ok(b) => b,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((Vec::new(), 0)),
             Err(e) => return Err(Error::Journal(format!("打不开 {}：{e}", self.path.display()))),
         };
         let mut records = Vec::new();
         let mut bad = 0;
-        for line in BufReader::new(f).lines() {
-            let line = line.map_err(|e| Error::Journal(e.to_string()))?;
+        // 按字节切行、每行单独解码：断电可能截断在一个中文字符的中间，
+        // 那一行不是合法的 UTF-8，只能跳过它，不能让整份日志都读不出来。
+        for raw in bytes.split(|&b| b == b'\n') {
+            let Ok(line) = std::str::from_utf8(raw) else {
+                bad += 1;
+                continue;
+            };
             if line.trim().is_empty() {
                 continue;
             }
-            match serde_json::from_str::<Record>(&line) {
+            match serde_json::from_str::<Record>(line) {
                 Ok(r) => records.push(r),
                 Err(_) => bad += 1,
             }
@@ -188,6 +208,25 @@ impl Journal {
         let (records, _) = self.read_all()?;
         Ok(merge(records))
     }
+}
+
+/// 文件为空、不存在，或者最后一个字节是换行时返回 true。
+fn ends_with_newline(path: &Path) -> Result<bool> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+        Err(e) => return Err(Error::Journal(format!("打不开 {}：{e}", path.display()))),
+    };
+    let len = f.metadata().map_err(|e| Error::Journal(e.to_string()))?.len();
+    if len == 0 {
+        return Ok(true);
+    }
+    let mut last = [0u8; 1];
+    f.seek(SeekFrom::Start(len - 1))
+        .and_then(|_| f.read_exact(&mut last))
+        .map_err(|e| Error::Journal(format!("读不了 {}：{e}", path.display())))?;
+    Ok(last[0] == b'\n')
 }
 
 pub fn merge(records: Vec<Record>) -> Vec<Entry> {

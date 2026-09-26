@@ -442,6 +442,11 @@ impl Platform for WindowsPlatform {
         Ok(true)
     }
 
+    fn user_hive_loaded(&self, sid: &str) -> bool {
+        // 已登录用户的配置单元挂在 HKEY_USERS\<SID> 下；注销后就打不开了
+        RegKey::predef(HKEY_USERS).open_subkey_with_flags(sid, KEY_READ).is_ok()
+    }
+
     fn service_get(&self, name: &str) -> PResult<Option<StartType>> {
         match open_service(name, SERVICE_QUERY_CONFIG)? {
             Some(svc) => query_start_type(&svc, name).map(Some),

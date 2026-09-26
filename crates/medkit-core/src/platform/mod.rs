@@ -56,6 +56,9 @@ pub trait Platform: Send + Sync {
     fn reg_delete_value(&self, root: &RegRoot, key: &str, name: &str) -> PResult<()>;
     /// 键为空（没有子键、没有值）时删除它，返回是否删了。
     fn reg_delete_key_if_empty(&self, root: &RegRoot, key: &str) -> PResult<bool>;
+    /// 这个用户的注册表（`HKU\<SID>`）现在有没有加载。用户注销以后就没有了，
+    /// 这时写到 `HKU\<SID>\…` 的撤销其实什么都没改，必须先拦下来。
+    fn user_hive_loaded(&self, sid: &str) -> bool;
 
     /// 服务的启动类型；服务不存在时返回 `Ok(None)`。
     fn service_get(&self, name: &str) -> PResult<Option<StartType>>;

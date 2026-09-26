@@ -34,6 +34,21 @@ const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
 const RESTORE_POINT_TIMEOUT: Duration = Duration::from_secs(300);
 pub const RESTORE_POINT_SCRIPT: &str = "host/restore-point.ps1";
 
+/// 一个原语没改成功。
+struct StepError {
+    /// 已经写进修改日志的 apply 记录（没走到那一步时为空）
+    entry: Option<String>,
+    error: Error,
+    /// 退回以后读回来一看，系统还没回到原样
+    left_changes: bool,
+}
+
+impl StepError {
+    fn early(error: Error) -> Self {
+        Self { entry: None, error, left_changes: false }
+    }
+}
+
 /// 原语的目标状态。
 enum Desired {
     Value(RegValue),
@@ -330,7 +345,7 @@ impl Engine {
                 format!("{root}\\{key} → {name}")
             }
             TargetRef::Service { name } => format!("服务 {name} 的启动类型"),
-            TargetRef::Script { feature } => format!("由脚本完成（{feature}）"),
+            TargetRef::Script { feature, .. } => format!("由脚本完成（{feature}）"),
         }
     }
 
@@ -373,10 +388,12 @@ impl Engine {
         }
     }
 
-    fn script_args(&self, f: &Feature) -> Map<String, Value> {
+    /// `hive` 为空时用现在的登录用户；撤销时传入执行那一刻记下的值。
+    fn script_args(&self, f: &Feature, hive: Option<&str>) -> Map<String, Value> {
         let mut args = Map::new();
         if f.target == Target::CurrentUser {
-            args.insert("UserHive".into(), Value::String(self.user_hive()));
+            let hive = hive.map_or_else(|| self.user_hive(), str::to_owned);
+            args.insert("UserHive".into(), Value::String(hive));
         }
         args
     }
@@ -407,7 +424,7 @@ impl Engine {
         }
         if !f.is_primitive() {
             let detect = f.detect.as_ref().ok_or_else(|| Error::Catalog(format!("{} 没有 detect", f.id)))?;
-            let v = self.runner.run(&detect.script, &self.script_args(f), SCRIPT_FEATURE_TIMEOUT)?;
+            let v = self.runner.run(&detect.script, &self.script_args(f, None), SCRIPT_FEATURE_TIMEOUT)?;
             let state = FeatureStateKind::parse(v.get("state").and_then(Value::as_str).unwrap_or(""));
             let details = v
                 .get("facts")
@@ -459,7 +476,7 @@ impl Engine {
                 .collect::<Result<Vec<_>>>()?
         } else {
             vec![PreviewChange {
-                target: Self::target_label(&TargetRef::Script { feature: f.id.clone() }),
+                target: Self::target_label(&TargetRef::Script { feature: f.id.clone(), hive: None }),
                 current: String::new(),
                 planned: f.description.get(&self.lang).to_owned(),
             }]
@@ -559,11 +576,13 @@ impl Engine {
                     entry_ids.push(rec.id.clone());
                     done.push((rec, after));
                 }
-                Err((rec_id, e)) => {
-                    entry_ids.extend(rec_id);
-                    let mut rolled_back = true;
+                Err(step) => {
+                    entry_ids.extend(step.entry);
+                    // 不信返回值，退完以后读回来和原值比：一致才算退干净了
+                    let mut rolled_back = !step.left_changes;
                     for (rec, after) in done.iter().rev() {
-                        if self.revert(rec, Some(after), UndoReason::Rollback, true).is_err() {
+                        let _ = self.revert(rec, Some(after), UndoReason::Rollback, true);
+                        if self.is_back(rec) != Some(true) {
                             rolled_back = false;
                         }
                     }
@@ -573,7 +592,7 @@ impl Engine {
                         "没有改成功，而且有部分改动没能自动退回，请在修改日志里手动恢复。".to_owned()
                     };
                     let mut r = self.result(f, false, entry_ids, message, notes);
-                    r.error = Some(e.to_string());
+                    r.error = Some(step.error.to_string());
                     return Ok(r);
                 }
             }
@@ -589,21 +608,16 @@ impl Engine {
 
     /// 执行一个原语：先写 apply（原值），再改，再写 commit（结果）。
     /// 失败时返回（已写入的 apply 记录 ID，错误）。
-    fn apply_one(
-        &self,
-        f: &Feature,
-        index: usize,
-        a: &Action,
-    ) -> std::result::Result<(ApplyRecord, State), (Option<String>, Error)> {
-        let desired = Desired::of(a).map_err(|e| (None, e))?;
-        let (target, mut before) = self.current(a).map_err(|e| (None, e))?;
+    fn apply_one(&self, f: &Feature, index: usize, a: &Action) -> std::result::Result<(ApplyRecord, State), StepError> {
+        let desired = Desired::of(a).map_err(StepError::early)?;
+        let (target, mut before) = self.current(a).map_err(StepError::early)?;
 
         // 记下为了写这个值要新建哪些键，撤销时一并删掉（如果那时已经空了）
         if let (Desired::Value(_), TargetRef::Registry { root, key, .. }, State::Registry { created_keys, .. }) =
             (&desired, &target, &mut before)
         {
             for k in key_ancestors(key) {
-                if !self.platform.reg_key_exists(root, &k).map_err(|e| (None, e.into()))? {
+                if !self.platform.reg_key_exists(root, &k).map_err(|e| StepError::early(e.into()))? {
                     created_keys.push(k);
                 }
             }
@@ -613,7 +627,7 @@ impl Engine {
                 TargetRef::Service { name } => name.clone(),
                 _ => String::new(),
             };
-            return Err((None, Error::NotApplicable(format!("这台电脑上没有服务 {name}"))));
+            return Err(StepError::early(Error::NotApplicable(format!("这台电脑上没有服务 {name}"))));
         }
 
         let rec = ApplyRecord {
@@ -626,7 +640,7 @@ impl Engine {
             target: target.clone(),
             before,
         };
-        self.journal.append(&Record::Apply(rec.clone())).map_err(|e| (None, e))?;
+        self.journal.append(&Record::Apply(rec.clone())).map_err(StepError::early)?;
 
         let change = match (&desired, &target) {
             (Desired::Value(v), TargetRef::Registry { root, key, name }) => self.platform.reg_set(root, key, name, v),
@@ -661,24 +675,27 @@ impl Engine {
         };
         if let Err(e) = self.journal.append(&Record::Commit(commit)) {
             // 改了但记不下来：马上退回，宁可不改也不能留下没有记录的改动
-            if ok {
-                let _ = self.restore(&rec);
-            }
-            return Err((Some(rec.id), e));
+            let _ = self.restore(&rec);
+            let left_changes = self.is_back(&rec) != Some(true);
+            return Err(StepError { entry: Some(rec.id), error: e, left_changes });
         }
         match (ok, after_state) {
             (true, Some(after)) => Ok((rec, after)),
             _ => {
                 // 没改成功的这一项也可能改了一半（比如键建好了、值没写进去），按原值退回
                 let _ = self.revert(&rec, None, UndoReason::Rollback, true);
+                let left_changes = self.is_back(&rec) != Some(true);
                 let msg = error.unwrap_or_else(|| "未知错误".to_owned());
-                Err((Some(rec.id), Error::Invalid(format!("{}：{msg}", Self::target_label(&target)))))
+                let error = Error::Invalid(format!("{}：{msg}", Self::target_label(&target)));
+                Err(StepError { entry: Some(rec.id), error, left_changes })
             }
         }
     }
 
     fn apply_script(&self, f: &Feature, notes: Vec<String>) -> Result<ApplyResult> {
         let run = f.run.as_ref().ok_or_else(|| Error::Catalog(format!("{} 没有 run", f.id)))?;
+        // 记下这次改的是哪个用户的注册表，撤销时原样传回
+        let hive = (f.target == Target::CurrentUser).then(|| self.user_hive());
         let rec = ApplyRecord {
             v: RECORD_VERSION,
             id: new_id(),
@@ -686,12 +703,12 @@ impl Engine {
             time: now_rfc3339(),
             feature: f.id.clone(),
             action: 0,
-            target: TargetRef::Script { feature: f.id.clone() },
+            target: TargetRef::Script { feature: f.id.clone(), hive: hive.clone() },
             // 脚本在执行时才知道原状态；先记一个占位，commit 里带上真正的 before
             before: State::Script { data: Value::Null },
         };
         self.journal.append(&Record::Apply(rec.clone()))?;
-        let outcome = self.runner.run(&run.script, &self.script_args(f), SCRIPT_FEATURE_TIMEOUT);
+        let outcome = self.runner.run(&run.script, &self.script_args(f, hive.as_deref()), SCRIPT_FEATURE_TIMEOUT);
         let (ok, after, error) = match &outcome {
             Ok(v) => (
                 true,
@@ -705,16 +722,26 @@ impl Engine {
             ),
             Err(e) => (false, None, Some(e.to_string())),
         };
-        self.journal.append(&Record::Commit(CommitRecord {
+        let committed = self.journal.append(&Record::Commit(CommitRecord {
             v: RECORD_VERSION,
             reference: rec.id.clone(),
             time: now_rfc3339(),
             ok,
             after,
             error: error.clone(),
-        }))?;
+        }));
+        if let Err(e) = committed {
+            // 改了但记不下来：马上用撤销脚本按原值退回，宁可不改也不能留下没有记录的改动
+            if let Ok(v) = &outcome {
+                let before = v.get("before").cloned().unwrap_or(Value::Null);
+                let _ = self.run_undo_script(f, hive.as_deref(), &before);
+            }
+            return Err(e);
+        }
         if !ok {
-            let mut r = self.result(f, false, vec![rec.id], "没有改成功。".to_owned(), notes);
+            // 脚本自己应该在出错时退回改了一半的东西；但超时被结束时它来不及，只能如实告诉用户
+            let message = "没有改成功。脚本在执行中途出错，可能已经改了一部分，建议重新检测一下这一项。".to_owned();
+            let mut r = self.result(f, false, vec![rec.id], message, notes);
             r.error = error;
             return Ok(r);
         }
@@ -732,7 +759,7 @@ impl Engine {
         let f = self.feature(id)?;
         if !f.is_primitive() {
             let b = f.break_script.as_ref().ok_or_else(|| Error::Catalog(format!("{} 没有 break 脚本", f.id)))?;
-            self.runner.run(&b.script, &self.script_args(f), SCRIPT_FEATURE_TIMEOUT)?;
+            self.runner.run(&b.script, &self.script_args(f, None), SCRIPT_FEATURE_TIMEOUT)?;
             return Ok(());
         }
         let actions = if f.break_actions.is_empty() { &f.windows_default } else { &f.break_actions };
@@ -764,7 +791,9 @@ impl Engine {
                     None => self.platform.reg_delete_value(root, key, name)?,
                 }
                 for k in created_keys.iter().rev() {
-                    self.platform.reg_delete_key_if_empty(root, k)?;
+                    // 清理为写值而新建的空键只是收尾：失败了（比如被安全软件锁住）也不影响值已经恢复，
+                    // 不能因为它把整条撤销判成失败（那样重试时还会误报「被改过」）
+                    let _ = self.platform.reg_delete_key_if_empty(root, k);
                 }
                 Ok(())
             }
@@ -778,6 +807,21 @@ impl Engine {
     /// 撤销一条修改并写日志。`after` 为 `None` 时跳过漂移检查。
     fn revert(&self, rec: &ApplyRecord, after: Option<&State>, reason: UndoReason, force: bool) -> Result<UndoResult> {
         let label = Self::target_label(&rec.target);
+        // 改的是某个用户的注册表，而这个用户现在没登录：写到 HKU\<SID> 什么都改不到，
+        // 还会被当成「恢复成功」。不写撤销记录，让用户等那个账户登录以后再来。
+        if let Some(sid) = Self::record_sid(&rec.target)
+            && !self.platform.user_hive_loaded(sid)
+        {
+            return Ok(UndoResult {
+                entry_id: rec.id.clone(),
+                ok: false,
+                drift: false,
+                message: format!(
+                    "{label} 改的是另一个账户的设置，那个账户现在没有登录，改不到。请让他登录以后再打开小药箱恢复。"
+                ),
+                error: None,
+            });
+        }
         if !force && let Some(after) = after {
             let drifted = match self.state_now(rec)? {
                 Some(now) => !Self::same_state(&now, after),
@@ -794,8 +838,12 @@ impl Engine {
             }
         }
         let outcome = match &rec.target {
-            TargetRef::Script { feature } => self.undo_script(feature, rec),
-            _ => self.restore(rec),
+            TargetRef::Script { feature, hive } => self.undo_script(feature, hive.as_deref(), rec),
+            // 写回以后读出来核对，不一致就不能算恢复成功
+            _ => self.restore(rec).and_then(|()| match self.is_back(rec) {
+                Some(false) => Err(Error::Invalid("恢复以后读回来的值和原来的不一样".to_owned())),
+                _ => Ok(()),
+            }),
         };
         let (ok, error) = match &outcome {
             Ok(()) => (true, None),
@@ -821,11 +869,8 @@ impl Engine {
         })
     }
 
-    fn undo_script(&self, feature: &str, rec: &ApplyRecord) -> Result<()> {
+    fn undo_script(&self, feature: &str, hive: Option<&str>, rec: &ApplyRecord) -> Result<()> {
         let f = self.feature(feature)?;
-        let Undo::Script(undo) = &f.undo else {
-            return Err(Error::Invalid("这个功能不能撤销".to_owned()));
-        };
         let before = self
             .journal
             .entries()?
@@ -838,9 +883,37 @@ impl Engine {
                 _ => None,
             })
             .unwrap_or(Value::Null);
-        let mut args = self.script_args(f);
+        if before.is_null() {
+            return Err(Error::Invalid("这一项执行时没来得及记下原来的状态，没法自动恢复".to_owned()));
+        }
+        self.run_undo_script(f, hive, &before)
+    }
+
+    fn run_undo_script(&self, f: &Feature, hive: Option<&str>, before: &Value) -> Result<()> {
+        let Undo::Script(undo) = &f.undo else {
+            return Err(Error::Invalid("这个功能不能撤销".to_owned()));
+        };
+        let mut args = self.script_args(f, hive);
         args.insert("Before".into(), Value::String(before.to_string()));
         self.runner.run(&undo.script, &args, SCRIPT_FEATURE_TIMEOUT).map(|_| ()).map_err(Error::from)
+    }
+
+    /// 这条记录改的是哪个用户的注册表（`HKU\<SID>`）；和具体用户无关时返回 `None`。
+    fn record_sid(target: &TargetRef) -> Option<&str> {
+        match target {
+            TargetRef::Registry { root: RegRoot::User(sid), .. } => Some(sid),
+            TargetRef::Script { hive: Some(h), .. } => h.strip_prefix("Registry::HKEY_USERS\\"),
+            _ => None,
+        }
+    }
+
+    /// 目标位置现在是不是已经回到记录里的原值（只读、不改）。脚本类没法核对，返回 `None`。
+    fn is_back(&self, rec: &ApplyRecord) -> Option<bool> {
+        match self.state_now(rec) {
+            Ok(Some(now)) => Some(Self::same_state(&now, &rec.before)),
+            Ok(None) => None,
+            Err(_) => Some(false),
+        }
     }
 
     /// 目标位置现在的状态；脚本类修改返回 `None`（不做漂移检查）。
@@ -878,12 +951,17 @@ impl Engine {
 
     /// 这条修改是不是脚本类的、而且功能声明了不能撤销。
     fn irreversible(&self, entry: &Entry) -> bool {
-        matches!(&entry.apply.target, TargetRef::Script { feature }
+        matches!(&entry.apply.target, TargetRef::Script { feature, .. }
             if self.catalog.feature(feature).is_none_or(|f| !f.reversible()))
     }
 
+    /// 脚本类修改的原状态是执行脚本返回的，记在 commit 里；程序在执行中途退出、没写 commit 的，没法自动恢复。
+    fn script_state_lost(entry: &Entry) -> bool {
+        matches!(entry.apply.target, TargetRef::Script { .. }) && entry.commit.is_none()
+    }
+
     fn can_undo(&self, entry: &Entry) -> bool {
-        entry.undo.is_none() && entry.maybe_applied() && !self.irreversible(entry)
+        entry.undo.is_none() && entry.maybe_applied() && !self.irreversible(entry) && !Self::script_state_lost(entry)
     }
 
     fn undo_entry(&self, entry: &Entry, force: bool) -> Result<UndoResult> {
@@ -895,6 +973,9 @@ impl Engine {
         }
         if self.irreversible(entry) {
             return Err(Error::Invalid("这一项改了就不能撤销".to_owned()));
+        }
+        if Self::script_state_lost(entry) {
+            return Err(Error::Invalid("这一项执行时没来得及记下原来的状态，没法自动恢复".to_owned()));
         }
         // 崩溃在中途、没有 commit 的记录：没法核对，按强制恢复处理
         let after = entry.commit.as_ref().and_then(|c| c.after.as_ref());

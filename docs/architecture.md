@@ -261,7 +261,9 @@ checks: [disk.system-free-space, system.pending-reboot]
 - 位置：`%ProgramData%\Medkit\journal\journal.jsonl`，一行一条 JSON，只追加不修改，每条写完立即落盘。
   - 目录的访问控制设为只有 SYSTEM 和 Administrators 能写。
   - 启动时如果这个目录是链接（junction / 符号链接），或者所有者不是 SYSTEM / Administrators，就把它改名挪走，重新建一个。
-  - 读的时候跳过坏掉的行（比如断电造成的半行），不影响其他记录。
+  - 读的时候按字节切行、每行单独解码，跳过坏掉的行（比如断电造成的半行，或者截断在中文字符中间的行），不影响其他记录。
+  - 追加前先看文件末尾是不是换行；不是（上次写到一半断电），就先补一个换行，免得新记录和半行粘在一起被一起丢掉。
+  - 同一时间只允许开一个小药箱（全局命名互斥体），修改日志只有一个写入者。
 - **先记后改**。每个原语写两条记录：
   - 改之前写 `apply`：打算改什么、改之前是什么样；
   - 改完写 `commit`：用 `ref` 指向 `apply`，带上结果和读回来的值。
@@ -274,7 +276,7 @@ checks: [disk.system-free-space, system.pending-reboot]
    "after":{"registry":{"value":{"type":"dword","data":0},"created_keys":[]}},"error":null}
   ```
 
-  - `target` 的三种形式：`registry {root,key,name}`、`service {name}`、`script {feature}`。`root` 是 `HKLM`、`HKCU` 或 `HKU\<SID>`。
+  - `target` 的三种形式：`registry {root,key,name}`、`service {name}`、`script {feature,hive}`。`root` 是 `HKLM`、`HKCU` 或 `HKU\<SID>`；`hive` 是执行时传给脚本的 `-UserHive`，撤销时原样传回，不按撤销那一刻的登录用户重新解析。
   - `before` / `after` 对应的三种形式：`registry {value,created_keys}`（`value` 为 `null` 表示值不存在）、`service {start_type}`、`script {data}`。
   - 脚本类功能的 `apply.before` 是占位的 `null`，真正的原状态在 `commit.after.script.data.before` 里（执行脚本返回的 `before`）。
   - 如果改完以后写不进 `commit`（比如磁盘满了），立即把这一项退回原样。宁可不改，也不留下没有记录的改动。
@@ -286,9 +288,12 @@ checks: [disk.system-free-space, system.pending-reboot]
   ```
 
   `reason` 是 `user`（用户点了恢复）或 `rollback`（同一功能里后面的步骤失败，自动退回）。
+- **不信返回值，读回来核对**：退回和撤销做完以后，都把目标位置读出来和原值比，一致才算成功；不一致的如实报告，条目保持「可以恢复」。
+- **改的是另一个账户、而那个账户没有登录时**，撤销直接拒绝并说明原因：那时写到 `HKU\<SID>` 什么都改不到。
+- 脚本类修改在执行中途程序退出、没写 `commit` 的，原状态没记下来，`canUndo` 为 `false`。
 - **一个功能里的多个原语是一个整体**：中途有一个失败，前面已经改过的会按倒序自动退回；失败的那一步本身也会按原值退回（它可能改了一半，比如键建好了、值没写进去）。
 - **已经是目标状态的原语不动**，也不写日志。整个功能本来就是好的，就直接返回「不用改」，也不建还原点。
-- **为了写值而新建的键**记在 `created_keys` 里；撤销时，这些键如果已经空了，就从深到浅删掉；里面后来有了别的内容的，保留。
+- **为了写值而新建的键**记在 `created_keys` 里；撤销时，这些键如果已经空了，就从深到浅删掉；里面后来有了别的内容的，保留。删键只是收尾，失败了不影响值已经恢复。
 - **撤销前先核对**：当前值不等于 `after`（被用户或别的软件改过）时，默认不撤销，返回 `drift: true`，由界面询问用户后再用 `force` 重试。
 - **按会话撤销**：同一会话里、还能撤销的记录按倒序逐条撤销。倒序是为了同一个位置被改过多次时能一路核对回去。发生漂移或出错的条目跳过，单独报告，不影响其他条。
 - 不能撤销的脚本类功能（`undo: none`）的记录，`canUndo` 为 `false`，撤销请求直接拒绝。

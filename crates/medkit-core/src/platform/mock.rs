@@ -1,6 +1,6 @@
 //! 内存里的假系统，用于测试和在非 Windows 平台上开发界面。
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
 use super::{OsInfo, PResult, Platform, PlatformError, UserIdentity};
@@ -17,6 +17,12 @@ struct State {
     services: BTreeMap<String, StartType>,
     /// 写这些「键\值」时模拟失败，用来测试回滚
     fail_writes: HashSet<String>,
+    /// 这些「键\值」前几次写入成功，之后失败（值是还允许成功的次数）
+    fail_writes_after: HashMap<String, usize>,
+    /// 删这些键时模拟失败
+    fail_key_deletes: HashSet<String>,
+    /// 这些用户的注册表没有加载（已注销）
+    unloaded_hives: HashSet<String>,
 }
 
 pub struct MockPlatform {
@@ -70,6 +76,25 @@ impl MockPlatform {
         self.state.lock().unwrap().fail_writes.insert(format!("{}\\{}", norm(key), name.to_ascii_lowercase()));
     }
 
+    /// 测试用：让写某个值时，前 `successes` 次成功、之后失败（用来让回滚那一步失败）。
+    pub fn fail_write_after(&self, key: &str, name: &str, successes: usize) {
+        self.state
+            .lock()
+            .unwrap()
+            .fail_writes_after
+            .insert(format!("{}\\{}", norm(key), name.to_ascii_lowercase()), successes);
+    }
+
+    /// 测试用：让删某个键时失败。
+    pub fn fail_key_delete(&self, key: &str) {
+        self.state.lock().unwrap().fail_key_deletes.insert(norm(key));
+    }
+
+    /// 测试用：模拟某个用户已经注销，他的注册表没有加载。
+    pub fn unload_hive(&self, sid: &str) {
+        self.state.lock().unwrap().unloaded_hives.insert(sid.to_ascii_uppercase());
+    }
+
     pub fn key_exists(&self, root: &RegRoot, key: &str) -> bool {
         self.reg_key_exists(root, key).unwrap()
     }
@@ -87,8 +112,15 @@ impl Platform for MockPlatform {
 
     fn reg_set(&self, root: &RegRoot, key: &str, name: &str, value: &RegValue) -> PResult<()> {
         let mut st = self.state.lock().unwrap();
-        if st.fail_writes.contains(&format!("{}\\{}", norm(key), name.to_ascii_lowercase())) {
+        let id = format!("{}\\{}", norm(key), name.to_ascii_lowercase());
+        if st.fail_writes.contains(&id) {
             return Err(PlatformError::AccessDenied(format!("{root}\\{key}\\{name}（模拟失败）")));
+        }
+        if let Some(left) = st.fail_writes_after.get_mut(&id) {
+            if *left == 0 {
+                return Err(PlatformError::AccessDenied(format!("{root}\\{key}\\{name}（模拟失败）")));
+            }
+            *left -= 1;
         }
         for k in key_ancestors(key) {
             st.keys.insert((root.clone(), norm(&k)));
@@ -107,6 +139,9 @@ impl Platform for MockPlatform {
 
     fn reg_delete_key_if_empty(&self, root: &RegRoot, key: &str) -> PResult<bool> {
         let mut st = self.state.lock().unwrap();
+        if st.fail_key_deletes.contains(&norm(key)) {
+            return Err(PlatformError::AccessDenied(format!("{root}\\{key}（模拟失败）")));
+        }
         let id = (root.clone(), norm(key));
         if !st.keys.contains(&id) {
             return Ok(false);
@@ -120,6 +155,10 @@ impl Platform for MockPlatform {
         st.keys.remove(&id);
         st.values.remove(&id);
         Ok(true)
+    }
+
+    fn user_hive_loaded(&self, sid: &str) -> bool {
+        !self.state.lock().unwrap().unloaded_hives.contains(&sid.to_ascii_uppercase())
     }
 
     fn service_get(&self, name: &str) -> PResult<Option<StartType>> {

@@ -168,6 +168,7 @@ if ($state.hibernate_enabled) {
 ```
 
 - 失败时 `throw`，不要吞掉错误。引擎会把错误写进修改日志，界面会告诉用户「没有改成功」。
+- **改到一半出错，要先把已经改了的退回去再 `throw`**（用 `try` / `catch`）。脚本出错时引擎拿不到 `before`，没法替你恢复。参考 `scripts/features/network/proxy-off-run.ps1`。
 - 原生命令要检查 `$LASTEXITCODE`。
 
 ## 3. 挂到症状上：`catalog/symptoms/<名字>.yaml`

@@ -62,7 +62,9 @@ mod os {
     use medkit_core::platform::Platform;
     use medkit_core::platform::windows::{WindowsPlatform, ensure_secure_dir, program_data};
     use medkit_core::script::{HostConfig, PowerShellHost, ScriptManifest, ScriptRunner};
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS, GetLastError};
     use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
+    use windows_sys::Win32::System::Threading::CreateMutexW;
     use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
 
     /// WebView2 运行时在注册表里的登记位置（微软文档《Distribute your app and the WebView2 Runtime》）。
@@ -107,6 +109,22 @@ mod os {
             // SAFETY: 在 main 最开头、还是单线程时调用，没有并发读写环境。
             unsafe { std::env::remove_var(name) };
         }
+    }
+
+    /// 只允许同时开一个小药箱。两个实例各有各的锁，可能交错修改同一个位置、交错写同一份修改日志，
+    /// 撤销时就会恢复到错误的值。用全局命名互斥体（跨登录会话）拦住第二个。
+    /// 返回 false 表示已经有一个在运行。互斥体要一直留到进程退出，所以故意不关句柄。
+    pub fn claim_single_instance() -> bool {
+        let name: Vec<u16> = "Global\\club.miao.medkit.instance".encode_utf16().chain(Some(0)).collect();
+        // SAFETY: name 以 NUL 结尾；安全属性用默认值
+        let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+        // SAFETY: 紧接在 CreateMutexW 之后读取
+        let err = unsafe { GetLastError() };
+        if handle.is_null() {
+            // 另一个账户里已经开着一个时，这里会因为权限打不开它
+            return err != ERROR_ACCESS_DENIED;
+        }
+        err != ERROR_ALREADY_EXISTS
     }
 
     pub fn preflight() -> Result<(), String> {
@@ -175,6 +193,10 @@ mod os {
 
     pub fn harden_environment() {}
 
+    pub fn claim_single_instance() -> bool {
+        true
+    }
+
     pub fn preflight() -> Result<(), String> {
         Ok(())
     }
@@ -193,7 +215,7 @@ mod os {
 }
 
 use os::{backend, data_root, secure_dir};
-pub use os::{fatal, harden_environment, preflight, webview2_hint};
+pub use os::{claim_single_instance, fatal, harden_environment, preflight, webview2_hint};
 
 /// 测试用：用假系统和真实的内嵌数据造一个 AppState，不碰真实系统、不落盘到固定位置。
 #[cfg(any(test, feature = "test-helpers"))]

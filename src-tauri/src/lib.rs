@@ -34,6 +34,10 @@ pub fn run() {
         setup::fatal(&message);
         return;
     }
+    if !setup::claim_single_instance() {
+        setup::fatal("小药箱已经在运行了，请在任务栏里找到它的窗口。\n\n如果是在另一个账户里打开的，请先在那边关掉。");
+        return;
+    }
     let state = setup::init();
     let result =
         tauri::Builder::default().manage(state).invoke_handler(command_handler!()).run(tauri::generate_context!());
