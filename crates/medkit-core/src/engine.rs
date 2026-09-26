@@ -183,6 +183,7 @@ impl Engine {
                     .catalog
                     .check(&step.check)
                     .map_or_else(|| step.check.clone(), |c| c.title.get(&self.lang).to_owned()),
+                stop_on: step.stop_on.clone(),
                 fixes: step
                     .fixes
                     .iter()

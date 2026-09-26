@@ -338,7 +338,7 @@ export interface FeatureSummary {
   reversible: boolean; irreversibleReason: string | null
 }
 export interface CatalogSummary { profiles: ProfileSummary[]; symptoms: SymptomSummary[]; features: FeatureSummary[] }
-export interface SymptomStep { check: string; checkTitle: string; fixes: FeatureSummary[] }
+export interface SymptomStep { check: string; checkTitle: string; stopOn: Status[]; fixes: FeatureSummary[] }
 export interface SymptomDetail extends SymptomSummary { causes: string[]; guide: string | null; steps: SymptomStep[] }
 export interface CheckResult {
   id: string; title: string; category: string

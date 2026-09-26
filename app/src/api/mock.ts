@@ -1,0 +1,1445 @@
+/**
+ * 示例后端：在普通浏览器里打开界面（`pnpm --dir app dev`）时，src/api/index.ts 会改用这里。
+ * 不装 Rust、不在 Windows 上也能开发和演示界面。
+ *
+ * 所有数据都是编的，不会读取或改动这台电脑。它模拟了一台「有点小毛病」的电脑：
+ * 预览、执行、检测、撤销都读写同一份「设置值」，所以修完再查会变正常，撤销以后又会变回来。
+ *
+ * 地址栏参数可以切换演示场景（可以组合）：
+ *   ?allok      体检全部正常
+ *   ?mismatch   用别的管理员账户运行（显示提示条）
+ *   ?notadmin   没有以管理员身份运行
+ */
+import type { CommandArgs, CommandName, CommandResult } from './commands'
+import type {
+  ApplyResult,
+  CatalogSummary,
+  CheckResult,
+  FeatureState,
+  FeatureStateKind,
+  FeatureSummary,
+  JournalEntryView,
+  JournalSession,
+  Preview,
+  Status,
+  SymptomDetail,
+  SystemInfo,
+  UndoResult,
+} from './types'
+
+// ─────────────────────────── 演示场景 ───────────────────────────
+
+const params = new URLSearchParams(window.location.search)
+const DEMO_ALL_OK = params.has('allok')
+const DEMO_MISMATCH = params.has('mismatch')
+const DEMO_NOT_ADMIN = params.has('notadmin')
+
+// ─────────────────────────── 小工具 ───────────────────────────
+
+const ID_RE = /^[a-z0-9]+([.-][a-z0-9]+)*$/
+const MINUTE = 60_000
+const DAY = 24 * 60 * MINUTE
+
+function randomInt(min: number, max: number): number {
+  return Math.floor(min + Math.random() * (max - min + 1))
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** 数字最多保留一位小数（和引擎渲染 message 的规则一致） */
+function num(n: number): string {
+  return String(Math.round(n * 10) / 10)
+}
+
+function iso(ms: number): string {
+  return new Date(ms).toISOString()
+}
+
+function uuid(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.floor(Math.random() * 16)
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
+
+/** 模拟 Tauri 的 JSON 序列化：界面拿到的永远是副本 */
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function requireId(id: string): string {
+  if (typeof id !== 'string' || !ID_RE.test(id)) {
+    throw `ID 不合法：${String(id)}`
+  }
+  return id
+}
+
+function localTime(ms: number): string {
+  const d = new Date(ms)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// ─────────────────────────── 系统信息 ───────────────────────────
+
+const SYSTEM: SystemInfo = {
+  osCaption: 'Microsoft Windows 11 家庭中文版',
+  build: 26100,
+  edition: '家庭中文版',
+  isAdmin: !DEMO_NOT_ADMIN,
+  interactiveUser: '小明',
+  elevatedUserMismatch: DEMO_MISMATCH,
+  appVersion: '0.0.1',
+  catalogVersion: '2026.09.26',
+}
+
+// ─────────────────────────── 这台示例电脑上的「设置值」 ───────────────────────────
+
+const ABSENT = '（不存在）'
+const CLEARED = '清空'
+
+const HKCU_CV = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion'
+const HKCU_ADVANCED = `${HKCU_CV}\\Explorer\\Advanced`
+const HKCU_CDM = `${HKCU_CV}\\ContentDeliveryManager`
+
+/** 被好几个检测引用的位置 */
+const T = {
+  proxyEnable: `${HKCU_CV}\\Internet Settings\\ProxyEnable`,
+  winhttpProxy: 'WinHTTP 代理（给系统服务用）',
+  dns: '以太网 的 DNS 服务器',
+  winsock: 'Winsock 目录',
+  discovery: '网络发现（专用网络）',
+  sharing: '文件和打印机共享（专用网络）',
+  rpcAuth: 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Print\\RpcAuthnLevelPrivacyEnabled',
+  tempDir: '临时文件夹（%TEMP%）',
+  updateCache: 'Windows 更新下载缓存',
+  hiberFile: '休眠文件大小',
+} as const
+
+const HIBER_FULL = '完整（12.7 GB）'
+const HIBER_REDUCED = '缩小（6.4 GB）'
+
+/** 位置 → 现在的值。没有记录的位置按「不存在」处理 */
+const values = new Map<string, string>()
+
+function valueOf(target: string): string {
+  return values.get(target) ?? ABSENT
+}
+
+// ─────────────────────────── 功能 ───────────────────────────
+
+interface MockChange {
+  target: string
+  /** 这台示例电脑上一开始的值 */
+  initial: string
+  /** 执行以后的值 */
+  planned: string
+  /** 「部分生效」时，检测结果里怎么称呼这一项 */
+  label?: string
+}
+
+interface MockFeature {
+  summary: FeatureSummary
+  changes: MockChange[]
+  notes: string[]
+  /** 一次性的动作（例如刷新 DNS 缓存）：做完以后状态不会一直保持 */
+  oneShot?: boolean
+  /** 执行时一定失败，用来演示出错的样子 */
+  failWith?: string
+  /** 检测时一定查不出来 */
+  detectError?: string
+  /** 执行后的复查结果；不写时按改动后的值判断 */
+  verifyAs?: FeatureStateKind
+  /** 创建还原点失败（系统还原没开） */
+  restorePointFails?: boolean
+}
+
+type FeatureInput = Partial<FeatureSummary> & Pick<FeatureSummary, 'id' | 'title' | 'description' | 'category'>
+
+function defineFeature(summary: FeatureInput, rest: Omit<MockFeature, 'summary'>): MockFeature {
+  return {
+    summary: {
+      risk: 'safe',
+      level: 'light',
+      recommend: 'optional',
+      subjective: false,
+      reboot: 'none',
+      reversible: true,
+      irreversibleReason: null,
+      ...summary,
+    },
+    ...rest,
+  }
+}
+
+const FEATURE_LIST: MockFeature[] = [
+  // ── 常用设置：资源管理器 ──
+  defineFeature(
+    {
+      id: 'explorer.show-extensions',
+      title: '显示文件扩展名',
+      description: '在资源管理器里显示 .docx、.exe 这类扩展名，更容易认出伪装成文档的病毒。',
+      category: 'explorer',
+      recommend: 'recommended',
+      reboot: 'explorer',
+    },
+    {
+      changes: [{ target: `${HKCU_ADVANCED}\\HideFileExt`, initial: 'DWORD 1', planned: 'DWORD 0' }],
+      notes: ['只改你自己账户的设置，不影响这台电脑上的其他用户。'],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'explorer.show-hidden-files',
+      title: '显示隐藏的文件和文件夹',
+      description: '能看到平时被隐藏的文件夹，比如 AppData。找聊天记录、软件配置时有用，平时用不上可以不开。',
+      category: 'explorer',
+    },
+    {
+      changes: [{ target: `${HKCU_ADVANCED}\\Hidden`, initial: 'DWORD 2', planned: 'DWORD 1' }],
+      notes: ['系统自己的重要文件仍然保持隐藏，不用担心误删。'],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'explorer.classic-context-menu',
+      title: '恢复经典右键菜单',
+      description: 'Win11 的右键菜单要再点「显示更多选项」才能看到全部功能。开启后，右键直接显示完整的老式菜单。',
+      category: 'explorer',
+      subjective: true,
+      reboot: 'explorer',
+    },
+    {
+      changes: [
+        {
+          target: 'HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32\\（默认）',
+          initial: ABSENT,
+          planned: '字符串（空）',
+        },
+      ],
+      notes: ['以后的 Windows 大版本更新可能让它失效，到时候再开一次就行。'],
+    },
+  ),
+  // ── 常用设置：桌面 ──
+  defineFeature(
+    {
+      id: 'desktop.show-this-pc',
+      title: '桌面显示「此电脑」',
+      description: '在桌面上放一个「此电脑」图标，双击就能打开 C 盘、D 盘。',
+      category: 'desktop',
+      recommend: 'recommended',
+      subjective: true,
+    },
+    {
+      changes: [
+        {
+          target: `${HKCU_CV}\\Explorer\\HideDesktopIcons\\NewStartPanel\\{20D04FE0-3AEA-1069-A2D8-08002B30309D}`,
+          initial: ABSENT,
+          planned: 'DWORD 0',
+        },
+      ],
+      notes: [],
+    },
+  ),
+  // ── 常用设置：任务栏 ──
+  defineFeature(
+    {
+      id: 'taskbar.align-left',
+      title: '任务栏图标靠左',
+      description: '把 Win11 任务栏上的开始按钮和图标放回左边，和 Win10 的习惯一样。',
+      category: 'taskbar',
+      subjective: true,
+    },
+    {
+      changes: [{ target: `${HKCU_ADVANCED}\\TaskbarAl`, initial: ABSENT, planned: 'DWORD 0' }],
+      notes: [],
+    },
+  ),
+  // ── 常用设置：开始菜单 ──
+  defineFeature(
+    {
+      id: 'start.disable-recommendations',
+      title: '关闭开始菜单和锁屏的推荐广告',
+      description: '开始菜单的「推荐」里不再出现推广的应用，锁屏也不再显示「趣味知识和提示」这类广告。',
+      category: 'start',
+      recommend: 'recommended',
+      reboot: 'logoff',
+    },
+    {
+      changes: [
+        {
+          target: `${HKCU_ADVANCED}\\Start_IrisRecommendations`,
+          initial: ABSENT,
+          planned: 'DWORD 0',
+          label: '开始菜单「推荐」里的推广',
+        },
+        {
+          target: `${HKCU_CDM}\\RotatingLockScreenOverlayEnabled`,
+          initial: 'DWORD 1',
+          planned: 'DWORD 0',
+          label: '锁屏上的「趣味知识和提示」',
+        },
+        {
+          target: `${HKCU_CDM}\\SubscribedContent-338387Enabled`,
+          initial: 'DWORD 1',
+          planned: 'DWORD 0',
+          label: '锁屏上的应用推荐',
+        },
+      ],
+      notes: [
+        '锁屏上的改动要注销后重新登录才能看到。',
+        '「推荐」里最近打开的文件不受影响；想一起关掉，可以在「设置 → 个性化 → 开始」里关。',
+      ],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'start.disable-web-search',
+      title: '关闭开始菜单里的网络搜索',
+      description: '在开始菜单里搜索时只找电脑上的程序和文件，不再夹杂必应的网页结果，搜起来也更快。',
+      category: 'start',
+      recommend: 'recommended',
+      reboot: 'explorer',
+    },
+    {
+      changes: [{ target: `${HKCU_CV}\\Search\\BingSearchEnabled`, initial: ABSENT, planned: 'DWORD 0' }],
+      notes: ['想搜网页时，直接打开浏览器搜就好。'],
+    },
+  ),
+  // ── 常用设置：电源 ──
+  defineFeature(
+    {
+      id: 'power.disable-fast-startup',
+      title: '关闭快速启动',
+      description: '快速启动让「关机」其实只是半休眠。装了双系统，或者关机后 U 盘、网卡偶尔不正常时才需要关；关掉后开机会慢几秒。',
+      category: 'power',
+      recommend: 'not-recommended',
+    },
+    {
+      changes: [
+        {
+          target: 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power\\HiberbootEnabled',
+          initial: 'DWORD 1',
+          planned: 'DWORD 0',
+        },
+      ],
+      notes: ['改的是整台电脑的设置，这台电脑上所有用户都会受影响。', '下次关机时生效。'],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'power.high-performance',
+      title: '切换到「高性能」电源计划',
+      description: 'CPU 一直保持较高频率，打开程序会快一点，但更耗电、风扇更吵。笔记本用电池时不建议开。',
+      category: 'power',
+      risk: 'caution',
+      subjective: true,
+    },
+    {
+      changes: [{ target: '电源计划', initial: '平衡', planned: '高性能' }],
+      notes: ['笔记本插着电源时效果最明显；用电池时会明显更耗电。'],
+      detectError: '没找到「高性能」电源计划，没法判断现在的状态。',
+      failWith: '这台电脑上没有「高性能」电源计划，可能被品牌自带的电脑管家删掉了。可以在品牌电脑管家里调「性能模式」。',
+    },
+  ),
+
+  // ── 修复：网络 ──
+  defineFeature(
+    {
+      id: 'network.proxy-off',
+      title: '关闭失效的系统代理',
+      description: '代理指向的程序已经不在了（多半是梯子或加速器卸载后留下的），浏览器因此打不开网页。关掉它就能恢复直接上网。',
+      category: 'network',
+      recommend: 'recommended',
+    },
+    {
+      changes: [
+        { target: T.proxyEnable, initial: 'DWORD 1', planned: 'DWORD 0' },
+        { target: T.winhttpProxy, initial: '127.0.0.1:7890', planned: '直接连接' },
+      ],
+      notes: ['以后还要用那个代理软件的话，重新打开它，它会自己把代理设置回去。'],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'network.dns-flush',
+      title: '刷新 DNS 缓存',
+      description: '清掉电脑记住的网址解析结果，解决「换了网络以后某些网站打不开」这类问题。',
+      category: 'network',
+      recommend: 'recommended',
+      reversible: false,
+      irreversibleReason: '清掉的只是临时缓存，电脑会自动重新记，不需要也没法撤销。',
+    },
+    {
+      changes: [{ target: 'DNS 缓存', initial: '236 条记录', planned: CLEARED }],
+      notes: [],
+      oneShot: true,
+    },
+  ),
+  defineFeature(
+    {
+      id: 'network.dns-public',
+      title: '改用国内公共 DNS',
+      description: '把网卡的 DNS 改成阿里（223.5.5.5）和腾讯（119.29.29.29）的公共 DNS。宽带自带的 DNS 不稳定时有用。',
+      category: 'network',
+    },
+    {
+      changes: [{ target: T.dns, initial: '自动获取', planned: '223.5.5.5、119.29.29.29' }],
+      notes: ['公司或学校的网络可能要求用它们自己的 DNS，这种情况下不要改。'],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'network.winsock-reset',
+      title: '重置 Winsock 网络组件',
+      description: '把网络组件恢复成系统默认，清除被加速器、老版本安全软件插进去的组件（常说的 LSP 断网）。',
+      category: 'network',
+      risk: 'caution',
+      level: 'medium',
+      reboot: 'reboot',
+      reversible: false,
+      irreversibleReason: 'Winsock 重置以后没法退回原来的状态。它本身没有坏处，但个别依赖网络组件的软件（例如某些加速器）需要重新安装。',
+    },
+    {
+      changes: [{ target: T.winsock, initial: '含 1 个第三方组件', planned: '系统默认' }],
+      notes: ['360、腾讯电脑管家可能会弹窗询问，请选择「允许」。'],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'network.discovery-on',
+      title: '开启网络发现和打印机共享',
+      description: '让这台电脑能在局域网里看到别的电脑和共享打印机，别人也能找到它。只对家里、办公室这类「专用网络」生效。',
+      category: 'network',
+      recommend: 'recommended',
+    },
+    {
+      changes: [
+        { target: T.discovery, initial: '关闭', planned: '开启' },
+        { target: T.sharing, initial: '关闭', planned: '开启' },
+      ],
+      notes: ['在咖啡馆、机场这类公用网络上不会生效，不用担心被陌生人看到。'],
+    },
+  ),
+
+  // ── 修复：磁盘 ──
+  defineFeature(
+    {
+      id: 'disk.cleanup-temp',
+      title: '清理临时文件和更新缓存',
+      description: '删掉程序用完没清理的临时文件，以及已经装好的更新留下的安装包。不会碰你的文档、照片和聊天记录。',
+      category: 'disk',
+      recommend: 'recommended',
+      reversible: false,
+      irreversibleReason: '删掉的临时文件找不回来，但它们本来就是没用的东西，不影响任何软件使用。',
+    },
+    {
+      changes: [
+        { target: T.tempDir, initial: '3.2 GB', planned: CLEARED },
+        { target: T.updateCache, initial: '4.1 GB', planned: CLEARED },
+      ],
+      notes: ['正在被程序使用的临时文件会自动跳过。'],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'disk.storage-sense-on',
+      title: '开启存储感知',
+      description: '让 Windows 定期自动清理临时文件，C 盘不容易再满。回收站和「下载」文件夹不会被自动清理。',
+      category: 'disk',
+      recommend: 'recommended',
+    },
+    {
+      changes: [
+        {
+          target: `${HKCU_CV}\\StorageSense\\Parameters\\StoragePolicy\\01`,
+          initial: 'DWORD 0',
+          planned: 'DWORD 1',
+        },
+      ],
+      notes: ['以后可以在「设置 → 系统 → 存储」里随时关掉。'],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'disk.hibernation-reduce',
+      title: '缩小休眠文件',
+      description: '把休眠文件缩小一半左右，能腾出好几 GB。快速启动照样能用，只是开始菜单里不再有「休眠」。',
+      category: 'disk',
+      risk: 'caution',
+      level: 'medium',
+    },
+    {
+      changes: [{ target: T.hiberFile, initial: HIBER_FULL, planned: HIBER_REDUCED }],
+      notes: ['「睡眠」不受影响，合上笔记本盖子照常睡眠。'],
+      restorePointFails: true,
+    },
+  ),
+
+  // ── 修复：打印机 ──
+  defineFeature(
+    {
+      id: 'printer.rpc-auth-compat',
+      title: '打印机共享 0x0000011b 兼容设置',
+      description: '在共享打印机的主机上关掉一项打印安全加固，让别的电脑能重新连上共享打印机。',
+      category: 'printer',
+      risk: 'danger',
+      level: 'medium',
+      reboot: 'reboot',
+    },
+    {
+      changes: [{ target: T.rpcAuth, initial: ABSENT, planned: 'DWORD 0' }],
+      notes: [
+        '这会关闭微软为修补打印漏洞加上的保护，局域网里的其他电脑更容易借打印服务发起攻击。',
+        '微软已经表示会逐步取消这个兼容开关，部分新版本的系统上可能无效。',
+        '更好的办法：如果打印机本身有网口或 Wi-Fi，让每台电脑直接按 IP 地址添加它，就不需要这项设置。',
+      ],
+      verifyAs: 'unknown',
+    },
+  ),
+]
+
+const FEATURES = new Map(FEATURE_LIST.map((f) => [f.summary.id, f]))
+
+function getFeature(id: string): MockFeature {
+  const f = FEATURES.get(requireId(id))
+  if (!f) throw `找不到这个功能：${id}`
+  return f
+}
+
+function detectKind(f: MockFeature): FeatureStateKind {
+  if (f.oneShot) return 'not-applied'
+  const done = f.changes.filter((c) => valueOf(c.target) === c.planned).length
+  if (done === f.changes.length) return 'applied'
+  if (done === 0) return 'not-applied'
+  return 'partial'
+}
+
+function isApplied(id: string): boolean {
+  const f = FEATURES.get(id)
+  return f !== undefined && detectKind(f) === 'applied'
+}
+
+/** 还没到目标状态、需要改的那几项（一次性动作每次都要做） */
+function pendingChanges(f: MockFeature): MockChange[] {
+  return f.changes.filter((c) => f.oneShot || valueOf(c.target) !== c.planned)
+}
+
+// ─────────────────────────── 检测 ───────────────────────────
+
+type Outcome = Pick<CheckResult, 'status' | 'message'> &
+  Partial<Pick<CheckResult, 'resultCode' | 'fixer' | 'next' | 'links' | 'facts' | 'error'>>
+
+interface MockCheck {
+  title: string
+  evaluate: () => Outcome
+}
+
+const CHECKS: Record<string, MockCheck> = {
+  // ── 磁盘 ──
+  'disk.system-free-space': {
+    title: 'C 盘剩余空间',
+    evaluate: () => {
+      const total = 237.9
+      let free = DEMO_ALL_OK ? 86.2 : 8.4
+      if (valueOf(T.tempDir) === CLEARED) free += 3.2
+      if (valueOf(T.updateCache) === CLEARED) free += 4.1
+      if (valueOf(T.hiberFile) === HIBER_REDUCED) free += 6.3
+      const pct = (free / total) * 100
+      const facts = { free_gb: Number(num(free)), free_pct: Number(num(pct)), total_gb: total }
+      if (free >= 20) {
+        return { status: 'ok', resultCode: 'ok', message: `C 盘还剩 ${num(free)} GB，空间充足。`, facts }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'low',
+        message: `C 盘只剩 ${num(free)} GB（${num(pct)}%），可能影响更新和软件运行。`,
+        fixer: 'medkit',
+        next: '打开「C 盘满了」，看看哪些东西可以清理或搬走。',
+        links: ['symptom:disk-full'],
+        facts,
+      }
+    },
+  },
+  'disk.hibernation-file': {
+    title: '休眠文件',
+    evaluate: () => {
+      if (DEMO_ALL_OK || valueOf(T.hiberFile) === HIBER_REDUCED) {
+        return { status: 'ok', message: '休眠文件已经是缩小的版本（6.4 GB），不用再动。', facts: { hiberfil_gb: 6.4, type: 'reduced' } }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'full',
+        message: '休眠文件占了 12.7 GB。缩小以后能腾出大约 6 GB，快速启动照样能用。',
+        fixer: 'medkit',
+        facts: { hiberfil_gb: 12.7, memory_gb: 16, type: 'full' },
+      }
+    },
+  },
+  'disk.wechat-files': {
+    title: '微信和 QQ 的文件',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return { status: 'ok', message: '微信和 QQ 的文件不多（3.1 GB），不用管。', facts: { wechat_gb: 2.4, qq_gb: 0.7 } }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'large',
+        message: '微信的聊天文件占了 38.2 GB，全都放在 C 盘。',
+        fixer: 'user',
+        next: '在微信里打开「设置 → 文件管理」，把保存位置改到 D 盘，旧文件会一起搬过去。QQ 在「设置 → 存储管理」里改。',
+        facts: { wechat_gb: 38.2, qq_gb: 2.6, wechat_version: '4.1' },
+      }
+    },
+  },
+  'disk.windows-old': {
+    title: '旧系统文件夹（Windows.old）',
+    evaluate: () => ({ status: 'ok', message: '没有旧系统留下的 Windows.old 文件夹。', facts: { exists: false } }),
+  },
+
+  // ── 网络 ──
+  'network.connectivity': {
+    title: '网络连通',
+    evaluate: () => ({
+      status: 'ok',
+      message: '网络正常：能连上路由器，也能直接连上外网。',
+      facts: { gateway_ok: true, internet_ok: true, rtt_ms: 18 },
+    }),
+  },
+  'network.adapter': {
+    title: '网卡和飞行模式',
+    evaluate: () => ({
+      status: 'ok',
+      message: '网卡工作正常，飞行模式没有打开。',
+      facts: { adapter: '以太网', media: '有线', link_speed_mbps: 1000, airplane_mode: false },
+    }),
+  },
+  'network.ip-address': {
+    title: '有没有拿到网络地址',
+    evaluate: () => ({ status: 'ok', message: '已经从路由器拿到了网络地址。', facts: { dhcp: true, apipa: false } }),
+  },
+  'network.gateway': {
+    title: '能不能连上路由器',
+    evaluate: () => ({ status: 'ok', message: '能连上路由器，响应时间 1 毫秒。', facts: { rtt_ms: 1, loss_pct: 0 } }),
+  },
+  'network.internet': {
+    title: '能不能连上外网',
+    evaluate: () => ({
+      status: 'ok',
+      message: '能直接连上外网（测试了两个国内常用网站的服务器）。',
+      facts: { targets_ok: 2, targets_total: 2, rtt_ms: 18 },
+    }),
+  },
+  'network.dns': {
+    title: '网址解析（DNS）',
+    evaluate: () => {
+      if (DEMO_ALL_OK || isApplied('network.dns-public')) {
+        return { status: 'ok', message: '网址解析正常，试了 6 次都成功了。', facts: { tries: 6, failures: 0 } }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'flaky',
+        message: '网址解析不太稳定：试了 6 次，有 2 次没解析出来，网页会时好时坏。',
+        fixer: 'medkit',
+        next: '先试试「刷新 DNS 缓存」；还不行，可以改用国内公共 DNS。',
+        facts: { tries: 6, failures: 2, server: '宽带自动分配' },
+      }
+    },
+  },
+  'network.proxy-dead': {
+    title: '代理设置',
+    evaluate: () => {
+      if (DEMO_ALL_OK || valueOf(T.proxyEnable) === 'DWORD 0') {
+        return { status: 'ok', message: '没有设置代理，浏览器直接上网。', facts: { proxy_enabled: false } }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'dead',
+        message:
+          '系统代理指向 127.0.0.1:7890，但那里没有程序在监听，多半是梯子或加速器卸载后留下的。浏览器会打不开网页，微信、QQ 不受影响。',
+        fixer: 'medkit',
+        next: '关掉这个失效的代理，就能恢复上网。',
+        links: ['feature:network.proxy-off', 'symptom:network'],
+        facts: { proxy_enabled: true, proxy_server: '127.0.0.1:7890', listening: false, winhttp_proxy: valueOf(T.winhttpProxy) },
+      }
+    },
+  },
+  'network.winsock': {
+    title: 'Winsock 网络组件',
+    evaluate: () => {
+      if (valueOf(T.winsock) === '系统默认') {
+        return { status: 'ok', message: 'Winsock 网络组件已经恢复成系统默认，重启电脑后生效。', facts: { third_party_providers: 0 } }
+      }
+      if (DEMO_ALL_OK) {
+        return { status: 'ok', message: 'Winsock 网络组件正常，没有第三方组件。', facts: { third_party_providers: 0 } }
+      }
+      return {
+        status: 'unknown',
+        resultCode: null,
+        message: '没查出 Winsock 网络组件的状态。',
+        next: '前面几步都正常、却还是上不了网时，可以试试重置它。',
+        error: '读取 Winsock 目录超时（15 秒），可能被安全软件拦住了。',
+      }
+    },
+  },
+  'network.time': {
+    title: '系统时间',
+    evaluate: () => ({
+      status: 'ok',
+      message: '系统时间准确，和标准时间只差 0.3 秒。',
+      facts: { offset_sec: 0.3, time_zone: '(UTC+08:00) 北京，重庆，香港特别行政区，乌鲁木齐' },
+    }),
+  },
+
+  // ── 打印机 ──
+  'printer.spooler': {
+    title: '打印服务',
+    evaluate: () => ({
+      status: 'ok',
+      message: '打印服务（Print Spooler）正在运行。',
+      facts: { service: 'Spooler', state: 'running', start_type: 'auto' },
+    }),
+  },
+  'printer.network-discovery': {
+    title: '网络发现和打印机共享',
+    evaluate: () => {
+      if (isApplied('network.discovery-on')) {
+        return { status: 'ok', message: '网络发现和打印机共享都已经开启。', facts: { discovery: true, sharing: true } }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'off',
+        message: '网络发现和打印机共享都没有开，局域网里的电脑互相看不见。',
+        fixer: 'medkit',
+        facts: { network_profile: '专用网络', discovery: false, sharing: false },
+      }
+    },
+  },
+  'printer.rpc-auth': {
+    title: '0x0000011b 兼容设置',
+    evaluate: () => {
+      if (valueOf(T.rpcAuth) === 'DWORD 0') {
+        return { status: 'ok', message: '已经写入 0x0000011b 兼容设置，重启电脑后生效。', facts: { rpc_privacy: false } }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'strict',
+        message: '这台电脑共享了打印机，但 Windows 更新加强了打印安全，别的电脑连接时会报 0x0000011b。',
+        fixer: 'medkit',
+        next: '如果打印机有网口或 Wi-Fi，更推荐让每台电脑直接按 IP 地址添加打印机。',
+        facts: { shared_printers: 1, rpc_privacy: true },
+      }
+    },
+  },
+
+  // ── 体检里的其他项目 ──
+  'system.component-store': {
+    title: '系统文件',
+    evaluate: () => ({ status: 'ok', message: '系统文件没有发现损坏。', facts: { check_health: 'healthy' } }),
+  },
+  'update.status': {
+    title: 'Windows 更新',
+    evaluate: () => ({
+      status: 'ok',
+      message: 'Windows 更新正常，最近一次装更新是 12 天前。',
+      facts: { last_install_days: 12, service_running: true, paused: false },
+    }),
+  },
+  'system.pending-reboot': {
+    title: '等待重启',
+    evaluate: () => {
+      if (DEMO_ALL_OK) return { status: 'ok', message: '没有在等重启的更新。' }
+      return {
+        status: 'advice',
+        resultCode: 'pending',
+        message: '有更新已经装好了，正在等你重启电脑。',
+        fixer: 'user',
+        next: '保存好手头的文件，找个方便的时候重启一下。',
+        facts: { since_hours: 26, reasons: ['Windows 更新', '待重命名的文件'] },
+      }
+    },
+  },
+  'hardware.disk-health': {
+    title: '硬盘健康',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          message: '硬盘健康状况良好。',
+          facts: { model: 'Samsung SSD 980 1TB', media: '固态硬盘', percentage_used: 3, power_on_hours: 1207 },
+        }
+      }
+      return {
+        status: 'manual',
+        resultCode: 'reallocated',
+        message: '这块机械硬盘出现了 12 个重新分配的扇区，这是硬盘开始老化的迹象。',
+        fixer: 'hardware',
+        next: '尽快把重要的文件备份到别的硬盘或网盘，然后考虑换一块固态硬盘。',
+        facts: {
+          model: 'WDC WD10EZEX-08WN4A0',
+          media: '机械硬盘',
+          reallocated_sectors: 12,
+          pending_sectors: 0,
+          power_on_hours: 21873,
+          temperature_c: 41,
+          smart: { attributes: [{ id: 5, raw: 12 }, { id: 197, raw: 0 }] },
+        },
+      }
+    },
+  },
+  'hardware.battery': {
+    title: '电池健康',
+    evaluate: () => ({ status: 'na', resultCode: 'no-battery', message: '这台电脑没有电池。' }),
+  },
+  'system.recent-bsod': {
+    title: '最近的蓝屏',
+    evaluate: () => ({ status: 'ok', message: '最近 30 天没有蓝屏记录。', facts: { days: 30, bugchecks: 0 } }),
+  },
+  'system.reliability': {
+    title: '程序崩溃记录',
+    evaluate: () => {
+      if (DEMO_ALL_OK) return { status: 'ok', message: '最近 7 天没有程序崩溃。', facts: { crashes_7d: 0 } }
+      return {
+        status: 'advice',
+        resultCode: 'crashes',
+        message: '最近 7 天有 5 次程序崩溃，大部分是「WPS Office」。',
+        fixer: 'helper',
+        next: '先把 WPS 更新到最新版；还是经常崩溃的话，把诊断报告发给懂哥看看。',
+        facts: { crashes_7d: 5, top_app: 'WPS Office', update_failures_7d: 0 },
+      }
+    },
+  },
+  'security.bitlocker': {
+    title: 'BitLocker 加密',
+    evaluate: () => {
+      if (DEMO_ALL_OK) return { status: 'ok', message: '系统盘没有加密。', facts: { protection: 'off' } }
+      return {
+        status: 'advice',
+        resultCode: 'on-key-unknown',
+        message: '系统盘开启了 BitLocker 设备加密。以后重装系统或换主板时，要用恢复密钥才能打开硬盘。',
+        fixer: 'user',
+        next: '在手机或别的电脑上登录 account.microsoft.com/devices/recoverykey，找到这台电脑的恢复密钥，抄下来放在安全的地方。',
+        facts: { protection: 'on', method: 'XTS-AES 128' },
+      }
+    },
+  },
+  'boot.secure-boot-cert': {
+    title: '安全启动证书',
+    evaluate: () => {
+      if (DEMO_ALL_OK) return { status: 'ok', message: '安全启动证书已经更新到 2023 版。', facts: { db_2023: true } }
+      return {
+        status: 'unknown',
+        resultCode: null,
+        message: '没查出安全启动证书的版本。',
+        next: '不影响现在使用，过几天再体检一次就好。',
+        error: '读取 UEFI 变量 db 失败：拒绝访问（0x80070005）。',
+      }
+    },
+  },
+  'system.device-problems': {
+    title: '设备和驱动',
+    evaluate: () => {
+      if (DEMO_ALL_OK) return { status: 'ok', message: '所有设备都工作正常。', facts: { problem_devices: 0 } }
+      return {
+        status: 'advice',
+        resultCode: 'basic-display',
+        message: '显卡驱动没装好，现在用的是「Microsoft 基本显示适配器」。屏幕分辨率可能不对，看视频、玩游戏会卡。',
+        fixer: 'system',
+        next: '打开「设置 → Windows 更新 → 高级选项 → 可选更新」，看看里面有没有显卡驱动；没有的话，到电脑品牌官网按型号下载。',
+        facts: { problem_devices: 1, device: 'Microsoft 基本显示适配器', problem_code: 28 },
+      }
+    },
+  },
+  'system.winre': {
+    title: '系统恢复环境',
+    evaluate: () => ({ status: 'ok', message: '系统恢复环境（WinRE）正常，电脑启动不了时可以进恢复模式。', facts: { enabled: true } }),
+  },
+  'system.managed': {
+    title: '单位管理',
+    evaluate: () => ({ status: 'ok', message: '这台电脑没有被单位管理（没有加入域，也没有设备管理）。', facts: { domain_joined: false, mdm: false } }),
+  },
+  'security.win10-esu': {
+    title: 'Win10 安全更新登记',
+    evaluate: () => ({ status: 'na', resultCode: 'not-win10', message: '这台电脑是 Win11，不需要登记。' }),
+  },
+}
+
+function runMockCheck(id: string): CheckResult {
+  const check = CHECKS[requireId(id)]
+  if (!check) throw `找不到这个检测：${id}`
+  const o = check.evaluate()
+  return {
+    id,
+    title: check.title,
+    category: id.split('.')[0] ?? 'other',
+    status: o.status,
+    resultCode: o.resultCode === undefined ? (o.status === 'ok' ? 'ok' : null) : o.resultCode,
+    message: o.message,
+    fixer: o.fixer ?? null,
+    next: o.next ?? null,
+    links: o.links ?? [],
+    facts: o.facts ?? {},
+    error: o.error ?? null,
+    durationMs: randomInt(15, 1800),
+  }
+}
+
+const PROFILES: Record<string, { title: string; checks: string[] }> = {
+  healthcheck: {
+    title: '系统体检',
+    checks: [
+      'disk.system-free-space',
+      'network.connectivity',
+      'network.proxy-dead',
+      'system.component-store',
+      'update.status',
+      'system.pending-reboot',
+      'hardware.disk-health',
+      'hardware.battery',
+      'system.recent-bsod',
+      'system.reliability',
+      'security.bitlocker',
+      'boot.secure-boot-cert',
+      'system.device-problems',
+      'system.winre',
+      'system.managed',
+      'security.win10-esu',
+    ],
+  },
+}
+
+// ─────────────────────────── 症状 ───────────────────────────
+
+interface MockSymptom {
+  id: string
+  title: string
+  summary: string | null
+  keywords: string[]
+  maturity: SymptomDetail['maturity']
+  causes: string[]
+  guide: string | null
+  steps: { check: string; stopOn?: Status[]; fixes: string[] }[]
+}
+
+const SYMPTOMS: MockSymptom[] = [
+  {
+    id: 'network',
+    title: '上不了网',
+    summary: '网页打不开、微信能用但浏览器不行、Wi-Fi 连上了却没网。',
+    keywords: ['没网', '断网', '网断了', '无法上网', '上网', '网络', 'wifi', 'wifi连不上', '无线网', '网页打不开', '浏览器打不开', '微信能用网页打不开'],
+    maturity: 'semi',
+    causes: [
+      '代理设置残留（梯子、加速器卸载后没清干净）',
+      '宽带自带的 DNS 不稳定，网址解析不出来',
+      'Winsock 网络组件被第三方软件改坏（常说的 LSP 断网）',
+      '路由器或宽带本身出了问题，这种情况不是电脑的毛病',
+    ],
+    guide: [
+      '如果上面几步都正常，但还是上不了网：',
+      '1. 把路由器和光猫都断电，等 30 秒再插上，等指示灯稳定下来（大约 2 分钟）。',
+      '2. 用手机连同一个 Wi-Fi 试试。手机也上不了网，就是宽带的问题，请联系运营商：电信 10000、移动 10086、联通 10010。',
+      '3. 如果是校园网、酒店或机场的 Wi-Fi，打开浏览器随便访问一个网址，看会不会跳出登录页面。',
+    ].join('\n'),
+    steps: [
+      { check: 'network.adapter', stopOn: ['manual'], fixes: [] },
+      { check: 'network.ip-address', fixes: [] },
+      { check: 'network.gateway', fixes: [] },
+      { check: 'network.internet', fixes: [] },
+      { check: 'network.dns', fixes: ['network.dns-flush', 'network.dns-public'] },
+      { check: 'network.proxy-dead', fixes: ['network.proxy-off'] },
+      { check: 'network.winsock', fixes: ['network.winsock-reset'] },
+      { check: 'network.time', fixes: [] },
+    ],
+  },
+  {
+    id: 'disk-full',
+    title: 'C 盘满了',
+    summary: 'C 盘变红、提示磁盘空间不足、更新装不上。',
+    keywords: ['c盘满了', 'c盘红了', 'c盘', '磁盘空间不足', '空间不足', '内存不足', '存储空间', '清理', '垃圾', '微信占空间'],
+    maturity: 'one-click',
+    causes: [
+      '临时文件和更新缓存越积越多',
+      '休眠文件占了好几 GB',
+      '微信、QQ 的聊天文件默认都存在 C 盘',
+      '桌面、「下载」文件夹里放了大文件（桌面其实也在 C 盘）',
+    ],
+    guide: [
+      '想从根上解决：',
+      '1. 打开「设置 → 系统 → 存储 → 高级存储设置 → 新内容的保存位置」，把文档、音乐、照片、视频的保存位置改到 D 盘。',
+      '2. 在微信里打开「设置 → 文件管理」，把文件保存位置改到 D 盘；QQ 在「设置 → 存储管理」里改。',
+      '3. 桌面上别放大文件。在「此电脑」里右键「桌面」→「属性」→「位置」，可以把整个桌面搬到 D 盘。',
+    ].join('\n'),
+    steps: [
+      { check: 'disk.system-free-space', fixes: ['disk.cleanup-temp', 'disk.storage-sense-on'] },
+      { check: 'disk.hibernation-file', fixes: ['disk.hibernation-reduce'] },
+      { check: 'disk.wechat-files', fixes: [] },
+      { check: 'disk.windows-old', fixes: [] },
+    ],
+  },
+  {
+    id: 'printer-share',
+    title: '打印机共享连不上',
+    summary: '连共享打印机时报 0x0000011b、0x00000709，或者找不到共享的打印机。',
+    keywords: ['打印机', '打印', '共享打印机', '打印机连不上', '找不到打印机', '打印不了', '0x0000011b', '11b', '0x00000709', '709'],
+    maturity: 'guide',
+    causes: [
+      'Windows 更新加强了打印安全，老的共享方式被拦住了（0x0000011b）',
+      'Win11 22H2 以后，连接旧系统共享的打印机会报 709',
+      '网络发现或打印机共享没有开',
+      '打印服务（Print Spooler）没有运行',
+    ],
+    guide: [
+      '先分清你是哪一边：',
+      '· 主机：打印机用 USB 线连在这台电脑上，共享给别人用。',
+      '· 连接的电脑：要去连别人共享出来的打印机。',
+      '',
+      '在主机上：',
+      '1. 打开「设置 → 蓝牙和其他设备 → 打印机和扫描仪」，点开打印机，选「打印机属性 → 共享」，勾选「共享这台打印机」。',
+      '2. 记下这台电脑的名字：「设置 → 系统 → 系统信息」里的「设备名称」。',
+      '',
+      '在连接的电脑上：',
+      '1. 按 Win + R，输入两个反斜杠加主机的名字，例如 \\\\DESKTOP-ABC，然后回车。',
+      '2. 双击共享的打印机，等它装好驱动。',
+      '',
+      '最省心的办法：如果打印机本身有网口或 Wi-Fi，直接按 IP 地址添加它（「添加设备 → 手动添加 → 使用 IP 地址或主机名添加打印机」），就不用再折腾共享了。',
+    ].join('\n'),
+    steps: [
+      { check: 'printer.spooler', fixes: [] },
+      { check: 'printer.network-discovery', fixes: ['network.discovery-on'] },
+      { check: 'printer.rpc-auth', fixes: ['printer.rpc-auth-compat'] },
+    ],
+  },
+]
+
+function getSymptom(id: string): MockSymptom {
+  const s = SYMPTOMS.find((x) => x.id === requireId(id))
+  if (!s) throw `找不到这个症状：${id}`
+  return s
+}
+
+// ─────────────────────────── 修改日志 ───────────────────────────
+
+/** 新的会话在前 */
+const sessions: JournalSession[] = []
+/** 这次打开小药箱以后的修改算一个会话；第一次真的改了东西时才出现在日志里 */
+const currentSessionId = uuid()
+let currentSession: JournalSession | null = null
+/** 「随机返回一次 drift」只演示一次 */
+let randomDriftShown = false
+/** Windows 默认 24 小时内只允许建一个还原点 */
+let restorePointMade = false
+
+interface EntryOptions {
+  error?: string | null
+  /** 程序在改的过程中退出了：日志里只有 apply、没有 commit，状态不确定 */
+  pending?: boolean
+}
+
+/** 和后端的规则一样：没撤销过、改成功了（或者状态不确定），而且功能本身能撤销 */
+function canUndo(e: JournalEntryView): boolean {
+  const reversible = FEATURES.get(e.feature)?.summary.reversible ?? false
+  return !e.undone && (e.ok || e.pending) && reversible
+}
+
+function makeEntry(
+  session: JournalSession,
+  f: MockFeature,
+  target: string,
+  before: string,
+  after: string,
+  timeMs: number,
+  opts: EntryOptions = {},
+): JournalEntryView {
+  const error = opts.error ?? null
+  const pending = opts.pending ?? false
+  const entry: JournalEntryView = {
+    id: uuid(),
+    sessionId: session.id,
+    time: iso(timeMs),
+    feature: f.summary.id,
+    featureTitle: f.summary.title,
+    target,
+    before,
+    after,
+    ok: error === null && !pending,
+    pending,
+    undone: false,
+    undoneAt: null,
+    canUndo: false,
+    error,
+  }
+  entry.canUndo = canUndo(entry)
+  session.entries.push(entry)
+  return entry
+}
+
+/** 失败的那一步本身也会按原值退回（引擎记一条 rollback） */
+function markRolledBack(entry: JournalEntryView, timeMs: number): void {
+  entry.undone = true
+  entry.undoneAt = iso(timeMs)
+  entry.canUndo = false
+}
+
+/** 预置的历史记录：按时间顺序「执行」，这样设置值和日志对得上 */
+function seedJournal(): void {
+  for (const f of FEATURE_LIST) {
+    for (const c of f.changes) values.set(c.target, c.initial)
+  }
+
+  const seed = (session: JournalSession, featureId: string, changeIndex: number, timeMs: number) => {
+    const f = getFeature(featureId)
+    const c = f.changes[changeIndex]
+    if (!c) throw new Error(`示例数据有误：${featureId} 没有第 ${changeIndex} 项改动`)
+    const entry = makeEntry(session, f, c.target, valueOf(c.target), c.planned, timeMs)
+    if (!f.oneShot) values.set(c.target, c.planned)
+    return entry
+  }
+
+  const now = Date.now()
+
+  // 较早的一次：6 天前
+  const aStart = now - 6 * DAY - 5 * 60 * MINUTE
+  const a: JournalSession = { id: uuid(), startedAt: iso(aStart), entries: [] }
+  seed(a, 'explorer.classic-context-menu', 0, aStart + 1 * MINUTE)
+  seed(a, 'desktop.show-this-pc', 0, aStart + 2 * MINUTE)
+  const aligned = seed(a, 'taskbar.align-left', 0, aStart + 3 * MINUTE)
+  seed(a, 'network.dns-public', 0, aStart + 12 * MINUTE)
+  const hp = getFeature('power.high-performance')
+  const hpChange = hp.changes[0]
+  if (hpChange) {
+    const t = aStart + 14 * MINUTE
+    const failed = makeEntry(a, hp, hpChange.target, valueOf(hpChange.target), '没有改动', t, {
+      error: hp.failWith ?? '执行失败',
+    })
+    markRolledBack(failed, t)
+  }
+  // 任务栏靠左后来被撤销了
+  values.set(aligned.target, aligned.before)
+  aligned.undone = true
+  aligned.undoneAt = iso(aStart + 9 * MINUTE)
+  aligned.canUndo = false
+
+  // 较近的一次：2 天前。「关闭推荐广告」改到第二项时小药箱被强行关掉了：
+  // 第一项改好了，第二项状态不确定，第三项没来得及改。所以常用设置里会显示「部分开启」。
+  const bStart = now - 2 * DAY - 3 * 60 * MINUTE
+  const b: JournalSession = { id: uuid(), startedAt: iso(bStart), entries: [] }
+  seed(b, 'start.disable-recommendations', 0, bStart + 1 * MINUTE)
+  const recs = getFeature('start.disable-recommendations')
+  const interrupted = recs.changes[1]
+  if (interrupted) {
+    makeEntry(b, recs, interrupted.target, valueOf(interrupted.target), '（不确定）', bStart + 1 * MINUTE + 2000, {
+      pending: true,
+    })
+  }
+  seed(b, 'network.dns-flush', 0, bStart + 4 * MINUTE)
+
+  sessions.push(b, a)
+
+  // 随机挑较早那次里的一项，假装后来被别的程序改回去了（漂移），
+  // 这样「撤销这次的全部修改」时能看到被跳过的项目。
+  const candidates = a.entries.filter((e) => canUndo(e) && !e.pending)
+  const drifted = candidates[randomInt(0, candidates.length - 1)]
+  if (drifted) values.set(drifted.target, drifted.before)
+}
+
+seedJournal()
+
+function restorePointNote(f: MockFeature): string {
+  if (f.restorePointFails) {
+    return '没能创建还原点：这台电脑的「系统还原」没有开启。修改日志照样记下了原来的状态，随时可以恢复。'
+  }
+  if (restorePointMade) {
+    return 'Windows 24 小时内只允许建一个还原点，今天已经建过了，这次没有再建。修改日志照样记下了原来的状态，随时可以恢复。'
+  }
+  restorePointMade = true
+  return `已创建还原点「电脑小药箱：${f.summary.title}之前」。`
+}
+
+function findEntry(entryId: string): JournalEntryView {
+  for (const s of sessions) {
+    const e = s.entries.find((x) => x.id === entryId)
+    if (e) return e
+  }
+  throw `找不到这条修改记录：${entryId}`
+}
+
+function ensureSession(): JournalSession {
+  if (!currentSession) {
+    currentSession = { id: currentSessionId, startedAt: iso(Date.now()), entries: [] }
+    sessions.unshift(currentSession)
+  }
+  return currentSession
+}
+
+/** 「别的程序」把值改掉了：改成一个和小药箱写入的值不同的值 */
+function simulateDrift(entry: JournalEntryView): void {
+  const other = entry.before !== entry.after ? entry.before : '（被别的程序改过）'
+  values.set(entry.target, other)
+}
+
+function driftResult(entry: JournalEntryView, skipped: boolean): UndoResult {
+  const now = valueOf(entry.target)
+  return {
+    entryId: entry.id,
+    ok: false,
+    drift: true,
+    message: skipped
+      ? `「${entry.featureTitle}」后来被改过（现在是 ${now}，不是小药箱改成的 ${entry.after}），已跳过。`
+      : `现在的值是 ${now}，不是小药箱当初改成的 ${entry.after}。`,
+    error: null,
+  }
+}
+
+function undoOne(entry: JournalEntryView, force: boolean, inSession: boolean): UndoResult {
+  if (entry.undone) {
+    return { entryId: entry.id, ok: false, drift: false, message: '这一项已经恢复过了。', error: null }
+  }
+  if (!canUndo(entry)) {
+    const f = FEATURES.get(entry.feature)
+    if (f && !f.summary.reversible) {
+      return { entryId: entry.id, ok: false, drift: false, message: '这一项不能撤销。', error: f.summary.irreversibleReason }
+    }
+    return { entryId: entry.id, ok: false, drift: false, message: '这一项当初就没有改成，不需要恢复。', error: null }
+  }
+  // 状态不确定的记录直接按修改前的值恢复，不核对
+  if (!force && !entry.pending) {
+    if (valueOf(entry.target) !== entry.after) return driftResult(entry, inSession)
+    // 单条撤销时随机来一次漂移，好演示「被改过，是否仍要撤销」
+    if (!inSession && !randomDriftShown && Math.random() < 0.5) {
+      randomDriftShown = true
+      simulateDrift(entry)
+      return driftResult(entry, false)
+    }
+  }
+  values.set(entry.target, entry.before)
+  entry.undone = true
+  entry.undoneAt = iso(Date.now())
+  entry.canUndo = false
+  let message: string
+  if (inSession) message = `已恢复：${entry.featureTitle}`
+  else if (entry.pending) message = `已按修改前的记录恢复：${entry.target} 设为 ${entry.before}。`
+  else message = `已恢复原状：${entry.target} 改回了 ${entry.before}。`
+  return { entryId: entry.id, ok: true, drift: false, message, error: null }
+}
+
+// ─────────────────────────── 诊断报告 ───────────────────────────
+
+const REPORT_STATUS: Record<CheckResult['status'], string> = {
+  ok: '正常',
+  advice: '建议处理',
+  manual: '需要人工',
+  unknown: '没查出来',
+  na: '不适用',
+}
+
+function buildReport(): string {
+  const profile = PROFILES.healthcheck
+  const results = (profile?.checks ?? []).map(runMockCheck).filter((r) => r.status !== 'na')
+  const order = { manual: 0, advice: 1, unknown: 2, ok: 3, na: 4 } as const
+  results.sort((x, y) => order[x.status] - order[y.status])
+  const okTitles = results.filter((r) => r.status === 'ok').map((r) => r.title)
+
+  const lines: string[] = [
+    '电脑小药箱 诊断报告',
+    `生成时间：${localTime(Date.now())}`,
+    `小药箱版本：${SYSTEM.appVersion}（数据版本 ${SYSTEM.catalogVersion}）`,
+    '',
+    '【这台电脑】',
+    `系统：${SYSTEM.osCaption.replace(/^Microsoft\s+/, '')}，版本号 ${SYSTEM.build}`,
+    `以管理员身份运行：${SYSTEM.isAdmin ? '是' : '否'}`,
+    '用户名：[已隐藏]',
+    '电脑名：[已隐藏]',
+    'CPU：Intel Core i5-10400（6 核 12 线程）',
+    '内存：16 GB',
+    '系统盘：WDC WD10EZEX（机械硬盘，1 TB），序列号 [已隐藏]',
+    '',
+    '【网络】',
+    '网卡：以太网（有线，1000 Mbps）',
+    'IP 地址：[已隐藏]    MAC 地址：[已隐藏]    Wi-Fi 名称：[已隐藏]',
+    `系统代理：${valueOf(T.proxyEnable) === 'DWORD 0' ? '没有开' : '开着，指向 127.0.0.1:7890（没有程序在监听）'}`,
+    `DNS：${valueOf(T.dns)}`,
+    '',
+    '【体检】',
+  ]
+  for (const r of results) {
+    if (r.status === 'ok') continue
+    lines.push(`${REPORT_STATUS[r.status]} · ${r.title}：${r.message}`)
+    if (r.error) lines.push(`    出错信息：${r.error}`)
+  }
+  if (okTitles.length > 0) lines.push(`正常 · ${okTitles.join('、')}`)
+
+  lines.push('', '【最近的修改】')
+  const recent = sessions.filter((s) => s.entries.length > 0).slice(0, 3)
+  if (recent.length === 0) lines.push('没有修改记录。')
+  for (const s of recent) {
+    lines.push(`${localTime(Date.parse(s.startedAt))} 开始，共 ${s.entries.length} 项：`)
+    for (const e of s.entries) {
+      if (e.pending) {
+        lines.push(`  · ${e.featureTitle}：${e.before} → ？（改到一半程序退出了，状态不确定）${e.undone ? '（已恢复原状）' : ''}`)
+        continue
+      }
+      const state = !e.ok ? '（没有改成）' : e.undone ? '（已恢复原状）' : ''
+      lines.push(`  · ${e.featureTitle}：${e.before} → ${e.after}${state}`)
+    }
+  }
+
+  lines.push('', '——', '本报告已去掉用户名、电脑名、IP / MAC 地址、Wi-Fi 名称和序列号。', '报告只保存在这台电脑上，小药箱不会自动上传。')
+  return lines.join('\n')
+}
+
+// ─────────────────────────── 命令 ───────────────────────────
+
+type Handlers = { [K in CommandName]: (args: CommandArgs<K>) => CommandResult<K> }
+
+const handlers: Handlers = {
+  system_info: () => SYSTEM,
+
+  catalog_summary: (): CatalogSummary => ({
+    profiles: Object.entries(PROFILES).map(([id, p]) => ({ id, title: p.title, checkCount: p.checks.length })),
+    symptoms: SYMPTOMS.map((s) => ({ id: s.id, title: s.title, summary: s.summary, keywords: s.keywords, maturity: s.maturity })),
+    features: FEATURE_LIST.map((f) => f.summary),
+  }),
+
+  symptom_detail: ({ id }): SymptomDetail => {
+    const s = getSymptom(id)
+    return {
+      id: s.id,
+      title: s.title,
+      summary: s.summary,
+      keywords: s.keywords,
+      maturity: s.maturity,
+      causes: s.causes,
+      guide: s.guide,
+      steps: s.steps.map((step) => ({
+        check: step.check,
+        checkTitle: CHECKS[step.check]?.title ?? step.check,
+        stopOn: step.stopOn ?? [],
+        fixes: step.fixes.map((fid) => getFeature(fid).summary),
+      })),
+    }
+  },
+
+  run_profile: ({ id }) => {
+    const profile = PROFILES[requireId(id)]
+    if (!profile) throw `找不到这个检测清单：${id}`
+    return profile.checks.map(runMockCheck)
+  },
+
+  run_check: ({ id }) => runMockCheck(id),
+
+  feature_detect: ({ id }): FeatureState => {
+    const f = getFeature(id)
+    if (f.detectError) return { id, state: 'unknown', details: [], error: f.detectError }
+    const state = detectKind(f)
+    const details =
+      state === 'partial'
+        ? f.changes.map((c) => `${c.label ?? c.target}：${valueOf(c.target) === c.planned ? '已改好' : '还没改'}`)
+        : []
+    return { id, state, details, error: null }
+  },
+
+  feature_preview: ({ id }): Preview => {
+    const f = getFeature(id)
+    return {
+      feature: f.summary,
+      changes: f.changes.map((c) => ({ target: c.target, current: valueOf(c.target), planned: c.planned })),
+      // 本来就是好的功能不用改，也就不建还原点
+      willCreateRestorePoint: f.summary.risk !== 'safe' && pendingChanges(f).length > 0,
+      notes: f.notes,
+    }
+  },
+
+  feature_apply: ({ id }): ApplyResult => {
+    const f = getFeature(id)
+    const title = f.summary.title
+    const todo = pendingChanges(f)
+
+    // 已经是目标状态的改动不动，也不写日志；整个功能本来就是好的，直接返回「不用改」
+    if (todo.length === 0) {
+      return {
+        feature: id,
+        sessionId: currentSessionId,
+        entryIds: [],
+        ok: true,
+        verified: 'applied',
+        message: '这一项本来就是好的，不用改。',
+        reboot: 'none',
+        notes: [],
+        error: null,
+      }
+    }
+
+    const session = ensureSession()
+    const now = Date.now()
+    const notes: string[] = []
+    if (f.summary.risk !== 'safe') notes.push(restorePointNote(f))
+
+    if (f.failWith) {
+      const c = todo[0]
+      const entryIds: string[] = []
+      if (c) {
+        const failed = makeEntry(session, f, c.target, valueOf(c.target), '没有改动', now, { error: f.failWith })
+        markRolledBack(failed, now)
+        entryIds.push(failed.id)
+      }
+      return {
+        feature: id,
+        sessionId: session.id,
+        entryIds,
+        ok: false,
+        verified: f.detectError ? 'unknown' : detectKind(f),
+        message: `没有改成「${title}」，已经退回原样，这台电脑上的设置没有变。`,
+        reboot: 'none',
+        notes,
+        error: f.failWith,
+      }
+    }
+
+    const entryIds = todo.map((c) => {
+      const entry = makeEntry(session, f, c.target, valueOf(c.target), c.planned, now)
+      if (!f.oneShot) values.set(c.target, c.planned)
+      return entry.id
+    })
+    const verified: FeatureStateKind = f.verifyAs ?? (f.oneShot ? 'applied' : detectKind(f))
+    return {
+      feature: id,
+      sessionId: session.id,
+      entryIds,
+      ok: true,
+      verified,
+      message:
+        verified === 'applied'
+          ? `「${title}」已经生效。`
+          : '设置已经写进去了，但要重启电脑以后才能确认有没有生效。',
+      reboot: f.summary.reboot,
+      notes,
+      error: null,
+    }
+  },
+
+  // canUndo 每次现算，和后端一样由「后端」决定显不显示「恢复原状」
+  journal_list: () => sessions.map((s) => ({ ...s, entries: s.entries.map((e) => ({ ...e, canUndo: canUndo(e) })) })),
+
+  journal_undo: ({ entryId, force }) => undoOne(findEntry(entryId), force, false),
+
+  // 同一会话里还能撤销的记录按倒序逐条撤销；漂移或出错的跳过，单独报告
+  journal_undo_session: ({ sessionId }) => {
+    const session = sessions.find((s) => s.id === sessionId)
+    if (!session) throw `找不到这次修改：${sessionId}`
+    return [...session.entries]
+      .reverse()
+      .filter(canUndo)
+      .map((e) => undoOne(e, false, true))
+  },
+
+  report_generate: () => buildReport(),
+}
+
+/** 和 Tauri 的 invoke 用法一样：等 300–800 毫秒后返回结果的副本；出错时 reject 一个字符串 */
+export async function mockInvoke<K extends CommandName>(cmd: K, args: CommandArgs<K>): Promise<CommandResult<K>> {
+  await sleep(randomInt(300, 800))
+  const handler: (a: CommandArgs<K>) => CommandResult<K> = handlers[cmd]
+  return clone(handler(args))
+}

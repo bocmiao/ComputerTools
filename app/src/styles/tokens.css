@@ -1,0 +1,127 @@
+/*
+ * 设计变量。所有颜色只在这个文件里定义，组件里一律用 var(--…)。
+ * 浅色为默认，深色跟随系统（prefers-color-scheme）。
+ */
+:root {
+  color-scheme: light dark;
+
+  --font-sans: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC",
+    "Source Han Sans SC", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace;
+
+  --text-base: 15px;
+  --text-small: 13.5px;
+  --text-large: 17px;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+
+  /* 页面 */
+  --color-bg: #f4f6f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0f2f6;
+  --color-nav-bg: #eaeef4;
+  --color-border: #dce1e8;
+  --color-border-strong: #c3cad5;
+  --color-text: #1f2329;
+  --color-text-muted: #59626f;
+
+  /* 主色 */
+  --color-primary: #2458c6;
+  --color-primary-hover: #1c49a8;
+  --color-primary-text: #ffffff;
+  --color-primary-soft: #dfe8fb;
+  --color-primary-soft-text: #1c4296;
+  --color-focus: #2f6fed;
+
+  /* 文字提示 */
+  --color-danger-text: #b3261e;
+  --color-success-text: #1d7340;
+
+  /* 醒目提示条（用别的管理员账户运行等） */
+  --color-warning-bg: #fff3dc;
+  --color-warning-border: #e9a53c;
+  --color-warning-text: #6d3d00;
+  --color-error-bg: #fdecec;
+  --color-error-border: #e79b97;
+  --color-error-text: #8c1d18;
+
+  /* 标签配色：ok 绿、advice 橙、manual 红（柔和）、unknown 灰 */
+  --tone-ok-bg: #e3f4e8;
+  --tone-ok-text: #1b6e3a;
+  --tone-ok-dot: #2f9e57;
+  --tone-advice-bg: #fff0dc;
+  --tone-advice-text: #94500a;
+  --tone-advice-dot: #ec8b16;
+  --tone-manual-bg: #fce8e6;
+  --tone-manual-text: #a3302a;
+  --tone-manual-dot: #de5b52;
+  --tone-unknown-bg: #eceff3;
+  --tone-unknown-text: #545d6b;
+  --tone-unknown-dot: #9aa3b0;
+  --tone-info-bg: #e2ebfc;
+  --tone-info-text: #1f4ea8;
+  --tone-info-dot: #3a6fd8;
+  --tone-neutral-bg: #eef0f4;
+  --tone-neutral-text: #4a5260;
+  --tone-neutral-dot: #a4acb8;
+
+  /* 阴影与遮罩 */
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-dialog: 0 18px 48px rgb(16 24 40 / 0.22);
+  --color-backdrop: rgb(17 24 39 / 0.42);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #15181d;
+    --color-surface: #1e2228;
+    --color-surface-2: #262b33;
+    --color-nav-bg: #191c21;
+    --color-border: #313741;
+    --color-border-strong: #454d5a;
+    --color-text: #e5e8ec;
+    --color-text-muted: #a0a9b6;
+
+    --color-primary: #7ea8ff;
+    --color-primary-hover: #9dbdff;
+    --color-primary-text: #0d1629;
+    --color-primary-soft: #22314f;
+    --color-primary-soft-text: #c2d5ff;
+    --color-focus: #8fb4ff;
+
+    --color-danger-text: #ff938b;
+    --color-success-text: #7fdc9c;
+
+    --color-warning-bg: #3a2b12;
+    --color-warning-border: #9c6c21;
+    --color-warning-text: #ffd699;
+    --color-error-bg: #3b1d1d;
+    --color-error-border: #8e3b37;
+    --color-error-text: #ffb4ae;
+
+    --tone-ok-bg: #173424;
+    --tone-ok-text: #86e0a4;
+    --tone-ok-dot: #44b86c;
+    --tone-advice-bg: #3a2b16;
+    --tone-advice-text: #ffc47f;
+    --tone-advice-dot: #f0a032;
+    --tone-manual-bg: #3d2121;
+    --tone-manual-text: #ffa39c;
+    --tone-manual-dot: #eb6e66;
+    --tone-unknown-bg: #2a3038;
+    --tone-unknown-text: #b8c0cc;
+    --tone-unknown-dot: #7e8896;
+    --tone-info-bg: #1f2d4a;
+    --tone-info-text: #a9c4ff;
+    --tone-info-dot: #6d98f2;
+    --tone-neutral-bg: #2a2f37;
+    --tone-neutral-text: #c0c7d2;
+    --tone-neutral-dot: #7b8490;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-dialog: 0 18px 48px rgb(0 0 0 / 0.55);
+    --color-backdrop: rgb(0 0 0 / 0.58);
+  }
+}

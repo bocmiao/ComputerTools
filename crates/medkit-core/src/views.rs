@@ -86,6 +86,8 @@ pub struct CatalogSummary {
 pub struct SymptomStep {
     pub check: String,
     pub check_title: String,
+    /// 这一步的结论在列表里时，不再往下查
+    pub stop_on: Vec<Status>,
     pub fixes: Vec<FeatureSummary>,
 }
 
