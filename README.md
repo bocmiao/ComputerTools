@@ -5,7 +5,7 @@
 - 普通人可以按症状点「上不了网」「C 盘满了」「打印机连不上」，自己查出原因、修好电脑。
 - 帮亲友修电脑的「懂哥」可以装在 U 盘里带着走，批量处理。
 
-> **项目还在规划阶段，目前没有可用的程序。** 名称、许可证等还没定，见[计划书第十三节](docs/plan.md#十三待拍板的事项附建议)。
+> **项目处于早期开发阶段（v0.0：只读体检），还不适合普通用户使用。** 名称还是暂定的，见[计划书第十三节](docs/plan.md#十三待拍板的事项附建议)。
 
 ## 原则
 
@@ -42,3 +42,34 @@
 
 - [执行计划书 v1.1](docs/plan.md)
 - [竞品调研与取长补短](docs/competitive-analysis.md)
+- [架构与数据格式规范](docs/architecture.md)
+- [功能编写指南](docs/feature-authoring.md)：写一个新的检测或修复
+- [参与贡献](CONTRIBUTING.md)
+
+## 开发
+
+需要：[Rust](https://rustup.rs/)（版本由 `rust-toolchain.toml` 固定）、Node.js 24 和 pnpm（`corepack enable`）。打包安装包需要在 Windows 上进行。
+
+```sh
+cargo test                              # 引擎测试；装了 pwsh 时还会跑脚本宿主协议测试
+cargo run -p medkit-data -- check       # 校验 catalog/ 和 scripts/
+pnpm install
+pnpm --dir app dev                      # 在浏览器里开发界面（用示例数据，不碰系统）
+pnpm tauri dev                          # Windows 上真实运行：要在「以管理员身份运行」的终端里执行
+pnpm tauri build                        # Windows 上：生成安装包
+```
+
+目录结构：
+
+| 目录 | 内容 |
+| --- | --- |
+| `catalog/` | 检测、修复、症状、检测清单（YAML） |
+| `scripts/` | PowerShell 脚本（只用 ASCII，兼容 Windows PowerShell 5.1） |
+| `crates/medkit-core/` | 引擎：数据校验、执行、修改日志与撤销、脚本宿主 |
+| `crates/medkit-data/` | 数据工具：校验、生成 JSON Schema、打包 |
+| `src-tauri/` | 桌面外壳 |
+| `app/` | 界面（Vue 3） |
+
+## 许可证
+
+代码、`catalog/` 和 `scripts/` 使用 [GPL-3.0-or-later](LICENSE)；`data/` 下的知识数据使用 [CC BY-SA 4.0](data/LICENSE)。

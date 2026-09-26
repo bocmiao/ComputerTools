@@ -1,0 +1,85 @@
+//! 界面能调用的命令。每个命令都在后台线程里跑，界面不会卡住；出错时返回给用户看的中文说明。
+
+use std::sync::Arc;
+
+use medkit_core::Engine;
+use medkit_core::views::{
+    ApplyResult, CatalogSummary, CheckResult, FeatureState, JournalSession, Preview, SymptomDetail, SystemInfo,
+    UndoResult,
+};
+use tauri::State;
+
+use crate::setup::AppState;
+
+type CmdResult<T> = Result<T, String>;
+
+async fn with_engine<T, F>(state: State<'_, AppState>, f: F) -> CmdResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce(&Engine) -> medkit_core::Result<T> + Send + 'static,
+{
+    let engine: Arc<Engine> = state.engine.clone()?;
+    tauri::async_runtime::spawn_blocking(move || f(&engine).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| format!("内部错误：{e}"))?
+}
+
+#[tauri::command]
+pub async fn system_info(state: State<'_, AppState>) -> CmdResult<SystemInfo> {
+    with_engine(state, |e| Ok(e.system_info())).await
+}
+
+#[tauri::command]
+pub async fn catalog_summary(state: State<'_, AppState>) -> CmdResult<CatalogSummary> {
+    with_engine(state, |e| Ok(e.catalog_summary())).await
+}
+
+#[tauri::command]
+pub async fn symptom_detail(state: State<'_, AppState>, id: String) -> CmdResult<SymptomDetail> {
+    with_engine(state, move |e| e.symptom_detail(&id)).await
+}
+
+#[tauri::command]
+pub async fn run_profile(state: State<'_, AppState>, id: String) -> CmdResult<Vec<CheckResult>> {
+    with_engine(state, move |e| e.run_profile(&id)).await
+}
+
+#[tauri::command]
+pub async fn run_check(state: State<'_, AppState>, id: String) -> CmdResult<CheckResult> {
+    with_engine(state, move |e| e.run_check(&id)).await
+}
+
+#[tauri::command]
+pub async fn feature_detect(state: State<'_, AppState>, id: String) -> CmdResult<FeatureState> {
+    with_engine(state, move |e| e.feature_detect(&id)).await
+}
+
+#[tauri::command]
+pub async fn feature_preview(state: State<'_, AppState>, id: String) -> CmdResult<Preview> {
+    with_engine(state, move |e| e.feature_preview(&id)).await
+}
+
+#[tauri::command]
+pub async fn feature_apply(state: State<'_, AppState>, id: String) -> CmdResult<ApplyResult> {
+    with_engine(state, move |e| e.feature_apply(&id)).await
+}
+
+#[tauri::command]
+pub async fn journal_list(state: State<'_, AppState>) -> CmdResult<Vec<JournalSession>> {
+    with_engine(state, |e| e.journal_list()).await
+}
+
+#[tauri::command]
+pub async fn journal_undo(state: State<'_, AppState>, entry_id: String, force: bool) -> CmdResult<UndoResult> {
+    with_engine(state, move |e| e.journal_undo(&entry_id, force)).await
+}
+
+#[tauri::command]
+pub async fn journal_undo_session(state: State<'_, AppState>, session_id: String) -> CmdResult<Vec<UndoResult>> {
+    with_engine(state, move |e| e.journal_undo_session(&session_id)).await
+}
+
+#[tauri::command]
+pub async fn report_generate(state: State<'_, AppState>) -> CmdResult<String> {
+    with_engine(state, |e| e.report_generate()).await
+}

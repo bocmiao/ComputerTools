@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "主窗口：只能调用小药箱自己的命令，不开放文件、Shell、网络等任何插件能力。",
+  "windows": ["main"],
+  "local": true,
+  "permissions": [
+    "allow-system-info",
+    "allow-catalog-summary",
+    "allow-symptom-detail",
+    "allow-run-profile",
+    "allow-run-check",
+    "allow-feature-detect",
+    "allow-feature-preview",
+    "allow-feature-apply",
+    "allow-journal-list",
+    "allow-journal-undo",
+    "allow-journal-undo-session",
+    "allow-report-generate"
+  ]
+}

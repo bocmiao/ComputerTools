@@ -1,0 +1,27 @@
+[package]
+name = "medkit"
+description = "电脑小药箱：帮普通人自己查修电脑小毛病"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+medkit-core.workspace = true
+
+[dependencies]
+tauri = { version = "2.11.6", features = [] }
+medkit-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_SystemInformation",
+    "Win32_UI_WindowsAndMessaging",
+] }

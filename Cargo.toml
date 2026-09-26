@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/medkit-core", "crates/medkit-data"]
+members = ["crates/medkit-core", "crates/medkit-data", "src-tauri"]
 default-members = ["crates/medkit-core", "crates/medkit-data"]
 
 [workspace.package]
