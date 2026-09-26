@@ -2,6 +2,8 @@
 # that it really comes up.
 #   - the main window appears and no error dialog is shown
 #   - WebView2 started for this app
+#   - the main window fits in the screen's work area (the runner's screen is only 1024x768,
+#     smaller than the default window size, like many budget laptops)
 #   - a second instance is refused instead of opening its own window
 # Also saves a screenshot for humans to look at.
 # Run with pwsh: the window title is Chinese and Windows PowerShell 5.1 would read this file
@@ -27,6 +29,15 @@ public static class SmokeWin {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT r, int size);
+    // The visible frame (DWMWA_EXTENDED_FRAME_BOUNDS), without the invisible resize borders.
+    public static int[] Bounds(IntPtr h) {
+        RECT r;
+        if (DwmGetWindowAttribute(h, 9, out r, Marshal.SizeOf(typeof(RECT))) != 0) { GetWindowRect(h, out r); }
+        return new[] { r.Left, r.Top, r.Right, r.Bottom };
+    }
     public static List<string[]> Of(uint pid) {
         var list = new List<string[]>();
         EnumWindows((h, l) => {
@@ -34,7 +45,7 @@ public static class SmokeWin {
             if (p == pid) {
                 var c = new StringBuilder(256); GetClassName(h, c, 256);
                 var t = new StringBuilder(256); GetWindowText(h, t, 256);
-                list.Add(new[] { c.ToString(), t.ToString(), IsWindowVisible(h) ? "1" : "0" });
+                list.Add(new[] { c.ToString(), t.ToString(), IsWindowVisible(h) ? "1" : "0", h.ToInt64().ToString() });
             }
             return true;
         }, IntPtr.Zero);
@@ -46,7 +57,7 @@ public static class SmokeWin {
 function Get-AppWindow {
     param([System.Diagnostics.Process]$Process)
     foreach ($w in [SmokeWin]::Of([uint32]$Process.Id)) {
-        [pscustomobject]@{ Class = $w[0]; Title = $w[1]; Visible = ($w[2] -eq '1') }
+        [pscustomobject]@{ Class = $w[0]; Title = $w[1]; Visible = ($w[2] -eq '1'); Handle = [IntPtr][long]$w[3] }
     }
 }
 
@@ -91,12 +102,22 @@ try {
     if ($webview.Count -eq 0) { throw 'no WebView2 process was started for the app' }
     Write-Output "WebView2 processes: $($webview.Count)"
 
+    # 3. The main window fits in the work area (not under the taskbar, not off the screen).
+    Add-Type -AssemblyName System.Windows.Forms
+    $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $b = [SmokeWin]::Bounds($main.Handle)
+    Write-Output ('main window {0},{1} - {2},{3}; work area {4},{5} - {6},{7}' -f $b[0], $b[1], $b[2], $b[3], $area.Left, $area.Top, $area.Right, $area.Bottom)
+    $slack = 2
+    if (($b[0] -lt $area.Left - $slack) -or ($b[1] -lt $area.Top - $slack) -or ($b[2] -gt $area.Right + $slack) -or ($b[3] -gt $area.Bottom + $slack)) {
+        throw 'the main window does not fit in the work area: part of it is off the screen or under the taskbar'
+    }
+
     # Give the page a moment to load and call the backend, then take a screenshot.
     Start-Sleep -Seconds 10
     if ($app.HasExited) { throw "the app exited after start-up with code $($app.ExitCode)" }
     Save-Screenshot -Path $Screenshot
 
-    # 3. A second instance is refused: it shows a dialog (or exits) and never opens its own window.
+    # 4. A second instance is refused: it shows a dialog (or exits) and never opens its own window.
     $second = Start-Process -FilePath $Exe -PassThru
     Start-Sleep -Seconds 8
     if (-not $second.HasExited) {
