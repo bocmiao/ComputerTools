@@ -1,0 +1,39 @@
+# 是否是单位管理的电脑。脚本：scripts/checks/system/managed-device.ps1
+# 三个判断，满足任意一个就是 managed：
+#   1. 加入了域：Win32_ComputerSystem.PartOfDomain
+#   2. 加入了 Microsoft Entra ID（Azure AD）：HKLM\SYSTEM\CurrentControlSet\Control\CloudDomainJoin\JoinInfo 下有子键
+#   3. 注册了 MDM（Intune 或别的 MDM）：HKLM\SOFTWARE\Microsoft\Enrollments 下有「像真的」注册项
+# 微软没有公开 Enrollments 键的格式。Windows 10/11 即使在家用电脑上也会建三十个左右的内部子键，
+# 其中几个也带 ProviderID（Local Authority、Cloud Authority、Deploy Authority、SC Authority、
+# MS Work Account、WMI_Bridge_Server、WMI_Bridge_SCCM_Server、Local_Management），所以只有同时满足
+#   ProviderID 不为空且不是上面这些内部名字、DiscoveryServiceFullURL 不为空、
+#   EnrollmentState 为 1（有这个值时；注销失败的旧注册项会留下别的状态）
+# 才算 MDM。Intune 的 ProviderID 是「MS DM Server」，Windows 声明式配置（MMP-C）是「Microsoft Device Management」。
+# 有注册项读不到、又没有别的证据时，脚本报错（显示「没查出来」），不猜成 personal。
+# 待真机验证：家庭中文版、只登录了微软账户、只在 Office 里加了工作账户（Entra 注册但没有 MDM）这几种情况都应该是 personal。
+id: system.managed-device
+schema_version: 1
+title: { zh-CN: 是否是单位管理的电脑 }
+description:
+  zh-CN: 看看这台电脑是不是由公司或学校统一管理（加入了域、Entra ID 或 MDM）。单位管理的电脑，很多设置会被自动改回去。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/managed-device.ps1
+results:
+  personal:
+    status: ok
+    message:
+      zh-CN: 这是一台个人电脑，没有被单位统一管理。
+  managed:
+    status: advice
+    message:
+      zh-CN: 这台电脑由单位（公司或学校）统一管理，很多设置会被单位的策略改回去。
+    fixer: helper
+    next:
+      zh-CN: 电脑有问题，先找单位的 IT 人员。不要自己去改单位下发的设置：改了也会被改回来，还可能违反单位的规定。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-computersystem
+  - https://learn.microsoft.com/en-us/entra/identity/devices/troubleshoot-device-dsregcmd
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm-diagnose-enrollment
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm-enrollment-of-windows-devices

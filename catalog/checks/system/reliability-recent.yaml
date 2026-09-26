@@ -1,0 +1,34 @@
+# 最近 7 天的程序崩溃和蓝屏。脚本：scripts/checks/system/reliability-recent.ps1
+# 数据来源：Win32_ReliabilityRecords（「可靠性监视器」背后的数据），按 TimeGenerated 过滤最近 7 天：
+#   Application Error / 1000：程序崩溃        Application Hang / 1002：程序无响应
+#   Microsoft-Windows-WER-SystemErrorReporting / 1001：蓝屏
+#   EventLog / 6008：意外关机（只作为事实 unexpected_shutdowns，不参与判断）
+# 返回 some 的条件（任务没有给阈值，这里自定）：蓝屏至少 1 次，或者崩溃 + 无响应至少 3 次。
+# 偶尔崩溃一次是正常的，不报（计划书原则 7：不制造焦虑）。
+# 崩溃最多的程序放在事实 top_app / top_app_count 里（没有程序崩溃时没有这两个事实）。
+# 待真机验证：精简系统上可靠性数据收集（RAC 计划任务）可能被关掉，这时查不到记录，会显示 quiet。
+id: system.reliability-recent
+schema_version: 1
+title: { zh-CN: 最近的崩溃和蓝屏 }
+description:
+  zh-CN: 看看最近 7 天有没有程序频繁崩溃、没有响应，或者出现过蓝屏。
+category: system
+requires_admin: false
+timeout_sec: 45
+probe:
+  script: checks/system/reliability-recent.ps1
+results:
+  quiet:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天没有频繁的程序崩溃，也没有蓝屏。"
+  some:
+    status: advice
+    message:
+      zh-CN: "最近 {days} 天：程序崩溃 {app_crashes} 次、程序没有响应 {app_hangs} 次、蓝屏 {bluescreens} 次。"
+    fixer: helper
+    next:
+      zh-CN: "总是同一个程序出问题的话，先把它更新到最新版或者重装。出现过蓝屏的，可能是驱动、内存或硬盘的问题，把诊断报告发给懂哥看看。想自己看详情，可以在开始菜单搜索「可靠性」，打开「查看可靠性历史记录」。"
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/windows/desktop/racwmiprov/win32-reliabilityrecords
+  - https://learn.microsoft.com/en-us/dotnet/api/system.management.managementdatetimeconverter.todmtfdatetime

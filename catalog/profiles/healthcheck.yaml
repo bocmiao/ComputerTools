@@ -1,0 +1,27 @@
+# 系统体检：按用户最关心的顺序排列。存储与硬盘 → 系统与更新 → 网络 → 安全 → 硬件。
+id: healthcheck
+schema_version: 1
+title: { zh-CN: 系统体检 }
+checks:
+  # 存储与硬盘
+  - disk.system-free-space
+  - disk.smart-health
+  - disk.error-events
+  # 系统与更新
+  - system.os-support
+  - system.pending-reboot
+  - system.reliability-recent
+  - boot.last-boot-duration
+  - system.winre-status
+  - system.managed-device
+  # 网络
+  - network.proxy-dead
+  # 安全
+  - security.bitlocker-status
+  - security.secureboot-ca2023
+  - security.tpm
+  # 硬件
+  - hardware.system-disk-type
+  - hardware.memory-size
+  - hardware.battery-health
+  - hardware.cpu-features

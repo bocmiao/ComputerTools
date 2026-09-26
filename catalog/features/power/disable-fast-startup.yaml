@@ -1,0 +1,36 @@
+# 关闭快速启动。HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power 的 HiberbootEnabled：
+# 0 = 关闭，1 = 开启（系统默认）。对应「控制面板 → 电源选项 → 选择电源按钮的功能 → 启用快速启动」。
+# 快速启动打开时，「关机」其实是把系统内核休眠到硬盘里：
+#   - 双系统时另一个系统会把这块硬盘当成「还在使用中」，读不了或者只能只读；
+#   - 驱动不会重新初始化，有的电脑关机再开机后 U 盘、网卡、蓝牙、声卡不正常，「重启」却是好的。
+# 下次关机时生效，不用立即重启。休眠文件被关掉（powercfg /h off）的电脑，快速启动本来就用不了。
+# 各版本（含家庭版）都有效。risk 按任务要求写 caution：冷开机会慢一些。
+id: power.disable-fast-startup
+schema_version: 1
+title: { zh-CN: 关闭快速启动 }
+description:
+  zh-CN: 让每次「关机」都是真正的完全关机。适合装了双系统（关机后另一个系统读不了这块硬盘），或者关机再开机后 U 盘、网卡、蓝牙等设备不正常、重启却正常的电脑。代价是从关机状态开机会慢几秒；「重启」本来就不受影响。下次关机时生效。
+category: power
+risk: caution
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power
+      name: HiberbootEnabled
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power
+      name: HiberbootEnabled
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/distinguishing-fast-startup-from-wake-from-hibernation
+  - https://learn.microsoft.com/en-us/answers/questions/5537465/how-to-disable-hibernation-and-fast-start-up-in-wi

@@ -1,0 +1,32 @@
+# 显示文件扩展名。HKCU\…\Explorer\Advanced 的 HideFileExt：0 = 显示，1 = 隐藏（系统默认）。
+# 对应「文件资源管理器 → 查看 → 显示 → 文件扩展名」这个勾选框，各版本（含家庭版）都有效。
+id: explorer.show-extensions
+schema_version: 1
+title: { zh-CN: 显示文件扩展名 }
+description:
+  zh-CN: 在资源管理器里显示 .docx、.exe 这类扩展名，更容易认出伪装成文档的病毒（比如「合同.pdf.exe」）。改文件名时注意别把扩展名删掉。
+category: explorer
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: HideFileExt
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: HideFileExt
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/common-file-name-extensions-in-windows-da4a4430-8e76-89c5-59f7-1cdbbc75cb01
+  - https://learn.microsoft.com/en-us/answers/questions/4053775/cant-hide-file-extensions
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

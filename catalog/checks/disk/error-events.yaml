@@ -1,0 +1,34 @@
+# 硬盘读写错误事件。脚本：scripts/checks/disk/error-events.ps1
+# 最近 30 天 System 日志里：
+#   disk 源：7（有坏块）、51（分页操作时出错）、153（读写超时后重试）
+#   Ntfs 源：55（文件系统结构损坏）
+# 有任意一条就返回 found。
+# 查询只按日志、事件 ID 和时间过滤，来源在脚本里比对：给 -FilterHashtable 传 ProviderName
+# 会先查来源的元数据，在部分系统上直接报错；而且 ID 55 也被 Kernel-Processor-Power 使用（每次开机都有）。
+# 已知的误报：直接拔掉 U 盘、移动硬盘也可能留下 51/153，所以文案里提醒了这一点。
+# 以后可以用事实 disk_numbers（出错的盘号）排除可移动盘。
+id: disk.error-events
+schema_version: 1
+title: { zh-CN: 硬盘读写错误 }
+description:
+  zh-CN: 查看系统日志里最近 30 天有没有硬盘坏道、读写失败的记录。
+category: disk
+requires_admin: true
+timeout_sec: 30
+probe:
+  script: checks/disk/error-events.ps1
+results:
+  none:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天没有硬盘读写出错的记录。"
+  found:
+    status: manual
+    message:
+      zh-CN: "最近 {days} 天系统记录了 {total} 次硬盘读写错误。硬盘可能出现坏道，请先备份重要文件。"
+    fixer: hardware
+    next:
+      zh-CN: "先把照片、文档、聊天记录等重要文件备份到别的地方，再找懂哥或售后检测硬盘。如果最近直接拔过 U 盘或移动硬盘，也可能是它们留下的记录。"
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/backup-and-storage/troubleshoot-data-corruption-and-disk-errors
+  - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent

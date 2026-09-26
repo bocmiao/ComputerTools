@@ -1,0 +1,41 @@
+# Win11 恢复经典右键菜单。
+# 在 HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32 写一个
+# 空字符串的默认值（name ""）。关键是「值为空字符串」：只建键、默认值是「(数值未设置)」时不起作用，
+# 所以恢复默认（windows_default）只要删掉这个默认值就能回到 Win11 新菜单，空键留着也无妨；
+# 「撤销」时引擎会连同它新建的空键一起删掉。
+# 给引擎的备注：HKCU\Software\Classes 实际是登录用户的 UsrClass.dat（HKU\<SID>_Classes）；
+# 登录用户的配置单元加载时，HKU\<SID>\Software\Classes 是指向它的链接，按 HKU\<SID>\… 写即可。
+# 写完要重启资源管理器才生效。按社区反馈 21H2 到 25H2 都有效（微软没有文档化这个开关），
+# 微软以后可能取消这个兼容行为，需要随新版本回归测试。
+id: explorer.classic-context-menu
+schema_version: 1
+title: { zh-CN: 恢复经典右键菜单（Win11） }
+description:
+  zh-CN: 把 Windows 11 精简过的右键菜单换回 Windows 10 那种完整菜单，不用每次再点「显示更多选项」。只是换个样子，不影响功能；不习惯随时可以改回来。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+applies_to:
+  min_build: 22000
+  max_build: null
+  editions: []
+actions:
+  - registry:
+      key: 'HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32'
+      name: ""
+      type: string
+      value: ""
+windows_default:
+  - registry:
+      key: 'HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32'
+      name: ""
+      delete: true
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/answers/questions/4045956/unable-to-change-win11-context-menu-with-registry
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

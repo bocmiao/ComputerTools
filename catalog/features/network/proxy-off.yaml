@@ -1,0 +1,52 @@
+# 关掉失效的系统代理。HKCU\…\Internet Settings 的 ProxyEnable：0 = 不用代理服务器（系统默认）。
+# 只关「使用代理服务器」开关，不删 ProxyServer 里的地址，也不动 PAC 自动配置脚本（AutoConfigURL）。
+# 要修的故障状态不是系统默认状态，所以另外写了 break_actions：代理开着、指向 127.0.0.1:9
+# （discard 端口，平时没有程序监听），检测 network.proxy-dead 会判断为 dead。
+# windows_default 和 actions 相同：系统默认就是不开代理。
+# 给引擎的备注（待真机验证）：WinINet 实际读的是 Internet Settings\Connections\DefaultConnectionSettings
+# 这个二进制值，ProxyEnable 是它的「旧式」副本；直接改注册表后，要等 WinINet 下次重新读取设置时才同步过去。
+# 建议写完后调用 InternetSetOption(INTERNET_OPTION_SETTINGS_CHANGED / INTERNET_OPTION_REFRESH) 通知系统，
+# 并在真机上确认浏览器能立刻恢复。已经打开的浏览器可能要重开。
+id: network.proxy-off
+schema_version: 1
+title: { zh-CN: 关掉失效的系统代理 }
+description:
+  zh-CN: 关闭 Windows 的「使用代理服务器」开关，让浏览器直接上网。梯子、加速器卸载或崩溃后，经常把这个开关留在打开状态，导致网页打不开。改完以后，已经打开的浏览器可能要关掉重开才会生效；以后再用梯子时，它会自己重新打开代理。
+category: network
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: none
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings
+      name: ProxyEnable
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings
+      name: ProxyEnable
+      type: dword
+      value: 0
+break_actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings
+      name: ProxyEnable
+      type: dword
+      value: 1
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings
+      name: ProxyServer
+      type: string
+      value: "127.0.0.1:9"
+undo: auto
+verify: network.proxy-dead
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/wininet/enabling-internet-functionality
+  - https://learn.microsoft.com/en-us/windows/win32/wininet/setting-and-retrieving-internet-options
+  - https://learn.microsoft.com/en-us/archive/blogs/ieinternals/understanding-web-proxy-configuration
+  - https://support.microsoft.com/en-us/windows/use-a-proxy-server-in-windows-03096c53-0554-4ffe-b6ab-8b1deee8dae1

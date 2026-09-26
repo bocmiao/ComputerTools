@@ -44,6 +44,7 @@
 - [竞品调研与取长补短](docs/competitive-analysis.md)
 - [架构与数据格式规范](docs/architecture.md)
 - [功能编写指南](docs/feature-authoring.md)：写一个新的检测或修复
+- [真机验证清单](docs/real-machine-checklist.md)：需要在真实电脑上确认的地方
 - [参与贡献](CONTRIBUTING.md)
 
 ## 开发

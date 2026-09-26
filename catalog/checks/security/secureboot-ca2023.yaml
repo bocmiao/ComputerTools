@@ -1,0 +1,51 @@
+# 安全启动证书是否更新到 2023 版。脚本：scripts/checks/security/secureboot-ca2023.ps1
+# 1. Confirm-SecureBootUEFI：True = 开着，False = 关着（UEFI 电脑）；传统 BIOS 或主板不支持安全启动时
+#    抛出 PlatformNotSupportedException（「Cmdlet not supported on this platform」，错误码 0xC0000002），
+#    脚本据此返回 legacy。没有管理员权限时抛出「Access was denied」，照常报错。
+# 2. 安全启动开着时：Get-SecureBootUEFI -Name db 取字节，按 ASCII 解码后查找「Windows UEFI CA 2023」
+#    （微软公布的检查方法）。
+# 事实里另外带上 HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\Servicing 的 UEFICA2023Status、
+# WindowsUEFICA2023Capable（微软说明这两个值「仅供参考」，所以不参与判断）。
+# 背景：微软 2011 年的安全启动证书在 2026 年陆续到期（Windows Production PCA 2011 是 2026-10-19）。
+# 待真机验证：传统 BIOS 电脑上异常的具体类型（中文系统的异常消息是本地化的，所以同时匹配错误码 0xC0000002）。
+id: security.secureboot-ca2023
+schema_version: 1
+title: { zh-CN: 安全启动证书（2023 版） }
+description:
+  zh-CN: 看看安全启动有没有开启，以及主板里的安全启动证书有没有更新到微软 2023 年的新证书。
+category: security
+requires_admin: true
+probe:
+  script: checks/security/secureboot-ca2023.ps1
+results:
+  updated:
+    status: ok
+    message:
+      zh-CN: 安全启动已开启，证书也已经更新到 2023 版（Windows UEFI CA 2023）。
+  not-updated:
+    status: advice
+    message:
+      zh-CN: 安全启动证书还没有更新到 2023 版。微软 2011 年的旧证书在 2026 年陆续到期，到期后电脑照样能开机，但以后可能收不到开机相关的安全更新。
+    fixer: system
+    next:
+      zh-CN: 一般不用自己动手：保持 Windows 更新开着，系统会自动更新证书。如果过了很久还是没更新，去电脑品牌官网下载安装最新的 BIOS（主板固件）更新。
+  secureboot-off:
+    status: advice
+    message:
+      zh-CN: 安全启动（Secure Boot）没有开启。Windows 11 要求开启安全启动，关着它开机过程也少了一层保护。
+    fixer: user
+    next:
+      zh-CN: 重启电脑进入 BIOS 设置（开机时连续按 F2、Del 或 F12，不同品牌按键不同），在「Security」或「Boot」页面把「Secure Boot」改成「Enabled」，保存后重启。拿不准就找懂哥。
+  legacy:
+    status: advice
+    message:
+      zh-CN: 电脑是用传统 BIOS（Legacy）方式启动的，或者主板不支持安全启动，所以用不了安全启动，也不满足 Windows 11 的要求。
+    fixer: helper
+    next:
+      zh-CN: 如果主板支持 UEFI，可以请懂哥先用系统自带的 mbr2gpt 工具把系统盘转换成 GPT 格式，再在 BIOS 里改成 UEFI 启动、打开安全启动。这一步有风险，操作前一定要备份重要文件。
+references:
+  - https://support.microsoft.com/en-us/topic/windows-secure-boot-certificate-expiration-and-ca-updates-7ff40d33-95dc-4c3c-8725-a9b95457578e
+  - https://support.microsoft.com/en-us/topic/registry-key-updates-for-secure-boot-windows-devices-with-it-managed-updates-a7be69c9-4634-42e1-9ca1-df06f43f360d
+  - https://learn.microsoft.com/en-us/powershell/module/secureboot/confirm-securebootuefi
+  - https://learn.microsoft.com/en-us/powershell/module/secureboot/get-securebootuefi
+  - https://learn.microsoft.com/en-us/windows/deployment/mbr-to-gpt

@@ -1,0 +1,32 @@
+# Windows 恢复环境（WinRE）是否启用。脚本：scripts/checks/system/winre-status.ps1
+# 读 %windir%\System32\Recovery\ReAgent.xml 里的 <InstallState state="…"/>：1 = 已启用，0 = 未启用。
+# 不解析 reagentc /info 的文字输出（中英文系统措辞不同）。
+# 待真机验证：
+#   - 微软没有公开 ReAgent.xml 的格式。InstallState 的含义来自社区工具（OSDeploy 的 Get-ReAgentXml、
+#     Intune 修复脚本等），需要在 reagentc /disable、/enable 前后各看一次文件，确认和 reagentc /info 一致。
+#   - ReAgent.xml 不存在（精简系统、从没配置过 WinRE？）时目前报错，显示「没查出来」。
+#   - InstallState=1 但 WinreLocation 的 path 为空时，目前算 enabled（事实 winre_location 会缺失）。
+id: system.winre-status
+schema_version: 1
+title: { zh-CN: Windows 恢复环境 }
+description:
+  zh-CN: 看看 Windows 恢复环境（WinRE）有没有开启。系统坏了以后，「重置此电脑」和开机自动修复都要靠它。
+category: system
+requires_admin: true
+probe:
+  script: checks/system/winre-status.ps1
+results:
+  enabled:
+    status: ok
+    message:
+      zh-CN: Windows 恢复环境正常，系统出问题时可以用「重置此电脑」和启动修复。
+  disabled:
+    status: advice
+    message:
+      zh-CN: Windows 恢复环境（WinRE）没有开启，系统出问题时「重置此电脑」和开机自动修复都用不了。
+    fixer: helper
+    next:
+      zh-CN: 请懂哥用管理员身份打开命令提示符，运行 reagentc /enable 重新开启。如果提示失败，多半是恢复分区太小或者被删掉了，需要懂哥修复恢复分区。
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/reagentc-command-line-options
+  - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/windows-recovery-environment--windows-re--technical-reference

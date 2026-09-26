@@ -1,0 +1,50 @@
+# 关闭开始菜单 / 任务栏搜索里的网络（必应）搜索结果。
+# 用的是组策略「关闭在文件资源管理器搜索框中显示最近的搜索条目」对应的注册表值：
+#   HKCU\Software\Policies\Microsoft\Windows\Explorer 的 DisableSearchBoxSuggestions = 1
+# 从 Win10 2004（19041，需要 2021 年 8 月的 KB5005101 或更新的累积更新）起，Windows 搜索也读这个值，
+# 不再显示网页结果和搜索建议；Win11 全系有效。Win11Debloat（同时支持 Win10 和 Win11）也只用这一个值。
+# 为什么不拆成 Win10 / Win11 两个功能：
+#   - 同一个值覆盖 Win10 2004 起和 Win11，所以用 applies_to.min_build = 19041 一个功能就够了；
+#   - 老办法 HKCU\Software\Microsoft\Windows\CurrentVersion\Search 的 BingSearchEnabled = 0 只对
+#     Win10 1809 ~ 1909 可靠，这些版本早已停止支持，不再提供；
+#   - 策略 ConnectedSearchUseWeb（「不要搜索 Web 或在搜索中显示 Web 结果」）按微软 Policy CSP 文档
+#     只对企业版和教育版生效，专业版、家庭版无效，所以不用它。
+# 家庭版存疑：微软 Policy CSP 文档里 DisableSearchBoxSuggestions 列的适用版本是专业版 / 企业版 / 教育版
+# （那是「能不能用 MDM 下发」），社区测试（Win11Debloat、Pureinfotech 等）说家庭版直接写注册表也有效。
+# 需要在家庭中文版真机上验证。
+# 副作用：资源管理器搜索框不再显示最近的搜索记录；部分版本的搜索框里 Copilot 按钮也会消失。
+# HKCU\Software\Policies 普通用户没有写权限，所以 requires_admin: true；要注销或重启后生效。
+id: start.disable-web-search
+schema_version: 1
+title: { zh-CN: 关闭开始菜单里的网络搜索结果 }
+description:
+  zh-CN: 在开始菜单或任务栏里搜索时，只显示电脑上的应用、文件和设置，不再夹带必应（Bing）的网页结果和推荐，搜索也会快一些。副作用是资源管理器的搜索框不再显示最近的搜索记录。改完要注销或重启才生效。
+category: start
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: logoff
+target: current-user
+applies_to:
+  min_build: 19041
+  max_build: null
+  editions: []
+actions:
+  - registry:
+      key: HKCU\Software\Policies\Microsoft\Windows\Explorer
+      name: DisableSearchBoxSuggestions
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Policies\Microsoft\Windows\Explorer
+      name: DisableSearchBoxSuggestions
+      delete: true
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-windowsexplorer
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-search
+  - https://github.com/Raphire/Win11Debloat/blob/master/Regfiles/Disable_Bing_Cortana_In_Search.reg
+  - https://woshub.com/disable-web-search-windows-start-menu/

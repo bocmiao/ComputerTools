@@ -116,6 +116,10 @@ jobs:
           rustup show
 
       - name: 引擎测试（真实注册表、服务、powershell.exe；含所有检测的冒烟测试和修复的往返测试）
+        env:
+          # CI 的运行环境是 Windows Server 虚拟机，这些检测在那里本来就查不了（只提示，不算失败）：
+          # - system.os-support：只判断桌面版 Windows 的支持期限，服务器版会明确报「不在范围内」
+          MEDKIT_SMOKE_EXPECTED_FAILURES: system.os-support
         run: cargo test -p medkit-core -- --include-ignored --nocapture
 
   windows-build:

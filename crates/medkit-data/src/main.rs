@@ -6,6 +6,7 @@ use std::process::ExitCode;
 use medkit_core::bundle::Bundle;
 use medkit_core::catalog::{Problem, Severity};
 use medkit_core::model::{Check, Feature, Profile, Symptom};
+use medkit_core::script::HOST_SCRIPT;
 
 const USAGE: &str = "\
 用法：
@@ -89,8 +90,12 @@ fn report(problems: &[Problem]) {
 }
 
 fn check(root: &Path) -> Option<Bundle> {
-    if !root.join("catalog").is_dir() {
-        eprintln!("{} 下面没有 catalog/ 目录；请在仓库根目录运行，或者用 --root 指定", root.display());
+    // 用宿主脚本认仓库根目录：它总是在，catalog/ 在项目早期可能还是空的
+    if !root.join("scripts").join(HOST_SCRIPT).is_file() {
+        eprintln!(
+            "{} 不像是仓库根目录（找不到 scripts/{HOST_SCRIPT}）；请在仓库根目录运行，或者用 --root 指定",
+            root.display()
+        );
         return None;
     }
     let (bundle, problems) = Bundle::from_repo(root);

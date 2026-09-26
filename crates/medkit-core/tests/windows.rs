@@ -112,19 +112,44 @@ fn services_can_be_read() {
     assert_eq!(p.service_get("MedkitNoSuchService").unwrap(), None);
 }
 
+/// 把一个服务的启动类型依次改成 `types`，每次读回核对，最后恢复原样。
+fn cycle_start_types(p: &WindowsPlatform, name: &str, types: &[StartType]) {
+    let original = p.service_get(name).unwrap().unwrap_or_else(|| panic!("没有服务 {name}"));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        for &st in types {
+            p.service_set(name, st).unwrap_or_else(|e| panic!("{name} → {st:?}：{e}"));
+            assert_eq!(p.service_get(name).unwrap(), Some(st), "{name} → {st:?}");
+        }
+    }));
+    p.service_set(name, original).unwrap();
+    assert_eq!(p.service_get(name).unwrap(), Some(original));
+    if let Err(e) = result {
+        std::panic::resume_unwind(e);
+    }
+}
+
 #[test]
 #[ignore = "会临时改动服务的启动类型；需要管理员权限"]
 fn service_start_type_round_trip() {
     let p = WindowsPlatform::new();
-    let name = "Spooler";
-    let original = p.service_get(name).unwrap().expect("有打印服务");
-    for st in [StartType::Manual, StartType::DelayedAuto, StartType::Auto, StartType::Disabled] {
-        p.service_set(name, st).unwrap();
-        assert_eq!(p.service_get(name).unwrap(), Some(st), "{st:?}");
-    }
-    p.service_set(name, original).unwrap();
-    assert_eq!(p.service_get(name).unwrap(), Some(original));
+    cycle_start_types(&p, "Spooler", &[StartType::Manual, StartType::Auto, StartType::Disabled]);
+    // 延迟启动要用不属于加载顺序组的服务
+    cycle_start_types(&p, "W32Time", &[StartType::DelayedAuto, StartType::Auto, StartType::Manual]);
     assert!(p.service_set("MedkitNoSuchService", StartType::Manual).is_err());
+}
+
+#[test]
+#[ignore = "需要管理员权限"]
+fn delayed_start_is_refused_for_grouped_services_without_changing_anything() {
+    let p = WindowsPlatform::new();
+    // 打印服务属于 SpoolerGroup
+    let before = p.service_get("Spooler").unwrap().expect("有打印服务");
+    let outcome = p.service_set("Spooler", StartType::DelayedAuto);
+    let after = p.service_get("Spooler").unwrap();
+    p.service_set("Spooler", before).unwrap();
+    let e = outcome.expect_err("属于加载顺序组的服务不能设为延迟启动");
+    assert!(e.to_string().contains("加载顺序组"), "{e}");
+    assert_eq!(after, Some(before), "拒绝时不能留下改动");
 }
 
 #[test]
@@ -177,12 +202,36 @@ fn real_engine(dir: &Path) -> (Engine, Bundle, Arc<WindowsPlatform>) {
     (engine, bundle, platform)
 }
 
+/// CI 的 Windows 运行环境是服务器版虚拟机，有些检测在那里本来就查不了（例如只针对桌面版的检测）。
+/// 这些检测的 ID 写在环境变量 `MEDKIT_SMOKE_EXPECTED_FAILURES` 里（逗号分隔），它们报的脚本错误只提示、不算失败。
+/// 超时、宿主出错、脚本校验失败、没定义的结果代码，不管在不在名单里都算失败。
+fn expected_failures() -> Vec<String> {
+    std::env::var("MEDKIT_SMOKE_EXPECTED_FAILURES")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// 不是「这台机器查不了」，而是我们自己的问题。
+fn is_contract_error(e: &str) -> bool {
+    ["运行超时", "脚本文件校验失败", "脚本宿主出错", "脚本返回了没有定义的结果"].iter().any(|p| e.starts_with(p))
+}
+
 #[test]
 fn every_check_runs_cleanly_on_windows_powershell() {
     let dir = tempfile::tempdir().unwrap();
     let (engine, bundle, platform) = real_engine(dir.path());
     let admin = platform.is_admin();
+    let expected = expected_failures();
     let mut failures = Vec::new();
+    for id in &expected {
+        if bundle.catalog.checks.iter().all(|c| &c.id != id) {
+            failures.push(format!("MEDKIT_SMOKE_EXPECTED_FAILURES 里的 {id} 不是一个检测"));
+        }
+    }
     for c in &bundle.catalog.checks {
         if c.requires_admin && !admin {
             eprintln!("跳过（需要管理员）：{}", c.id);
@@ -193,8 +242,15 @@ fn every_check_runs_cleanly_on_windows_powershell() {
         if !r.facts.is_empty() {
             eprintln!("{:<40} facts: {}", "", serde_json::Value::Object(r.facts.clone()));
         }
-        if let Some(e) = &r.error {
-            failures.push(format!("{}：{e}", c.id));
+        match &r.error {
+            Some(e) if expected.contains(&c.id) && !is_contract_error(e) => {
+                println!("::warning title={}::在这台 CI 机器上预期查不了：{e}", c.id);
+            }
+            Some(e) => failures.push(format!("{}：{e}", c.id)),
+            None if expected.contains(&c.id) => {
+                println!("::notice title={}::已经能跑通，可以从 MEDKIT_SMOKE_EXPECTED_FAILURES 里去掉", c.id);
+            }
+            None => {}
         }
         for text in std::iter::once(&r.message).chain(r.next.as_ref()) {
             let left = unresolved(text);

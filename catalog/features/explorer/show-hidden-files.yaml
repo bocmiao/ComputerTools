@@ -1,0 +1,32 @@
+# 显示隐藏的文件和文件夹。HKCU\…\Explorer\Advanced 的 Hidden：1 = 显示，2 = 不显示（系统默认）。
+# 对应「文件资源管理器 → 查看 → 显示 → 隐藏的项目」。不影响「受保护的操作系统文件」（ShowSuperHidden），
+# 那些仍然不显示。各版本（含家庭版）都有效。
+id: explorer.show-hidden-files
+schema_version: 1
+title: { zh-CN: 显示隐藏的文件和文件夹 }
+description:
+  zh-CN: 在资源管理器里显示被设为「隐藏」的文件和文件夹（比如 AppData），找软件的配置文件、聊天记录时用得上。系统自己的重要文件仍然不显示。隐藏的项目会显示成半透明的图标，不认识的不要删。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: false
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: Hidden
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: Hidden
+      type: dword
+      value: 2
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/view-hidden-files-and-folders-in-windows-97fbc472-c603-9d90-91d0-1166d1d9f4b5
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

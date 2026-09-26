@@ -1,0 +1,42 @@
+# 笔记本电池健康。脚本：scripts/checks/hardware/battery-health.ps1
+# 没有 Win32_Battery 实例 → no-battery（台式机，状态 na，界面不显示）。
+# 否则运行 powercfg /batteryreport /xml /output <临时文件>，读 Batteries/Battery 下的
+# DesignCapacity、FullChargeCapacity、CycleCount（单位 mWh），算出 health_pct = 满电容量 ÷ 设计容量，
+# 读完删掉临时文件。有两块电池时相加。新电池的满电容量可能略高于设计容量，事实 health_pct 最多显示 100。
+# 结果：good（≥ 80%）/ worn（50% 到 80%）/ poor（< 50%）/ no-battery。
+# 待真机验证：接了 USB 不间断电源（UPS）的台式机，Win32_Battery 可能会把 UPS 当成电池。
+id: hardware.battery-health
+schema_version: 1
+title: { zh-CN: 电池健康 }
+description:
+  zh-CN: 看看笔记本电池老化了多少：现在充满电的容量，和出厂时的设计容量相比还剩多少。
+category: hardware
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/hardware/battery-health.ps1
+results:
+  good:
+    status: ok
+    message:
+      zh-CN: "电池健康度 {health_pct}%，状态良好。"
+  worn:
+    status: advice
+    message:
+      zh-CN: "电池健康度 {health_pct}%，已经有些老化，充满电后能用的时间比新的时候短。"
+    next:
+      zh-CN: 这是正常损耗，不影响使用。如果续航已经不够用了，可以找品牌售后换电池。
+  poor:
+    status: advice
+    message:
+      zh-CN: "电池健康度只有 {health_pct}%，老化严重，续航会很短，还可能突然关机。"
+    fixer: vendor
+    next:
+      zh-CN: 建议找品牌售后或正规维修点换一块原装电池。如果发现电池鼓包（外壳鼓起来、触控板或键盘被顶起），请马上停止充电，尽快送修。
+  no-battery:
+    status: na
+    message:
+      zh-CN: 这台电脑没有电池（台式机），不用检查。
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-battery

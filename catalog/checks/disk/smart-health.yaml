@@ -1,0 +1,46 @@
+# 硬盘健康（SMART）。脚本：scripts/checks/disk/smart-health.ps1
+# 数据来源：Get-PhysicalDisk 的 HealthStatus / OperationalStatus；
+#           Get-StorageReliabilityCounter 的 Wear（磨损）、Temperature、PowerOnHours，拿不到就省略。
+# 多块盘时取最差的一块（U 盘、移动硬盘也算在内）。判断口径：
+#   unhealthy：HealthStatus 为 Unhealthy，或 OperationalStatus 含
+#              Predictive Failure / Non-Recoverable Error / Failed Media
+#   warning：  HealthStatus 为 Warning，或 OperationalStatus 含 Degraded / Stressed / Error / IO Error，
+#              或 Wear ≥ 90%（Wear 是「已用掉的额定寿命」，100% 表示到了厂商标称的寿命；
+#              参考 CrystalDiskInfo「固态硬盘看剩余寿命」的口径，这一条是在任务要求之外加的）
+#   healthy：  其余 HealthStatus 为 Healthy 的盘
+# 所有盘的 HealthStatus 都是 Unknown 时，脚本报错，界面显示「没查出来」。
+# 待真机验证：RAID / Intel RST、USB 硬盘盒上 HealthStatus 是否总是 Unknown 或总是 Healthy。
+id: disk.smart-health
+schema_version: 1
+title: { zh-CN: 硬盘健康 }
+description:
+  zh-CN: 读取硬盘自己报告的健康状态（SMART），看看硬盘有没有快坏的迹象。
+category: disk
+requires_admin: true
+timeout_sec: 30
+probe:
+  script: checks/disk/smart-health.ps1
+results:
+  healthy:
+    status: ok
+    message:
+      zh-CN: "硬盘状态良好（共 {disk_count} 块）。"
+  warning:
+    status: advice
+    message:
+      zh-CN: "硬盘「{worst_disk}」出现了异常迹象，可能快要坏了。"
+    fixer: hardware
+    next:
+      zh-CN: "请尽快把照片、文档、聊天记录等重要文件备份到另一块硬盘、U 盘或网盘。备份好以后，可以找懂哥或售后检测一下，需要的话换一块新硬盘。"
+  unhealthy:
+    status: manual
+    message:
+      zh-CN: "硬盘「{worst_disk}」报告自己已经损坏或即将损坏，里面的数据随时可能读不出来。"
+    fixer: hardware
+    next:
+      zh-CN: "请马上备份重要文件（备份时先别做别的事，尽量少让硬盘读写），然后联系电脑售后，或者换一块新硬盘。"
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/storage/get-physicaldisk
+  - https://learn.microsoft.com/en-us/powershell/module/storage/get-storagereliabilitycounter
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/storage/msft-physicaldisk
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/storage/msft-storagereliabilitycounter

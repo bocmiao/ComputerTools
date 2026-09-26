@@ -1,0 +1,33 @@
+# 上次开机用了多久。脚本：scripts/checks/boot/last-boot-duration.ps1
+# 读 Microsoft-Windows-Diagnostics-Performance/Operational 日志的事件 100，取 EventData 里的 BootTime（毫秒）。
+# BootTime = MainPathBootTime（按下电源到出现桌面）+ BootPostBootTime（出现桌面到系统空闲下来）。
+# 事实：boot_sec、boot_time、after_update，以及 main_path_sec、post_boot_sec（有的话）。
+# 和任务要求的一处差异：最近一条如果是「装完更新后的第一次开机」（BootIsRebootAfterInstall = true），
+# 改用最近 10 条里最新的一次普通开机，避免把装更新时的慢开机当成问题；都是装更新后的开机时才用最近一条。
+# 没有事件 100 时脚本报错，显示「没查出来」。
+# 待真机验证：开着「快速启动」时，普通的关机再开机是否也记录事件 100。
+id: boot.last-boot-duration
+schema_version: 1
+title: { zh-CN: 开机用时 }
+description:
+  zh-CN: 看看上次开机从按下电源到可以正常使用，一共花了多久。
+category: boot
+requires_admin: true
+probe:
+  script: checks/boot/last-boot-duration.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: "上次开机用了 {boot_sec} 秒，速度正常。"
+  slow:
+    status: advice
+    message:
+      zh-CN: "上次开机用了 {boot_sec} 秒，有点慢（正常在 1 分钟以内）。"
+    fixer: user
+    next:
+      zh-CN: 打开「开机慢」，看看是哪些东西拖慢了开机。
+    links: ["symptom:slow-boot"]
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent
+  - https://support.microsoft.com/en-us/windows/configure-startup-applications-in-windows-115a420a-0bff-4a6f-90e0-1934c844e473

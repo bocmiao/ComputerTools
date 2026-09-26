@@ -8,6 +8,7 @@
 
 ## 最容易上手的贡献
 
+- **真机验证**：[真机验证清单](docs/real-machine-checklist.md)里的每一项，都只需要一台对应的电脑和一点耐心，不用写代码。
 - **数据**：同义词、错误码解释、弹窗知识库、品牌 BIOS 按键表。不用写代码。
 - **图文指引**：给 `catalog/symptoms/` 里的症状写手动排查步骤（`maturity: guide`）。
 - **检测和修复**：一个 YAML，加一两个 PowerShell 脚本。

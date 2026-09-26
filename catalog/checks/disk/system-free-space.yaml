@@ -1,0 +1,40 @@
+# 系统盘（一般是 C 盘）剩余空间。脚本：scripts/checks/disk/system-free-space.ps1
+# 阈值（脚本按原始值比较，不按四舍五入后的事实比较）。真正要紧的是剩多少 GB（大版本更新要 20 GB 左右），
+# 比例只对小硬盘有意义，所以 2 TB 的 C 盘剩 250 GB 不算紧张：
+#   critical：不到 5 GB，或者不到 5% 且不到 20 GB
+#   low：不到 20 GB，或者不到 10% 且不到 50 GB
+# fixer 暂时写 system：「C 盘满了」目前只有图文指引（存储感知、磁盘清理都是系统自带功能），
+#       等有了一键清理的功能再改成 medkit。
+id: disk.system-free-space
+schema_version: 1
+title: { zh-CN: C 盘剩余空间 }
+description:
+  zh-CN: 看看系统盘（一般是 C 盘）还剩多少空间。空间太少，系统更新会失败，软件也可能打不开。
+category: disk
+requires_admin: false
+probe:
+  script: checks/disk/system-free-space.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: "{drive} 盘还剩 {free_gb} GB（{free_pct}%），空间充足。"
+  low:
+    status: advice
+    message:
+      zh-CN: "{drive} 盘只剩 {free_gb} GB（{free_pct}%），空间有点紧张，可能影响系统更新和软件运行。"
+    fixer: system
+    next:
+      zh-CN: "打开「C 盘满了」，看看哪些东西可以清理、哪些可以搬到别的盘。"
+    links: ["symptom:disk-full"]
+  critical:
+    status: advice
+    message:
+      zh-CN: "{drive} 盘快满了，只剩 {free_gb} GB（{free_pct}%）！系统更新会失败，软件也可能打不开或闪退。"
+    fixer: system
+    next:
+      zh-CN: "请尽快清理：打开「C 盘满了」，先删临时文件，再把下载文件夹、桌面上的大文件搬到别的盘。"
+    links: ["symptom:disk-full"]
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-logicaldisk
+  - https://support.microsoft.com/en-us/windows/free-up-drive-space-in-windows-85529ccb-c365-490d-b548-831022bc9b32

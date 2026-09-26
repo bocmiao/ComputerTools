@@ -1,0 +1,38 @@
+# Win11 任务栏图标靠左。HKCU\…\Explorer\Advanced 的 TaskbarAl：0 = 靠左，1 = 居中（系统默认；
+# 全新系统里这个值可能不存在，不存在时也是居中，写回 1 效果相同）。
+# 对应「设置 → 个性化 → 任务栏 → 任务栏行为 → 任务栏对齐方式」。
+# 待真机验证：直接改注册表后任务栏会不会立刻变化；这里保守地写 reboot: explorer。
+id: taskbar.align-left
+schema_version: 1
+title: { zh-CN: 任务栏图标靠左（Win11） }
+description:
+  zh-CN: 把 Windows 11 任务栏上居中的开始按钮和图标挪到左边，和 Windows 10 的习惯一样。纯属个人喜好，随时可以改回来。
+category: taskbar
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+applies_to:
+  min_build: 22000
+  max_build: null
+  editions: []
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: TaskbarAl
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: TaskbarAl
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/customize-the-taskbar-in-windows-0657a50f-0cc7-dbfd-ae6b-05020b195b07
+  - https://learn.microsoft.com/en-us/answers/questions/1388907/need-script-built-to-address-the-windows-changes-n
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

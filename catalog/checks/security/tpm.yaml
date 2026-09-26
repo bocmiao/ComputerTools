@@ -1,0 +1,45 @@
+# TPM 安全芯片。脚本：scripts/checks/security/tpm.ps1
+# 数据来源：root\cimv2\Security\MicrosoftTpm 的 Win32_Tpm（IsEnabled_InitialValue、IsActivated_InitialValue、
+# SpecVersion，SpecVersion 形如「2.0, 0, 1.38」）。判断顺序：
+#   没有实例 → missing；SpecVersion 是 1.x → tpm12（即使没开启也报 1.2：开了也不满足 Win11）；
+#   没启用或没激活 → disabled；SpecVersion 是 2.x → tpm2；其余（比如「Not Supported」）报错。
+# 事实：present、spec_version、enabled、activated、manufacturer（厂商代码，如 INTC、AMD、IFX）。
+id: security.tpm
+schema_version: 1
+title: { zh-CN: TPM 安全芯片 }
+description:
+  zh-CN: 看看电脑有没有 TPM 2.0 安全芯片。Windows 11 和 BitLocker 加密都需要它。
+category: security
+requires_admin: true
+probe:
+  script: checks/security/tpm.ps1
+results:
+  tpm2:
+    status: ok
+    message:
+      zh-CN: 电脑有 TPM 2.0 安全芯片，满足 Windows 11 的要求。
+  tpm12:
+    status: advice
+    message:
+      zh-CN: 电脑的 TPM 安全芯片只有 1.2 版，不满足 Windows 11 的要求（需要 2.0）。
+    fixer: hardware
+    next:
+      zh-CN: 少数电脑可以用品牌官网的 BIOS 或固件更新把 TPM 升到 2.0，可以先查一下；否则想用 Windows 11 只能换主板或换电脑。
+  disabled:
+    status: advice
+    message:
+      zh-CN: 电脑有 TPM 安全芯片，但没有开启。Windows 11 需要它。
+    fixer: helper
+    next:
+      zh-CN: 重启进入 BIOS 设置，在安全（Security）相关的页面里开启 TPM（Intel 电脑可能叫 PTT，AMD 电脑叫 fTPM）。拿不准就找懂哥。
+  missing:
+    status: advice
+    message:
+      zh-CN: 没有检测到 TPM 安全芯片，多半是 BIOS 里没开。Windows 11 需要它。
+    fixer: helper
+    next:
+      zh-CN: 2017 年以后的电脑大多内置了 TPM，只是默认关着：重启进入 BIOS，打开「Intel PTT」或「AMD fTPM」（有的主板叫 Security Device Support）。更老的电脑可能确实没有 TPM。拿不准就找懂哥。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/secprov/win32-tpm
+  - https://support.microsoft.com/en-us/windows/enable-tpm-2-0-on-your-pc-1fd5a332-360d-4f46-a1e7-ae6b0c90645c
+  - https://support.microsoft.com/en-us/windows/windows-11-system-requirements-86c11283-ea52-4782-9efd-7674389a7ba3

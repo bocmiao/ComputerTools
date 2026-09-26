@@ -214,7 +214,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\checks\disk\syst
 cargo test -p medkit-core --test windows -- --include-ignored
 ```
 
-CI 会在 Windows 上跑同样的测试。
+CI 会在 Windows 上跑同样的测试。CI 的 Windows 机器是服务器版虚拟机，个别检测在那里本来就查不了（比如只判断桌面版支持期限的检测），这些检测的 ID 列在 `.github/workflows/ci.yml` 的 `MEDKIT_SMOKE_EXPECTED_FAILURES` 里，并写明原因；它们报的脚本错误只提示、不算失败。超时、脚本宿主出错、返回了没定义的结果代码，不管在不在名单里都算失败。
 
 ## 5. 提交前检查清单
 

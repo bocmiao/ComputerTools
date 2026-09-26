@@ -198,7 +198,8 @@ fn open_service(name: &str, access: u32) -> PResult<Option<ScHandle>> {
     Ok(Some(ScHandle(svc)))
 }
 
-fn query_start_type(svc: &ScHandle, name: &str) -> PResult<StartType> {
+/// 服务配置里我们关心的两项：启动类型、是否属于加载顺序组（属于的话不能设为延迟启动）。
+fn query_config(svc: &ScHandle, name: &str) -> PResult<(u32, bool)> {
     let mut needed = 0u32;
     // SAFETY: 第一次调用只为取需要的大小
     unsafe { QueryServiceConfigW(svc.0, null_mut(), 0, &mut needed) };
@@ -209,12 +210,21 @@ fn query_start_type(svc: &ScHandle, name: &str) -> PResult<StartType> {
     {
         return Err(map_io(&format!("读取服务 {name} 的配置"), last_error()));
     }
-    // SAFETY: 调用成功，缓冲区开头是 QUERY_SERVICE_CONFIGW
-    let start = unsafe { (*buf.as_ptr().cast::<QUERY_SERVICE_CONFIGW>()).dwStartType };
+    // SAFETY: 调用成功，缓冲区开头是 QUERY_SERVICE_CONFIGW，里面的字符串指针指向同一个缓冲区
+    let (start, group) = unsafe {
+        let cfg = &*buf.as_ptr().cast::<QUERY_SERVICE_CONFIGW>();
+        (cfg.dwStartType, from_wide_ptr(cfg.lpLoadOrderGroup))
+    };
+    Ok((start, !group.is_empty()))
+}
+
+fn query_start_type(svc: &ScHandle, name: &str) -> PResult<StartType> {
+    let (start, _) = query_config(svc, name)?;
     Ok(match start {
         SERVICE_AUTO_START => {
             let mut info = SERVICE_DELAYED_AUTO_START_INFO { fDelayedAutostart: 0 };
             let size = u32::try_from(std::mem::size_of::<SERVICE_DELAYED_AUTO_START_INFO>()).unwrap_or(4);
+            let mut needed = 0u32;
             // SAFETY: info 是大小合适的结构体
             let ok = unsafe {
                 QueryServiceConfig2W(
@@ -442,28 +452,37 @@ impl Platform for WindowsPlatform {
     fn service_set(&self, name: &str, start_type: StartType) -> PResult<()> {
         let svc = open_service(name, SERVICE_QUERY_CONFIG | SERVICE_CHANGE_CONFIG)?
             .ok_or_else(|| PlatformError::NotFound(format!("服务 {name}")))?;
+        let (original, grouped) = query_config(&svc, name)?;
+        // 先检查再动手：属于加载顺序组的服务，Windows 不允许设为延迟启动（会报「参数错误」）
+        if start_type == StartType::DelayedAuto && grouped {
+            return Err(PlatformError::Unsupported(format!(
+                "服务 {name} 属于加载顺序组，Windows 不允许把它设为延迟启动"
+            )));
+        }
         let start = match start_type {
             StartType::Auto | StartType::DelayedAuto => SERVICE_AUTO_START,
             StartType::Manual => SERVICE_DEMAND_START,
             StartType::Disabled => SERVICE_DISABLED,
         };
-        // SAFETY: 其余参数用 SERVICE_NO_CHANGE / 空指针表示不改
-        let ok = unsafe {
-            ChangeServiceConfigW(
-                svc.0,
-                SERVICE_NO_CHANGE,
-                start,
-                SERVICE_NO_CHANGE,
-                null(),
-                null(),
-                null_mut(),
-                null(),
-                null(),
-                null(),
-                null(),
-            )
+        let set_start = |value: u32| {
+            // SAFETY: 其余参数用 SERVICE_NO_CHANGE / 空指针表示不改
+            unsafe {
+                ChangeServiceConfigW(
+                    svc.0,
+                    SERVICE_NO_CHANGE,
+                    value,
+                    SERVICE_NO_CHANGE,
+                    null(),
+                    null(),
+                    null_mut(),
+                    null(),
+                    null(),
+                    null(),
+                    null(),
+                )
+            }
         };
-        if ok == 0 {
+        if set_start(start) == 0 {
             return Err(map_io(&format!("修改服务 {name}"), last_error()));
         }
         if start == SERVICE_AUTO_START {
@@ -473,7 +492,10 @@ impl Platform for WindowsPlatform {
             if unsafe { ChangeServiceConfig2W(svc.0, SERVICE_CONFIG_DELAYED_AUTO_START_INFO, (&raw const info).cast()) }
                 == 0
             {
-                return Err(map_io(&format!("设置服务 {name} 的延迟启动"), last_error()));
+                let err = map_io(&format!("设置服务 {name} 的延迟启动"), last_error());
+                // 第一步已经改了启动类型，退回去，不留半截改动
+                set_start(original);
+                return Err(err);
             }
         }
         Ok(())

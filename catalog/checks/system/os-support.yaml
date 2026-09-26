@@ -1,0 +1,60 @@
+# 系统版本是否还在支持期内。脚本：scripts/checks/system/os-support.ps1
+# 读 HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion 的 CurrentBuild、DisplayVersion、EditionID、
+# ProductName、InstallationType。Win11 的 ProductName 仍然写 Windows 10，所以按 build ≥ 22000 判断。
+# 脚本里有一张「build → 支持截止日期」的表，2026-09-26 按微软生命周期页面核对过（页面是太平洋时间，
+# 表里写的是最后一个受支持的日子）：
+#   Win11 家庭版/专业版：21H2 2023-10-10、22H2 2024-10-08、23H2 2025-11-11、24H2 2026-10-13、
+#                        25H2 2027-10-12、26H1 2028-03-14（26H1 只预装在骁龙 X2 新机上）
+#   Win11 企业版/教育版：21H2 2024-10-08、22H2 2025-10-14、23H2 2026-11-10、24H2 2027-10-12、
+#                        25H2 2028-10-10、26H1 2029-03-13（任务只要求家庭版/专业版，企业版/教育版的日期
+#                        不同，按家庭版的表会误报，所以一并加上）
+#   Win10 22H2：2025-10-14 停止支持；消费者扩展安全更新（ESU，只限家庭版、专业版、专业教育版、
+#               专业工作站版的 22H2）到 2027-10-12
+#   长期服务版（EditionID 以 EnterpriseS / IoTEnterpriseS 开头，含 N 版）单独一张表：
+#     LTSB 2015 2025-10-14、LTSB 2016 2026-10-13、LTSC 2019 2029-01-09、
+#     LTSC 2021 2027-01-12（IoT 2032-01-13）、LTSC 2024 2029-10-09（IoT 2034-10-10）
+# 结果：supported（在支持期内）/ win10（Win10 22H2 家庭版、专业版，ESU 还没结束）/
+#       expired（已过期，包括 Win10 企业版/教育版和 22H2 之前的 Win10）/ ltsc（长期服务版且没过期）。
+# 表里没有的 build（比如 2026 年 10 月才正式发布的 26H2，build 26300）脚本会报错，显示「没查出来」，
+# 不去猜。每次微软发布新版本都要更新这张表。Windows Server 也报错（不在本检测范围内）。
+# 待真机验证：国内（区域为中国、用微软账户登录）能否在「Windows 更新」里看到并完成免费 ESU 登记（计划书第一节）。
+id: system.os-support
+schema_version: 1
+title: { zh-CN: 系统是否还在支持期 }
+description:
+  zh-CN: 看看你的 Windows 版本微软还管不管。过了支持期就收不到安全更新，中毒、被攻击的风险会变大。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/os-support.ps1
+results:
+  supported:
+    status: ok
+    message:
+      zh-CN: "你的系统是 {os} {version}，微软会提供安全更新到 {end_date}。"
+  win10:
+    status: advice
+    message:
+      zh-CN: "你的系统是 Windows 10，微软已在 {end_date} 停止常规支持，不登记的话就收不到安全更新了。"
+    fixer: user
+    next:
+      zh-CN: "可以免费登记「扩展安全更新」，继续收到安全补丁到 {esu_end}：打开「设置 → 更新和安全 → Windows 更新」，按页面上的提示登记（需要登录微软账户）。电脑配置够的话，也可以免费升级到 Windows 11。"
+  expired:
+    status: advice
+    message:
+      zh-CN: "你的系统（{os} {version}）已经停止支持，微软不再提供安全更新。"
+    fixer: user
+    next:
+      zh-CN: "建议更新到新版本：Windows 11 打开「设置 → Windows 更新」，安装最新的功能更新；Windows 10 可以免费升级到 Windows 11（电脑配置要满足要求），或者先更新到 Windows 10 22H2，再登记扩展安全更新。"
+  ltsc:
+    status: ok
+    message:
+      zh-CN: "你的系统是 Windows 长期服务版（{version}），微软会提供安全更新到 {end_date}。长期服务版不会升级到新的功能版本，这是正常的。"
+references:
+  - https://learn.microsoft.com/en-us/lifecycle/products/windows-11-home-and-pro
+  - https://learn.microsoft.com/en-us/lifecycle/products/windows-11-enterprise-and-education
+  - https://learn.microsoft.com/en-us/lifecycle/products/windows-10-home-and-pro
+  - https://www.microsoft.com/en-us/windows/extended-security-updates
+  - https://learn.microsoft.com/en-us/lifecycle/products/windows-10-enterprise-ltsc-2021
+  - https://learn.microsoft.com/en-us/lifecycle/products/windows-11-enterprise-ltsc-2024
+  - https://support.microsoft.com/en-us/windows/windows-10-support-has-ended-on-october-14-2025-2ca8b313-1946-43d3-b55c-2b95b107f281

@@ -1,0 +1,28 @@
+# CPU 是否支持 Windows 11 24H2 起必需的指令。内置检测（Rust 实现，见 crates/medkit-core/src/builtin.rs），
+# 没有脚本。事实：popcnt、sse42（布尔值）；结果：ok（都支持）/ missing（缺任意一项）。
+# 24H2 起缺这两条指令的 CPU 会在启动时报「无效指令」蓝屏或开不了机，任何绕过检查的办法都没用。
+id: hardware.cpu-features
+schema_version: 1
+title: { zh-CN: CPU 是否支持新版 Windows 11 }
+description:
+  zh-CN: 看看 CPU 支不支持 Windows 11 24H2 起必需的 POPCNT 和 SSE4.2 指令。
+category: hardware
+requires_admin: false
+probe:
+  builtin: cpu-features
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: CPU 支持 Windows 11 24H2 起必需的 POPCNT 和 SSE4.2 指令。
+  missing:
+    status: advice
+    message:
+      zh-CN: CPU 太老，不支持 Windows 11 24H2 起必需的 POPCNT 或 SSE4.2 指令，就算绕过安装检查也装不上、开不了机。
+    fixer: hardware
+    next:
+      zh-CN: 这台电脑只能继续用 Windows 10（记得登记扩展安全更新）。想用新版 Windows，需要换 CPU 或换电脑。
+references:
+  - https://support.microsoft.com/en-us/windows/windows-11-system-requirements-86c11283-ea52-4782-9efd-7674389a7ba3
+  - https://download.microsoft.com/download/7/8/8/788bf5ab-0751-4928-a22c-dffdc23c27f2/Minimum%20Hardware%20Requirements%20for%20Windows%2011.pdf
+  - https://www.tomshardware.com/software/windows/microsoft-updates-windows-11-24h2-requirements-cpu-must-support-sse42-or-the-os-will-not-boot
