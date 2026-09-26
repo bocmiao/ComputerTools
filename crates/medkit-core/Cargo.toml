@@ -1,0 +1,38 @@
+[package]
+name = "medkit-core"
+description = "电脑小药箱的引擎：数据模型、目录加载与校验、原语、快照撤销、修改日志、检测"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error.workspace = true
+schemars.workspace = true
+yaml-rust2.workspace = true
+sha2.workspace = true
+hex.workspace = true
+uuid.workspace = true
+time.workspace = true
+thiserror.workspace = true
+regex = "1"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_System_Services",
+  "Win32_System_Threading",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Memory",
+  "Win32_Storage_FileSystem",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true

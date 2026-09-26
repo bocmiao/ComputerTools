@@ -1,0 +1,32 @@
+[workspace]
+resolver = "3"
+members = ["crates/medkit-core", "crates/medkit-data"]
+default-members = ["crates/medkit-core", "crates/medkit-data"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.94"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/bocmiao/ComputerTools"
+
+[workspace.dependencies]
+medkit-core = { path = "crates/medkit-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_path_to_error = "0.1"
+schemars = "1.2"
+yaml-rust2 = "0.13"
+sha2 = "0.11"
+hex = "0.4"
+uuid = { version = "1", features = ["v4", "serde"] }
+time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
+thiserror = "2"
+tempfile = "3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

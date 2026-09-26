@@ -1,0 +1,13 @@
+[package]
+name = "medkit-data"
+description = "校验 catalog、生成 JSON Schema、打包"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+medkit-core.workspace = true
+serde_json.workspace = true
+schemars.workspace = true

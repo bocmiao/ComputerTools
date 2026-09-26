@@ -1,0 +1,373 @@
+//! catalog 里数据文件的类型定义。字段含义见 docs/architecture.md。
+//!
+//! 这些类型同时用来生成 `schema/` 下的 JSON Schema，所以字段上的文档注释会出现在编辑器补全里。
+
+use std::collections::BTreeMap;
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+/// 本地化文本：语言标签到文本的映射，必须包含 `zh-CN`。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(transparent)]
+pub struct Text(pub BTreeMap<String, String>);
+
+impl Text {
+    pub const DEFAULT_LANG: &'static str = "zh-CN";
+
+    /// 取指定语言的文本，没有就回退到简体中文。
+    pub fn get(&self, lang: &str) -> &str {
+        self.0.get(lang).or_else(|| self.0.get(Self::DEFAULT_LANG)).map(String::as_str).unwrap_or("")
+    }
+
+    pub fn zh(&self) -> &str {
+        self.get(Self::DEFAULT_LANG)
+    }
+
+    #[cfg(test)]
+    pub fn zh_only(s: &str) -> Self {
+        Self(BTreeMap::from([(Self::DEFAULT_LANG.to_owned(), s.to_owned())]))
+    }
+}
+
+/// 检测结论。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Status {
+    /// 正常
+    Ok,
+    /// 建议处理
+    Advice,
+    /// 需要人工
+    Manual,
+    /// 没查出来
+    Unknown,
+    /// 不适用（不显示）
+    Na,
+}
+
+/// 谁能修。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Fixer {
+    Medkit,
+    System,
+    User,
+    Helper,
+    Vendor,
+    Isp,
+    Hardware,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Risk {
+    Safe,
+    Caution,
+    Danger,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Level {
+    Light,
+    Medium,
+    Heavy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Recommend {
+    Recommended,
+    Optional,
+    NotRecommended,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reboot {
+    #[default]
+    None,
+    Explorer,
+    Logoff,
+    Reboot,
+}
+
+/// 功能改的是谁的设置。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Target {
+    /// 登录用户（HKCU 会被解析成登录用户的 HKU\<SID>）
+    CurrentUser,
+    /// 整台电脑（HKLM、服务）
+    Machine,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Maturity {
+    Guide,
+    Semi,
+    OneClick,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Edition {
+    Home,
+    Pro,
+    Enterprise,
+    Education,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum RegType {
+    Dword,
+    Qword,
+    String,
+    ExpandString,
+    MultiString,
+    Binary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum StartType {
+    Auto,
+    DelayedAuto,
+    Manual,
+    Disabled,
+}
+
+impl StartType {
+    pub fn label(self) -> &'static str {
+        match self {
+            StartType::Auto => "自动",
+            StartType::DelayedAuto => "自动（延迟启动）",
+            StartType::Manual => "手动",
+            StartType::Disabled => "禁用",
+        }
+    }
+}
+
+fn default_timeout() -> u32 {
+    15
+}
+
+/// 只读检测。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Check {
+    /// 全局唯一、永不改名的 ID，例如 `disk.system-free-space`
+    pub id: String,
+    pub schema_version: u32,
+    pub title: Text,
+    #[serde(default)]
+    pub description: Option<Text>,
+    /// disk / network / system / security / hardware / boot / printer …
+    pub category: String,
+    #[serde(default)]
+    pub requires_admin: bool,
+    #[serde(default = "default_timeout")]
+    pub timeout_sec: u32,
+    /// 为 true 时，引擎给脚本传 `-UserHive`
+    #[serde(default)]
+    pub user_hive: bool,
+    pub probe: Probe,
+    /// 结果代码 → 展示方式
+    pub results: BTreeMap<String, ResultSpec>,
+    #[serde(default)]
+    pub references: Vec<String>,
+}
+
+/// 检测方式：脚本或内置检测，二选一。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Probe {
+    /// 相对于 scripts/ 的路径
+    #[serde(default)]
+    pub script: Option<String>,
+    /// 内置检测的名字，例如 `cpu-features`
+    #[serde(default)]
+    pub builtin: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ResultSpec {
+    pub status: Status,
+    /// 可以用 `{事实名}` 引用脚本返回的事实
+    pub message: Text,
+    #[serde(default)]
+    pub fixer: Option<Fixer>,
+    #[serde(default)]
+    pub next: Option<Text>,
+    /// `symptom:<id>` 或 `feature:<id>`
+    #[serde(default)]
+    pub links: Vec<String>,
+}
+
+/// 原子修复。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Feature {
+    pub id: String,
+    pub schema_version: u32,
+    pub title: Text,
+    pub description: Text,
+    pub category: String,
+    pub risk: Risk,
+    pub level: Level,
+    pub recommend: Recommend,
+    /// 属于个人偏好，而不是建议
+    #[serde(default)]
+    pub subjective: bool,
+    #[serde(default)]
+    pub requires_admin: bool,
+    #[serde(default)]
+    pub reboot: Reboot,
+    pub target: Target,
+    #[serde(default)]
+    pub applies_to: AppliesTo,
+    /// 原语列表（和 `run` 二选一）
+    #[serde(default)]
+    pub actions: Vec<Action>,
+    /// Windows 的默认状态
+    #[serde(default)]
+    pub windows_default: Vec<Action>,
+    /// 测试时用来制造故障状态；不写就用 `windows_default`
+    #[serde(default)]
+    pub break_actions: Vec<Action>,
+    #[serde(default)]
+    pub detect: Option<ScriptRef>,
+    /// 执行脚本（和 `actions` 二选一）
+    #[serde(default)]
+    pub run: Option<ScriptRef>,
+    pub undo: Undo,
+    #[serde(default)]
+    pub irreversible_reason: Option<Text>,
+    #[serde(default, rename = "break")]
+    pub break_script: Option<ScriptRef>,
+    /// 修完以后改用某个检测来复查
+    #[serde(default)]
+    pub verify: Option<String>,
+    #[serde(default)]
+    pub references: Vec<String>,
+}
+
+impl Feature {
+    pub fn is_primitive(&self) -> bool {
+        self.run.is_none()
+    }
+
+    pub fn reversible(&self) -> bool {
+        !matches!(self.undo, Undo::Keyword(UndoKeyword::None))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptRef {
+    pub script: String,
+}
+
+/// `auto` / `none`，或者 `{ script: … }`。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum Undo {
+    Keyword(UndoKeyword),
+    Script(ScriptRef),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum UndoKeyword {
+    Auto,
+    None,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AppliesTo {
+    #[serde(default)]
+    pub min_build: Option<u32>,
+    #[serde(default)]
+    pub max_build: Option<u32>,
+    /// 空表示所有版本
+    #[serde(default)]
+    pub editions: Vec<Edition>,
+}
+
+/// 引擎原生支持的原语。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Action {
+    Registry(RegistryAction),
+    Service(ServiceAction),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RegistryAction {
+    /// 以 `HKCU\` 或 `HKLM\` 开头
+    pub key: String,
+    /// 值的名字，`""` 表示默认值
+    #[serde(default)]
+    pub name: String,
+    #[serde(default, rename = "type")]
+    pub value_type: Option<RegType>,
+    #[serde(default)]
+    pub value: Option<serde_json::Value>,
+    /// 为 true 表示「这个值不应该存在」
+    #[serde(default)]
+    pub delete: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ServiceAction {
+    pub name: String,
+    pub start_type: StartType,
+}
+
+/// 症状诊断树。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Symptom {
+    pub id: String,
+    pub schema_version: u32,
+    pub title: Text,
+    #[serde(default)]
+    pub summary: Option<Text>,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub causes: Vec<Text>,
+    pub maturity: Maturity,
+    #[serde(default)]
+    pub steps: Vec<Step>,
+    #[serde(default)]
+    pub guide: Option<Text>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Step {
+    pub check: String,
+    /// 这一步的结论在列表里时，不再往下查
+    #[serde(default)]
+    pub stop_on: Vec<Status>,
+    #[serde(default)]
+    pub fixes: Vec<String>,
+}
+
+/// 检测清单，例如体检。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Profile {
+    pub id: String,
+    pub schema_version: u32,
+    pub title: Text,
+    pub checks: Vec<String>,
+}
