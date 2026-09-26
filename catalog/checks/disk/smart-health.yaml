@@ -1,15 +1,19 @@
 # 硬盘健康（SMART）。脚本：scripts/checks/disk/smart-health.ps1
 # 数据来源：Get-PhysicalDisk 的 HealthStatus / OperationalStatus；
 #           Get-StorageReliabilityCounter 的 Wear（磨损）、Temperature、PowerOnHours，拿不到就省略。
-# 多块盘时取最差的一块（U 盘、移动硬盘也算在内）。判断口径：
+# 多块盘时取最差的一块（U 盘、移动硬盘报告有问题时也算在内）。判断口径：
 #   unhealthy：HealthStatus 为 Unhealthy，或 OperationalStatus 含
 #              Predictive Failure / Non-Recoverable Error / Failed Media
 #   warning：  HealthStatus 为 Warning，或 OperationalStatus 含 Degraded / Stressed / Error / IO Error，
 #              或 Wear ≥ 90%（Wear 是「已用掉的额定寿命」，100% 表示到了厂商标称的寿命；
 #              参考 CrystalDiskInfo「固态硬盘看剩余寿命」的口径，这一条是在任务要求之外加的）
-#   healthy：  其余 HealthStatus 为 Healthy 的盘
-# 所有盘的 HealthStatus 都是 Unknown 时，脚本报错，界面显示「没查出来」。
-# 待真机验证：RAID / Intel RST、USB 硬盘盒上 HealthStatus 是否总是 Unknown 或总是 Healthy。
+#   healthy：  其余 HealthStatus 为 Healthy 的盘（文案里的块数只数查到了状态的盘）
+#   incomplete：没有盘报告问题，但有内置盘的 HealthStatus 是 Unknown——不能说「状态良好」，状态用 unknown。
+#              内置盘指 USB 盘、挂载的虚拟磁盘（File Backed Virtual）以外的盘；SD / MMC 总线上的只有系统盘（eMMC）算内置，
+#              读卡器里的存储卡不算。
+# 所有盘都是 Unknown、而且没有一块是内置盘时，脚本报错，界面显示「没查出来」。
+# 待真机验证：RAID / Intel RST、USB 硬盘盒上 HealthStatus 是否总是 Unknown 或总是 Healthy；
+# 读卡器里的 SD 卡、eMMC 系统盘各报什么 BusType。
 id: disk.smart-health
 schema_version: 1
 title: { zh-CN: 硬盘健康 }
@@ -24,7 +28,13 @@ results:
   healthy:
     status: ok
     message:
-      zh-CN: "硬盘状态良好（共 {disk_count} 块）。"
+      zh-CN: "硬盘状态良好（共 {known_count} 块）。"
+  incomplete:
+    status: unknown
+    message:
+      zh-CN: "{disk_count} 块硬盘里有 {unknown_count} 块查不到健康状态（{unknown_disks}），没法确定它们是否正常。"
+    next:
+      zh-CN: 开着 RAID（磁盘阵列）模式的电脑、一些硬盘盒不会把健康状态告诉系统。想确认的话，可以请懂哥用硬盘厂商的检测工具看一看。
   warning:
     status: advice
     message:

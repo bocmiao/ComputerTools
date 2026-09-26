@@ -12,17 +12,19 @@
 # 家庭版存疑：微软 Policy CSP 文档里 DisableSearchBoxSuggestions 列的适用版本是专业版 / 企业版 / 教育版
 # （那是「能不能用 MDM 下发」），社区测试（Win11Debloat、Pureinfotech 等）说家庭版直接写注册表也有效。
 # 需要在家庭中文版真机上验证。
-# 副作用：资源管理器搜索框不再显示最近的搜索记录；部分版本的搜索框里 Copilot 按钮也会消失。
+# 副作用：资源管理器搜索框不再显示最近的搜索记录；部分版本的搜索框里 Copilot 按钮也会消失；
+# 因为是一条策略，「设置 → 隐私和安全性 → 搜索权限」会显示「某些设置由你的组织管理」，「搜索要点」开关变灰
+# （社区资料的说法，需要真机核对）。有人就是想要网页结果，所以 recommend 是 optional，不放进「只应用推荐项」。
 # HKCU\Software\Policies 普通用户没有写权限，所以 requires_admin: true；要注销或重启后生效。
 id: start.disable-web-search
 schema_version: 1
 title: { zh-CN: 关闭开始菜单里的网络搜索结果 }
 description:
-  zh-CN: 在开始菜单或任务栏里搜索时，只显示电脑上的应用、文件和设置，不再夹带必应（Bing）的网页结果和推荐，搜索也会快一些。副作用是资源管理器的搜索框不再显示最近的搜索记录。改完要注销或重启才生效。
+  zh-CN: 在开始菜单或任务栏里搜索时，只显示电脑上的应用、文件和设置，不再夹带必应（Bing）的网页结果和推荐，搜索也会快一些。副作用：资源管理器的搜索框不再显示最近的搜索记录；因为用的是系统策略，设置里的「搜索权限」页面会显示「某些设置由你的组织管理」，「搜索要点」开关会变灰——这是正常的，不是电脑被别人控制了，恢复原状后就会消失。改完要注销或重启才生效。
 category: start
 risk: safe
 level: light
-recommend: recommended
+recommend: optional
 subjective: false
 requires_admin: true
 reboot: logoff

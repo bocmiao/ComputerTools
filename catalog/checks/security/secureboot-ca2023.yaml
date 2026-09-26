@@ -7,6 +7,14 @@
 # 事实里另外带上 HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\Servicing 的 UEFICA2023Status、
 # WindowsUEFICA2023Capable（微软说明这两个值「仅供参考」，所以不参与判断）。
 # 背景：微软 2011 年的安全启动证书在 2026 年陆续到期（Windows Production PCA 2011 是 2026-10-19）。
+# 文案口径：
+# - not-updated：新证书只通过 Windows 更新发给还在支持期内的系统（微软 FAQ：「Only supported Windows OS versions will
+#   get the certificates」），过了支持期的要先登记扩展安全更新或升级。不建议用户自己刷 BIOS：固件更新改的是固件里的
+#   默认变量，不一定改到生效的 db（同一 FAQ），而且刷 BIOS 会触发 BitLocker 恢复、有变砖风险；微软给家庭用户的建议是
+#   保持更新、固件原因找厂商。
+# - secureboot-off、legacy 只做提示（状态 ok）：Windows 11 只要求电脑「支持」安全启动，不要求一定打开；
+#   改成 UEFI 启动要转换系统盘分区格式，不可逆，不引导普通用户去做。打开安全启动（或 TPM）后，
+#   系统可能自动开启设备加密（BitLocker），所以提到打开时都提醒先确认恢复密钥。
 # 待真机验证：传统 BIOS 电脑上异常的具体类型（中文系统的异常消息是本地化的，所以同时匹配错误码 0xC0000002）。
 id: security.secureboot-ca2023
 schema_version: 1
@@ -28,24 +36,24 @@ results:
       zh-CN: 安全启动证书还没有更新到 2023 版。微软 2011 年的旧证书在 2026 年陆续到期，到期后电脑照样能开机，但以后可能收不到开机相关的安全更新。
     fixer: system
     next:
-      zh-CN: 一般不用自己动手：保持 Windows 更新开着，系统会自动更新证书。如果过了很久还是没更新，去电脑品牌官网下载安装最新的 BIOS（主板固件）更新。
+      zh-CN: 一般不用自己动手：保持 Windows 更新开着，系统会自动装上新证书。但已经过了支持期的系统收不到这个更新，要先登记「扩展安全更新」或者升级系统（可以看体检里「系统是否还在支持期」那一项）。系统还在支持期内、很长时间都没更新的，可以打开「Windows 安全中心 → 设备安全性」看看安全启动的状态，或者联系电脑品牌售后。
   secureboot-off:
-    status: advice
+    status: ok
     message:
-      zh-CN: 安全启动（Secure Boot）没有开启。Windows 11 要求开启安全启动，关着它开机过程也少了一层保护。
-    fixer: user
+      zh-CN: 安全启动（Secure Boot）没有打开，不影响正常使用。Windows 11 只要求电脑支持安全启动，并不要求一定打开；打开以后，开机过程会多一层保护。
     next:
-      zh-CN: 重启电脑进入 BIOS 设置（开机时连续按 F2、Del 或 F12，不同品牌按键不同），在「Security」或「Boot」页面把「Secure Boot」改成「Enabled」，保存后重启。拿不准就找懂哥。
+      zh-CN: 想打开的话，请懂哥或售后帮忙在 BIOS 里把「Secure Boot」改成「Enabled」。动手之前先找到 BitLocker 恢复密钥：已经开了 BitLocker 的电脑，改了这个设置以后，下次开机可能要输入恢复密钥；没开的，打开以后系统也可能自动开启设备加密（BitLocker）。
   legacy:
-    status: advice
+    status: ok
     message:
-      zh-CN: 电脑是用传统 BIOS（Legacy）方式启动的，或者主板不支持安全启动，所以用不了安全启动，也不满足 Windows 11 的要求。
-    fixer: helper
+      zh-CN: 电脑是用传统 BIOS（Legacy）方式启动的，或者主板不支持安全启动。这不影响现在使用；只是 Windows 11 要求电脑用 UEFI 方式启动、支持安全启动，以后想升级时要考虑这一点。
     next:
-      zh-CN: 如果主板支持 UEFI，可以请懂哥先用系统自带的 mbr2gpt 工具把系统盘转换成 GPT 格式，再在 BIOS 里改成 UEFI 启动、打开安全启动。这一步有风险，操作前一定要备份重要文件。
+      zh-CN: 改成 UEFI 启动要转换系统盘的分区格式，这一步做完就改不回去，弄错了电脑会开不了机，不建议自己动手。真要升级 Windows 11 时，请懂哥或售后帮忙评估：动手之前先备份重要文件、确认 BitLocker 恢复密钥。
 references:
   - https://support.microsoft.com/en-us/topic/windows-secure-boot-certificate-expiration-and-ca-updates-7ff40d33-95dc-4c3c-8725-a9b95457578e
-  - https://support.microsoft.com/en-us/topic/registry-key-updates-for-secure-boot-windows-devices-with-it-managed-updates-a7be69c9-4634-42e1-9ca1-df06f43f360d
+  - https://support.microsoft.com/en-us/topic/frequently-asked-questions-about-the-secure-boot-update-process-b34bf675-b03a-4d34-b689-98ec117c7818
+  - https://support.microsoft.com/en-us/topic/secure-boot-certificate-update-status-in-the-windows-security-app-5ce39986-7dd2-4852-8c21-ef30dd04f046
+  - https://support.microsoft.com/en-us/windows/security/devicesecurity/windows-11-and-secure-boot
+  - https://learn.microsoft.com/en-us/windows/security/operating-system-security/data-protection/bitlocker/
   - https://learn.microsoft.com/en-us/powershell/module/secureboot/confirm-securebootuefi
   - https://learn.microsoft.com/en-us/powershell/module/secureboot/get-securebootuefi
-  - https://learn.microsoft.com/en-us/windows/deployment/mbr-to-gpt

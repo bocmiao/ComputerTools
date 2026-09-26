@@ -1,16 +1,20 @@
-# 上次开机用了多久。脚本：scripts/checks/boot/last-boot-duration.ps1
-# 读 Microsoft-Windows-Diagnostics-Performance/Operational 日志的事件 100，取 EventData 里的 BootTime（毫秒）。
-# BootTime = MainPathBootTime（按下电源到出现桌面）+ BootPostBootTime（出现桌面到系统空闲下来）。
-# 事实：boot_sec、boot_time、after_update，以及 main_path_sec、post_boot_sec（有的话）。
-# 和任务要求的一处差异：最近一条如果是「装完更新后的第一次开机」（BootIsRebootAfterInstall = true），
-# 改用最近 10 条里最新的一次普通开机，避免把装更新时的慢开机当成问题；都是装更新后的开机时才用最近一条。
+# 开机用了多久。脚本：scripts/checks/boot/last-boot-duration.ps1
+# 读 Microsoft-Windows-Diagnostics-Performance/Operational 日志的事件 100，EventData 里（单位毫秒）：
+#   MainPathBootTime：按下电源到出现桌面（或登录界面）——判断只看它（事件里没有它时才用 BootTime）
+#   BootPostBootTime：出现桌面后到系统空闲下来（自启软件、更新、杀毒扫描都会拉长它），只作为事实 post_boot_sec
+#   BootTime：两者之和，作为事实 boot_sec
+# 装完更新后的第一次开机（BootIsRebootAfterInstall = true）本来就慢：用最近 10 条里最新的一次普通开机；
+# 10 条都是装更新后的开机时，返回 after-update，不判快慢。
+# 事实：desktop_sec、boot_sec、boot_when（那次开机的本地时间，「yyyy-MM-dd HH:mm」）、boot_time（ISO 格式）、
+#       after_update，以及 post_boot_sec（有的话）。
 # 日志不存在（服务器版系统）或者没有事件 100（被精简系统关掉了）时返回 no-data，不显示。
-# 待真机验证：开着「快速启动」时，普通的关机再开机是否也记录事件 100。
+# 待真机验证：开着「快速启动」时，普通的关机再开机是否也记录事件 100；MainPathBootTime 是否包含停在登录界面、
+# 输入密码的时间；装完更新后的第一次开机，BootIsRebootAfterInstall 是否为 true。
 id: boot.last-boot-duration
 schema_version: 1
 title: { zh-CN: 开机用时 }
 description:
-  zh-CN: 看看上次开机从按下电源到可以正常使用，一共花了多久。
+  zh-CN: 看看最近一次开机从按下电源到出现桌面，一共花了多久。
 category: boot
 requires_admin: true
 probe:
@@ -19,15 +23,19 @@ results:
   ok:
     status: ok
     message:
-      zh-CN: "上次开机用了 {boot_sec} 秒，速度正常。"
+      zh-CN: "{boot_when} 那次开机，从按下电源到出现桌面用了 {desktop_sec} 秒，速度正常。"
   slow:
     status: advice
     message:
-      zh-CN: "上次开机用了 {boot_sec} 秒，有点慢（正常在 1 分钟以内）。"
+      zh-CN: "{boot_when} 那次开机，从按下电源到出现桌面用了 {desktop_sec} 秒，有点慢（正常在 1 分钟以内）。"
     fixer: user
     next:
       zh-CN: 打开「开机慢」，看看是哪些东西拖慢了开机。
     links: ["symptom:slow-boot"]
+  after-update:
+    status: ok
+    message:
+      zh-CN: "最近记录到的几次开机都是装完系统更新后的第一次开机（最近一次是 {boot_when}，到出现桌面用了 {desktop_sec} 秒）。装完更新后开机慢一些是正常的，不用处理。"
   no-data:
     status: na
     message:

@@ -2,9 +2,14 @@
 # Health of every physical disk (Get-PhysicalDisk HealthStatus / OperationalStatus),
 # plus wear, temperature and power-on hours from Get-StorageReliabilityCounter when
 # the disk exposes them. The worst disk decides the result.
+# A disk whose health is Unknown is never counted as healthy. Internal disks are
+# everything except USB disks, mounted virtual disks (File Backed Virtual) and
+# SD / MMC cards other than the system disk (eMMC); when an internal disk is
+# Unknown and no disk reports a problem, the result is "incomplete".
 # Read-only. Needs administrator rights (reliability counters).
-# Result codes: healthy / warning / unhealthy. If no disk reports a known health
-# status the script throws, and the engine shows "unknown".
+# Result codes: healthy / warning / unhealthy / incomplete. If no disk at all
+# reports a known health status and none of them is internal, the script throws
+# and the engine shows "unknown".
 
 [CmdletBinding()]
 param()
@@ -43,19 +48,41 @@ function ConvertTo-Name {
     return $text
 }
 
+$externalBuses = @('USB', '7', 'File Backed Virtual', '15')
+$cardBuses = @('SD', '12', 'MMC', '13')
+
 $disks = @(Get-PhysicalDisk)
 if ($disks.Count -eq 0) {
     throw 'Get-PhysicalDisk returned no disks'
 }
 
+# The disk that holds Windows counts as internal even on an SD / MMC bus (eMMC).
+$systemDisk = ''
+try {
+    $letter = ([string]$env:SystemDrive).TrimEnd(':')
+    if ($letter -match '^[A-Za-z]$') {
+        $systemDisk = [string](Get-Partition -DriveLetter $letter -ErrorAction Stop).DiskNumber
+    }
+}
+catch {
+    $systemDisk = ''
+}
+
 $worstLevel = 'unknown'
 $worst = $null
+$knownCount = 0
+$unknownInternal = New-Object System.Collections.Generic.List[string]
 $summaries = New-Object System.Collections.Generic.List[string]
 
 foreach ($disk in $disks) {
     $name = ([string]$disk.FriendlyName).Trim()
     if ($name.Length -eq 0) {
         $name = 'Disk ' + [string]$disk.DeviceId
+    }
+    $bus = [string]$disk.BusType
+    $internal = -not ($externalBuses -contains $bus)
+    if ($internal -and ($cardBuses -contains $bus) -and ([string]$disk.DeviceId -ne $systemDisk)) {
+        $internal = $false
     }
 
     $health = ConvertTo-Name -Value $disk.HealthStatus -Names $healthNames
@@ -128,6 +155,13 @@ foreach ($disk in $disks) {
     }
     $summaries.Add(('{0}: {1}' -f $name, ($parts -join ', ')))
 
+    if ($level -eq 'unknown') {
+        if ($internal) {
+            $unknownInternal.Add($name)
+        }
+        continue
+    }
+    $knownCount++
     if ($rank[$level] -gt $rank[$worstLevel]) {
         $worstLevel = $level
         $worst = [pscustomobject]@{
@@ -140,27 +174,39 @@ foreach ($disk in $disks) {
     }
 }
 
-if ($worstLevel -eq 'unknown') {
+$result = $worstLevel
+if (($worstLevel -ne 'warning') -and ($worstLevel -ne 'unhealthy') -and ($unknownInternal.Count -gt 0)) {
+    # No disk reports a problem, but at least one internal disk could not be checked.
+    $result = 'incomplete'
+}
+elseif ($worstLevel -eq 'unknown') {
     throw ('No disk reported a known health status: {0}' -f ($summaries -join '; '))
 }
 
 $facts = [ordered]@{
-    disk_count   = $disks.Count
-    worst_disk   = $worst.Name
-    worst_health = $worst.Health
+    disk_count  = $disks.Count
+    known_count = $knownCount
 }
-if ($null -ne $worst.Wear) {
-    $facts['wear_pct'] = $worst.Wear
+if ($null -ne $worst) {
+    $facts['worst_disk'] = $worst.Name
+    $facts['worst_health'] = $worst.Health
+    if ($null -ne $worst.Wear) {
+        $facts['wear_pct'] = $worst.Wear
+    }
+    if ($null -ne $worst.Temperature) {
+        $facts['temperature_c'] = $worst.Temperature
+    }
+    if ($null -ne $worst.Hours) {
+        $facts['power_on_hours'] = $worst.Hours
+    }
 }
-if ($null -ne $worst.Temperature) {
-    $facts['temperature_c'] = $worst.Temperature
-}
-if ($null -ne $worst.Hours) {
-    $facts['power_on_hours'] = $worst.Hours
+$facts['unknown_count'] = $unknownInternal.Count
+if ($unknownInternal.Count -gt 0) {
+    $facts['unknown_disks'] = ($unknownInternal -join ', ')
 }
 $facts['disks'] = ($summaries -join '; ')
 
 [pscustomobject]@{
-    result = $worstLevel
+    result = $result
     facts  = $facts
 }

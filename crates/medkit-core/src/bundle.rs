@@ -108,6 +108,7 @@ fn load_scripts(dir: &Path, problems: &mut Vec<Problem>) -> BTreeMap<String, Bun
         let sha256 = sha256_hex(content.as_bytes());
         out.insert(rel, BundledScript { sha256, content });
     }
+    problems.extend(lint::lint_shared_blocks(out.iter().map(|(rel, s)| (rel.as_str(), s.content.as_str()))));
     out
 }
 

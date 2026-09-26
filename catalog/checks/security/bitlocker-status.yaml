@@ -2,11 +2,17 @@
 # 数据来源：root\cimv2\Security\MicrosoftVolumeEncryption 的 Win32_EncryptableVolume，
 # 只看有盘符的固定磁盘（VolumeType 0 系统盘、1 数据盘；2 可移动盘跳过）。
 # 下面任一情况就算「已加密」：ProtectionStatus 为 1（保护已开）或 2（状态未知，比如分区被锁住）；
-# ConversionStatus 不为 0（全部或部分已加密，包括「保护已暂停」和 24H2 设备加密「等待激活」的状态）。
-# 事实：encrypted_volumes（如「C:, D:」）、encrypted_count、volume_count、protection_on、converting。
+# ConversionStatus 不为 0（全部或部分已加密）。
+# 保护关着（ProtectionStatus 0）但已加密的，用 GetKeyProtectors 分成两种：
+#   有密钥保护器 → 「保护已暂停」，以后还是要恢复密钥，算 on；
+#   一个保护器都没有 → 设备加密「等待激活」（24H2 全新安装、只用本地账户登录时常见）：用明文密钥加密，
+#   微软原话「remains unprotected even though the data is encrypted」，这时还没有恢复密钥，算 waiting。
+#   GetKeyProtectors 调用失败时按 on 处理（更保守）。
+# 事实：encrypted_volumes（如「C:, D:」）、waiting_volumes、encrypted_count、volume_count、protection_on、converting。
 # WMI 命名空间不存在等错误由脚本抛出，界面显示「没查出来」。
 # 结果代码 "off" / "on" 特意加了引号：按 YAML 1.1 解析的工具（比如 PyYAML、部分编辑器插件）
 # 会把不带引号的 on / off 当成布尔值。
+# 待真机验证：「等待激活」状态下 GetKeyProtectors 确实返回空（对照 manage-bde -status 的「密钥保护器：未找到」）。
 id: security.bitlocker-status
 schema_version: 1
 title: { zh-CN: BitLocker 加密 }
@@ -28,8 +34,16 @@ results:
       zh-CN: "硬盘分区 {encrypted_volumes} 已开启 BitLocker 加密。数据更安全，但重装系统、换主板或刷 BIOS 以后，开机可能要求输入 48 位恢复密钥，输不出来就打不开硬盘。"
     fixer: user
     next:
-      zh-CN: "请确认恢复密钥已经备份：用手机或电脑打开 aka.ms/myrecoverykey，登录你的微软账户就能看到。那里没有的话，专业版可以在开始菜单搜索「管理 BitLocker」，点「备份恢复密钥」存到 U 盘或打印出来。重装系统、换主板或刷 BIOS 之前，一定要先备份好恢复密钥。"
+      zh-CN: "请确认恢复密钥已经备份：用手机或电脑打开 aka.ms/myrecoverykey，登录你的微软账户就能看到（家庭版的恢复密钥一般就存在当初登录这台电脑的那个微软账户里）。专业版还可以在开始菜单搜索「管理 BitLocker」，点「备份恢复密钥」存到 U 盘或打印出来。家庭版在微软账户里找不到的话，请懂哥帮忙用管理员命令查出恢复密钥抄下来。重装系统、换主板或刷 BIOS 之前，一定要先备份好恢复密钥。"
+  waiting:
+    status: ok
+    message:
+      zh-CN: "硬盘分区 {waiting_volumes} 已经加密，但还没有启用保护（系统里显示为「等待激活」）。现在还没有恢复密钥，重装系统时也不需要。"
+    next:
+      zh-CN: 以后用微软账户登录这台电脑时，系统会自动启用保护，并把恢复密钥存到你的微软账户里，到时候用手机打开 aka.ms/myrecoverykey 就能看到。
 references:
   - https://learn.microsoft.com/en-us/windows/win32/secprov/win32-encryptablevolume
+  - https://learn.microsoft.com/en-us/windows/win32/secprov/getkeyprotectors-win32-encryptablevolume
+  - https://learn.microsoft.com/en-us/windows/security/operating-system-security/data-protection/bitlocker/
   - https://support.microsoft.com/en-us/windows/find-your-bitlocker-recovery-key-6b71ad27-0b89-ea08-f143-056f5ab347d6
   - https://support.microsoft.com/en-us/windows/device-encryption-in-windows-cf7e2b6f-3e70-4882-9532-18633605b7df

@@ -1,15 +1,18 @@
 # 系统盘是固态硬盘还是机械硬盘。脚本：scripts/checks/hardware/system-disk-type.ps1
 # 顺着系统盘找到物理盘：Get-Partition → Get-Disk → Get-PhysicalDisk（按 DeviceId = 盘号对应，
-# 对不上时再按序列号），读 MediaType（HDD / SSD / SCM / Unspecified）和 BusType。
-# 虚拟机的虚拟磁盘返回 virtual，不显示。MediaType 为 Unspecified 时：NVMe、SD、MMC、UFS、SCM 总线一定是闪存；
-# 按 MSFT_PhysicalDisk 的文档，SpindleSpeed 为 0 表示非旋转介质（固态）；其他转速（包括 0xFFFFFFFF「转速未知」）
-# 按机械盘处理。拿不到 SpindleSpeed 时脚本报错，显示「没查出来」。
-# 待真机验证：Intel RST / VMD 的 RAID 模式下能否对应到物理盘；eMMC 小本的 BusType。
+# 对不上时再按序列号），读 MediaType（HDD / SSD / SCM / Unspecified）和 BusType。判断顺序：
+#   虚拟机的虚拟磁盘 → virtual（不显示）；MediaType 是 SSD / SCM → ssd；
+#   型号名里有 SSD、NVMe、Solid State → ssd（RAID 控制器后面的固态硬盘有时会被报成 HDD 或 Unspecified）；
+#   NVMe、SD、MMC、UFS、SCM 总线 → ssd（一定是闪存）；
+#   RAID 总线 → unsure（控制器把真正的硬盘藏起来了，判断不了；对不上唯一物理盘的 RAID 卷也是 unsure）；
+#   MediaType 是 HDD → hdd；拿不到 SpindleSpeed → unsure；
+#   SpindleSpeed 为 0（按 MSFT_PhysicalDisk 的文档表示非旋转介质）→ ssd；其他转速（包括 0xFFFFFFFF「转速未知」）→ hdd。
+# 待真机验证：Intel RST / VMD 的 RAID 模式下报的是什么（现在判为 unsure，除非 MediaType 报 SSD 或型号名能看出来）；eMMC 小本的 BusType。
 id: hardware.system-disk-type
 schema_version: 1
 title: { zh-CN: 系统盘类型 }
 description:
-  zh-CN: 看看系统装在固态硬盘还是机械硬盘上。系统装在机械硬盘上，开机和打开软件都会很慢。
+  zh-CN: 看看系统装在固态硬盘还是机械硬盘上。系统装在机械硬盘上，开机和打开软件都会明显慢一些。
 category: hardware
 requires_admin: false
 timeout_sec: 30
@@ -23,10 +26,16 @@ results:
   hdd:
     status: advice
     message:
-      zh-CN: 系统装在机械硬盘上，这是电脑慢的主要原因。
+      zh-CN: 系统装在机械硬盘上，开机和打开软件都会明显慢一些。
     fixer: hardware
     next:
-      zh-CN: 换一块固态硬盘是最有效的办法。可以找懂哥或电脑店帮忙安装，把系统迁移过去或者重装。换之前记得备份重要文件。
+      zh-CN: 换一块固态硬盘是最有效的办法。可以找懂哥或电脑店帮忙安装，把系统迁移过去或者重装。换之前记得备份重要文件；开了 BitLocker 加密的，还要先确认恢复密钥。
+  unsure:
+    status: unknown
+    message:
+      zh-CN: "系统盘「{model}」接在 RAID（磁盘阵列）控制器上，或者系统没有报告它是哪种硬盘，小药箱判断不了它是固态硬盘还是机械硬盘。"
+    next:
+      zh-CN: 可以看看电脑的配置单，或者问懂哥、售后。
   virtual:
     status: na
     message:

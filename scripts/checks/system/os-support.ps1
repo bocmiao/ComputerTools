@@ -3,7 +3,16 @@
 # Reads HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion (CurrentBuild,
 # DisplayVersion, EditionID, ProductName, InstallationType). ProductName still
 # says "Windows 10" on Windows 11, so the OS is decided by build >= 22000.
-# Read-only. Result codes: supported / win10 / expired / ltsc.
+# Read-only. Result codes:
+#   supported       Windows 11 within its servicing period
+#   ltsc            long-term servicing edition within its servicing period
+#   win10           Windows 10 22H2, Home/Pro family: can enroll in consumer ESU
+#   expired         older Windows 10, Home/Pro family: update to 22H2, then ESU
+#   expired-win11   Windows 11 version past its end date: install the latest
+#                   feature update
+#   expired-no-esu  past its end and no consumer ESU: Enterprise / Education /
+#                   IoT editions of Windows 10, expired LTSB/LTSC, and any
+#                   Windows 10 once consumer ESU has ended
 #
 # End-of-servicing dates come from the Microsoft Lifecycle pages (checked on
 # 2026-09-26). The pages show dates in Pacific Time; the times they list
@@ -112,6 +121,8 @@ $version = $displayVersion
 $endDate = ''
 $result = $null
 
+$esuOpen = -not (Test-DatePassed $esuEndDate)
+
 if ($isLtsc) {
     if (-not $ltscTable.ContainsKey($build)) {
         throw ('Unknown LTSB/LTSC build {0} ({1}); the lifecycle table needs an update' -f $build, $edition)
@@ -123,7 +134,7 @@ if ($isLtsc) {
         $endDate = $row[2]
     }
     if (Test-DatePassed $endDate) {
-        $result = 'expired'
+        $result = 'expired-no-esu'
     }
     else {
         $result = 'ltsc'
@@ -140,7 +151,7 @@ elseif ($build -ge 22000) {
         $endDate = $row[2]
     }
     if (Test-DatePassed $endDate) {
-        $result = 'expired'
+        $result = 'expired-win11'
     }
     else {
         $result = 'supported'
@@ -152,16 +163,22 @@ elseif ($build -eq $win10FinalBuild) {
     # editions can enroll in consumer ESU from Settings.
     $version = '22H2'
     $endDate = $win10EndDate
-    if ((-not $isEnterprise) -and (-not (Test-DatePassed $esuEndDate))) {
+    if ((-not $isEnterprise) -and $esuOpen) {
         $result = 'win10'
     }
     else {
-        $result = 'expired'
+        $result = 'expired-no-esu'
     }
 }
 elseif ($build -ge 10240) {
-    # Older Windows 10 releases (non-LTSC) all ended before 22H2 did.
-    $result = 'expired'
+    # Older Windows 10 releases (non-LTSC) all ended before 22H2 did. Home/Pro
+    # can still update to 22H2 and enroll in consumer ESU while it lasts.
+    if ((-not $isEnterprise) -and $esuOpen) {
+        $result = 'expired'
+    }
+    else {
+        $result = 'expired-no-esu'
+    }
 }
 else {
     throw ('Windows build {0} is older than Windows 10' -f $build)
@@ -176,7 +193,7 @@ $facts = [ordered]@{
 if ($endDate.Length -gt 0) {
     $facts['end_date'] = $endDate
 }
-if ($result -eq 'win10') {
+if (($result -eq 'win10') -or ($result -eq 'expired')) {
     $facts['esu_end'] = $esuEndDate
 }
 

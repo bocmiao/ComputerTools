@@ -1,28 +1,40 @@
 # Check: network.proxy-dead
-# Does the system proxy point at a program on this PC that is no longer running?
+# Does a system proxy point at a program on this PC that is no longer running?
 # That is what VPN tools and game accelerators leave behind when they are
 # uninstalled or crash: the proxy is on, it points at 127.0.0.1:7890, and
 # nothing listens on that port, so web pages stop loading.
 #
-# Two places hold the per-user proxy setting (read via -UserHive):
-#   1. Internet Settings\Connections\DefaultConnectionSettings (REG_BINARY).
-#      This is what WinINet and .NET actually use. Layout (little-endian DWORDs):
-#        offset 0  version, offset 4 change counter, offset 8 flags
-#        (0x02 = manual proxy server in use), offset 12 length N of the proxy
-#        server string, then N bytes of ANSI text.
-#   2. The legacy values Internet Settings\ProxyEnable / ProxyServer, which
+# WinINet keeps proxy settings per connection (read via -UserHive):
+#   1. LAN: Internet Settings\Connections\DefaultConnectionSettings (REG_BINARY),
+#      plus the legacy values Internet Settings\ProxyEnable / ProxyServer, which
 #      WinINet keeps in sync and which many tools write directly.
-# The blob is used when it exists and is at least 16 bytes. The proxy counts as
-# on if either place says so; the endpoint that is tested comes from the blob
-# when the blob has the proxy on with a server string, otherwise from the legacy
-# values.
+#   2. Every dial-up / VPN (RAS) connection, for example a PPPoE "broadband
+#      connection": Internet Settings\Connections\<connection name>, same binary
+#      layout. WinINet uses the settings of an active dial-up / VPN connection
+#      instead of the LAN settings, and some proxy tools (v2rayN, for example)
+#      write the proxy into every connection.
+#   SavedLegacySettings and WinHttpSettings under Connections are not
+#   connections and are ignored.
+# Binary layout (little-endian DWORDs; reverse-engineered by the community):
+#   offset 0 version, 4 change counter, 8 flags (0x02 = manual proxy server,
+#   0x04 = automatic configuration script), 12 length N of the proxy server
+#   string + N bytes of ANSI text, then the bypass list and the automatic
+#   configuration (PAC) URL in the same length + text form.
+# LAN: the blob decides when it has the proxy on with a server string, otherwise
+# the legacy values. Every dial-up / VPN connection is tested on its own.
 # ProxyServer / the blob string is either "host:port" or per protocol,
 # "http=host:port;https=host:port;socks=host:port", sometimes with a scheme
-# ("http://127.0.0.1:7890"). For local endpoints (127.0.0.0/8, localhost, ::1)
-# a TCP connection is attempted with a 500 ms timeout.
-# AutoConfigURL (PAC script) is reported as a fact only: the fix
-# (network.proxy-off) only turns off the manual proxy.
-# Read-only. Result codes: none / remote / alive / dead.
+# ("http://127.0.0.1:7890"). For local endpoints (127.0.0.0/8, localhost, ::1,
+# 0.0.0.0) a TCP connection is attempted with a 500 ms timeout; proxies on other
+# machines are not tested.
+# Read-only. Result codes:
+#   none         no manual proxy anywhere
+#   none-pac     no manual proxy, but an automatic configuration script (PAC) is set
+#   remote       only proxies on other machines (not tested)
+#   alive        a local proxy answers (and no local proxy is dead)
+#   dead         the LAN proxy points at this PC and nothing answers
+#   dead-dialup  the LAN proxy is fine or off, but a dial-up / VPN connection's
+#                proxy points at this PC and nothing answers
 
 [CmdletBinding()]
 param(
@@ -33,6 +45,10 @@ $ErrorActionPreference = 'Stop'
 
 $connectTimeoutMs = 500
 $proxyFlag = 2
+$pacFlag = 4
+$lanValue = 'DefaultConnectionSettings'
+# Binary values under Connections that are not per-connection proxy settings.
+$ignoredValues = @('SavedLegacySettings', 'WinHttpSettings')
 
 function Get-PropertyText {
     param($Object, [string]$Name)
@@ -46,22 +62,59 @@ function Get-PropertyText {
     return ([string]$prop.Value).Trim()
 }
 
-# Returns the raw value, or $null when the key or the value does not exist.
-function Get-RegistryValue {
-    param([string]$Path, [string]$Name)
-    if (-not (Test-Path -LiteralPath $Path)) {
-        return $null
+# ---- shared block proxy-test: identical in checks/network/proxy-dead.ps1, features/network/proxy-off-detect.ps1 and proxy-off-run.ps1 (medkit-data check compares them) ----
+# Every per-connection settings blob under Connections: name -> byte[].
+# Values that are not REG_BINARY or shorter than 12 bytes are skipped.
+function Get-ConnectionBlobs {
+    param([string]$Path)
+    $result = [ordered]@{}
+    if (Test-Path -LiteralPath $Path) {
+        $key = Get-Item -LiteralPath $Path
+        foreach ($name in @($key.GetValueNames())) {
+            if ([string]::IsNullOrEmpty($name) -or ($ignoredValues -contains $name)) {
+                continue
+            }
+            $value = $key.GetValue($name)
+            if (($value -is [byte[]]) -and ($value.Length -ge 12)) {
+                $result[$name] = $value
+            }
+        }
     }
-    $item = Get-ItemProperty -LiteralPath $Path
-    if ($null -eq $item) {
-        return $null
+    # The unary comma keeps the dictionary in one piece.
+    return , $result
+}
+
+# Flags, proxy server string and PAC URL of one connection settings blob.
+# Strings that do not fit into the blob are left empty.
+function Read-ConnectionBlob {
+    param([byte[]]$Blob)
+    $texts = New-Object System.Collections.Generic.List[string]
+    $offset = 12
+    for ($i = 0; $i -lt 3; $i++) {
+        if (($offset + 4) -gt $Blob.Length) {
+            break
+        }
+        $length = [long][System.BitConverter]::ToUInt32($Blob, $offset)
+        $offset += 4
+        if (($offset + $length) -gt $Blob.Length) {
+            break
+        }
+        $texts.Add(([System.Text.Encoding]::Default.GetString($Blob, $offset, [int]$length)).Trim([char]0).Trim())
+        $offset += [int]$length
     }
-    $prop = $item.PSObject.Properties[$Name]
-    if ($null -eq $prop) {
-        return $null
+    $server = ''
+    $pacUrl = ''
+    if ($texts.Count -ge 1) {
+        $server = $texts[0]
     }
-    # The unary comma keeps a byte[] from being unrolled into single bytes.
-    return , $prop.Value
+    if ($texts.Count -ge 3) {
+        $pacUrl = $texts[2]
+    }
+    return [pscustomobject]@{
+        Flags  = [System.BitConverter]::ToUInt32($Blob, 8)
+        Server = $server
+        Pac    = $pacUrl
+    }
 }
 
 # Splits a proxy server string into endpoints: @{ Protocol; Host; Port }.
@@ -211,6 +264,35 @@ function Test-LocalPort {
     return $false
 }
 
+# Tests one proxy server string. State: remote / alive / dead, or unparsed when
+# no endpoint can be read from it.
+function Test-ProxyServer {
+    param([string]$Server)
+    $endpoints = @(Get-ProxyEndpoints $Server)
+    if ($endpoints.Count -eq 0) {
+        return [pscustomobject]@{ State = 'unparsed'; Address = '' }
+    }
+    $local = @($endpoints | Where-Object { Test-LocalHost $_.Host })
+    if ($local.Count -eq 0) {
+        return [pscustomobject]@{ State = 'remote'; Address = (Format-Endpoint $endpoints[0]) }
+    }
+    # One program usually serves every local port; if any of them answers,
+    # the proxy works.
+    $tested = New-Object System.Collections.Generic.List[string]
+    foreach ($ep in $local) {
+        $label = Format-Endpoint $ep
+        if ($tested.Contains($label)) {
+            continue
+        }
+        $tested.Add($label)
+        if (Test-LocalPort -Name $ep.Host -Port $ep.Port -TimeoutMs $connectTimeoutMs) {
+            return [pscustomobject]@{ State = 'alive'; Address = $label }
+        }
+    }
+    return [pscustomobject]@{ State = 'dead'; Address = (Format-Endpoint $local[0]) }
+}
+# ---- end of shared block proxy-test ----
+
 if ([string]::IsNullOrWhiteSpace($UserHive)) {
     $UserHive = 'HKCU:'
 }
@@ -227,24 +309,41 @@ if ($enableText.Length -gt 0) {
 $legacyServer = Get-PropertyText $settings 'ProxyServer'
 $pac = Get-PropertyText $settings 'AutoConfigURL'
 
-# DefaultConnectionSettings.
+# Connection blobs: the LAN one and one per dial-up / VPN connection.
+$blobs = Get-ConnectionBlobs $connectionsPath
+
 $blobPresent = $false
 $blobEnabled = $false
 $blobServer = ''
-$raw = Get-RegistryValue -Path $connectionsPath -Name 'DefaultConnectionSettings'
-if (($null -ne $raw) -and ($raw -is [byte[]]) -and ($raw.Length -ge 16)) {
-    $blob = [byte[]]$raw
+if ($blobs.Contains($lanValue)) {
+    $lan = Read-ConnectionBlob $blobs[$lanValue]
     $blobPresent = $true
-    $flags = [System.BitConverter]::ToUInt32($blob, 8)
-    $blobEnabled = (($flags -band $proxyFlag) -ne 0)
-    $length = [System.BitConverter]::ToUInt32($blob, 12)
-    if (($length -gt 0) -and ((16 + [long]$length) -le $blob.Length)) {
-        $blobServer = [System.Text.Encoding]::Default.GetString($blob, 16, [int]$length).Trim([char]0).Trim()
+    $blobEnabled = (($lan.Flags -band $proxyFlag) -ne 0)
+    $blobServer = $lan.Server
+    if (($pac.Length -eq 0) -and (($lan.Flags -band $pacFlag) -ne 0)) {
+        $pac = $lan.Pac
     }
 }
 
-# Which setting decides: the blob when it has the proxy on with a server string,
-# otherwise the legacy values.
+$dialupCount = 0
+$dialupOn = New-Object System.Collections.Generic.List[string]
+$dialupSources = New-Object System.Collections.Generic.List[object]
+foreach ($name in @($blobs.Keys)) {
+    if ($name -eq $lanValue) {
+        continue
+    }
+    $dialupCount++
+    $info = Read-ConnectionBlob $blobs[$name]
+    if (($info.Flags -band $proxyFlag) -ne 0) {
+        $dialupOn.Add($name)
+        if ($info.Server.Length -gt 0) {
+            $dialupSources.Add([pscustomobject]@{ Name = $name; Server = $info.Server })
+        }
+    }
+}
+
+# Which LAN setting decides: the blob when it has the proxy on with a server
+# string, otherwise the legacy values.
 $source = ''
 $server = ''
 if ($blobPresent -and $blobEnabled -and ($blobServer.Length -gt 0)) {
@@ -275,45 +374,65 @@ if ($source.Length -gt 0) {
     $facts['proxy_source'] = $source
 }
 $facts['pac_url'] = $pac
-
-if ($source.Length -eq 0) {
-    $result = 'none'
+$facts['dialup_count'] = $dialupCount
+if ($dialupOn.Count -gt 0) {
+    $facts['dialup_proxy'] = ($dialupOn -join ', ')
 }
-else {
-    $endpoints = @(Get-ProxyEndpoints $server)
-    if ($endpoints.Count -eq 0) {
+
+# Test the LAN proxy and every dial-up / VPN proxy.
+$lanState = $null
+if ($source.Length -gt 0) {
+    $lanState = Test-ProxyServer $server
+    if ($lanState.State -eq 'unparsed') {
         throw ("Cannot parse the proxy server value '{0}'" -f $server)
     }
-    $local = @($endpoints | Where-Object { Test-LocalHost $_.Host })
-    if ($local.Count -eq 0) {
-        $facts['proxy_address'] = Format-Endpoint $endpoints[0]
-        $result = 'remote'
+}
+$dialupStates = New-Object System.Collections.Generic.List[object]
+foreach ($s in $dialupSources) {
+    $state = Test-ProxyServer $s.Server
+    if ($state.State -ne 'unparsed') {
+        $dialupStates.Add([pscustomobject]@{ Name = $s.Name; State = $state.State; Address = $state.Address })
     }
-    else {
-        # One program usually serves every local port; if any of them answers,
-        # the proxy works.
-        $alive = $false
-        $tested = New-Object System.Collections.Generic.List[string]
-        foreach ($ep in $local) {
-            $label = Format-Endpoint $ep
-            if ($tested.Contains($label)) {
-                continue
-            }
-            $tested.Add($label)
-            if (Test-LocalPort -Name $ep.Host -Port $ep.Port -TimeoutMs $connectTimeoutMs) {
-                $alive = $true
-                $facts['proxy_address'] = $label
-                break
-            }
-        }
-        if ($alive) {
-            $result = 'alive'
-        }
-        else {
-            $facts['proxy_address'] = Format-Endpoint $local[0]
-            $result = 'dead'
-        }
+}
+
+$deadDialup = @($dialupStates | Where-Object { $_.State -eq 'dead' })
+$aliveDialup = @($dialupStates | Where-Object { $_.State -eq 'alive' })
+$remoteDialup = @($dialupStates | Where-Object { $_.State -eq 'remote' })
+
+if (($null -ne $lanState) -and ($lanState.State -eq 'dead')) {
+    $result = 'dead'
+    $facts['proxy_address'] = $lanState.Address
+    if ($deadDialup.Count -gt 0) {
+        $facts['dead_dialup'] = (@($deadDialup | ForEach-Object { $_.Name }) -join ', ')
     }
+}
+elseif ($deadDialup.Count -gt 0) {
+    $result = 'dead-dialup'
+    $facts['connection'] = $deadDialup[0].Name
+    $facts['proxy_address'] = $deadDialup[0].Address
+    $facts['dead_dialup'] = (@($deadDialup | ForEach-Object { $_.Name }) -join ', ')
+}
+elseif (($null -ne $lanState) -and ($lanState.State -eq 'alive')) {
+    $result = 'alive'
+    $facts['proxy_address'] = $lanState.Address
+}
+elseif ($aliveDialup.Count -gt 0) {
+    $result = 'alive'
+    $facts['proxy_address'] = $aliveDialup[0].Address
+}
+elseif (($null -ne $lanState) -and ($lanState.State -eq 'remote')) {
+    $result = 'remote'
+    $facts['proxy_address'] = $lanState.Address
+}
+elseif ($remoteDialup.Count -gt 0) {
+    $result = 'remote'
+    $facts['proxy_address'] = $remoteDialup[0].Address
+}
+elseif ($pac.Length -gt 0) {
+    $result = 'none-pac'
+}
+else {
+    $result = 'none'
 }
 
 [pscustomobject]@{

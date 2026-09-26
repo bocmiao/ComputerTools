@@ -2,7 +2,9 @@
 # Produces the "leftover proxy" state that network.proxy-dead reports as dead:
 #   Internet Settings\ProxyEnable = 1, ProxyServer = 127.0.0.1:9 (discard port;
 #   normally nothing listens there)
-#   Connections\DefaultConnectionSettings, only if it already exists:
+#   every connection blob under Internet Settings\Connections that already exists
+#   (DefaultConnectionSettings and each dial-up / VPN connection; not
+#   SavedLegacySettings or WinHttpSettings):
 #     - well-formed (at least 16 bytes and the proxy string fits): rewritten as
 #       version, counter + 1, flags | 0x02, new length, "127.0.0.1:9", and every
 #       byte after the original proxy string copied unchanged
@@ -19,23 +21,25 @@ $ErrorActionPreference = 'Stop'
 
 $proxyFlag = 2
 $proxyServer = '127.0.0.1:9'
+$ignoredValues = @('SavedLegacySettings', 'WinHttpSettings')
 
-# Returns the raw value, or $null when the key or the value does not exist.
-function Get-RegistryValue {
-    param([string]$Path, [string]$Name)
-    if (-not (Test-Path -LiteralPath $Path)) {
-        return $null
+# Every per-connection settings blob under Connections: name -> byte[].
+function Get-ConnectionBlobs {
+    param([string]$Path)
+    $result = [ordered]@{}
+    if (Test-Path -LiteralPath $Path) {
+        $key = Get-Item -LiteralPath $Path
+        foreach ($name in @($key.GetValueNames())) {
+            if ([string]::IsNullOrEmpty($name) -or ($ignoredValues -contains $name)) {
+                continue
+            }
+            $value = $key.GetValue($name)
+            if (($value -is [byte[]]) -and ($value.Length -ge 12)) {
+                $result[$name] = $value
+            }
+        }
     }
-    $item = Get-ItemProperty -LiteralPath $Path
-    if ($null -eq $item) {
-        return $null
-    }
-    $prop = $item.PSObject.Properties[$Name]
-    if ($null -eq $prop) {
-        return $null
-    }
-    # The unary comma keeps a byte[] from being unrolled into single bytes.
-    return , $prop.Value
+    return , $result
 }
 
 # Writes a little-endian DWORD into the array in place.
@@ -53,6 +57,37 @@ function Get-NextCounter {
     return [uint32]($Value + 1)
 }
 
+# The blob with the manual proxy switched on and pointing at $proxyServer.
+function Get-BrokenBlob {
+    param([byte[]]$Blob)
+    $flags = [System.BitConverter]::ToUInt32($Blob, 8) -bor $proxyFlag
+    $counter = Get-NextCounter ([System.BitConverter]::ToUInt32($Blob, 4))
+
+    $oldLength = -1
+    if ($Blob.Length -ge 16) {
+        $oldLength = [long][System.BitConverter]::ToUInt32($Blob, 12)
+    }
+    if (($oldLength -ge 0) -and ((16 + $oldLength) -le $Blob.Length)) {
+        $proxyBytes = [System.Text.Encoding]::ASCII.GetBytes($proxyServer)
+        $restStart = [int](16 + $oldLength)
+        $restLength = $Blob.Length - $restStart
+        $newBlob = New-Object byte[] (16 + $proxyBytes.Length + $restLength)
+        [System.Array]::Copy($Blob, 0, $newBlob, 0, 4)
+        Set-UInt32 -Bytes $newBlob -Offset 4 -Value $counter
+        Set-UInt32 -Bytes $newBlob -Offset 8 -Value ([uint32]$flags)
+        Set-UInt32 -Bytes $newBlob -Offset 12 -Value ([uint32]$proxyBytes.Length)
+        [System.Array]::Copy($proxyBytes, 0, $newBlob, 16, $proxyBytes.Length)
+        if ($restLength -gt 0) {
+            [System.Array]::Copy($Blob, $restStart, $newBlob, 16 + $proxyBytes.Length, $restLength)
+        }
+        return [pscustomobject]@{ Mode = 'rewritten'; Blob = $newBlob }
+    }
+    $copy = [byte[]]$Blob.Clone()
+    Set-UInt32 -Bytes $copy -Offset 4 -Value $counter
+    Set-UInt32 -Bytes $copy -Offset 8 -Value ([uint32]$flags)
+    return [pscustomobject]@{ Mode = 'flag-only'; Blob = $copy }
+}
+
 if ([string]::IsNullOrWhiteSpace($UserHive)) {
     $UserHive = 'HKCU:'
 }
@@ -66,47 +101,18 @@ if (-not (Test-Path -LiteralPath $settingsPath)) {
 Set-ItemProperty -LiteralPath $settingsPath -Name 'ProxyEnable' -Value 1 -Type DWord
 Set-ItemProperty -LiteralPath $settingsPath -Name 'ProxyServer' -Value $proxyServer -Type String
 
-$blobMode = 'absent'
-$blob = Get-RegistryValue -Path $connectionsPath -Name 'DefaultConnectionSettings'
-if (($null -ne $blob) -and ($blob -is [byte[]]) -and ($blob.Length -ge 12)) {
-    $flags = [System.BitConverter]::ToUInt32($blob, 8) -bor $proxyFlag
-    $counter = Get-NextCounter ([System.BitConverter]::ToUInt32($blob, 4))
-
-    $oldLength = -1
-    if ($blob.Length -ge 16) {
-        $oldLength = [long][System.BitConverter]::ToUInt32($blob, 12)
-    }
-    if (($oldLength -ge 0) -and ((16 + $oldLength) -le $blob.Length)) {
-        $proxyBytes = [System.Text.Encoding]::ASCII.GetBytes($proxyServer)
-        $restStart = [int](16 + $oldLength)
-        $restLength = $blob.Length - $restStart
-        $newBlob = New-Object byte[] (16 + $proxyBytes.Length + $restLength)
-        [System.Array]::Copy($blob, 0, $newBlob, 0, 4)
-        Set-UInt32 -Bytes $newBlob -Offset 4 -Value $counter
-        Set-UInt32 -Bytes $newBlob -Offset 8 -Value ([uint32]$flags)
-        Set-UInt32 -Bytes $newBlob -Offset 12 -Value ([uint32]$proxyBytes.Length)
-        [System.Array]::Copy($proxyBytes, 0, $newBlob, 16, $proxyBytes.Length)
-        if ($restLength -gt 0) {
-            [System.Array]::Copy($blob, $restStart, $newBlob, 16 + $proxyBytes.Length, $restLength)
-        }
-        $blobMode = 'rewritten'
-    }
-    else {
-        $newBlob = [byte[]]$blob.Clone()
-        Set-UInt32 -Bytes $newBlob -Offset 4 -Value $counter
-        Set-UInt32 -Bytes $newBlob -Offset 8 -Value ([uint32]$flags)
-        $blobMode = 'flag-only'
-    }
-    Set-ItemProperty -LiteralPath $connectionsPath -Name 'DefaultConnectionSettings' -Value $newBlob -Type Binary
-}
-elseif ($null -ne $blob) {
-    $blobMode = 'left-unchanged'
+$blobs = Get-ConnectionBlobs $connectionsPath
+$modes = New-Object System.Collections.Generic.List[string]
+foreach ($name in @($blobs.Keys)) {
+    $broken = Get-BrokenBlob -Blob $blobs[$name]
+    Set-ItemProperty -LiteralPath $connectionsPath -Name $name -Value ([byte[]]$broken.Blob) -Type Binary
+    $modes.Add(('{0}={1}' -f $name, $broken.Mode))
 }
 
 [pscustomobject]@{
     result = 'broken'
     facts  = [ordered]@{
         proxy_server = $proxyServer
-        blob         = $blobMode
+        connections  = ($modes -join ', ')
     }
 }

@@ -1,25 +1,35 @@
-# 关掉失效的系统代理（脚本类功能）。脚本在 scripts/features/network/ 下：
-#   proxy-off-detect.ps1  两处都没开代理 → applied；两处都开着 → not-applied；只有一处开着 → partial
-#                         （二进制值不存在时只看 ProxyEnable）
-#   proxy-off-run.ps1     先记下原状态 before = { proxy_enable, dcs（十六进制）}，再改：
-#                         1. Internet Settings\ProxyEnable 设为 DWORD 0；
-#                         2. Internet Settings\Connections\DefaultConnectionSettings（WinINet 和 .NET
-#                            实际读取的二进制值）存在且不少于 12 字节、偏移 8 的标志里有 0x02 时，
-#                            清掉 0x02，偏移 4 的计数器加 1，写回 REG_BINARY。
+# 关掉失效的系统代理（脚本类功能）。脚本在 scripts/features/network/ 下。
+# 「连接」指 Internet Settings\Connections 下的每个二进制值：DefaultConnectionSettings 是局域网，其余每个值是一个
+# 拨号或 VPN 连接（比如 PPPoE 的「宽带连接」），格式相同；SavedLegacySettings、WinHttpSettings 不是连接，不碰。
+# 只处理「指向本机（127.x、localhost、::1、0.0.0.0）、试连没有程序在听」的手动代理，判断方法和 network.proxy-dead
+# 完全一样（三个脚本里共用的函数必须保持一致）；还在运行的代理、别的机器上的代理（单位、学校的代理服务器）一律不动。
+#   proxy-off-detect.ps1  局域网（DefaultConnectionSettings 开着代理且有地址时看它，否则看 ProxyEnable + ProxyServer）
+#                         或任何一个拨号、VPN 连接还有失效的本机代理 → not-applied；都没有 → applied。
+#                         撤销前引擎用它核对修复是否还在。
+#   proxy-off-run.ps1     先记下原状态 before = { proxy_enable, legacy_changed, connections: { 连接名: 原值十六进制 } }
+#                         （connections 只记这次要改的连接），再改：
+#                         1. 局域网的代理失效时：ProxyEnable 设为 DWORD 0，DefaultConnectionSettings 清掉 0x02；
+#                         2. 每个代理失效的拨号、VPN 连接：清掉 0x02。
+#                         二进制值只改偏移 8 的标志位 0x02，偏移 4 的计数器加 1，其余字节原样保留。
 #                         ProxyServer、ProxyOverride、AutoConfigURL、SavedLegacySettings 都不动。
-#   proxy-off-undo.ps1    按 -Before 原样写回两个值；原来不存在的就删掉，不会新建空的 Connections 键
-#   proxy-off-break.ps1   只在测试中使用：ProxyEnable = 1、ProxyServer = 127.0.0.1:9（discard 端口，
-#                         平时没有程序监听），二进制值存在时把代理标志和代理地址也改成同样的状态
+#                         中途写入失败时，先把已经改了的退回去再报错。
+#   proxy-off-undo.ps1    按位恢复，和执行对称：ProxyEnable 改回原值（原来不存在就删掉，只在执行时改过它才动）；
+#                         记下的每个连接，只把 0x02 位改回原来的状态、计数器加 1，其余字节保留现在的值——
+#                         之后改过的代理地址、例外列表、自动配置脚本、自动检测都不会被覆盖。
+#                         执行前存在、现在却不存在（或者已经不是可用的二进制值）的，才把原值整段写回。
+#                         也能读旧版本执行脚本记下的 { proxy_enable, dcs }。
+#   proxy-off-break.ps1   只在测试中使用：ProxyEnable = 1、ProxyServer = 127.0.0.1:9（discard 端口，平时没有程序监听），
+#                         已经存在的每个连接的二进制值都改成代理开着、指向同一个地址
 # 修完用 network.proxy-dead 复查（verify），引擎据此判断是否修好。
 # 二进制值的格式是社区逆向出来的，微软没有公开；脚本只改标志位和计数器，其余字节原样保留。
 # 已知限制：已经在运行的程序会继续用它缓存的代理设置，脚本没法通知它们（不用 Add-Type 就调不了
-# InternetSetOption），所以要提醒用户重开浏览器。改完是否立刻生效、重启后是否保持，见
-# docs/real-machine-checklist.md。
+# InternetSetOption），所以要提醒用户重开浏览器。改完是否立刻生效、重启后是否保持，以及拨号连接的处理，
+# 见 docs/real-machine-checklist.md。
 id: network.proxy-off
 schema_version: 1
 title: { zh-CN: 关掉失效的系统代理 }
 description:
-  zh-CN: 关闭 Windows 的「使用代理服务器」开关，让浏览器不再经过那个已经失效的代理。系统里记录这个开关的两个地方会一起改，代理地址、例外列表和自动配置脚本都不动。已经打开的浏览器可能要关掉重开才会生效；如果之后网页还是打不开，说明还有别的原因。以后再用梯子时，它会自己重新打开代理。
+  zh-CN: 关闭 Windows 的「使用代理服务器」开关，让浏览器不再经过那个已经失效的代理。局域网和各个拨号、VPN 连接里，指向这台电脑、又没有程序在用的代理都会一起关掉；还在运行的代理软件、别的机器上的代理（比如单位的代理服务器），以及代理地址、例外列表和自动配置脚本都不动。已经打开的浏览器可能要关掉重开才会生效；如果之后网页还是打不开，说明还有别的原因。以后再用代理软件或加速器时，它会自己重新打开代理。
 category: network
 risk: safe
 level: light
@@ -44,3 +54,4 @@ references:
   - https://learn.microsoft.com/en-us/archive/blogs/ieinternals/understanding-web-proxy-configuration
   - https://www.spad.uk/posts/how-does-proxysettingsperuser-work/
   - https://support.microsoft.com/en-us/windows/use-a-proxy-server-in-windows-03096c53-0554-4ffe-b6ab-8b1deee8dae1
+  - https://github.com/2dust/v2rayN/blob/master/v2rayN/ServiceLib/Handler/SysProxy/ProxySettingWindows.cs

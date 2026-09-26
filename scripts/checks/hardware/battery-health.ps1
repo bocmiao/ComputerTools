@@ -5,6 +5,8 @@
 #   Batteries/Battery/{DesignCapacity, FullChargeCapacity, CycleCount} (mWh),
 #   then delete the temp file. Several batteries are added up.
 # The report XML uses a default namespace, so elements are matched by local name.
+# A battery that reports its design capacity but a full-charge capacity of 0
+# (a dead battery; Windows shows "0% available") is poor, not unknown.
 # Read-only. Result codes: good (>= 80 %) / worn (50-80 %) / poor (< 50 %) / no-battery.
 
 [CmdletBinding()]
@@ -89,6 +91,7 @@ if ($nodes.Count -eq 0) {
 
 $design = [double]0
 $full = [double]0
+$fullKnown = $false
 $cycles = [long]0
 foreach ($n in $nodes) {
     $value = [long]0
@@ -98,6 +101,7 @@ foreach ($n in $nodes) {
     $value = [long]0
     if ([long]::TryParse((Get-ChildText $n 'FullChargeCapacity'), [ref]$value)) {
         $full += $value
+        $fullKnown = $true
     }
     $value = [long]0
     if ([long]::TryParse((Get-ChildText $n 'CycleCount'), [ref]$value)) {
@@ -110,8 +114,11 @@ foreach ($n in $nodes) {
 if ($design -le 0) {
     throw 'The battery does not report its design capacity'
 }
-if ($full -le 0) {
+if (-not $fullKnown) {
     throw 'The battery does not report its full charge capacity'
+}
+if ($full -lt 0) {
+    $full = [double]0
 }
 
 $healthPct = $full / $design * 100

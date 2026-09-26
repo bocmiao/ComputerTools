@@ -1,17 +1,24 @@
 # 硬盘读写错误事件。脚本：scripts/checks/disk/error-events.ps1
 # 最近 30 天 System 日志里：
-#   disk 源：7（有坏块）、51（分页操作时出错）、153（读写超时后重试）
-#   Ntfs 源：55（文件系统结构损坏）
-# 有任意一条就返回 found。
+#   disk 源：7（有坏块）、51（分页操作时出错）、153（读写请求超时后重试）
+#   Ntfs / Microsoft-Windows-Ntfs 源：55（文件系统结构损坏）、98（需要脱机做完整磁盘检查）。
+#     98 每次开机都会以「信息」级别记一条「卷正常」，所以只数级别为错误、警告（Level 1~3）的。
+# 结果（按这个顺序判断）：
+#   found：有 7 或 51，或者 153 有 20 次以上——硬盘可能有坏道或者连接不稳定；
+#   fs-corrupt：没有上面这些，但有文件系统损坏（55 / 98）；
+#   retries：只有少量 153。微软说明 153 是存储请求超时后重试，处理方向是驱动、固件和负载，不是坏道；
+#   none：都没有。
+# 尽量排除 U 盘、移动硬盘：出错的盘现在接在 USB 上，或者现在已经不在了（拔掉的 U 盘、SD 卡），
+# 按盘号（\Device\HarddiskN）或盘符对应，排除的条数记在事实 excluded_removable 里；
+# 拿不到盘的信息时不排除。
 # 查询只按日志、事件 ID 和时间过滤，来源在脚本里比对：给 -FilterHashtable 传 ProviderName
 # 会先查来源的元数据，在部分系统上直接报错；而且 ID 55 也被 Kernel-Processor-Power 使用（每次开机都有）。
-# 已知的误报：直接拔掉 U 盘、移动硬盘也可能留下 51/153，所以文案里提醒了这一点。
-# 以后可以用事实 disk_numbers（出错的盘号）排除可移动盘。
+# 事实：days、total、bad_block、paging_error、io_retry、ntfs_corrupt、excluded_removable、disk_numbers（出错的盘号）、last_time。
 id: disk.error-events
 schema_version: 1
 title: { zh-CN: 硬盘读写错误 }
 description:
-  zh-CN: 查看系统日志里最近 30 天有没有硬盘坏道、读写失败的记录。
+  zh-CN: 查看系统日志里最近 30 天有没有硬盘坏道、读写失败、文件系统损坏的记录。
 category: disk
 requires_admin: true
 timeout_sec: 30
@@ -22,13 +29,28 @@ results:
     status: ok
     message:
       zh-CN: "最近 {days} 天没有硬盘读写出错的记录。"
+  retries:
+    status: advice
+    message:
+      zh-CN: "最近 {days} 天有 {io_retry} 次「硬盘读写超时后重试」的记录，没有发现坏道的记录。这通常是硬盘驱动、固件或者连接不稳定造成的，不一定是硬盘坏了。"
+    fixer: helper
+    next:
+      zh-CN: 可以请懂哥到电脑品牌官网更新芯片组、硬盘的驱动或固件（更新前先备份重要文件）。之后如果还是反复出现，再请懂哥或售后检测一下硬盘。
+  fs-corrupt:
+    status: manual
+    message:
+      zh-CN: "最近 {days} 天系统记录了 {ntfs_corrupt} 次文件系统损坏（硬盘上记录文件存放位置的结构出了错），有的文件可能打不开。"
+    fixer: helper
+    next:
+      zh-CN: 请先把照片、文档、聊天记录等重要文件备份到别的地方，再请懂哥用系统自带的磁盘检查修复。修复时有可能删掉损坏的文件，所以一定要先备份。
   found:
     status: manual
     message:
-      zh-CN: "最近 {days} 天系统记录了 {total} 次硬盘读写错误。硬盘可能出现坏道，请先备份重要文件。"
+      zh-CN: "最近 {days} 天系统记录了 {total} 次硬盘读写错误（坏块 {bad_block} 次、读写出错 {paging_error} 次、超时重试 {io_retry} 次），硬盘可能有坏道或者连接不稳定。请先备份重要文件。"
     fixer: hardware
     next:
-      zh-CN: "先把照片、文档、聊天记录等重要文件备份到别的地方，再找懂哥或售后检测硬盘。如果最近直接拔过 U 盘或移动硬盘，也可能是它们留下的记录。"
+      zh-CN: 先把照片、文档、聊天记录等重要文件备份到别的地方，再找懂哥或售后检测硬盘。
 references:
   - https://learn.microsoft.com/en-us/troubleshoot/windows-server/backup-and-storage/troubleshoot-data-corruption-and-disk-errors
   - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent
+  - https://learn.microsoft.com/en-us/powershell/module/storage/get-disk

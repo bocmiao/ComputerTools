@@ -3,12 +3,18 @@
 # SpecVersion，SpecVersion 形如「2.0, 0, 1.38」）。判断顺序：
 #   没有实例 → missing；SpecVersion 是 1.x → tpm12（即使没开启也报 1.2：开了也不满足 Win11）；
 #   没启用或没激活 → disabled；SpecVersion 是 2.x → tpm2；其余（比如「Not Supported」）报错。
-# 事实：present、spec_version、enabled、activated、manufacturer（厂商代码，如 INTC、AMD、IFX）。
+# 只有已经装了 Windows 11（CurrentBuild ≥ 22000）的电脑，缺 TPM 2.0 才算「建议处理」：这时系统不满足微软的官方
+# 硬件要求，以后的大版本更新可能装不上。Windows 10（以及不在检测范围内的服务器版）上同样的结论用带 -win10 的
+# 结果代码，状态是 ok，只提示以后升级 Windows 11 要满足什么条件。
+# 不建议刷 TPM 固件：要先暂停 BitLocker、清除 TPM，TPM 2.0 还要求 UEFI 启动；能这样升级的机型大多是 6、7 代
+# Intel 处理器，本来就不在 Windows 11 的支持列表里（见戴尔的说明）。打开 TPM 后系统可能自动开启设备加密，
+# 所以提到打开 TPM 的地方都提醒先确认 BitLocker 恢复密钥。
+# 事实：present、spec_version、enabled、activated、manufacturer（厂商代码，如 INTC、AMD、IFX）、build、windows11。
 id: security.tpm
 schema_version: 1
 title: { zh-CN: TPM 安全芯片 }
 description:
-  zh-CN: 看看电脑有没有 TPM 2.0 安全芯片。Windows 11 和 BitLocker 加密都需要它。
+  zh-CN: 看看电脑有没有 TPM 2.0 安全芯片。Windows 11 需要它，BitLocker 加密用它也更方便。
 category: security
 requires_admin: true
 probe:
@@ -21,25 +27,43 @@ results:
   tpm12:
     status: advice
     message:
-      zh-CN: 电脑的 TPM 安全芯片只有 1.2 版，不满足 Windows 11 的要求（需要 2.0）。
-    fixer: hardware
+      zh-CN: 电脑的 TPM 安全芯片只有 1.2 版。这台电脑装的 Windows 11 不满足微软的官方硬件要求（需要 TPM 2.0），以后的大版本更新可能装不上。
+    fixer: helper
     next:
-      zh-CN: 少数电脑可以用品牌官网的 BIOS 或固件更新把 TPM 升到 2.0，可以先查一下；否则想用 Windows 11 只能换主板或换电脑。
+      zh-CN: 现在可以照常使用，记得定期备份重要文件。TPM 1.2 一般没办法自己升级；以后大版本更新装不上时，请懂哥或售后帮忙看看怎么办。
   disabled:
     status: advice
     message:
-      zh-CN: 电脑有 TPM 安全芯片，但没有开启。Windows 11 需要它。
+      zh-CN: 电脑有 TPM 安全芯片，但是没有打开。这台电脑装的 Windows 11 不满足微软的官方硬件要求，以后的大版本更新可能装不上。
     fixer: helper
     next:
-      zh-CN: 重启进入 BIOS 设置，在安全（Security）相关的页面里开启 TPM（Intel 电脑可能叫 PTT，AMD 电脑叫 fTPM）。拿不准就找懂哥。
+      zh-CN: 请懂哥在 BIOS 里把它打开（可能叫 PTT、fTPM 或 Security Chip）。打开之前先确认 BitLocker 恢复密钥：打开以后，系统可能会自动开启设备加密（BitLocker）。
   missing:
     status: advice
     message:
-      zh-CN: 没有检测到 TPM 安全芯片，多半是 BIOS 里没开。Windows 11 需要它。
+      zh-CN: 没有检测到 TPM 安全芯片。这台电脑装的 Windows 11 不满足微软的官方硬件要求，以后的大版本更新可能装不上。
     fixer: helper
     next:
-      zh-CN: 2017 年以后的电脑大多内置了 TPM，只是默认关着：重启进入 BIOS，打开「Intel PTT」或「AMD fTPM」（有的主板叫 Security Device Support）。更老的电脑可能确实没有 TPM。拿不准就找懂哥。
+      zh-CN: 很多电脑其实有 TPM，只是在 BIOS 里关着（可能叫 PTT、fTPM 或 Security Chip），可以请懂哥看一下。打开之前先确认 BitLocker 恢复密钥：打开以后，系统可能会自动开启设备加密（BitLocker）。
+  tpm12-win10:
+    status: ok
+    message:
+      zh-CN: 电脑的 TPM 安全芯片是 1.2 版，不影响现在使用。以后想用 Windows 11，需要 TPM 2.0。
+  disabled-win10:
+    status: ok
+    message:
+      zh-CN: 电脑有 TPM 安全芯片，但是没有打开，不影响现在使用。以后想用 Windows 11，需要先把它打开。
+    next:
+      zh-CN: 到时候可以请懂哥在 BIOS 里打开（可能叫 PTT、fTPM 或 Security Chip）。打开之前先确认 BitLocker 恢复密钥：打开以后，系统可能会自动开启设备加密（BitLocker）。
+  missing-win10:
+    status: ok
+    message:
+      zh-CN: 没有检测到 TPM 安全芯片，不影响现在使用。以后想用 Windows 11，需要电脑有 TPM 2.0。
+    next:
+      zh-CN: 很多电脑其实有 TPM，只是在 BIOS 里关着（可能叫 PTT、fTPM 或 Security Chip）；更老的电脑可能确实没有。真要升级时可以请懂哥看一下，打开之前先确认 BitLocker 恢复密钥。
 references:
   - https://learn.microsoft.com/en-us/windows/win32/secprov/win32-tpm
   - https://support.microsoft.com/en-us/windows/enable-tpm-2-0-on-your-pc-1fd5a332-360d-4f46-a1e7-ae6b0c90645c
   - https://support.microsoft.com/en-us/windows/windows-11-system-requirements-86c11283-ea52-4782-9efd-7674389a7ba3
+  - https://learn.microsoft.com/en-us/windows/security/operating-system-security/data-protection/bitlocker/
+  - https://www.dell.com/support/kbdoc/en-us/000132583/dell-systems-that-can-upgrade-from-tpm-version-1-2-to-2-0

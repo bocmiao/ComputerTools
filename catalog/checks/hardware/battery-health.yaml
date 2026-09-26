@@ -3,8 +3,10 @@
 # 否则运行 powercfg /batteryreport /xml /output <临时文件>，读 Batteries/Battery 下的
 # DesignCapacity、FullChargeCapacity、CycleCount（单位 mWh），算出 health_pct = 满电容量 ÷ 设计容量，
 # 读完删掉临时文件。有两块电池时相加。新电池的满电容量可能略高于设计容量，事实 health_pct 最多显示 100。
-# 结果：good（≥ 80%）/ worn（50% 到 80%）/ poor（< 50%）/ no-battery。
-# 待真机验证：接了 USB 不间断电源（UPS）的台式机，Win32_Battery 可能会把 UPS 当成电池。
+# 结果：good（≥ 80%）/ worn（50% 到 80%，正常损耗，状态 ok）/ poor（< 50%）/ no-battery。
+# 报告了设计容量、满电容量却是 0 的（电池已经坏了，系统里显示「0% 可用」）判 poor，不当成「没查出来」。
+# 待真机验证：接了 USB 不间断电源（UPS）的台式机，Win32_Battery 可能会把 UPS 当成电池；
+# 电池彻底坏了的笔记本，电池报告里的满电容量是否真的是 0。
 id: hardware.battery-health
 schema_version: 1
 title: { zh-CN: 电池健康 }
@@ -21,7 +23,7 @@ results:
     message:
       zh-CN: "电池健康度 {health_pct}%，状态良好。"
   worn:
-    status: advice
+    status: ok
     message:
       zh-CN: "电池健康度 {health_pct}%，已经有些老化，充满电后能用的时间比新的时候短。"
     next:

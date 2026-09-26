@@ -1,15 +1,22 @@
 # Check: boot.last-boot-duration
-# How long did the last start-up take?
+# How long did start-up take, from pressing the power button until the desktop
+# appeared?
 # Source: Microsoft-Windows-Diagnostics-Performance/Operational, event 100. Its
-# EventData holds BootTime in milliseconds (MainPathBootTime + BootPostBootTime,
-# i.e. power-on until the desktop is ready and idle).
-# The first boot after installing updates is slow by design. When the newest
-# event has BootIsRebootAfterInstall = true, the newest ordinary boot among the
-# last 10 events is used instead (after_update tells which one was used).
+# EventData holds, in milliseconds:
+#   MainPathBootTime  power-on until the desktop (or the sign-in screen) appears
+#   BootPostBootTime  desktop until the system is idle (start-up apps, updates,
+#                     virus scans...); reported as a fact only
+#   BootTime          the sum of both
+# The verdict uses MainPathBootTime (BootTime when an event lacks it).
+# The first boot after installing updates is slow by design: the newest ordinary
+# boot among the last 10 events is used. When all of them are first boots after
+# installing updates (BootIsRebootAfterInstall = true), the newest one is
+# reported as after-update instead of being judged.
+# boot_when is the local time of the boot that was used ("yyyy-MM-dd HH:mm").
 # Read-only. Needs administrator rights (the log is restricted).
-# Result codes: ok (60 s or less) / slow (more than 60 s) / no-data (the log does
-# not exist, as on Windows Server, or has been disabled or emptied, as on some
-# "optimized" systems).
+# Result codes: ok (desktop within 60 s) / slow (more than 60 s) / after-update /
+# no-data (the log does not exist, as on Windows Server, or has been disabled or
+# emptied, as on some "optimized" systems).
 
 [CmdletBinding()]
 param()
@@ -71,45 +78,63 @@ if ($events.Count -eq 0) {
 # Get-WinEvent returns the newest events first.
 $chosen = $null
 $chosenData = $null
+$newestUpdate = $null
+$newestUpdateData = $null
 foreach ($e in $events) {
     $data = Get-EventDataMap $e
     if (-not $data.ContainsKey('BootTime')) {
         continue
     }
-    if ($null -eq $chosen) {
-        $chosen = $e
-        $chosenData = $data
+    if ($data['BootIsRebootAfterInstall'] -eq 'true') {
+        if ($null -eq $newestUpdate) {
+            $newestUpdate = $e
+            $newestUpdateData = $data
+        }
+        continue
     }
-    if ($data['BootIsRebootAfterInstall'] -ne 'true') {
-        $chosen = $e
-        $chosenData = $data
-        break
-    }
+    $chosen = $e
+    $chosenData = $data
+    break
 }
+$afterUpdateOnly = $false
 if ($null -eq $chosen) {
-    throw 'The boot performance events do not contain BootTime'
+    if ($null -eq $newestUpdate) {
+        throw 'The boot performance events do not contain BootTime'
+    }
+    $chosen = $newestUpdate
+    $chosenData = $newestUpdateData
+    $afterUpdateOnly = $true
 }
 
 $invariant = [System.Globalization.CultureInfo]::InvariantCulture
 $bootMs = [double]::Parse($chosenData['BootTime'], $invariant)
-
-$facts = [ordered]@{
-    boot_sec     = [math]::Round($bootMs / 1000, 1)
-    boot_time    = $chosen.TimeCreated.ToString('o')
-    after_update = ($chosenData['BootIsRebootAfterInstall'] -eq 'true')
-}
+# Time until the desktop appears; the whole BootTime when the event lacks it.
+$desktopMs = $bootMs
 $value = [double]0
 if ($chosenData.ContainsKey('MainPathBootTime') -and [double]::TryParse($chosenData['MainPathBootTime'], [System.Globalization.NumberStyles]::Float, $invariant, [ref]$value)) {
-    $facts['main_path_sec'] = [math]::Round($value / 1000, 1)
+    $desktopMs = $value
+}
+
+$facts = [ordered]@{
+    desktop_sec  = [math]::Round($desktopMs / 1000, 1)
+    boot_sec     = [math]::Round($bootMs / 1000, 1)
+    boot_when    = $chosen.TimeCreated.ToString('yyyy-MM-dd HH:mm', $invariant)
+    boot_time    = $chosen.TimeCreated.ToString('o')
+    after_update = ($chosenData['BootIsRebootAfterInstall'] -eq 'true')
 }
 $value = [double]0
 if ($chosenData.ContainsKey('BootPostBootTime') -and [double]::TryParse($chosenData['BootPostBootTime'], [System.Globalization.NumberStyles]::Float, $invariant, [ref]$value)) {
     $facts['post_boot_sec'] = [math]::Round($value / 1000, 1)
 }
 
-$result = 'ok'
-if ($bootMs -gt $slowThresholdMs) {
+if ($afterUpdateOnly) {
+    $result = 'after-update'
+}
+elseif ($desktopMs -gt $slowThresholdMs) {
     $result = 'slow'
+}
+else {
+    $result = 'ok'
 }
 
 [pscustomobject]@{

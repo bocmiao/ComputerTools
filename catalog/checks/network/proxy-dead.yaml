@@ -1,23 +1,29 @@
 # 系统代理是否指向一个已经不在运行的本机程序。脚本：scripts/checks/network/proxy-dead.ps1
-# 读登录用户（-UserHive）的两处设置：
-#   1. Internet Settings\Connections\DefaultConnectionSettings（二进制值，WinINet 和 .NET 实际读的是它）：
-#      存在且不少于 16 字节时解析——偏移 8 的 DWORD 是标志，0x02 表示开了手动代理；偏移 12 的 DWORD 是
-#      代理地址的长度 N，后面跟 N 字节的 ANSI 文本。格式是社区逆向出来的，微软没有公开。
-#   2. 旧式的 Internet Settings\ProxyEnable、ProxyServer（WinINet 会同步，很多软件也直接写它们）。
-# 两处任意一处开着代理就算开着；试连的地址优先用二进制值里的（它开着且有地址时），否则用 ProxyServer。
+# WinINet 的代理设置是按连接存的（都读登录用户 -UserHive 的注册表）：
+#   1. 局域网：Internet Settings\Connections\DefaultConnectionSettings（二进制值，WinINet 和 .NET 实际读的是它），
+#      以及旧式的 Internet Settings\ProxyEnable、ProxyServer（WinINet 会同步，很多软件也直接写它们）。
+#   2. 每个拨号、VPN 连接（比如 PPPoE 的「宽带连接」）：Internet Settings\Connections\<连接名>，格式和局域网的一样。
+#      拨号、VPN 连接连着时，WinINet 用的是这个连接自己的设置，不是局域网的；v2rayN 这类软件设置系统代理时
+#      会把所有连接都写上。Connections 下的 SavedLegacySettings、WinHttpSettings 不是连接，跳过。
+# 二进制值（格式是社区逆向出来的，微软没有公开）：偏移 8 的 DWORD 是标志（0x02 = 手动代理，0x04 = 自动配置脚本）；
+#   偏移 12 起依次是代理地址、例外列表、自动配置脚本（PAC）地址，每项是「4 字节长度 + ANSI 文本」。
+# 局域网：二进制值开着代理且有地址时用它，否则用旧式的 ProxyEnable、ProxyServer。每个拨号、VPN 连接单独判断。
 # 地址可能是「127.0.0.1:7890」，也可能按协议写「http=127.0.0.1:7890;https=…;socks=…」，有时还带「http://」。
-# 指向本机（127.x、localhost、::1）时，用 TcpClient 试连端口，超时 500 毫秒；本机任意一个端口能连上就算 alive。
-# 结果：none（没开代理）/ remote（代理在别的机器上）/ alive（本机代理在运行）/ dead（本机代理没人监听）。
-# 事实：proxy_enabled、proxy_server（实际用来判断的地址）、proxy_source（blob 或 legacy）、
-#       legacy_proxy_enabled、blob_proxy_enabled（二进制值存在时）、settings_mismatch（两处开关不一致，
-#       或者都开着但地址不同时为 true，一致时不出现）、pac_url、proxy_address。
-# AutoConfigURL（PAC 自动配置脚本）只作为事实 pac_url，不参与判断：修复 network.proxy-off 只关手动代理。
-# 所以「没开手动代理、但 PAC 指向本机失效端口」目前也显示 none，以后可以单独做一个检测和修复。
+# 指向本机（127.x、localhost、::1、0.0.0.0）时，用 TcpClient 试连端口，超时 500 毫秒；本机任意一个端口能连上就算 alive。
+# 指向别的机器的代理不试连（remote）。
+# 结果（按这个顺序判断）：
+#   dead：局域网的代理指向本机、没人监听；dead-dialup：局域网正常或没开，但某个拨号、VPN 连接的代理指向本机、没人监听；
+#   alive：本机代理有程序在监听；remote：只有别的机器上的代理；none-pac：没开手动代理，但设了自动配置脚本；none：都没有。
+# 事实：proxy_enabled、proxy_server（局域网实际用来判断的地址）、proxy_source（blob 或 legacy）、legacy_proxy_enabled、
+#       blob_proxy_enabled（二进制值存在时）、settings_mismatch（两处开关不一致，或者都开着但地址不同时为 true）、
+#       pac_url、dialup_count（拨号、VPN 连接的个数）、dialup_proxy（开着代理的连接名）、dead_dialup（代理失效的连接名）、
+#       connection（dead-dialup 时出问题的连接名）、proxy_address。
+# PAC 只作为 none-pac 提示，不试连：修复 network.proxy-off 只关手动代理。
 id: network.proxy-dead
 schema_version: 1
 title: { zh-CN: 失效的系统代理 }
 description:
-  zh-CN: 看看系统代理是不是指向了一个已经不在运行的程序（梯子、加速器卸载后常见），这会导致网页打不开。
+  zh-CN: 看看系统代理是不是指向了一个已经不在运行的程序（代理软件、加速器卸载或退出后常见），这可能导致网页打不开。
 category: network
 requires_admin: false
 user_hive: true
@@ -27,25 +33,42 @@ results:
   none:
     status: ok
     message:
-      zh-CN: 系统没有开启代理，网络设置正常。
+      zh-CN: 系统没有开启代理。
+  none-pac:
+    status: ok
+    message:
+      zh-CN: "系统没有开启手动代理，但设置了自动配置脚本（PAC）：{pac_url}。小药箱没有检查这个脚本能不能用。"
+    next:
+      zh-CN: 如果网页打不开，而你又不知道这个自动配置脚本是谁设置的，可以请懂哥看看要不要去掉它。单位或学校要求设置的，不要自己改。
   remote:
     status: ok
     message:
-      zh-CN: "系统设置了代理服务器 {proxy_address}（不在这台电脑上）。如果是单位或学校要求设置的，这是正常的。"
+      zh-CN: "系统设置了代理服务器 {proxy_address}（不在这台电脑上）。小药箱没有检查那台代理服务器能不能用；如果是单位或学校要求设置的，一般不用管。"
   alive:
     status: ok
     message:
-      zh-CN: "系统代理指向本机 {proxy_address}，那里有程序在运行（一般是梯子或加速器），代理可以正常使用。"
+      zh-CN: "系统代理指向本机 {proxy_address}，那里有程序在运行（一般是代理软件或加速器）。这只说明软件开着，不保证一定能上网。"
+    next:
+      zh-CN: 如果网页打不开，可以先把这个代理软件或加速器正常退出，再试试。
   dead:
     status: advice
     message:
-      zh-CN: "代理指向本机 {proxy_address}，但那里没有程序在运行，所以网页打不开。多半是梯子或加速器卸载后留下的。"
+      zh-CN: "系统代理指向本机 {proxy_address}，但那里没有程序在运行，可能导致网页打不开。多半是代理软件或加速器卸载、退出后留下的。"
     fixer: medkit
     next:
-      zh-CN: 点下面的按钮关掉这个失效的代理。关掉以后，已经打开的浏览器可能要关掉重开。以后再用梯子时，它会自己重新打开代理。
+      zh-CN: 点下面的按钮关掉这个失效的代理。关掉以后，已经打开的浏览器可能要关掉重开。以后再用代理软件时，它会自己重新打开代理。
+    links: ["feature:network.proxy-off"]
+  dead-dialup:
+    status: advice
+    message:
+      zh-CN: "拨号或 VPN 连接「{connection}」的代理指向本机 {proxy_address}，但那里没有程序在运行，用这个连接上网时网页可能打不开。多半是代理软件或加速器卸载、退出后留下的。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮关掉这个失效的代理。关掉以后，已经打开的浏览器可能要关掉重开。以后再用代理软件时，它会自己重新打开代理。
     links: ["feature:network.proxy-off"]
 references:
   - https://learn.microsoft.com/en-us/windows/win32/wininet/enabling-internet-functionality
   - https://learn.microsoft.com/en-us/archive/blogs/ieinternals/understanding-web-proxy-configuration
   - https://support.microsoft.com/en-us/windows/use-a-proxy-server-in-windows-03096c53-0554-4ffe-b6ab-8b1deee8dae1
   - https://learn.microsoft.com/en-us/dotnet/api/system.net.sockets.tcpclient
+  - https://github.com/2dust/v2rayN/blob/master/v2rayN/ServiceLib/Handler/SysProxy/ProxySettingWindows.cs
