@@ -1,5 +1,7 @@
 # 电脑小药箱（暂定名）
 
+[![CI](https://github.com/bocmiao/ComputerTools/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bocmiao/ComputerTools/actions/workflows/ci.yml)
+
 免费、开源的 Windows 电脑维护工具。
 
 - 普通人可以按症状点「上不了网」「C 盘满了」「打印机连不上」，自己查出原因、修好电脑。
@@ -59,6 +61,8 @@ pnpm --dir app dev                      # 在浏览器里开发界面（用示�
 pnpm tauri dev                          # Windows 上真实运行：要在「以管理员身份运行」的终端里执行
 pnpm tauri build                        # Windows 上：生成安装包
 ```
+
+每次推送到 `main`，CI 都会在 Windows 上构建安装包和便携版。在 [Actions](https://github.com/bocmiao/ComputerTools/actions/workflows/ci.yml) 页面打开最新一次运行，下载 `medkit-windows-x64` 即可（未签名，只供测试）。
 
 目录结构：
 
