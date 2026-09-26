@@ -488,19 +488,26 @@ references:
 ### 6.7 代码仓库结构
 
 ```
-项目根目录/               （仓库名待定）
+项目根目录/
 ├─ app/                   Vue 前端（界面）
-├─ src-tauri/             Rust 外壳（含原语执行器、修改日志与撤销）
-├─ symptoms/              症状层：诊断树
-├─ features/              功能层：原子修复（按模块分目录）
-├─ scripts/               PowerShell 脚本（检测 / 执行 / 撤销 / 故障制造）
-├─ schema/                功能文件的 JSON Schema
-├─ data/                  软件清单、错误码、同义词、弹窗知识库、品牌按键表、ISO 哈希
-├─ website/               官网和教程（VitePress）
-├─ tests/                 Pester 测试 + 虚拟机自动化
-├─ docs/                  计划书、竞品调研、设计文档
+├─ src-tauri/             Tauri 外壳：窗口、命令、打包
+├─ crates/
+│  ├─ medkit-core/        引擎：数据加载与校验、原语执行、修改日志与撤销、PowerShell 宿主
+│  └─ medkit-data/        数据工具：校验、生成 JSON Schema、打包
+├─ catalog/
+│  ├─ checks/             检测（按分类分目录）
+│  ├─ features/           功能：原子修复（按分类分目录）
+│  ├─ symptoms/           症状：用户的说法 → 排查路线
+│  └─ profiles/           检测清单（例如「一键体检」）
+├─ scripts/               PowerShell 脚本（宿主 / 检测 / 执行 / 撤销 / 故障制造）
+├─ schema/                数据文件的 JSON Schema（由代码生成，编辑器补全用）
+├─ data/                  知识数据：错误码、同义词、弹窗知识库、品牌按键表、ISO 哈希（CC BY-SA 4.0）
+├─ website/               官网和教程（VitePress，后续）
+├─ docs/                  计划书、竞品调研、架构规范、编写指南
 └─ .github/workflows/     构建、检查、签名、发布
 ```
+
+格式细节见[《架构与数据格式规范》](architecture.md)，写新功能的步骤见[《功能编写指南》](feature-authoring.md)。
 
 ### 6.8 测试
 

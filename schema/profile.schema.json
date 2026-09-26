@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Profile",
+  "description": "检测清单，例如体检。",
+  "type": "object",
+  "properties": {
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "title": {
+      "$ref": "#/$defs/Text"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "title",
+    "checks"
+  ],
+  "$defs": {
+    "Text": {
+      "description": "本地化文本：语言标签到文本的映射，必须包含 `zh-CN`。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

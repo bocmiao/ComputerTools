@@ -81,6 +81,9 @@ impl ScriptManifest {
 
 pub const HOST_SCRIPT: &str = "host/Host.ps1";
 
+/// 宿主进程启动的最长等待时间（和单个脚本的超时分开算）。
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(60);
+
 pub struct HostConfig {
     /// `powershell.exe`（Windows）或 `pwsh`（开发和测试）
     pub program: PathBuf,
@@ -154,7 +157,30 @@ impl PowerShellHost {
                 buf.push_back(line);
             }
         });
-        Ok(HostProc { child, stdin, lines: rx, stderr })
+        let mut proc = HostProc { child, stdin, lines: rx, stderr };
+        // 等宿主说「准备好了」。PowerShell 冷启动在老电脑上可能要好几秒，不能算进第一个脚本的超时里。
+        let deadline = Instant::now() + STARTUP_TIMEOUT;
+        loop {
+            match proc.lines.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                Ok(line) => {
+                    let ready = serde_json::from_str::<Value>(line.trim_start_matches('\u{feff}'))
+                        .is_ok_and(|v| v.get("ready") == Some(&Value::Bool(true)));
+                    if ready {
+                        return Ok(proc);
+                    }
+                }
+                Err(e) => {
+                    let tail: Vec<String> = proc.stderr.lock().unwrap().iter().cloned().collect();
+                    let _ = proc.child.kill();
+                    let _ = proc.child.wait();
+                    let why = match e {
+                        RecvTimeoutError::Timeout => format!("{} 秒内没有启动完成", STARTUP_TIMEOUT.as_secs()),
+                        RecvTimeoutError::Disconnected => "启动后立即退出了".to_owned(),
+                    };
+                    return Err(ScriptError::Host(format!("PowerShell {why}：{}", tail.join(" | "))));
+                }
+            }
+        }
     }
 
     fn stop(slot: &mut Option<HostProc>) {

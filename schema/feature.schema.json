@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Feature",
+  "description": "原子修复。",
+  "type": "object",
+  "properties": {
+    "actions": {
+      "description": "原语列表（和 `run` 二选一）",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Action"
+      }
+    },
+    "applies_to": {
+      "$ref": "#/$defs/AppliesTo",
+      "default": {
+        "editions": [],
+        "max_build": null,
+        "min_build": null
+      }
+    },
+    "break": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScriptRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "break_actions": {
+      "description": "测试时用来制造故障状态；不写就用 `windows_default`",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Action"
+      }
+    },
+    "category": {
+      "type": "string"
+    },
+    "description": {
+      "$ref": "#/$defs/Text"
+    },
+    "detect": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScriptRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "id": {
+      "type": "string"
+    },
+    "irreversible_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Text"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "level": {
+      "$ref": "#/$defs/Level"
+    },
+    "reboot": {
+      "$ref": "#/$defs/Reboot",
+      "default": "none"
+    },
+    "recommend": {
+      "$ref": "#/$defs/Recommend"
+    },
+    "references": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "requires_admin": {
+      "type": "boolean",
+      "default": false
+    },
+    "risk": {
+      "$ref": "#/$defs/Risk"
+    },
+    "run": {
+      "description": "执行脚本（和 `actions` 二选一）",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScriptRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schema_version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "subjective": {
+      "description": "属于个人偏好，而不是建议",
+      "type": "boolean",
+      "default": false
+    },
+    "target": {
+      "$ref": "#/$defs/Target"
+    },
+    "title": {
+      "$ref": "#/$defs/Text"
+    },
+    "undo": {
+      "$ref": "#/$defs/Undo"
+    },
+    "verify": {
+      "description": "修完以后改用某个检测来复查",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "windows_default": {
+      "description": "Windows 的默认状态",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Action"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "title",
+    "description",
+    "category",
+    "risk",
+    "level",
+    "recommend",
+    "target",
+    "undo"
+  ],
+  "$defs": {
+    "Action": {
+      "description": "引擎原生支持的原语。",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "registry": {
+              "$ref": "#/$defs/RegistryAction"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "registry"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "service": {
+              "$ref": "#/$defs/ServiceAction"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "service"
+          ]
+        }
+      ]
+    },
+    "AppliesTo": {
+      "type": "object",
+      "properties": {
+        "editions": {
+          "description": "空表示所有版本",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Edition"
+          }
+        },
+        "max_build": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "min_build": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Edition": {
+      "type": "string",
+      "enum": [
+        "home",
+        "pro",
+        "enterprise",
+        "education"
+      ]
+    },
+    "Level": {
+      "type": "string",
+      "enum": [
+        "light",
+        "medium",
+        "heavy"
+      ]
+    },
+    "Reboot": {
+      "type": "string",
+      "enum": [
+        "none",
+        "explorer",
+        "logoff",
+        "reboot"
+      ]
+    },
+    "Recommend": {
+      "type": "string",
+      "enum": [
+        "recommended",
+        "optional",
+        "not-recommended"
+      ]
+    },
+    "RegType": {
+      "type": "string",
+      "enum": [
+        "dword",
+        "qword",
+        "string",
+        "expand-string",
+        "multi-string",
+        "binary"
+      ]
+    },
+    "RegistryAction": {
+      "type": "object",
+      "properties": {
+        "delete": {
+          "description": "为 true 表示「这个值不应该存在」",
+          "type": "boolean",
+          "default": false
+        },
+        "key": {
+          "description": "以 `HKCU\\` 或 `HKLM\\` 开头",
+          "type": "string"
+        },
+        "name": {
+          "description": "值的名字，`\"\"` 表示默认值",
+          "type": "string",
+          "default": ""
+        },
+        "type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RegType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "value": {
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key"
+      ]
+    },
+    "Risk": {
+      "type": "string",
+      "enum": [
+        "safe",
+        "caution",
+        "danger"
+      ]
+    },
+    "ScriptRef": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "script"
+      ]
+    },
+    "ServiceAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "start_type": {
+          "$ref": "#/$defs/StartType"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "start_type"
+      ]
+    },
+    "StartType": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "delayed-auto",
+        "manual",
+        "disabled"
+      ]
+    },
+    "Target": {
+      "description": "功能改的是谁的设置。",
+      "oneOf": [
+        {
+          "description": "登录用户（HKCU 会被解析成登录用户的 HKU\\<SID>）",
+          "type": "string",
+          "const": "current-user"
+        },
+        {
+          "description": "整台电脑（HKLM、服务）",
+          "type": "string",
+          "const": "machine"
+        }
+      ]
+    },
+    "Text": {
+      "description": "本地化文本：语言标签到文本的映射，必须包含 `zh-CN`。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "Undo": {
+      "description": "`auto` / `none`，或者 `{ script: … }`。",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UndoKeyword"
+        },
+        {
+          "$ref": "#/$defs/ScriptRef"
+        }
+      ]
+    },
+    "UndoKeyword": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "none"
+      ]
+    }
+  }
+}

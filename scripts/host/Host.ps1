@@ -11,6 +11,9 @@
         <- {"id":1,"ok":true,"data":{...},"ms":84}
         <- {"id":2,"ok":false,"error":"...","ms":12}
 
+    On start-up it writes {"id":0,"ready":true,"ps":"5.1..."} before reading
+    any request.
+
     Only the success stream of a script is collected. Warning, verbose, debug and
     information streams are discarded so that stray output cannot break the
     protocol. The engine verifies the SHA-256 of every script before sending a
@@ -51,6 +54,10 @@ function Resolve-ScriptPath {
     if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "script not found: $Relative" }
     return $full
 }
+
+# Tell the engine we are ready, so that PowerShell start-up time (which can be
+# several seconds on an old machine) is not counted against the first script.
+Write-Response -Response ([ordered]@{ id = 0; ready = $true; ps = $PSVersionTable.PSVersion.ToString() })
 
 while ($true) {
     $line = [Console]::In.ReadLine()

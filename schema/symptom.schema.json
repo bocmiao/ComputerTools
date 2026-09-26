@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Symptom",
+  "description": "症状诊断树。",
+  "type": "object",
+  "properties": {
+    "causes": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Text"
+      }
+    },
+    "guide": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Text"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "id": {
+      "type": "string"
+    },
+    "keywords": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "maturity": {
+      "$ref": "#/$defs/Maturity"
+    },
+    "schema_version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "steps": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Step"
+      }
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Text"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "title": {
+      "$ref": "#/$defs/Text"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "title",
+    "maturity"
+  ],
+  "$defs": {
+    "Maturity": {
+      "type": "string",
+      "enum": [
+        "guide",
+        "semi",
+        "one-click"
+      ]
+    },
+    "Status": {
+      "description": "检测结论。",
+      "oneOf": [
+        {
+          "description": "正常",
+          "type": "string",
+          "const": "ok"
+        },
+        {
+          "description": "建议处理",
+          "type": "string",
+          "const": "advice"
+        },
+        {
+          "description": "需要人工",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "没查出来",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "不适用（不显示）",
+          "type": "string",
+          "const": "na"
+        }
+      ]
+    },
+    "Step": {
+      "type": "object",
+      "properties": {
+        "check": {
+          "type": "string"
+        },
+        "fixes": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "stop_on": {
+          "description": "这一步的结论在列表里时，不再往下查",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Status"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "check"
+      ]
+    },
+    "Text": {
+      "description": "本地化文本：语言标签到文本的映射，必须包含 `zh-CN`。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

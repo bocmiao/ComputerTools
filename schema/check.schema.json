@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Check",
+  "description": "只读检测。",
+  "type": "object",
+  "properties": {
+    "category": {
+      "description": "disk / network / system / security / hardware / boot / printer …",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Text"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "id": {
+      "description": "全局唯一、永不改名的 ID，例如 `disk.system-free-space`",
+      "type": "string"
+    },
+    "probe": {
+      "$ref": "#/$defs/Probe"
+    },
+    "references": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "requires_admin": {
+      "type": "boolean",
+      "default": false
+    },
+    "results": {
+      "description": "结果代码 → 展示方式",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ResultSpec"
+      }
+    },
+    "schema_version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "timeout_sec": {
+      "type": "integer",
+      "format": "uint32",
+      "default": 15,
+      "minimum": 0
+    },
+    "title": {
+      "$ref": "#/$defs/Text"
+    },
+    "user_hive": {
+      "description": "为 true 时，引擎给脚本传 `-UserHive`",
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "title",
+    "category",
+    "probe",
+    "results"
+  ],
+  "$defs": {
+    "Fixer": {
+      "description": "谁能修。",
+      "type": "string",
+      "enum": [
+        "medkit",
+        "system",
+        "user",
+        "helper",
+        "vendor",
+        "isp",
+        "hardware"
+      ]
+    },
+    "Probe": {
+      "description": "检测方式：脚本或内置检测，二选一。",
+      "type": "object",
+      "properties": {
+        "builtin": {
+          "description": "内置检测的名字，例如 `cpu-features`",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "script": {
+          "description": "相对于 scripts/ 的路径",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "ResultSpec": {
+      "type": "object",
+      "properties": {
+        "fixer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fixer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "links": {
+          "description": "`symptom:<id>` 或 `feature:<id>`",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "description": "可以用 `{事实名}` 引用脚本返回的事实",
+          "$ref": "#/$defs/Text"
+        },
+        "next": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Text"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "message"
+      ]
+    },
+    "Status": {
+      "description": "检测结论。",
+      "oneOf": [
+        {
+          "description": "正常",
+          "type": "string",
+          "const": "ok"
+        },
+        {
+          "description": "建议处理",
+          "type": "string",
+          "const": "advice"
+        },
+        {
+          "description": "需要人工",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "没查出来",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "不适用（不显示）",
+          "type": "string",
+          "const": "na"
+        }
+      ]
+    },
+    "Text": {
+      "description": "本地化文本：语言标签到文本的映射，必须包含 `zh-CN`。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

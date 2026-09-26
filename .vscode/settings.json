@@ -1,0 +1,13 @@
+{
+  "yaml.schemas": {
+    "./schema/check.schema.json": "catalog/checks/**/*.yaml",
+    "./schema/feature.schema.json": "catalog/features/**/*.yaml",
+    "./schema/symptom.schema.json": "catalog/symptoms/**/*.yaml",
+    "./schema/profile.schema.json": "catalog/profiles/**/*.yaml"
+  },
+  "files.eol": "\n",
+  "[powershell]": {
+    "files.eol": "\r\n",
+    "files.encoding": "utf8"
+  }
+}

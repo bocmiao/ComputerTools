@@ -21,9 +21,9 @@ use windows_sys::Win32::Security::Authorization::{
     SDDL_REVISION_1, SE_FILE_OBJECT, SetNamedSecurityInfoW,
 };
 use windows_sys::Win32::Security::{
-    ACL, DACL_SECURITY_INFORMATION, GetSecurityDescriptorDacl, GetTokenInformation, LookupAccountSidW,
-    OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SID_NAME_USE,
-    TOKEN_ELEVATION, TOKEN_QUERY, TOKEN_USER, TokenElevation, TokenUser,
+    ACL, DACL_SECURITY_INFORMATION, GetSecurityDescriptorDacl, GetSecurityDescriptorOwner, GetTokenInformation,
+    LookupAccountSidW, OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
+    SID_NAME_USE, TOKEN_ELEVATION, TOKEN_QUERY, TOKEN_USER, TokenElevation, TokenUser,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
@@ -49,8 +49,11 @@ use crate::model::StartType;
 use crate::registry::{RegRoot, RegValue};
 
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-/// SYSTEM、Administrators 完全控制；Users 只读。受保护（不继承上级）。
-const DATA_DIR_SDDL: &str = "D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)";
+/// 所有者 Administrators；SYSTEM、Administrators 完全控制；Users 只读。受保护（不继承上级）。
+///
+/// 所有者要明确设成 Administrators 组：提权后的管理员新建的目录，所有者可能是这个管理员账户本身
+/// （取决于组策略），下次启动时就会被当成「不可信」挪走，修改日志也就跟着没了。
+const DATA_DIR_SDDL: &str = "O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)";
 const SID_ADMINISTRATORS: &str = "S-1-5-32-544";
 const SID_SYSTEM: &str = "S-1-5-18";
 
@@ -571,21 +574,25 @@ fn apply_protected_dacl(path: &Path) -> io::Result<()> {
     {
         return Err(last_error());
     }
-    let (mut present, mut defaulted) = (0, 0);
+    let (mut present, mut dacl_defaulted, mut owner_defaulted) = (0, 0, 0);
     let mut dacl: *mut ACL = null_mut();
-    // SAFETY: sd 有效
-    let ok = unsafe { GetSecurityDescriptorDacl(sd, &mut present, &mut dacl, &mut defaulted) };
-    let result = if ok == 0 || present == 0 {
+    let mut owner: PSID = null_mut();
+    // SAFETY: sd 有效；输出指针指向 sd 内部
+    let ok = unsafe {
+        GetSecurityDescriptorDacl(sd, &mut present, &mut dacl, &mut dacl_defaulted) != 0
+            && GetSecurityDescriptorOwner(sd, &mut owner, &mut owner_defaulted) != 0
+    };
+    let result = if !ok || present == 0 || owner.is_null() {
         Err(last_error())
     } else {
         let wpath = wide(path);
-        // SAFETY: dacl 指向 sd 内部，在 LocalFree 之前有效
+        // SAFETY: owner 和 dacl 指向 sd 内部，在 LocalFree 之前有效
         let err = unsafe {
             SetNamedSecurityInfoW(
                 wpath.as_ptr(),
                 SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                null_mut(),
+                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                owner,
                 null_mut(),
                 dacl,
                 null(),
@@ -598,11 +605,13 @@ fn apply_protected_dacl(path: &Path) -> io::Result<()> {
     result
 }
 
-/// 准备一个只有管理员能写的目录。
+/// 准备一个只有管理员能写的目录（需要以管理员身份运行）。
 ///
 /// 普通用户可以在 ProgramData 下建目录，所以如果目录已经存在，先确认它不是联接点、
 /// 所有者是 SYSTEM 或 Administrators；不是就挪开，重新建一个干净的。
-pub fn ensure_secure_dir(path: &Path) -> io::Result<()> {
+/// 返回被挪开的旧目录（如果有）。
+pub fn ensure_secure_dir(path: &Path) -> io::Result<Option<PathBuf>> {
+    let mut moved = None;
     if let Ok(meta) = std::fs::symlink_metadata(path) {
         let is_reparse = meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
         let trusted = !is_reparse && matches!(owner_sid(path).as_deref(), Ok(SID_ADMINISTRATORS | SID_SYSTEM));
@@ -613,8 +622,15 @@ pub fn ensure_secure_dir(path: &Path) -> io::Result<()> {
                 .unwrap_or_default();
             let aside = path.with_extension(format!("untrusted-{stamp}"));
             std::fs::rename(path, &aside)?;
+            moved = Some(aside);
         }
     }
     std::fs::create_dir_all(path)?;
-    apply_protected_dacl(path)
+    apply_protected_dacl(path)?;
+    Ok(moved)
+}
+
+/// 目录的所有者 SID（测试和诊断用）。
+pub fn dir_owner_sid(path: &Path) -> io::Result<String> {
+    owner_sid(path)
 }
