@@ -26,6 +26,15 @@ pub enum PlatformError {
 
 pub type PResult<T> = Result<T, PlatformError>;
 
+/// 要打开的系统工具，已经按 [`crate::tools`] 的名单解析过（数据里只能写名单里的名字）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenRequest {
+    /// System32 下的程序和参数；以 `.msc` 结尾的参数换成 System32 下的绝对路径
+    Program { exe: &'static str, args: &'static [&'static str] },
+    /// 「设置」里的一页：`ms-settings:<page>`
+    Settings(&'static str),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UserIdentity {
     pub sid: String,
@@ -70,6 +79,10 @@ pub trait Platform: Send + Sync {
     fn process_user(&self) -> Option<UserIdentity>;
     fn is_admin(&self) -> bool;
     fn os_info(&self) -> OsInfo;
+
+    /// 打开一个系统工具或「设置」里的一页，不等它关掉。
+    /// 程序不存在（精简系统删掉了）时返回 [`PlatformError::NotFound`]，内容是缺的文件名。
+    fn open(&self, request: &OpenRequest) -> PResult<()>;
 }
 
 /// 注册表 EditionID → 版本类型。

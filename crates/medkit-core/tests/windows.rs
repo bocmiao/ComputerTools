@@ -8,18 +8,21 @@
 #![cfg(windows)]
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
+use std::time::Duration;
 
 use medkit_core::Engine;
 use medkit_core::bundle::Bundle;
 use medkit_core::catalog::Catalog;
 use medkit_core::journal::{Journal, new_id};
-use medkit_core::model::{Action, Feature, StartType};
+use medkit_core::model::{Action, Feature, StartType, ToolGroup};
 use medkit_core::platform::Platform;
 use medkit_core::platform::windows::{WindowsPlatform, dir_owner_sid, ensure_secure_dir};
 use medkit_core::registry::{RegRoot, RegValue, SpecRoot, is_sid, split_key};
 use medkit_core::render::unresolved;
 use medkit_core::script::{HostConfig, PowerShellHost};
+use medkit_core::tools;
 use medkit_core::views::FeatureStateKind;
 
 fn repo_root() -> PathBuf {
@@ -360,4 +363,117 @@ fn every_feature_breaks_fixes_and_undoes() {
         }
     }
     assert!(failures.is_empty(), "有修复没通过往返测试：\n{}", failures.join("\n"));
+}
+
+// ───────────── 小工具 ─────────────
+
+/// 所有 info、action 小工具都用 Windows PowerShell 5.1 真跑一遍，包括重启资源管理器
+/// （CI 机器上有桌面，Winlogon 会把它拉起来）。表格里不能有没定义的文字，也不能出现电脑名、用户名。
+/// 遮住的值（WiFi 密码）不打印。
+#[test]
+#[ignore = "会重启资源管理器、刷新 DNS 缓存"]
+fn every_tool_runs_cleanly_on_windows_powershell() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, bundle, platform) = real_engine(dir.path());
+    let computer = std::env::var("COMPUTERNAME").unwrap_or_default().to_lowercase();
+    let user = platform
+        .process_user()
+        .and_then(|u| u.name.rsplit_once('\\').map(|(_, n)| n.to_lowercase()))
+        .unwrap_or_default();
+    let mut failures = Vec::new();
+    for t in bundle.catalog.tools.iter().filter(|t| t.group != ToolGroup::Open) {
+        let r = engine.tool_run(&t.id).unwrap();
+        eprintln!("{:<32} {:<8} {:>6} ms  {}", t.id, format!("{:?}", r.status), r.duration_ms, r.message);
+        let mut shown = Vec::new();
+        for s in &r.sections {
+            eprintln!("    [{}]", s.title);
+            shown.push(s.title.to_lowercase());
+            for row in &s.rows {
+                let value = if row.secret { "（已遮住）" } else { row.value.as_str() };
+                eprintln!("      {}：{value}", row.label);
+                if !row.secret {
+                    shown.push(row.value.to_lowercase());
+                }
+            }
+        }
+        if let Some(e) = &r.error {
+            failures.push(format!("{}：{e}", t.id));
+        }
+        for text in std::iter::once(&r.message).chain(r.next.as_ref()) {
+            let left = unresolved(text);
+            if !left.is_empty() {
+                failures.push(format!("{}：文字里有没替换掉的占位符 {left:?}：{text}", t.id));
+            }
+        }
+        for (what, name) in [("电脑名", &computer), ("用户名", &user)] {
+            if name.chars().count() >= 3 && shown.iter().any(|v| v.contains(name.as_str())) {
+                failures.push(format!("{}：表格里出现了{what}", t.id));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "有小工具没跑通：\n{}", failures.join("\n"));
+}
+
+/// 这个程序现在正在运行的进程号（用 tasklist，不用额外的依赖）。
+fn pids_of(exe: &str) -> Vec<u32> {
+    let Ok(out) = Command::new("tasklist").args(["/FI", &format!("IMAGENAME eq {exe}"), "/FO", "CSV", "/NH"]).output()
+    else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| line.split("\",\"").nth(1).and_then(|pid| pid.trim_matches('"').parse().ok()))
+        .collect()
+}
+
+/// 关掉测试打开的窗口：只结束测试之前还没有的进程。
+fn close_new(exe: &str, before: &[u32]) {
+    for pid in pids_of(exe) {
+        if !before.contains(&pid) {
+            let _ = Command::new("taskkill").args(["/F", "/PID", &pid.to_string()]).status();
+        }
+    }
+}
+
+/// 每个打开类小工具真打开一次：程序在的要能打开；不在的（服务器版可能没装）要如实说「这台电脑上没有」。
+/// 打开的窗口随后关掉。「设置」页面在服务器版上可能打不开，只提示、不算失败。
+#[test]
+#[ignore = "会打开再关掉系统工具的窗口"]
+fn open_tools_launch_or_explain_why_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, bundle, _) = real_engine(dir.path());
+    let system32 = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join("System32");
+    let mut failures = Vec::new();
+    for t in bundle.catalog.tools.iter().filter(|t| t.group == ToolGroup::Open) {
+        let open = t.open.as_ref().expect("open 小工具有 open");
+        match (&open.program, &open.settings) {
+            (Some(name), None) => {
+                let p = tools::program(name).expect("名单里有");
+                let present = system32.join(p.exe).is_file()
+                    && p.args.iter().filter(|a| a.ends_with(".msc")).all(|a| system32.join(a).is_file());
+                let before = pids_of(p.exe);
+                let r = engine.tool_open(&t.id);
+                match (&r, present) {
+                    (Ok(()), true) => eprintln!("打开了 {:<28} {}", t.id, p.exe),
+                    (Err(e), false) if e.to_string().contains("这台电脑上没有") => {
+                        println!("::notice title={}::这台 CI 机器上没有 {}：{e}", t.id, p.exe);
+                    }
+                    _ => failures.push(format!("{}：{} 在不在：{present}，结果：{r:?}", t.id, p.exe)),
+                }
+                std::thread::sleep(Duration::from_secs(2));
+                close_new(p.exe, &before);
+            }
+            (None, Some(page)) => {
+                let before = pids_of("SystemSettings.exe");
+                match engine.tool_open(&t.id) {
+                    Ok(()) => eprintln!("打开了 {:<28} ms-settings:{page}", t.id),
+                    Err(e) => println!("::warning title={}::ms-settings:{page} 在这台 CI 机器上打不开：{e}", t.id),
+                }
+                std::thread::sleep(Duration::from_secs(2));
+                close_new("SystemSettings.exe", &before);
+            }
+            _ => failures.push(format!("{}：open 写得不对", t.id)),
+        }
+    }
+    assert!(failures.is_empty(), "有打开类小工具不对：\n{}", failures.join("\n"));
 }

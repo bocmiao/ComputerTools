@@ -16,6 +16,8 @@ const COMMANDS: &[&str] = &[
     "journal_undo",
     "journal_undo_session",
     "report_generate",
+    "tool_run",
+    "tool_open",
 ];
 
 fn main() {

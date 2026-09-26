@@ -5,7 +5,7 @@ use std::sync::Arc;
 use medkit_core::Engine;
 use medkit_core::views::{
     ApplyResult, CatalogSummary, CheckResult, FeatureState, JournalSession, Preview, SymptomDetail, SystemInfo,
-    UndoResult,
+    ToolResult, UndoResult,
 };
 use tauri::State;
 
@@ -82,4 +82,14 @@ pub async fn journal_undo_session(state: State<'_, AppState>, session_id: String
 #[tauri::command]
 pub async fn report_generate(state: State<'_, AppState>) -> CmdResult<String> {
     with_engine(state, |e| e.report_generate()).await
+}
+
+#[tauri::command]
+pub async fn tool_run(state: State<'_, AppState>, id: String) -> CmdResult<ToolResult> {
+    with_engine(state, move |e| e.tool_run(&id)).await
+}
+
+#[tauri::command]
+pub async fn tool_open(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    with_engine(state, move |e| e.tool_open(&id)).await
 }

@@ -3,7 +3,8 @@
     "./schema/check.schema.json": "catalog/checks/**/*.yaml",
     "./schema/feature.schema.json": "catalog/features/**/*.yaml",
     "./schema/symptom.schema.json": "catalog/symptoms/**/*.yaml",
-    "./schema/profile.schema.json": "catalog/profiles/**/*.yaml"
+    "./schema/profile.schema.json": "catalog/profiles/**/*.yaml",
+    "./schema/tool.schema.json": "catalog/tools/**/*.yaml"
   },
   "files.eol": "\n",
   "[powershell]": {

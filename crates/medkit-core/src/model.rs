@@ -371,3 +371,91 @@ pub struct Profile {
     pub title: Text,
     pub checks: Vec<String>,
 }
+
+/// 小工具：一次性的操作，不改设置（见 docs/architecture.md 第 11 节）。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Tool {
+    pub id: String,
+    pub schema_version: u32,
+    pub group: ToolGroup,
+    pub title: Text,
+    /// 一两句话：做什么、什么时候用
+    pub description: Text,
+    /// system / network / disk / hardware / settings …
+    pub category: String,
+    #[serde(default)]
+    pub audience: Audience,
+    #[serde(default)]
+    pub requires_admin: bool,
+    #[serde(default = "default_timeout")]
+    pub timeout_sec: u32,
+    /// 为 true 时，引擎给脚本传 `-UserHive`
+    #[serde(default)]
+    pub user_hive: bool,
+    /// info、action 的脚本
+    #[serde(default)]
+    pub run: Option<ScriptRef>,
+    /// 只有 action 能写：执行前确认框里的话
+    #[serde(default)]
+    pub confirm: Option<Text>,
+    /// info、action：结果代码 → 展示方式（和检测的一样）
+    #[serde(default)]
+    pub results: BTreeMap<String, ResultSpec>,
+    /// 只有 info 能写：表格里的文字
+    #[serde(default)]
+    pub labels: ToolLabels,
+    /// 只有 open 能写：打开什么
+    #[serde(default)]
+    pub open: Option<OpenTarget>,
+    #[serde(default)]
+    pub references: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum ToolGroup {
+    /// 看信息（只读），结果显示成表格
+    Info,
+    /// 一键处理（没有持久影响），结果显示成一句话
+    Action,
+    /// 打开系统自带的工具或「设置」里的一页
+    Open,
+}
+
+/// 给谁用。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Audience {
+    #[default]
+    Everyone,
+    /// 给懂哥用的
+    Helper,
+}
+
+/// info 小工具表格里的文字。脚本只返回键，文字写在这里。
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ToolLabels {
+    /// 表格标题：section id → 文字
+    #[serde(default)]
+    pub sections: BTreeMap<String, Text>,
+    /// 行的标签：row id → 文字
+    #[serde(default)]
+    pub rows: BTreeMap<String, Text>,
+    /// 行的值：value code → 文字
+    #[serde(default)]
+    pub values: BTreeMap<String, Text>,
+}
+
+/// open 小工具打开什么：`program` 和 `settings` 二选一，都必须在引擎的名单里。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OpenTarget {
+    /// 系统工具的名字，例如 `device-manager`（名单见 docs/architecture.md 11.3）
+    #[serde(default)]
+    pub program: Option<String>,
+    /// 「设置」里的页面，例如 `windowsupdate`（打开 ms-settings:windowsupdate）
+    #[serde(default)]
+    pub settings: Option<String>,
+}

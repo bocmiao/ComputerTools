@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tool",
+  "description": "小工具：一次性的操作，不改设置（见 docs/architecture.md 第 11 节）。",
+  "type": "object",
+  "properties": {
+    "audience": {
+      "$ref": "#/$defs/Audience",
+      "default": "everyone"
+    },
+    "category": {
+      "description": "system / network / disk / hardware / settings …",
+      "type": "string"
+    },
+    "confirm": {
+      "description": "只有 action 能写：执行前确认框里的话",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Text"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "description": {
+      "description": "一两句话：做什么、什么时候用",
+      "$ref": "#/$defs/Text"
+    },
+    "group": {
+      "$ref": "#/$defs/ToolGroup"
+    },
+    "id": {
+      "type": "string"
+    },
+    "labels": {
+      "description": "只有 info 能写：表格里的文字",
+      "$ref": "#/$defs/ToolLabels",
+      "default": {
+        "rows": {},
+        "sections": {},
+        "values": {}
+      }
+    },
+    "open": {
+      "description": "只有 open 能写：打开什么",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OpenTarget"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "references": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "requires_admin": {
+      "type": "boolean",
+      "default": false
+    },
+    "results": {
+      "description": "info、action：结果代码 → 展示方式（和检测的一样）",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ResultSpec"
+      },
+      "default": {}
+    },
+    "run": {
+      "description": "info、action 的脚本",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScriptRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schema_version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "timeout_sec": {
+      "type": "integer",
+      "format": "uint32",
+      "default": 15,
+      "minimum": 0
+    },
+    "title": {
+      "$ref": "#/$defs/Text"
+    },
+    "user_hive": {
+      "description": "为 true 时，引擎给脚本传 `-UserHive`",
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "group",
+    "title",
+    "description",
+    "category"
+  ],
+  "$defs": {
+    "Audience": {
+      "description": "给谁用。",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "everyone"
+          ]
+        },
+        {
+          "description": "给懂哥用的",
+          "type": "string",
+          "const": "helper"
+        }
+      ]
+    },
+    "Fixer": {
+      "description": "谁能修。",
+      "type": "string",
+      "enum": [
+        "medkit",
+        "system",
+        "user",
+        "helper",
+        "vendor",
+        "isp",
+        "hardware"
+      ]
+    },
+    "OpenTarget": {
+      "description": "open 小工具打开什么：`program` 和 `settings` 二选一，都必须在引擎的名单里。",
+      "type": "object",
+      "properties": {
+        "program": {
+          "description": "系统工具的名字，例如 `device-manager`（名单见 docs/architecture.md 11.3）",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "settings": {
+          "description": "「设置」里的页面，例如 `windowsupdate`（打开 ms-settings:windowsupdate）",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "ResultSpec": {
+      "type": "object",
+      "properties": {
+        "fixer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fixer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "links": {
+          "description": "`symptom:<id>` 或 `feature:<id>`",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "description": "可以用 `{事实名}` 引用脚本返回的事实",
+          "$ref": "#/$defs/Text"
+        },
+        "next": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Text"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "message"
+      ]
+    },
+    "ScriptRef": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "script"
+      ]
+    },
+    "Status": {
+      "description": "检测结论。",
+      "oneOf": [
+        {
+          "description": "正常",
+          "type": "string",
+          "const": "ok"
+        },
+        {
+          "description": "建议处理",
+          "type": "string",
+          "const": "advice"
+        },
+        {
+          "description": "需要人工",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "没查出来",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "不适用（不显示）",
+          "type": "string",
+          "const": "na"
+        }
+      ]
+    },
+    "Text": {
+      "description": "本地化文本：语言标签到文本的映射，必须包含 `zh-CN`。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "ToolGroup": {
+      "oneOf": [
+        {
+          "description": "看信息（只读），结果显示成表格",
+          "type": "string",
+          "const": "info"
+        },
+        {
+          "description": "一键处理（没有持久影响），结果显示成一句话",
+          "type": "string",
+          "const": "action"
+        },
+        {
+          "description": "打开系统自带的工具或「设置」里的一页",
+          "type": "string",
+          "const": "open"
+        }
+      ]
+    },
+    "ToolLabels": {
+      "description": "info 小工具表格里的文字。脚本只返回键，文字写在这里。",
+      "type": "object",
+      "properties": {
+        "rows": {
+          "description": "行的标签：row id → 文字",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Text"
+          },
+          "default": {}
+        },
+        "sections": {
+          "description": "表格标题：section id → 文字",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Text"
+          },
+          "default": {}
+        },
+        "values": {
+          "description": "行的值：value code → 文字",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Text"
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

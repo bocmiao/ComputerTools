@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 use medkit_core::bundle::Bundle;
 use medkit_core::catalog::{Problem, Severity};
-use medkit_core::model::{Check, Feature, Profile, Symptom};
+use medkit_core::model::{Check, Feature, Profile, Symptom, Tool};
 use medkit_core::script::HOST_SCRIPT;
 
 const USAGE: &str = "\
@@ -132,6 +132,7 @@ fn schemas() -> Vec<(&'static str, String)> {
         ("feature.schema.json", one::<Feature>()),
         ("symptom.schema.json", one::<Symptom>()),
         ("profile.schema.json", one::<Profile>()),
+        ("tool.schema.json", one::<Tool>()),
     ]
 }
 

@@ -1,4 +1,4 @@
-//! 引擎：检测、功能的检测 / 预览 / 执行、修改日志、撤销、报告。
+//! 引擎：检测、功能的检测 / 预览 / 执行、修改日志、撤销、报告、小工具。
 //!
 //! 关键不变量：
 //! - 每个原语改动前先把原值写进修改日志（apply），改完再写结果（commit）；
@@ -18,16 +18,19 @@ use crate::journal::{
     ApplyRecord, CommitRecord, Entry, Journal, RECORD_VERSION, Record, State, TargetRef, UndoReason, UndoRecord,
     new_id, now_rfc3339,
 };
-use crate::model::{Action, Check, Feature, RegistryAction, Risk, StartType, Status, Symptom, Target, Undo};
-use crate::platform::Platform;
+use crate::model::{
+    Action, Check, Feature, RegistryAction, Risk, StartType, Status, Symptom, Target, Tool, ToolGroup, Undo,
+};
+use crate::platform::{OpenRequest, Platform, PlatformError};
 use crate::registry::{RegRoot, RegValue, SpecRoot, display_opt, is_sid, key_ancestors, split_key};
 use crate::render::render;
 use crate::report::redact;
 use crate::script::ScriptRunner;
+use crate::tools;
 use crate::views::{
     ApplyResult, CatalogSummary, CheckResult, FeatureState, FeatureStateKind, FeatureSummary, JournalEntryView,
     JournalSession, Preview, PreviewChange, ProfileSummary, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo,
-    UndoResult,
+    ToolOpens, ToolResult, ToolSummary, UndoResult,
 };
 
 const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -161,6 +164,7 @@ impl Engine {
                 .collect(),
             symptoms: d.symptoms.iter().map(|s| self.symptom_summary(s)).collect(),
             features: d.features.iter().map(|f| self.feature_summary(f)).collect(),
+            tools: d.tools.iter().map(|t| self.tool_summary(t)).collect(),
         }
     }
 
@@ -306,6 +310,115 @@ impl Engine {
         *self.last_results.lock().unwrap() = results.clone();
         *self.last_profile_time.lock().unwrap() = Some(now_rfc3339());
         Ok(results)
+    }
+
+    // ───────────── 小工具 ─────────────
+    //
+    // 小工具不改设置（会改设置的一律做成功能），所以不写修改日志、没有撤销。
+
+    fn tool(&self, id: &str) -> Result<&Tool> {
+        self.catalog.tool(id).ok_or_else(|| Error::not_found("小工具", id))
+    }
+
+    fn tool_summary(&self, t: &Tool) -> ToolSummary {
+        ToolSummary {
+            id: t.id.clone(),
+            title: t.title.get(&self.lang).to_owned(),
+            description: t.description.get(&self.lang).to_owned(),
+            category: t.category.clone(),
+            group: t.group,
+            opens: t.open.as_ref().map(|o| if o.program.is_some() { ToolOpens::Program } else { ToolOpens::Settings }),
+            audience: t.audience,
+            confirm: t.confirm.as_ref().map(|c| c.get(&self.lang).to_owned()),
+        }
+    }
+
+    /// 运行一个 info 或 action 小工具。
+    pub fn tool_run(&self, id: &str) -> Result<ToolResult> {
+        let tool = self.tool(id)?;
+        let Some(run) = &tool.run else {
+            return Err(Error::Invalid(format!("「{}」不用运行，直接打开就行", tool.title.get(&self.lang))));
+        };
+        let start = Instant::now();
+        let outcome = if tool.requires_admin && !self.platform.is_admin() {
+            Err("这一项需要管理员权限".to_owned())
+        } else {
+            let mut args = Map::new();
+            if tool.user_hive {
+                args.insert("UserHive".into(), Value::String(self.user_hive()));
+            }
+            self.runner.run(&run.script, &args, Duration::from_secs(tool.timeout_sec.into())).map_err(|e| e.to_string())
+        };
+        let elapsed = start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+        Ok(self.interpret_tool(tool, outcome, elapsed))
+    }
+
+    fn interpret_tool(&self, tool: &Tool, outcome: std::result::Result<Value, String>, ms: u64) -> ToolResult {
+        let failed = if tool.group == ToolGroup::Info { "没能读出来。" } else { "没能完成。" };
+        let mut result = ToolResult {
+            id: tool.id.clone(),
+            title: tool.title.get(&self.lang).to_owned(),
+            status: Status::Unknown,
+            result_code: None,
+            message: failed.to_owned(),
+            next: None,
+            links: Vec::new(),
+            sections: Vec::new(),
+            error: None,
+            duration_ms: ms,
+        };
+        match outcome {
+            Err(e) => result.error = Some(e),
+            Ok(v) => {
+                let code = v.get("result").and_then(Value::as_str).map(str::to_owned);
+                let facts = v.get("facts").and_then(Value::as_object).cloned().unwrap_or_default();
+                match code.as_deref().and_then(|c| tool.results.get(c)) {
+                    Some(spec) => {
+                        result.status = spec.status;
+                        result.message = render(spec.message.get(&self.lang), &facts);
+                        result.next = spec.next.as_ref().map(|t| render(t.get(&self.lang), &facts));
+                        result.links = spec.links.clone();
+                    }
+                    None => {
+                        result.error =
+                            Some(format!("脚本返回了没有定义的结果：{}", code.as_deref().unwrap_or("（空）")));
+                    }
+                }
+                if tool.group == ToolGroup::Info {
+                    let mut missing = Vec::new();
+                    result.sections = tools::render_sections(v.get("sections"), &tool.labels, &self.lang, &mut missing);
+                    if !missing.is_empty() && result.error.is_none() {
+                        result.error = Some(format!("数据文件里缺少这些文字：{}", missing.join("、")));
+                    }
+                }
+                result.result_code = code;
+            }
+        }
+        result
+    }
+
+    /// 打开一个 open 小工具：系统自带的工具，或者「设置」里的一页。
+    pub fn tool_open(&self, id: &str) -> Result<()> {
+        let tool = self.tool(id)?;
+        let title = tool.title.get(&self.lang);
+        let request = match tool.open.as_ref().map(|o| (o.program.as_deref(), o.settings.as_deref())) {
+            Some((Some(name), None)) => {
+                let p = tools::program(name)
+                    .ok_or_else(|| Error::Catalog(format!("{id} 的 open.program 不在名单里：{name}")))?;
+                OpenRequest::Program { exe: p.exe, args: p.args }
+            }
+            Some((None, Some(page))) => OpenRequest::Settings(
+                tools::settings_page(page)
+                    .ok_or_else(|| Error::Catalog(format!("{id} 的 open.settings 不在名单里：{page}")))?,
+            ),
+            _ => return Err(Error::Invalid(format!("「{title}」不是用来打开的工具"))),
+        };
+        self.platform.open(&request).map_err(|e| match e {
+            PlatformError::NotFound(file) => {
+                Error::Invalid(format!("这台电脑上没有「{title}」（找不到 {file}），可能被精简系统删掉了。"))
+            }
+            other => Error::Invalid(format!("没能打开「{title}」：{other}")),
+        })
     }
 
     // ───────────── 功能：检测、预览 ─────────────

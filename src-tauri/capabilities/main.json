@@ -16,6 +16,8 @@
     "allow-journal-list",
     "allow-journal-undo",
     "allow-journal-undo-session",
-    "allow-report-generate"
+    "allow-report-generate",
+    "allow-tool-run",
+    "allow-tool-open"
   ]
 }

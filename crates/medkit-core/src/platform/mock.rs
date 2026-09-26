@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
-use super::{OsInfo, PResult, Platform, PlatformError, UserIdentity};
+use super::{OpenRequest, OsInfo, PResult, Platform, PlatformError, UserIdentity};
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue, key_ancestors};
 
@@ -23,6 +23,10 @@ struct State {
     fail_key_deletes: HashSet<String>,
     /// 这些用户的注册表没有加载（已注销）
     unloaded_hives: HashSet<String>,
+    /// 打开过的系统工具，按顺序
+    opened: Vec<OpenRequest>,
+    /// 打开这些程序时模拟「这台电脑上没有」
+    missing_programs: HashSet<String>,
 }
 
 pub struct MockPlatform {
@@ -93,6 +97,16 @@ impl MockPlatform {
     /// 测试用：模拟某个用户已经注销，他的注册表没有加载。
     pub fn unload_hive(&self, sid: &str) {
         self.state.lock().unwrap().unloaded_hives.insert(sid.to_ascii_uppercase());
+    }
+
+    /// 测试用：模拟精简系统删掉了某个程序（文件名，不区分大小写）。
+    pub fn remove_program(&self, exe: &str) {
+        self.state.lock().unwrap().missing_programs.insert(exe.to_ascii_lowercase());
+    }
+
+    /// 测试用：打开过的系统工具。
+    pub fn opened(&self) -> Vec<OpenRequest> {
+        self.state.lock().unwrap().opened.clone()
     }
 
     pub fn key_exists(&self, root: &RegRoot, key: &str) -> bool {
@@ -190,5 +204,16 @@ impl Platform for MockPlatform {
 
     fn os_info(&self) -> OsInfo {
         self.os.clone()
+    }
+
+    fn open(&self, request: &OpenRequest) -> PResult<()> {
+        let mut state = self.state.lock().unwrap();
+        if let OpenRequest::Program { exe, .. } = request
+            && state.missing_programs.contains(&exe.to_ascii_lowercase())
+        {
+            return Err(PlatformError::NotFound((*exe).to_owned()));
+        }
+        state.opened.push(*request);
+        Ok(())
     }
 }

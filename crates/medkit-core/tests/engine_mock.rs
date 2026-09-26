@@ -248,6 +248,7 @@ fn fixture_data() -> CatalogData {
         features: parse_all::<Feature>(FEATURES),
         symptoms: parse_all::<Symptom>(SYMPTOMS),
         profiles: parse_all::<Profile>(PROFILES),
+        tools: Vec::new(),
         sources: Default::default(),
     }
 }

@@ -44,7 +44,7 @@ use winreg::enums::{
     KEY_WRITE, RegType as WinRegType,
 };
 
-use super::{OsInfo, PResult, Platform, PlatformError, UserIdentity, edition_from_id};
+use super::{OpenRequest, OsInfo, PResult, Platform, PlatformError, UserIdentity, edition_from_id};
 use crate::model::StartType;
 use crate::registry::{RegRoot, RegValue};
 
@@ -555,6 +555,80 @@ impl Platform for WindowsPlatform {
             edition_id,
             computer_name: std::env::var("COMPUTERNAME").unwrap_or_default(),
         }
+    }
+
+    fn open(&self, request: &OpenRequest) -> PResult<()> {
+        match request {
+            OpenRequest::Program { exe, args } => open_program(exe, args),
+            OpenRequest::Settings(page) => open_settings(page),
+        }
+    }
+}
+
+// ───────────── 打开系统工具 ─────────────
+
+/// System32 的绝对路径（不依赖 PATH 和当前目录）。
+fn system_directory() -> PathBuf {
+    use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
+    let mut buf = [0u16; 260];
+    // SAFETY: 缓冲区长度正确
+    let n = unsafe { GetSystemDirectoryW(buf.as_mut_ptr(), buf.len() as u32) } as usize;
+    if n > 0 && n < buf.len() {
+        PathBuf::from(String::from_utf16_lossy(&buf[..n]))
+    } else {
+        PathBuf::from(r"C:\Windows\System32")
+    }
+}
+
+/// 按绝对路径启动 System32 下的程序。以小药箱的权限（管理员）运行，所以不会再弹 UAC。
+fn open_program(exe: &str, args: &[&str]) -> PResult<()> {
+    use std::process::{Command, Stdio};
+    let system32 = system_directory();
+    let program = system32.join(exe);
+    if !program.is_file() {
+        return Err(PlatformError::NotFound(exe.to_owned()));
+    }
+    let mut cmd = Command::new(&program);
+    for arg in args {
+        if arg.ends_with(".msc") {
+            let snap_in = system32.join(arg);
+            if !snap_in.is_file() {
+                return Err(PlatformError::NotFound((*arg).to_owned()));
+            }
+            cmd.arg(snap_in);
+        } else {
+            cmd.arg(arg);
+        }
+    }
+    // 当前目录设成 System32：便携版可能放在「下载」里，别让子进程从那里找 DLL
+    cmd.current_dir(&system32).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    cmd.spawn().map(|_| ()).map_err(|e| PlatformError::Other(format!("启动 {exe} 失败：{e}")))
+}
+
+/// 打开「设置」里的一页（ms-settings:<page>）。「设置」是系统应用，由系统按登录用户打开。
+fn open_settings(page: &str) -> PResult<()> {
+    use windows_sys::Win32::System::Com::{
+        COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
+    };
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let uri = wide(format!("ms-settings:{page}"));
+    let verb = wide("open");
+    // ShellExecute 可能通过 COM 找协议的处理程序，先在这个线程上初始化 COM（微软文档的要求）
+    // SAFETY: 参数都是合法值；成功（含 S_FALSE）时要配对调用 CoUninitialize
+    let com = unsafe { CoInitializeEx(null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32) };
+    // SAFETY: 字符串都以 NUL 结尾；不需要父窗口
+    let r = unsafe { ShellExecuteW(null_mut(), verb.as_ptr(), uri.as_ptr(), null(), null(), SW_SHOWNORMAL) };
+    if com >= 0 {
+        // SAFETY: 和上面成功的 CoInitializeEx 配对
+        unsafe { CoUninitialize() };
+    }
+    // 返回值大于 32 表示成功
+    if r as isize > 32 {
+        Ok(())
+    } else {
+        Err(PlatformError::Other(format!("打开「设置」失败（错误 {}）", r as isize)))
     }
 }
 

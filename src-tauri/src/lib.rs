@@ -5,7 +5,7 @@
 pub mod commands;
 pub mod setup;
 
-/// 注册 12 个命令的处理器。`run()` 和集成测试都用它，保证测的和真跑的是同一套。
+/// 注册 14 个命令的处理器。`run()` 和集成测试都用它，保证测的和真跑的是同一套。
 #[macro_export]
 macro_rules! command_handler {
     () => {
@@ -22,6 +22,8 @@ macro_rules! command_handler {
             $crate::commands::journal_undo,
             $crate::commands::journal_undo_session,
             $crate::commands::report_generate,
+            $crate::commands::tool_run,
+            $crate::commands::tool_open,
         ]
     };
 }

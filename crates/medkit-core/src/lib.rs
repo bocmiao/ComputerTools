@@ -6,6 +6,7 @@
 //! - [`engine`]：检测、执行、撤销、修改日志、报告
 //! - [`platform`]：和操作系统打交道的接口（Windows 实现 + 测试用的模拟实现）
 //! - [`script`]：PowerShell 宿主
+//! - [`tools`]：小工具能打开的程序名单、info 小工具的表格渲染
 
 pub mod builtin;
 pub mod bundle;
@@ -20,6 +21,7 @@ pub mod registry;
 pub mod render;
 pub mod report;
 pub mod script;
+pub mod tools;
 pub mod views;
 mod yaml;
 

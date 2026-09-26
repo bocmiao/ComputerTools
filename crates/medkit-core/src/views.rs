@@ -4,7 +4,7 @@
 use serde::Serialize;
 use serde_json::{Map, Value};
 
-use crate::model::{Fixer, Level, Maturity, Reboot, Recommend, Risk, Status};
+use crate::model::{Audience, Fixer, Level, Maturity, Reboot, Recommend, Risk, Status, ToolGroup};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -83,6 +83,64 @@ pub struct CatalogSummary {
     pub profiles: Vec<ProfileSummary>,
     pub symptoms: Vec<SymptomSummary>,
     pub features: Vec<FeatureSummary>,
+    pub tools: Vec<ToolSummary>,
+}
+
+/// open 小工具打开的是什么。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ToolOpens {
+    /// 系统自带的工具（任务管理器、设备管理器……）
+    Program,
+    /// 「设置」里的一页
+    Settings,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSummary {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub category: String,
+    pub group: ToolGroup,
+    /// 只有 open 有值
+    pub opens: Option<ToolOpens>,
+    pub audience: Audience,
+    /// 只有 action 可能有：执行前要用户确认的说明
+    pub confirm: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolRow {
+    pub label: String,
+    pub value: String,
+    /// 默认遮住，不进「复制全部」（例如 WiFi 密码）
+    pub secret: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSection {
+    pub title: String,
+    pub rows: Vec<ToolRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolResult {
+    pub id: String,
+    pub title: String,
+    pub status: Status,
+    pub result_code: Option<String>,
+    pub message: String,
+    pub next: Option<String>,
+    pub links: Vec<String>,
+    /// 只有 info 有内容
+    pub sections: Vec<ToolSection>,
+    pub error: Option<String>,
+    pub duration_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]

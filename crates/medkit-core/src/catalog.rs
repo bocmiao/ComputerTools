@@ -1,6 +1,6 @@
 //! 读取和校验 catalog/ 下的数据文件。
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::path::Path;
 use std::sync::LazyLock;
@@ -10,7 +10,8 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
-    Action, Check, Feature, Maturity, Profile, RegistryAction, Symptom, Target, Text, Undo, UndoKeyword,
+    Action, Check, Feature, Maturity, Profile, RegistryAction, ResultSpec, Symptom, Target, Text, Tool, ToolGroup,
+    Undo, UndoKeyword,
 };
 use crate::registry::{RegValue, SpecRoot, split_key};
 use crate::yaml;
@@ -64,6 +65,8 @@ pub struct CatalogData {
     pub features: Vec<Feature>,
     pub symptoms: Vec<Symptom>,
     pub profiles: Vec<Profile>,
+    #[serde(default)]
+    pub tools: Vec<Tool>,
     /// ID → 来源文件（只用于报错）
     #[serde(skip)]
     pub sources: HashMap<String, String>,
@@ -77,6 +80,7 @@ pub fn load_dir(catalog_root: &Path) -> (CatalogData, Vec<Problem>) {
     load_kind(catalog_root, "features", &mut data.features, |f| &f.id, &mut data.sources, &mut problems);
     load_kind(catalog_root, "symptoms", &mut data.symptoms, |s| &s.id, &mut data.sources, &mut problems);
     load_kind(catalog_root, "profiles", &mut data.profiles, |p| &p.id, &mut data.sources, &mut problems);
+    load_kind(catalog_root, "tools", &mut data.tools, |t| &t.id, &mut data.sources, &mut problems);
     (data, problems)
 }
 
@@ -213,9 +217,14 @@ impl Validator<'_> {
         let feature_ids = self.unique_ids("features", data.features.iter().map(|f| f.id.as_str()));
         let symptom_ids = self.unique_ids("symptoms", data.symptoms.iter().map(|s| s.id.as_str()));
         self.unique_ids("profiles", data.profiles.iter().map(|p| p.id.as_str()));
+        let tool_ids = self.unique_ids("tools", data.tools.iter().map(|t| t.id.as_str()));
+        let targets = LinkTargets { features: &feature_ids, symptoms: &symptom_ids, tools: &tool_ids };
 
         for c in &data.checks {
-            self.check(c, &feature_ids, &symptom_ids);
+            self.check(c, &targets);
+        }
+        for t in &data.tools {
+            self.tool(t, &targets);
         }
         for f in &data.features {
             self.feature(f, &check_ids);
@@ -277,7 +286,7 @@ impl Validator<'_> {
         }
     }
 
-    fn check(&mut self, c: &Check, features: &HashSet<&str>, symptoms: &HashSet<&str>) {
+    fn check(&mut self, c: &Check, targets: &LinkTargets) {
         let file = self.file("checks", &c.id);
         self.common(&file, c.schema_version, &c.title, "title");
         if let Some(d) = &c.description {
@@ -295,31 +304,112 @@ impl Validator<'_> {
         if c.timeout_sec == 0 || c.timeout_sec > 600 {
             self.err(&file, "timeout_sec 要在 1 到 600 之间".into());
         }
-        if c.results.is_empty() {
-            self.err(&file, "results 不能为空".into());
+        self.results(&file, &c.results, targets);
+        if c.references.is_empty() {
+            self.warn(&file, "最好写上 references（来源）".into());
         }
-        for (code, spec) in &c.results {
+    }
+
+    /// 检测和 info、action 小工具共用的 results 校验。
+    fn results(&mut self, file: &str, results: &BTreeMap<String, ResultSpec>, targets: &LinkTargets) {
+        if results.is_empty() {
+            self.err(file, "results 不能为空".into());
+        }
+        for (code, spec) in results {
             if !ID_RE.is_match(code) {
-                self.err(&file, format!("结果代码格式不对：{code}"));
+                self.err(file, format!("结果代码格式不对：{code}"));
             }
-            self.text(&file, &spec.message, &format!("results.{code}.message"));
-            self.placeholders(&file, &spec.message, code);
+            self.text(file, &spec.message, &format!("results.{code}.message"));
+            self.placeholders(file, &spec.message, code);
             if let Some(next) = &spec.next {
-                self.text(&file, next, &format!("results.{code}.next"));
-                self.placeholders(&file, next, code);
+                self.text(file, next, &format!("results.{code}.next"));
+                self.placeholders(file, next, code);
             }
             for link in &spec.links {
-                let ok = match link.split_once(':') {
-                    Some(("symptom", id)) => symptoms.contains(id),
-                    Some(("feature", id)) => features.contains(id),
-                    _ => false,
-                };
-                if !ok {
-                    self.err(&file, format!("results.{code}.links 里的链接无效：{link}"));
+                if !targets.contains(link) {
+                    self.err(file, format!("results.{code}.links 里的链接无效：{link}"));
                 }
             }
         }
-        if c.references.is_empty() {
+    }
+
+    fn tool(&mut self, t: &Tool, targets: &LinkTargets) {
+        let file = self.file("tools", &t.id);
+        self.common(&file, t.schema_version, &t.title, "title");
+        self.text(&file, &t.description, "description");
+        if t.category.trim().is_empty() {
+            self.err(&file, "category 不能为空".into());
+        }
+        let labels_empty = t.labels.sections.is_empty() && t.labels.rows.is_empty() && t.labels.values.is_empty();
+        match t.group {
+            ToolGroup::Info | ToolGroup::Action => {
+                match &t.run {
+                    Some(run) => {
+                        let run = run.script.clone();
+                        self.script_ref(&file, &run, "run");
+                    }
+                    None => self.err(&file, "info、action 小工具必须写 run".into()),
+                }
+                if t.open.is_some() {
+                    self.err(&file, "只有 open 小工具能写 open".into());
+                }
+                if t.timeout_sec == 0 || t.timeout_sec > 600 {
+                    self.err(&file, "timeout_sec 要在 1 到 600 之间".into());
+                }
+                self.results(&file, &t.results, targets);
+                if t.group == ToolGroup::Info {
+                    if t.confirm.is_some() {
+                        self.err(&file, "只有 action 小工具能写 confirm（info 只读，不用确认）".into());
+                    }
+                    for (kind, map) in
+                        [("sections", &t.labels.sections), ("rows", &t.labels.rows), ("values", &t.labels.values)]
+                    {
+                        for (key, text) in map {
+                            if !FACT_NAME_RE.is_match(key) && !ID_RE.is_match(key) {
+                                self.err(&file, format!("labels.{kind} 的键格式不对：{key}"));
+                            }
+                            self.text(&file, text, &format!("labels.{kind}.{key}"));
+                        }
+                    }
+                } else {
+                    if !labels_empty {
+                        self.err(&file, "只有 info 小工具能写 labels".into());
+                    }
+                    if let Some(c) = &t.confirm {
+                        self.text(&file, c, "confirm");
+                    }
+                }
+            }
+            ToolGroup::Open => {
+                if t.run.is_some() || !t.results.is_empty() || !labels_empty || t.confirm.is_some() {
+                    self.err(&file, "open 小工具只写 open，不写 run、results、labels、confirm".into());
+                }
+                if t.requires_admin || t.user_hive {
+                    self.err(&file, "open 小工具不跑脚本，不要写 requires_admin、user_hive".into());
+                }
+                match t.open.as_ref().map(|o| (o.program.as_deref(), o.settings.as_deref())) {
+                    Some((Some(p), None)) => {
+                        if crate::tools::program(p).is_none() {
+                            let names: Vec<&str> = crate::tools::OPEN_PROGRAMS.iter().map(|(n, _)| *n).collect();
+                            self.err(&file, format!("open.program 不在名单里：{p}（可用：{}）", names.join("、")));
+                        }
+                    }
+                    Some((None, Some(page))) => {
+                        if crate::tools::settings_page(page).is_none() {
+                            self.err(
+                                &file,
+                                format!(
+                                    "open.settings 不在名单里：{page}（可用：{}）",
+                                    crate::tools::SETTINGS_PAGES.join("、")
+                                ),
+                            );
+                        }
+                    }
+                    _ => self.err(&file, "open 必须且只能写 program 或 settings 之一".into()),
+                }
+            }
+        }
+        if t.references.is_empty() {
             self.warn(&file, "最好写上 references（来源）".into());
         }
     }
@@ -513,6 +603,24 @@ impl Validator<'_> {
     }
 }
 
+/// 检测结果的 links 能指向的对象。
+struct LinkTargets<'a> {
+    features: &'a HashSet<&'a str>,
+    symptoms: &'a HashSet<&'a str>,
+    tools: &'a HashSet<&'a str>,
+}
+
+impl LinkTargets<'_> {
+    fn contains(&self, link: &str) -> bool {
+        match link.split_once(':') {
+            Some(("symptom", id)) => self.symptoms.contains(id),
+            Some(("feature", id)) => self.features.contains(id),
+            Some(("tool", id)) => self.tools.contains(id),
+            _ => false,
+        }
+    }
+}
+
 /// 建好索引、可以查询的 catalog。
 #[derive(Debug, Clone, Default)]
 pub struct Catalog {
@@ -521,6 +629,7 @@ pub struct Catalog {
     features: HashMap<String, usize>,
     symptoms: HashMap<String, usize>,
     profiles: HashMap<String, usize>,
+    tools: HashMap<String, usize>,
 }
 
 impl Catalog {
@@ -533,6 +642,7 @@ impl Catalog {
             features: index(&data.features, |f| &f.id),
             symptoms: index(&data.symptoms, |s| &s.id),
             profiles: index(&data.profiles, |p| &p.id),
+            tools: index(&data.tools, |t| &t.id),
             data,
         }
     }
@@ -551,5 +661,9 @@ impl Catalog {
 
     pub fn profile(&self, id: &str) -> Option<&Profile> {
         self.profiles.get(id).map(|&i| &self.data.profiles[i])
+    }
+
+    pub fn tool(&self, id: &str) -> Option<&Tool> {
+        self.tools.get(id).map(|&i| &self.data.tools[i])
     }
 }

@@ -11,10 +11,12 @@ catalog/                 数据（GPL-3.0，随程序发布）
   features/              原子修复：一个文件一个功能
   symptoms/              症状诊断树
   profiles/              检测清单（例如体检）
+  tools/                 小工具：看信息、一键处理、打开系统工具（第 11 节）
 scripts/                 PowerShell 脚本（只能有 ASCII 字符）
   host/Host.ps1          常驻宿主进程
   checks/…               检测脚本
   features/…             功能脚本（检测 / 执行 / 撤销 / 故障制造）
+  tools/…                小工具脚本
 data/                    知识数据（CC BY-SA 4.0）：同义词、错误码解释等
 crates/medkit-core/      Rust 引擎：模型、目录加载与校验、原语、快照撤销、修改日志、检测
 crates/medkit-data/      命令行工具：校验 catalog、生成 JSON Schema、打包
@@ -80,7 +82,7 @@ references:
   - `isp`：运营商
   - `hardware`：需要换硬件
 - **message / next** 里的 `{名字}` 会被替换成脚本返回的同名事实。数字最多保留一位小数。
-- **links**：可以写 `symptom:<id>` 或 `feature:<id>`，界面会显示成跳转按钮。
+- **links**：可以写 `symptom:<id>`、`feature:<id>` 或 `tool:<id>`（第 11 节），界面会显示成跳转或打开的按钮。
 - 脚本返回的结果代码必须在 `results` 里有定义；没定义的，引擎按 `unknown` 处理。CI 里的冒烟测试会检查这一点。
 
 ### 内置检测（builtin）
@@ -317,6 +319,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `journal_undo` | `entryId`、`force` | `UndoResult` |
 | `journal_undo_session` | `sessionId` | `UndoResult[]` |
 | `report_generate` | — | `string`（已脱敏的纯文本） |
+| `tool_run` | `id` | `ToolResult`（只能用于 `info`、`action` 小工具） |
+| `tool_open` | `id` | `null`（只能用于 `open` 小工具；打不开时返回错误字符串） |
 
 TypeScript 类型如下（字段名是 camelCase，所有文本已经渲染成中文）：
 
@@ -344,7 +348,10 @@ export interface FeatureSummary {
   applicable: boolean                  // 这台电脑能不能用（系统版本、Windows 版本不对就不能）
   notApplicableReason: string | null   // 不能用的原因，给用户看
 }
-export interface CatalogSummary { profiles: ProfileSummary[]; symptoms: SymptomSummary[]; features: FeatureSummary[] }
+export interface CatalogSummary {
+  profiles: ProfileSummary[]; symptoms: SymptomSummary[]; features: FeatureSummary[]
+  tools: ToolSummary[]
+}
 export interface SymptomStep { check: string; checkTitle: string; stopOn: Status[]; fixes: FeatureSummary[] }
 export interface SymptomDetail extends SymptomSummary { causes: string[]; guide: string | null; steps: SymptomStep[] }
 export interface CheckResult {
@@ -375,6 +382,26 @@ export interface JournalEntryView {
 }
 export interface JournalSession { id: string; startedAt: string; entries: JournalEntryView[] }
 export interface UndoResult { entryId: string; ok: boolean; drift: boolean; message: string; error: string | null }
+
+// 小工具（第 11 节）
+export type ToolGroup = 'info' | 'action' | 'open'
+export type ToolOpens = 'program' | 'settings'
+export type Audience = 'everyone' | 'helper'
+export interface ToolSummary {
+  id: string; title: string; description: string; category: string
+  group: ToolGroup
+  opens: ToolOpens | null      // 只有 open 有值：打开的是系统工具，还是「设置」里的一页
+  audience: Audience           // helper：给懂哥用的，界面上标出来
+  confirm: string | null       // 只有 action 可能有：执行前要用户确认的说明
+}
+export interface ToolRow { label: string; value: string; secret: boolean }   // secret：默认遮住，不进「复制全部」
+export interface ToolSection { title: string; rows: ToolRow[] }
+export interface ToolResult {
+  id: string; title: string
+  status: Status; resultCode: string | null; message: string; next: string | null; links: string[]
+  sections: ToolSection[]      // 只有 info 有内容
+  error: string | null; durationMs: number
+}
 ```
 
 ## 10. 安全边界（摘要）
@@ -383,3 +410,101 @@ export interface UndoResult { entryId: string; ok: boolean; drift: boolean; mess
 - 后端不开本地服务，不注册 URL 协议，不装内核驱动。
 - 脚本和数据都内嵌在 exe 里；运行目录只有管理员能写，执行前逐个校验哈希。
 - 其余要求见计划书 6.5 节。
+
+## 11. 小工具（`catalog/tools/**/*.yaml`）
+
+小工具是一次性的操作，**不改设置**，所以不写修改日志，也没有撤销。分三组：
+
+| group | 做什么 | 怎么执行 | 例子 |
+|---|---|---|---|
+| `info` | 看信息（只读） | 跑脚本，结果显示成几张「标签：值」的小表 | 电脑配置、WiFi 密码 |
+| `action` | 一键处理 | 跑脚本，结果显示成一句话（和检测一样用结果代码） | 刷新 DNS 缓存、重启资源管理器 |
+| `open` | 打开系统自带的工具，或「设置」里的某一页 | 引擎直接打开，不跑脚本 | 任务管理器、Windows 更新 |
+
+**会改设置的（哪怕能撤销）一律做成功能（第 4 节），不能做成小工具**：小工具不进修改日志，改了就没法撤销。
+`action` 只能做没有持久影响的事，比如清缓存、重启一个进程。
+
+### 11.1 公共字段
+
+```yaml
+id: network.flush-dns        # 规则和检测、功能的 ID 一样；检测结果里用 tool:<id> 链接过来
+schema_version: 1
+group: action                # info / action / open
+title: { zh-CN: 刷新 DNS 缓存 }
+description: { zh-CN: …… }   # 一两句话：做什么、什么时候用
+category: network            # system / network / disk / hardware / settings ……
+audience: everyone           # everyone（默认）/ helper：给懂哥用的
+references: [ … ]
+```
+
+### 11.2 `info` 和 `action`
+
+```yaml
+requires_admin: true
+timeout_sec: 30              # 1 到 600，默认 15
+user_hive: false             # 为 true 时给脚本传 -UserHive（和检测一样）
+run: { script: tools/network/flush-dns.ps1 }
+confirm: { zh-CN: …… }       # 只有 action 能写：执行前确认框里的话；不写就不确认
+results:                     # 和检测的 results 完全一样：结果代码 → status、message、next、links
+  done:
+    status: ok
+    message: { zh-CN: "已经刷新了 DNS 缓存（清掉了 {entries} 条记录）。" }
+labels:                      # 只有 info 能写：表格里的文字（脚本里不能写中文）
+  sections: { cpu: { zh-CN: 处理器 } }
+  rows: { name: { zh-CN: 型号 } }
+  values: { ssd: { zh-CN: 固态硬盘 } }
+```
+
+脚本和检测脚本一样只输出一个对象，另外 `info` 脚本可以带 `sections`：
+
+```json
+{
+  "result": "ok",
+  "facts": { "count": 2 },
+  "sections": [
+    { "id": "cpu", "rows": [ { "id": "name", "value": "Intel(R) Core(TM) i5-8250U CPU @ 1.60GHz" } ] },
+    { "id": "disk", "name": "Samsung SSD 870 EVO 500GB",
+      "rows": [ { "id": "size", "value": "466 GB" }, { "id": "type", "code": "ssd" } ] },
+    { "id": "wifi", "name": "HomeWiFi",
+      "rows": [ { "id": "password", "value": "12345678", "secret": true } ] }
+  ]
+}
+```
+
+- 表格标题是 `labels.sections[id]`，有 `name` 时接上「：name」，比如「硬盘：Samsung SSD 870 EVO 500GB」。
+- 每一行的标签是 `labels.rows[id]`，同一个 id 可以出现多行。值要么是 `value`（字符串或数字，原样显示），要么是 `code`（显示 `labels.values[code]`）。
+- `secret: true` 的值默认遮住，点「显示」才看得到，也不会被「复制全部」带上。
+- 用到了 `labels` 里没有的 id 或 code，界面照样显示原文，同时在 `error` 里说明；CI 的冒烟测试会拦住这种情况。
+- **不输出序列号、MAC 地址、电脑名、用户名**：界面有「复制全部」，用户会把它发给别人。
+
+### 11.3 `open`
+
+二选一：
+
+```yaml
+open: { program: device-manager }   # 系统工具：名字必须在下面的名单里
+open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<页面>）：页面也必须在名单里
+```
+
+名单写在 `crates/medkit-core/src/tools.rs` 里，改名单要改代码、过代码审核，数据文件里不能随便写程序路径：
+
+| program | 实际启动（都在 System32 下，按绝对路径） |
+|---|---|
+| `task-manager` | `Taskmgr.exe` |
+| `device-manager` | `mmc.exe devmgmt.msc` |
+| `disk-management` | `mmc.exe diskmgmt.msc` |
+| `disk-cleanup` | `cleanmgr.exe` |
+| `system-restore` | `rstrui.exe` |
+| `reliability` | `perfmon.exe /rel` |
+| `memory-diagnostic` | `MdSched.exe` |
+| `system-information` | `msinfo32.exe` |
+| `services` | `mmc.exe services.msc` |
+| `event-viewer` | `mmc.exe eventvwr.msc` |
+| `control-panel` | `control.exe` |
+
+settings 页面：`windowsupdate`、`storagesense`、`appsfeatures`、`defaultapps`、`network-status`、`printers`、
+`sound`、`powersleep`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`。
+
+- 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。
+- 精简系统上被删掉的工具，打开时如实说「这台电脑上没有这个工具」，不去别处找。
+
