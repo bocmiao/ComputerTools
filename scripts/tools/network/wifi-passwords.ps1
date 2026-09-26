@@ -16,6 +16,13 @@
 #    back to make sure. The whole folder is deleted in "finally", also when
 #    something failed; if it cannot be deleted the script throws so that the
 #    user hears about it.
+#    "finally" does not run when the process is killed (engine timeout, app
+#    closed), so every run first deletes the export folders that earlier runs
+#    left behind: direct children of the temp directory named exactly
+#    medkit-wifi-<32 lowercase hex digits>, that are real folders (not
+#    junctions or links) holding files only, as this script creates them.
+#    Anything else with a similar name is left alone. A leftover that cannot be
+#    deleted is an error, like the folder of the current run.
 # 4. Passwords and XML text never go into facts or exception messages. Error
 #    messages have the temp path (which contains the user name) replaced by
 #    %TEMP%.
@@ -29,8 +36,10 @@
 #             enterprise / other (MSM/security/authEncryption)
 # The same profile on two wireless adapters is shown once.
 #
-# Result codes: found / none / no-wifi (all status ok). Facts: count, skipped
-# (exported files that could not be read).
+# Result codes: found (ok), found-partial (ok: some exported files could not be
+# read), none-readable (profiles were exported but none could be read), none
+# (nothing saved), no-wifi (ok). Facts: count, skipped (exported files that
+# could not be read).
 
 [CmdletBinding()]
 param()
@@ -123,6 +132,33 @@ function Remove-ExportFolder {
         }
     }
     return (-not (Test-Path -LiteralPath $Path))
+}
+
+# Deletes the export folders of earlier runs that were killed before their
+# "finally" ran (see 3. above). Throws when one of them cannot be deleted.
+function Remove-LeftoverFolder {
+    $reparse = [System.IO.FileAttributes]::ReparsePoint
+    foreach ($dir in @(Get-ChildItem -LiteralPath $tempRoot -Directory -Force -Filter 'medkit-wifi-*' -ErrorAction SilentlyContinue)) {
+        if ($dir.Name -cnotmatch '^medkit-wifi-[0-9a-f]{32}$') {
+            continue
+        }
+        if (($dir.Attributes -band $reparse) -ne 0) {
+            continue
+        }
+        try {
+            $children = @(Get-ChildItem -LiteralPath $dir.FullName -Force)
+        }
+        catch {
+            continue
+        }
+        $foreign = @($children | Where-Object { $_.PSIsContainer -or (($_.Attributes -band $reparse) -ne 0) })
+        if ($foreign.Count -gt 0) {
+            continue
+        }
+        if (-not (Remove-ExportFolder -Path $dir.FullName)) {
+            throw ('Could not delete the temporary folder %TEMP%\{0} with the profiles an earlier run exported; please delete it by hand' -f $dir.Name)
+        }
+    }
 }
 
 function Read-XmlFile {
@@ -271,6 +307,7 @@ $profiles = New-Object System.Collections.Generic.List[object]
 $skipped = 0
 
 try {
+    Remove-LeftoverFolder
     $adapter = $null
     $service = Test-WlanService
     if ($service) {
@@ -353,6 +390,12 @@ foreach ($p in @($unique.Values | Sort-Object -Property Name)) {
 }
 if ($sections.Count -gt 0) {
     $result = 'found'
+    if ($skipped -gt 0) {
+        $result = 'found-partial'
+    }
+}
+elseif (($result -eq 'none') -and ($skipped -gt 0)) {
+    $result = 'none-readable'
 }
 
 [pscustomobject]@{

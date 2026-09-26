@@ -12,6 +12,9 @@
 # WMI 命名空间不存在等错误由脚本抛出，界面显示「没查出来」。
 # 结果代码 "off" / "on" 特意加了引号：按 YAML 1.1 解析的工具（比如 PyYAML、部分编辑器插件）
 # 会把不带引号的 on / off 当成布尔值。
+# 状态口径（计划书原则 7）：开着 BitLocker 是正常、更安全的状态，Win11 24H2 起大多数笔记本出厂就是这样，
+# 所以 on 是 ok，也不写 fixer（写了会显示「谁能修」，像是在劝用户把加密关掉）。只在 next 里提醒：
+# 重装系统、换主板、刷 BIOS 之前先确认恢复密钥已经备份。
 # 待真机验证：「等待激活」状态下 GetKeyProtectors 确实返回空（对照 manage-bde -status 的「密钥保护器：未找到」）。
 id: security.bitlocker-status
 schema_version: 1
@@ -29,12 +32,11 @@ results:
     message:
       zh-CN: 硬盘没有开启 BitLocker 加密，重装系统时不需要恢复密钥。
   "on":
-    status: advice
+    status: ok
     message:
-      zh-CN: "硬盘分区 {encrypted_volumes} 已开启 BitLocker 加密。数据更安全，但重装系统、换主板或刷 BIOS 以后，开机可能要求输入 48 位恢复密钥，输不出来就打不开硬盘。"
-    fixer: user
+      zh-CN: "硬盘分区 {encrypted_volumes} 已开启 BitLocker 加密，数据更安全，平时用电脑不受影响。只是重装系统、换主板或刷 BIOS 以后，开机可能要求输入 48 位恢复密钥，输不出来就打不开硬盘。"
     next:
-      zh-CN: "请确认恢复密钥已经备份：用手机或电脑打开 aka.ms/myrecoverykey，登录你的微软账户就能看到（家庭版的恢复密钥一般就存在当初登录这台电脑的那个微软账户里）。专业版还可以在开始菜单搜索「管理 BitLocker」，点「备份恢复密钥」存到 U 盘或打印出来。家庭版在微软账户里找不到的话，请懂哥帮忙用管理员命令查出恢复密钥抄下来。重装系统、换主板或刷 BIOS 之前，一定要先备份好恢复密钥。"
+      zh-CN: "现在不用做什么，也不用关掉加密。有空的时候确认一下恢复密钥已经备份：用手机或电脑打开 aka.ms/myrecoverykey，登录你的微软账户就能看到（家庭版的恢复密钥一般就存在当初登录这台电脑的那个微软账户里）。专业版还可以在开始菜单搜索「管理 BitLocker」，点「备份恢复密钥」存到 U 盘或打印出来。家庭版在微软账户里找不到的话，请懂哥帮忙用管理员命令查出恢复密钥抄下来。重装系统、换主板或刷 BIOS 之前，一定要先备份好恢复密钥。"
   waiting:
     status: ok
     message:

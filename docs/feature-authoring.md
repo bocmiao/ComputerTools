@@ -222,13 +222,14 @@ $sections.Add([ordered]@{ id = 'disk'; name = $friendlyName; rows = $rows.ToArra
 - 没有值的行不要输出（`value` 为空或 `$null` 的行会被丢掉并报错）；读不到的整张表就不输出。
 - 数组用 `.ToArray()` 或 `@(...)` 转成真正的数组再输出。注意：在一些 PowerShell 7 版本里，对 `List[object]` 变量直接写 `@($list)` 会报「Argument types do not match」，所以对 List 一律用 `.ToArray()`。
 - 每一块单独 `try` / `catch`：一个 WMI 类坏了，只少那一张表（可以用一个 `partial` 之类的结果代码告诉用户），全都读不出来才 `throw`。
+- 超时以后引擎结束整个脚本宿主，已经读到的也全丢了。可能很慢的查询（比如 `SoftwareLicensingProduct`）要有上限：放进另一个 runspace 里最先开始、最后按截止时间收结果，没等到就只少那一行；参考 `scripts/tools/system/hardware-info.ps1`。等待循环按时钟算（`Stopwatch`），不按次数算：每次查看本身也要时间。YAML 的 `timeout_sec` 要比脚本自己最多等的时间宽裕得多。
 - 数字格式用 `[System.Globalization.CultureInfo]::InvariantCulture`，日期输出成 `yyyy-MM-dd` 字符串。
 
 ### 4.3 密码和个人信息
 
 - 密码这类值加 `secret = $true`：界面默认遮住，点「显示」才看得到，也不会被「复制全部」带上。
 - **不输出序列号、UUID、MAC 地址、IP 地址、电脑名、用户名、产品密钥**：用户会点「复制全部」发给别人。读 WMI 时只取要显示的属性；Windows 激活状态只查 `LicenseStatus`。
-- 密码不能出现在 `facts` 和报错信息里。要把机密写到磁盘上的（比如 `netsh wlan export profile key=clear`），参考 `scripts/tools/network/wifi-passwords.ps1`：随机名字的临时文件夹，导出之前先设成只有 SYSTEM 和 Administrators 能访问，`finally` 里删掉，删不掉就报错；报错信息里的临时目录路径（里面有用户名）换成 `%TEMP%`。
+- 密码不能出现在 `facts` 和报错信息里。要把机密写到磁盘上的（比如 `netsh wlan export profile key=clear`），参考 `scripts/tools/network/wifi-passwords.ps1`：随机名字的临时文件夹，导出之前先设成只有 SYSTEM 和 Administrators 能访问，`finally` 里删掉，删不掉就报错；报错信息里的临时目录路径（里面有用户名）换成 `%TEMP%`。脚本被强行结束时（引擎超时、小药箱被关掉）`finally` 不会执行，所以每次运行一开始先删掉以前留下的同名文件夹：名字要和脚本建的完全一样（前缀加随机部分的格式），而且只删真正的文件夹、不跟着链接走（临时目录是用户能写的，别人可以放一个同名的链接指向别处）。
 - 脚本以管理员身份运行。不要从脚本里启动用户要用的程序（比如 `explorer.exe`），否则它也带着管理员权限；参考 `scripts/tools/system/restart-explorer.ps1`，交给系统按用户身份启动。
 
 ### 4.4 测试

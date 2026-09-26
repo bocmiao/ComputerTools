@@ -10,6 +10,8 @@
 #   EnrollmentState 为 1（有这个值时；注销失败的旧注册项会留下别的状态）
 # 才算 MDM。Intune 的 ProviderID 是「MS DM Server」，Windows 声明式配置（MMP-C）是「Microsoft Device Management」。
 # 有注册项读不到、又没有别的证据时，脚本报错（显示「没查出来」），不猜成 personal。
+# managed 不写 fixer：「谁能修」里没有「单位的 IT 人员」这一项，helper（找懂哥）、vendor（找品牌售后）都会把人指错，
+# 该找谁已经写在 next 里。
 # 待真机验证：家庭中文版、只登录了微软账户、只在 Office 里加了工作账户（Entra 注册但没有 MDM）这几种情况都应该是 personal。
 id: system.managed-device
 schema_version: 1
@@ -26,10 +28,10 @@ results:
     message:
       zh-CN: 这是一台个人电脑，没有被单位统一管理。
   managed:
-    status: advice
+    # 只是说明情况，用户什么都不用做，所以不算「建议处理」（计划书原则 7）
+    status: ok
     message:
       zh-CN: 这台电脑由单位（公司或学校）统一管理，很多设置会被单位的策略改回去。
-    fixer: helper
     next:
       zh-CN: 电脑有问题，先找单位的 IT 人员。不要自己去改单位下发的设置：改了也会被改回来，还可能违反单位的规定。
 references:

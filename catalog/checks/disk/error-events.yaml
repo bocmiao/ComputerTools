@@ -6,7 +6,7 @@
 # 结果（按这个顺序判断）：
 #   found：有 7 或 51，或者 153 有 20 次以上——硬盘可能有坏道或者连接不稳定；
 #   fs-corrupt：没有上面这些，但有文件系统损坏（55 / 98）；
-#   retries：只有少量 153。微软说明 153 是存储请求超时后重试，处理方向是驱动、固件和负载，不是坏道；
+#   retries-few：153 只有 1 到 4 次，算正常；retries：153 有 5 到 19 次、没有别的。微软说明 153 是存储请求超时后重试，处理方向是驱动、固件和负载，不是坏道；
 #   none：都没有。
 # 尽量排除 U 盘、移动硬盘：出错的盘现在接在 USB 上，或者现在已经不在了（拔掉的 U 盘、SD 卡），
 # 按盘号（\Device\HarddiskN）或盘符对应，排除的条数记在事实 excluded_removable 里；
@@ -29,6 +29,10 @@ results:
     status: ok
     message:
       zh-CN: "最近 {days} 天没有硬盘读写出错的记录。"
+  retries-few:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天有 {io_retry} 次「硬盘读写超时后重试」的记录，次数很少，没有发现坏道的记录，不用管。"
   retries:
     status: advice
     message:

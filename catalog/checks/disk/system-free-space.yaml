@@ -3,6 +3,8 @@
 # 比例只对小硬盘有意义，所以 2 TB 的 C 盘剩 250 GB 不算紧张：
 #   critical：不到 5 GB，或者不到 5% 且不到 20 GB
 #   low：不到 20 GB，或者不到 10% 且不到 50 GB
+# next 不写「打开「C 盘满了」」：这一项就是「C 盘满了」的第一步，那个页面里也显示这段话（那里只显示小工具的按钮）；
+# 体检里另有跳到「C 盘满了」的按钮。
 # fixer 暂时写 system：「C 盘满了」目前只有图文指引（存储感知、磁盘清理都是系统自带功能），
 #       等有了一键清理的功能再改成 medkit。
 id: disk.system-free-space
@@ -25,7 +27,7 @@ results:
       zh-CN: "{drive} 盘只剩 {free_gb} GB（{free_pct}%），空间有点紧张，可能影响系统更新和软件运行。"
     fixer: system
     next:
-      zh-CN: "打开「C 盘满了」，看看哪些东西可以清理、哪些可以搬到别的盘。"
+      zh-CN: 可以点下面的按钮打开「存储」设置或「磁盘清理」，先删掉临时文件；再把下载文件夹、桌面上不常用的大文件搬到别的盘。
     links: ["symptom:disk-full", "tool:open.disk-cleanup", "tool:settings.storage"]
   critical:
     status: advice
@@ -33,7 +35,7 @@ results:
       zh-CN: "{drive} 盘快满了，只剩 {free_gb} GB（{free_pct}%）！系统更新会失败，软件也可能打不开或闪退。"
     fixer: system
     next:
-      zh-CN: "请尽快清理：打开「C 盘满了」，先删临时文件，再把下载文件夹、桌面上的大文件搬到别的盘。"
+      zh-CN: 请尽快清理：点下面的按钮打开「存储」设置或「磁盘清理」，先删掉临时文件；再把下载文件夹、桌面上的大文件搬到别的盘。
     links: ["symptom:disk-full", "tool:open.disk-cleanup", "tool:settings.storage"]
 references:
   - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-logicaldisk

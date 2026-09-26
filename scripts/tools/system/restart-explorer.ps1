@@ -15,9 +15,12 @@
 #   (auto-restart-off): the desktop would not come back by itself.
 # - Only explorer.exe processes in this script's own session are stopped
 #   ((Get-Process -Id $PID).SessionId), never another signed-in user's.
-# - It then waits up to 15 seconds, polling every 500 ms, for an explorer.exe
-#   in the same session that was not running before (a new PID, or the same PID
-#   with a different start time).
+# - It then waits up to 15 seconds from the stop (measured by the clock, not
+#   by counting polls, since each poll takes time too), polling every 500 ms,
+#   for an explorer.exe in the same session that was not running before (a new
+#   PID, or the same PID with a different start time). The YAML's timeout_sec
+#   leaves plenty of room above that, so the engine never kills the host while
+#   Explorer is stopped.
 # If Explorer does not come back, or was not running at all, the YAML tells the
 # user how to start it from Task Manager, which starts it as the user.
 #
@@ -30,7 +33,7 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $pollMs = 500
-$maxPolls = 30
+$maxWaitMs = 15000
 
 function Get-ShellProcess {
     param([int]$SessionId)
@@ -86,6 +89,8 @@ foreach ($p in $before) {
     $old[[int]$p.Id] = Get-StartTick $p
 }
 
+# The wait starts with the first stop.
+$watch = [System.Diagnostics.Stopwatch]::StartNew()
 $stopped = 0
 $errors = New-Object System.Collections.Generic.List[string]
 foreach ($p in $before) {
@@ -108,10 +113,10 @@ if ($stopped -eq 0) {
     throw ('Could not stop explorer.exe: {0}' -f ($errors -join '; '))
 }
 
-$watch = [System.Diagnostics.Stopwatch]::StartNew()
 $restarted = $false
-for ($i = 0; ($i -lt $maxPolls) -and (-not $restarted); $i++) {
-    Start-Sleep -Milliseconds $pollMs
+while ((-not $restarted) -and ($watch.ElapsedMilliseconds -lt $maxWaitMs)) {
+    $sleepMs = [int][math]::Min($pollMs, [math]::Max(1, $maxWaitMs - $watch.ElapsedMilliseconds))
+    Start-Sleep -Milliseconds $sleepMs
     foreach ($p in @(Get-ShellProcess -SessionId $session)) {
         $id = [int]$p.Id
         if ((-not $old.ContainsKey($id)) -or ($old[$id] -ne (Get-StartTick $p))) {

@@ -13,8 +13,15 @@
 # installing updates (BootIsRebootAfterInstall = true), the newest one is
 # reported as after-update instead of being judged.
 # boot_when is the local time of the boot that was used ("yyyy-MM-dd HH:mm").
+# Fast startup: HiberbootEnabled (HKLM\SYSTEM\CurrentControlSet\Control\
+# Session Manager\Power; missing = 1, the default) and HibernateEnabled
+# (HKLM\SYSTEM\CurrentControlSet\Control\Power; fast startup needs the
+# hibernation file). Fact fast_startup: $false when either is 0, $true
+# otherwise, left out when the keys cannot be read. Without fast startup every
+# power-on is a full (cold) boot, which is slower, so a slow boot says so.
 # Read-only. Needs administrator rights (the log is restricted).
-# Result codes: ok (desktop within 60 s) / slow (more than 60 s) / after-update /
+# Result codes: ok (desktop within 60 s) / slow (more than 60 s) /
+# slow-no-fast-startup (more than 60 s, fast startup off) / after-update /
 # no-data (the log does not exist, as on Windows Server, or has been disabled or
 # emptied, as on some "optimized" systems).
 
@@ -54,6 +61,24 @@ function Get-EventDataMap {
         }
     }
     return $map
+}
+
+# $true / $false, or $null when it cannot be told.
+function Get-FastStartup {
+    try {
+        $hiberboot = Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' -ErrorAction Stop
+        $power = Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -ErrorAction Stop
+    }
+    catch {
+        return $null
+    }
+    foreach ($pair in @(@($hiberboot, 'HiberbootEnabled'), @($power, 'HibernateEnabled'))) {
+        $prop = $pair[0].PSObject.Properties[$pair[1]]
+        if (($null -ne $prop) -and ([string]$prop.Value -eq '0')) {
+            return $false
+        }
+    }
+    return $true
 }
 
 $events = @()
@@ -127,11 +152,19 @@ if ($chosenData.ContainsKey('BootPostBootTime') -and [double]::TryParse($chosenD
     $facts['post_boot_sec'] = [math]::Round($value / 1000, 1)
 }
 
+$fastStartup = Get-FastStartup
+if ($null -ne $fastStartup) {
+    $facts['fast_startup'] = $fastStartup
+}
+
 if ($afterUpdateOnly) {
     $result = 'after-update'
 }
 elseif ($desktopMs -gt $slowThresholdMs) {
     $result = 'slow'
+    if ($false -eq $fastStartup) {
+        $result = 'slow-no-fast-startup'
+    }
 }
 else {
     $result = 'ok'

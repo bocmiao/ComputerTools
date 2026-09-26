@@ -22,7 +22,13 @@
 # （含家庭中文版 CoreCountrySpecific、专业教育版、专业工作站版），和微软 ESU 页面列的可登记版本一致。
 # 表里没有的 build（比如 2026 年 10 月才正式发布的 26H2，build 26300）脚本会报错，显示「没查出来」，
 # 不去猜。每次微软发布新版本都要更新这张表。Windows Server 也报错（不在本检测范围内）。
-# 待真机验证：国内（区域为中国、用微软账户登录）能否在「Windows 更新」里看到并完成免费 ESU 登记（计划书第一节）。
+# 已经登记了 ESU 的 Win10 也返回 win10：微软没有公开能让脚本读的登记状态（社区工具用的是
+# HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\ConsumerESU 的 ESUEligibility，格式没有官方说明），
+# 所以文案不说「你没登记」，只说「还没登记的话……」，登记状态以「Windows 更新」页面为准。
+# 能不能升级 Windows 11 不在这里下结论：同一屏的「TPM 安全芯片」「CPU 是否支持新版 Windows 11」两项会说，
+# 最终以「Windows 更新」页面为准（Win11 还要求 CPU 在支持列表里，小药箱没有查这一项）。
+# 待真机验证：国内（区域为中国、用微软账户登录）能否在「Windows 更新」里看到并完成免费 ESU 登记（计划书第一节）；
+# 登记前后 ConsumerESU 键的变化，见 docs/real-machine-checklist.md。
 id: system.os-support
 schema_version: 1
 title: { zh-CN: 系统是否还在支持期 }
@@ -40,10 +46,10 @@ results:
   win10:
     status: advice
     message:
-      zh-CN: "你的系统是 Windows 10，微软已在 {end_date} 停止常规支持，不登记的话就收不到安全更新了。"
+      zh-CN: "你的系统是 Windows 10，微软已在 {end_date} 停止常规支持。登记了免费的「扩展安全更新」，就能继续收到安全补丁到 {esu_end}。"
     fixer: user
     next:
-      zh-CN: "可以免费登记「扩展安全更新」，继续收到安全补丁到 {esu_end}：打开「设置 → 更新和安全 → Windows 更新」（点下面的按钮就能直接打开），按页面上的提示登记（需要登录微软账户）。电脑配置够的话，也可以免费升级到 Windows 11。"
+      zh-CN: "如果还没登记：打开「设置 → 更新和安全 → Windows 更新」（点下面的按钮就能直接打开），按页面上的提示登记（需要登录微软账户）。这个页面上也能看到这台电脑是不是已经登记好了，已经登记的就不用再做什么。想免费升级到 Windows 11 的话，先看看体检里「TPM 安全芯片」「CPU 是否支持新版 Windows 11」这两项，能不能升级以「Windows 更新」页面上说的为准。"
     links: ["tool:settings.windows-update"]
   expired:
     status: advice
@@ -51,7 +57,7 @@ results:
       zh-CN: "你的系统（{os} {version}）已经停止支持，微软不再提供安全更新。"
     fixer: user
     next:
-      zh-CN: "先打开「设置 → 更新和安全 → Windows 更新」（点下面的按钮就能直接打开），把系统更新到 Windows 10 22H2，再按页面上的提示免费登记「扩展安全更新」，就能继续收到安全补丁到 {esu_end}（需要登录微软账户）。电脑配置够的话，也可以免费升级到 Windows 11。"
+      zh-CN: "先打开「设置 → 更新和安全 → Windows 更新」（点下面的按钮就能直接打开），把系统更新到 Windows 10 22H2，再按页面上的提示免费登记「扩展安全更新」，就能继续收到安全补丁到 {esu_end}（需要登录微软账户）。想免费升级到 Windows 11 的话，先看看体检里「TPM 安全芯片」「CPU 是否支持新版 Windows 11」这两项，能不能升级以「Windows 更新」页面上说的为准。"
     links: ["tool:settings.windows-update"]
   expired-win11:
     status: advice
@@ -67,7 +73,7 @@ results:
       zh-CN: "你的系统（{os} {version}）已经停止支持，微软不再提供安全更新，也没有可以免费登记的「扩展安全更新」。"
     fixer: helper
     next:
-      zh-CN: 电脑配置满足要求的话，可以升级到 Windows 11；否则请懂哥或售后帮忙，换成还在支持期内的 Windows 版本。升级或换系统之前，一定要先备份重要文件。
+      zh-CN: 能不能升级到 Windows 11，先看看体检里「TPM 安全芯片」「CPU 是否支持新版 Windows 11」这两项，再请懂哥或售后帮忙确认；升级不了的，请他们帮忙换成还在支持期内的 Windows 版本。升级或换系统之前，一定要先备份重要文件。
   ltsc:
     status: ok
     message:

@@ -7,7 +7,9 @@
 #              系统类型（Session Manager\Environment 的 PROCESSOR_ARCHITECTURE，是系统本身的，不受 32 位进程影响）；
 #              安装日期（和「设置 → 系统 → 系统信息」里的一样：装完大版本更新后会变成那次更新的日子）；
 #              激活状态（SoftwareLicensingProduct 里 Windows 那一项、装了密钥的，LicenseStatus 为 1 就是已激活；
-#              只读 LicenseStatus，不读产品密钥；这个查询要几秒钟，查不出来显示「没查出来」，不影响别的部分）。
+#              只读 LicenseStatus，不读产品密钥。这个查询在机械硬盘的老电脑上可能要几十秒，会把整个小工具拖过 60 秒超时、
+#              什么都显示不出来，所以它在另一个 runspace 里最先开始、最后才收结果，自己带 25 秒的 CIM 超时；
+#              脚本开始 30 秒后还没查完就不等了。查不出来、没等到都显示「没查出来」，不影响别的部分，表格顺序不变）。
 #   cpu（处理器）：每个处理器一张表：核心数、线程数、主频（MaxClockSpeed）。
 #   board（主板）：Win32_BaseBoard 的厂商、型号，Win32_BIOS 的版本、日期。
 #   memory（内存）：总容量（各条内存相加；虚拟机里拿不到内存条时用系统可用内存）、插槽（已用 / 总数，

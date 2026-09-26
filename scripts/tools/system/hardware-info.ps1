@@ -22,6 +22,14 @@
 #   network   one section per physical network adapter: kind (wifi / ethernet /
 #             other), status (up / down / disabled).
 #
+# Activation: SoftwareLicensingProduct can take tens of seconds on an old PC
+# with a hard disk, long enough to push the whole tool past its 60 s timeout
+# (and then everything is lost, as the output is written at the end). So the
+# query runs in a second runspace, started before anything else and collected
+# after everything else, with -OperationTimeoutSec as well; whatever is still
+# running $activationDeadlineMs after the start of the script is abandoned and
+# the row shows "unknown". The os section keeps its place in the output.
+#
 # Privacy: the tool view has a "copy all" button and people send the result to
 # others, so serial numbers, UUIDs, MAC and IP addresses, the computer name, user
 # names and product keys are never read into the output. The activation query
@@ -77,6 +85,12 @@ $busNames = @{
 $displayClass = '{4d36e968-e325-11ce-bfc1-08002be10318}'
 # A 32-bit size at or above this value may be capped at 4 GB.
 $saturated = [double]4293918720
+
+# Activation query: its own CIM timeout, and the time after the start of the
+# script after which its result is no longer waited for.
+$activationTimeoutSec = 25
+$activationDeadlineMs = 30000
+$scriptWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 $sections = New-Object System.Collections.Generic.List[object]
 $failed = New-Object System.Collections.Generic.List[string]
@@ -309,21 +323,56 @@ function Get-ArchitectureCode {
 
 # The Windows product (ApplicationID 55c92734-...) that has a key installed;
 # LicenseStatus 1 is Licensed. Only LicenseStatus is selected, so the partial
-# product key never leaves WMI. The query can take several seconds; any failure
-# is "unknown".
-function Get-ActivationCode {
+# product key never leaves WMI. The query runs in a second runspace (see the
+# header); $null when that cannot be started.
+function Start-ActivationQuery {
     $query = "SELECT LicenseStatus FROM SoftwareLicensingProduct WHERE ApplicationID = '55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL"
     try {
-        $products = @(Get-CimInstance -Query $query)
+        $shell = [powershell]::Create()
+        $null = $shell.AddScript({
+                param([string]$Query, [int]$TimeoutSec)
+                foreach ($p in @(Get-CimInstance -Query $Query -OperationTimeoutSec $TimeoutSec -ErrorAction Stop)) {
+                    [string]$p.LicenseStatus
+                }
+            }).AddArgument($query).AddArgument($activationTimeoutSec)
+        $handle = $shell.BeginInvoke()
+        return [pscustomobject]@{ Shell = $shell; Handle = $handle }
+    }
+    catch {
+        return $null
+    }
+}
+
+# activated / not-activated / unknown (no product, an error, or no answer
+# before the deadline). A query that is still running is told to stop, without
+# waiting for it.
+function Receive-ActivationCode {
+    param($Job)
+    if ($null -eq $Job) {
+        return 'unknown'
+    }
+    $statuses = @()
+    try {
+        $waitMs = [int][math]::Max(0, $activationDeadlineMs - $scriptWatch.ElapsedMilliseconds)
+        if (-not $Job.Handle.AsyncWaitHandle.WaitOne($waitMs)) {
+            $null = $Job.Shell.BeginStop($null, $null)
+            return 'unknown'
+        }
+        $statuses = @($Job.Shell.EndInvoke($Job.Handle))
+        $hadErrors = $Job.Shell.HadErrors
+        $Job.Shell.Dispose()
+        if ($hadErrors) {
+            return 'unknown'
+        }
     }
     catch {
         return 'unknown'
     }
-    if ($products.Count -eq 0) {
+    if ($statuses.Count -eq 0) {
         return 'unknown'
     }
-    foreach ($p in $products) {
-        if ((Get-Count $p.LicenseStatus) -eq 1) {
+    foreach ($status in $statuses) {
+        if ((Get-Count $status) -eq 1) {
             return 'activated'
         }
     }
@@ -381,6 +430,8 @@ function Get-DiskOrder {
     return [int]::MaxValue
 }
 
+$activationJob = Start-ActivationQuery
+
 # ---- computer
 try {
     $rows = New-Object System.Collections.Generic.List[object]
@@ -417,8 +468,10 @@ catch {
     Add-Failure 'computer'
 }
 
-# ---- os
-$rows = New-Object System.Collections.Generic.List[object]
+# ---- os (added to $sections at the end, in this place, with the activation row)
+$osIndex = $sections.Count
+$osRows = New-Object System.Collections.Generic.List[object]
+$rows = $osRows
 try {
     $os = @(Get-CimInstance -ClassName Win32_OperatingSystem) | Select-Object -First 1
     $caption = Get-CleanText $os.Caption
@@ -447,8 +500,6 @@ catch {
 if ($installed.Length -gt 0) {
     $rows.Add((New-ValueRow -Id 'install_date' -Value $installed))
 }
-$rows.Add((New-CodeRow -Id 'activation' -Code (Get-ActivationCode)))
-Add-Section -Id 'os' -Name '' -Rows $rows
 
 # ---- cpu
 try {
@@ -684,6 +735,10 @@ try {
 catch {
     Add-Failure 'network'
 }
+
+# ---- os, collected last: the activation query has been running all along.
+$osRows.Add((New-CodeRow -Id 'activation' -Code (Receive-ActivationCode $activationJob)))
+$sections.Insert($osIndex, [ordered]@{ id = 'os'; rows = $osRows.ToArray() })
 
 # The os section always has the activation row; without anything else there is
 # nothing worth showing.

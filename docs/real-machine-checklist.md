@@ -20,7 +20,8 @@ CI 在 Windows Server 虚拟机上跑脚本和往返测试，能发现大部分�
 | `disk.smart-health` | 查不到健康状态（Unknown）的内置盘现在判为 incomplete（界面显示「没查出来」），不再算进「状态良好」：要确认 RAID / Intel RST 下系统盘是不是 Unknown；读卡器里的 SD 卡、eMMC 系统盘各报什么 BusType（SD / MMC 上只有系统盘算内置） | 在开了 RAID 的电脑、带读卡器的笔记本、eMMC 小本上运行 |
 | `security.bitlocker-status` | 「等待激活」（已加密但没启用保护）现在靠 `GetKeyProtectors` 返回空来识别；「保护已暂停」有保护器，仍按「已开启」处理 | 在只用本地账户装好的 Win11 24H2 家庭版上运行，对照 `manage-bde -status` 里的「密钥保护器」；再在暂停了 BitLocker 的专业版上运行 |
 | `network.proxy-dead` | 拨号、VPN 连接的代理：`Internet Settings\Connections\<连接名>` 的格式是否和局域网的一样；连着 PPPoE 时 WinINet 是否真的用这个连接的设置（微软 IE 团队博客是这么说的） | 在直接 PPPoE 拨号的电脑上，用 v2rayN 打开系统代理后强行结束它，运行检测，看结果是不是 dead-dialup（「拨号或 VPN 连接「宽带连接」的代理指向本机……」），`dialup_proxy` 里有没有这个连接 |
-| `system.os-support` | Win11 26H2（build 26300）正式发布后要把日期补进表里；国内能否在「Windows 更新」里完成免费 ESU 登记 | 26H2 发布后更新表格；在 Win10 22H2 家庭版上走一遍 ESU 登记 |
+| `system.os-support` | Win11 26H2（build 26300）正式发布后要把日期补进表里；国内能否在「Windows 更新」里完成免费 ESU 登记；登记了 ESU 的电脑现在仍显示「建议处理」（文案写的是「如果还没登记……」），因为微软没有公开登记状态。社区工具读的是 `HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\ConsumerESU` 的 `ESUEligibility`（据说 3 = 按设备登记、5 = 按微软账户登记），要确认它是否可靠、登记前后怎么变、换一个 Windows 账户登录时怎么样 | 26H2 发布后更新表格；在 Win10 22H2 家庭版上走一遍 ESU 登记，登记前后都导出这个键对照；可靠的话给检测加一个「已登记」的 ok 结果（要 `user_hive: true`） |
+| `boot.last-boot-duration` 快速启动 | 事实 `fast_startup` 按 `HiberbootEnabled` 和 `HibernateEnabled` 任一为 0 判为关着（慢的话报 slow-no-fast-startup）；有的电脑休眠不可用（`powercfg /a` 里没有「休眠」）但这两个值都是 1，现在按「开着」处理、不提快速启动 | 分别在「控制面板 → 电源选项」里关掉快速启动、`powercfg /h off` 之后运行检测，看 `fast_startup`；在不支持休眠的电脑（部分虚拟机、精简系统）上看这两个值 |
 
 ## 修复
 
@@ -38,9 +39,9 @@ CI 在 Windows Server 虚拟机上跑脚本和往返测试，能发现大部分�
 | `system.hardware-info` 显存 | 显卡驱动注册表项里的 `HardwareInformation.qwMemorySize` 是不是各家驱动都写、单位是不是字节；`HardwareInformation.MemorySize` 微软文档写的是 MB，实际驱动写的是字节（脚本按「小于 1 MB 就当 MB」处理）；核显显示的是专用显存（常见 128 MB 到 2 GB），用户会不会误会 | 在 NVIDIA（6 GB 以上）、AMD 独显、Intel 核显、AMD 核显的电脑上运行，对照任务管理器「性能 → GPU」里的「专用 GPU 内存」 |
 | `system.hardware-info` 基本显示适配器 | 没装显卡驱动时，是否一定能按名字（英文或「Microsoft 基本显示适配器」）或 `InfFilename = display.inf` 认出来 | 在刚装完系统、还没装显卡驱动的电脑（或虚拟机）上运行 |
 | `system.hardware-info` 内存条 | 各品牌内存的 `Manufacturer` 是可读名字、JEDEC 代码还是乱码（代码和乱码不显示）；板载 LPDDR 内存报的类型、频率；插槽数是否可信 | 在台式机（金士顿、三星、海力士、长鑫等内存条）、板载内存的轻薄本上运行，对照 CPU-Z 的 SPD 页 |
-| `system.hardware-info` 其他 | 激活查询（SoftwareLicensingProduct）在老电脑上要几秒，是否在 60 秒超时以内；联想电脑的型号名（Win32_ComputerSystemProduct.Version）；安装日期在装过大版本更新的电脑上显示的是更新日期 | 在机械硬盘的老电脑上计时；在联想笔记本上运行；对照「设置 → 系统 → 系统信息」 |
-| `network.wifi-passwords` | 在保存过 WiFi（包括中文名字的 WiFi）的电脑上，导出的 XML 编码是否正确、中文名字显示是否正常；有无线网卡但一个 WiFi 都没保存过时 netsh 的退出码（脚本按 0 处理，不是 0 会显示「没能读出来」）；用户名里有空格或中文时 `folder=` 参数能否正常传给 netsh；杀毒软件会不会拦截导出、或者锁住文件导致删不掉 | 在连过多个 WiFi（含中文名、隐藏网络、单位的企业网络）的笔记本上运行，对照手机上看到的密码；删掉所有 WiFi 后再运行；运行后确认 `%TEMP%` 下没有留下 `medkit-wifi-*` 文件夹 |
-| `system.restart-explorer` | 强制结束 explorer.exe 以后，Win10 和 Win11 是否都由 Winlogon 自动重新启动、一般要几秒（脚本最多等 15 秒）；重新启动的资源管理器是普通权限还是管理员权限（应该是普通权限：从新桌面打开的程序不应该带管理员盾牌）；开着「在单独的进程中打开文件夹窗口」时是否也正常 | 在 Win10 22H2、Win11 24H2 上运行，看任务栏回来的时间；在任务管理器「详细信息」里给 explorer.exe 加上「提升」列，确认是「否」 |
+| `system.hardware-info` 其他 | 激活查询（SoftwareLicensingProduct）在老电脑上要多久：现在放在另一个 runspace 里和别的部分一起查，自带 25 秒 CIM 超时，脚本开始 30 秒后还没查完就显示「没查出来」；要确认 PowerShell 5.1 上 `-OperationTimeoutSec` 对本机查询是否生效、没等到时整个小工具是否在 35 秒左右返回、之后再运行一次是否正常（上次的查询在后台被叫停）；联想电脑的型号名（Win32_ComputerSystemProduct.Version）；安装日期在装过大版本更新的电脑上显示的是更新日期 | 在机械硬盘的老电脑上计时；在联想笔记本上运行；对照「设置 → 系统 → 系统信息」 |
+| `network.wifi-passwords` | 在保存过 WiFi（包括中文名字的 WiFi）的电脑上，导出的 XML 编码是否正确、中文名字显示是否正常；有无线网卡但一个 WiFi 都没保存过时 netsh 的退出码（脚本按 0 处理，不是 0 会显示「没能读出来」）；用户名里有空格或中文时 `folder=` 参数能否正常传给 netsh；杀毒软件会不会拦截导出、或者锁住文件导致删不掉 | 在连过多个 WiFi（含中文名、隐藏网络、单位的企业网络）的笔记本上运行，对照手机上看到的密码；删掉所有 WiFi 后再运行；运行后确认 `%TEMP%` 下没有留下 `medkit-wifi-*` 文件夹；在导出过程中从任务管理器结束小药箱（或它的 powershell.exe），确认留下的 `medkit-wifi-*` 文件夹在下一次运行时被删掉 |
+| `system.restart-explorer` | 强制结束 explorer.exe 以后，Win10 和 Win11 是否都由 Winlogon 自动重新启动、一般要几秒（脚本从结束那一刻起按时钟最多等 15 秒，小工具的超时是 45 秒）；重新启动的资源管理器是普通权限还是管理员权限（应该是普通权限：从新桌面打开的程序不应该带管理员盾牌）；开着「在单独的进程中打开文件夹窗口」时是否也正常 | 在 Win10 22H2、Win11 24H2 上运行，看任务栏回来的时间；在任务管理器「详细信息」里给 explorer.exe 加上「提升」列，确认是「否」 |
 | `network.flush-dns` | `Clear-DnsClientCache` 在家庭版上是否正常；清掉的条数和 `ipconfig /displaydns` 是否大致一致；hosts 文件里的条目清掉后是否立即恢复 | 在家庭中文版上运行两次，第二次条数应该很少；在 hosts 里加一条再运行，确认仍然生效 |
 
 ## 引擎和外壳

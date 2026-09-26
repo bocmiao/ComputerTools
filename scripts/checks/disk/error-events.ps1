@@ -19,7 +19,8 @@
 # ID 55 is also logged by Kernel-Processor-Power at every boot.
 # Read-only. Result codes:
 #   none        nothing found
-#   retries     only a few 153 events (fewer than 20)
+#   retries-few 1 to 4 153 events: normal noise
+#   retries     5 to 19 153 events and nothing else
 #   fs-corrupt  file system corruption (55 / 98), no disk-level errors
 #   found       7 or 51, or 20 or more 153 events
 
@@ -30,6 +31,8 @@ $ErrorActionPreference = 'Stop'
 
 $days = 30
 $manyRetries = 20
+# Fewer than this many 153 events in 30 days are normal noise (retries-few, status ok).
+$someRetries = 5
 $since = (Get-Date).AddDays(-$days)
 
 $events = @()
@@ -193,8 +196,11 @@ if ((($badBlock + $paging) -gt 0) -or ($retry -ge $manyRetries)) {
 elseif ($ntfs -gt 0) {
     $result = 'fs-corrupt'
 }
-elseif ($retry -gt 0) {
+elseif ($retry -ge $someRetries) {
     $result = 'retries'
+}
+elseif ($retry -gt 0) {
+    $result = 'retries-few'
 }
 
 [pscustomobject]@{

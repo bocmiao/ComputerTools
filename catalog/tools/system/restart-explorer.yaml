@@ -4,7 +4,7 @@
 # 把它重新拉起来：AutoRestartShell 为 1（系统默认）时，桌面进程意外结束（强制结束的退出码不是 0，算意外），
 # Winlogon 会自动重新启动它。
 #   - 只结束和小药箱在同一个会话里的 explorer.exe，不碰别的已登录用户的；
-#   - 结束后最多等 15 秒（每半秒看一次），出现了新的 explorer.exe（进程号是新的，或者启动时间不一样）就算重启好了；
+#   - 从结束那一刻起最多等 15 秒（按时钟算，每半秒看一次），出现了新的 explorer.exe（进程号是新的，或者启动时间不一样）就算重启好了；
 #   - AutoRestartShell 被改成 0 的电脑上，结束了就不会自己回来，所以什么都不做（auto-restart-off）；
 #   - 没回来（not-restarted）或本来就没在运行（not-running）时，教用户从任务管理器里手动启动，任务管理器会按用户身份启动它。
 # 事实：stopped（结束了几个进程）、waited_sec（等了几秒）。
@@ -17,7 +17,8 @@ description:
   zh-CN: 任务栏、开始菜单或桌面卡住不动、点了没反应时，重启一下资源管理器往往就好了；有些设置改完也要重启它才生效。其他正在运行的软件不受影响。
 category: system
 requires_admin: true
-timeout_sec: 30
+# 超时要比脚本最多等的 15 秒宽裕得多：资源管理器已经关掉时引擎要是把脚本宿主结束了，就没人告诉用户怎么把桌面找回来。
+timeout_sec: 45
 run:
   script: tools/system/restart-explorer.ps1
 confirm:

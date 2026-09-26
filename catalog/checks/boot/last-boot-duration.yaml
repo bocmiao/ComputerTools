@@ -6,7 +6,13 @@
 # 装完更新后的第一次开机（BootIsRebootAfterInstall = true）本来就慢：用最近 10 条里最新的一次普通开机；
 # 10 条都是装更新后的开机时，返回 after-update，不判快慢。
 # 事实：desktop_sec、boot_sec、boot_when（那次开机的本地时间，「yyyy-MM-dd HH:mm」）、boot_time（ISO 格式）、
-#       after_update，以及 post_boot_sec（有的话）。
+#       after_update，以及 post_boot_sec、fast_startup（有的话）。
+# 快速启动：Session Manager\Power 的 HiberbootEnabled（没有这个值 = 1，系统默认）和 Control\Power 的 HibernateEnabled
+# （快速启动要靠休眠文件）任一为 0 就是关着，事实 fast_startup 为 false（读不到注册表时没有这个事实）。
+# 慢而且快速启动关着时返回 slow-no-fast-startup：每次关机再开机都是完整启动，本来就慢一些，这要说出来；
+# 但关掉快速启动常常是用户有意的（双系统、关机后设备不正常），所以只说明代价和改回去的地方，不劝。
+# 文案不说「打开「开机慢」看看是什么拖慢了开机」：没有哪个检测分析开机慢在哪，而且这段话也会显示在「开机慢」页面里
+# （那里只显示小工具的按钮，不显示跳到症状的按钮）。
 # 日志不存在（服务器版系统）或者没有事件 100（被精简系统关掉了）时返回 no-data，不显示。
 # 待真机验证：开着「快速启动」时，普通的关机再开机是否也记录事件 100；MainPathBootTime 是否包含停在登录界面、
 # 输入密码的时间；装完更新后的第一次开机，BootIsRebootAfterInstall 是否为 true。
@@ -30,7 +36,15 @@ results:
       zh-CN: "{boot_when} 那次开机，从按下电源到出现桌面用了 {desktop_sec} 秒，有点慢（正常在 1 分钟以内）。"
     fixer: user
     next:
-      zh-CN: 打开「开机慢」，看看是哪些东西拖慢了开机。最常见的原因是开机自动启动的软件太多：可以打开任务管理器，在「启动应用」（Windows 10 是「启动」选项卡）里把不需要一开机就用的软件禁用。
+      zh-CN: 开机慢最常见的原因是开机自动启动的软件太多：可以打开任务管理器（点下面的按钮），在「启动应用」（Windows 10 是「启动」选项卡）里把不需要一开机就用的软件禁用。系统装在机械硬盘上、内存太小也会让开机变慢，「系统盘类型」「内存大小」这两项检测会告诉你是不是这种情况。
+    links: ["symptom:slow-boot", "tool:open.task-manager"]
+  slow-no-fast-startup:
+    status: advice
+    message:
+      zh-CN: "{boot_when} 那次开机，从按下电源到出现桌面用了 {desktop_sec} 秒，有点慢（正常在 1 分钟以内）。这台电脑的「快速启动」没有开（或者休眠被关掉了，快速启动用不了），每次关机再开机都要完整启动一遍，本来就会慢一些。"
+    fixer: user
+    next:
+      zh-CN: 当初是为了装双系统，或者因为关机再开机后 U 盘、网卡之类的设备不正常才关掉的，保持现在这样就好。不是的话，可以在「控制面板 → 电源选项 → 选择电源按钮的功能」里先点「更改当前不可用的设置」，再勾选「启用快速启动」（用小药箱关掉的，在「修改日志」里撤销就行；找不到这个选项的，请懂哥帮忙看看）。另外，开机慢最常见的原因是开机自动启动的软件太多：可以打开任务管理器（点下面的按钮），在「启动应用」（Windows 10 是「启动」选项卡）里把不需要一开机就用的软件禁用。
     links: ["symptom:slow-boot", "tool:open.task-manager"]
   after-update:
     status: ok
