@@ -7,7 +7,9 @@
 # event has BootIsRebootAfterInstall = true, the newest ordinary boot among the
 # last 10 events is used instead (after_update tells which one was used).
 # Read-only. Needs administrator rights (the log is restricted).
-# Result codes: ok (60 s or less) / slow (more than 60 s). No event -> throws.
+# Result codes: ok (60 s or less) / slow (more than 60 s) / no-data (the log does
+# not exist, as on Windows Server, or has been disabled or emptied, as on some
+# "optimized" systems).
 
 [CmdletBinding()]
 param()
@@ -52,13 +54,18 @@ try {
     $events = @(Get-WinEvent -FilterHashtable @{ LogName = $logName; Id = 100 } -MaxEvents 10 -ErrorAction Stop)
 }
 catch {
-    if ([string]$_.FullyQualifiedErrorId -like 'NoMatchingEventsFound*') {
-        throw 'No boot performance event (ID 100) was found in the Diagnostics-Performance log'
+    # NoMatchingLogsFound: the log does not exist. NoMatchingEventsFound: no event 100.
+    $errorId = [string]$_.FullyQualifiedErrorId
+    if (($errorId -like 'NoMatchingLogsFound*') -or ($errorId -like 'NoMatchingEventsFound*')) {
+        $events = @()
     }
-    throw
+    else {
+        throw
+    }
 }
 if ($events.Count -eq 0) {
-    throw 'No boot performance event (ID 100) was found in the Diagnostics-Performance log'
+    [pscustomobject]@{ result = 'no-data'; facts = [ordered]@{} }
+    return
 }
 
 # Get-WinEvent returns the newest events first.

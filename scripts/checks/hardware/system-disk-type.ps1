@@ -3,12 +3,15 @@
 # Follows the system drive to its physical disk:
 #   Get-Partition -DriveLetter C -> Get-Disk -Number N -> Get-PhysicalDisk (DeviceId N)
 # and reads MediaType (HDD / SSD / SCM / Unspecified) and BusType.
-# When MediaType is Unspecified, only unambiguous hints are used: NVMe, SD, MMC,
-# UFS and SCM buses are always flash; a non-zero SpindleSpeed (including
-# 0xFFFFFFFF, "rotating, speed unknown") means a spinning disk. Anything else
-# (for example RAID volumes or virtual disks) throws, and the engine shows
-# "unknown" rather than guessing.
-# Read-only. Result codes: ssd / hdd.
+# Virtual disks (virtual machines) are reported as "virtual": whether the host
+# stores them on an SSD is not something the user can change here.
+# When MediaType is Unspecified:
+#   - NVMe, SD, MMC, UFS and SCM buses are always flash;
+#   - SpindleSpeed 0 means non-rotational media (MSFT_PhysicalDisk documentation);
+#   - any other SpindleSpeed (including 0xFFFFFFFF, "speed unknown") is treated
+#     as a spinning disk.
+# A disk without SpindleSpeed throws, and the engine shows "unknown".
+# Read-only. Result codes: ssd / hdd / virtual.
 
 [CmdletBinding()]
 param()
@@ -60,8 +63,19 @@ if ($null -ne $pd.SpindleSpeed) {
     $spindle = [uint32]$pd.SpindleSpeed
 }
 
+$model = ([string]$pd.FriendlyName).Trim()
+if ($model.Length -eq 0) {
+    $model = ([string]$disk.FriendlyName).Trim()
+}
+$virtualBuses = @('Virtual', 'File Backed Virtual')
+# Hyper-V / Azure "Msft Virtual Disk", VMware "Virtual disk", VirtualBox, QEMU, virtio
+$virtualModel = $model -match '(?i)virtual|vbox|qemu|virtio'
+
 $type = $null
-if (($media -eq 'SSD') -or ($media -eq 'SCM')) {
+if (($virtualBuses -contains $bus) -or $virtualModel) {
+    $type = 'virtual'
+}
+elseif (($media -eq 'SSD') -or ($media -eq 'SCM')) {
     $type = 'ssd'
 }
 elseif ($media -eq 'HDD') {
@@ -70,16 +84,14 @@ elseif ($media -eq 'HDD') {
 elseif ($flashBuses -contains $bus) {
     $type = 'ssd'
 }
-elseif (($null -ne $spindle) -and ($spindle -gt 0)) {
-    $type = 'hdd'
+elseif ($null -eq $spindle) {
+    throw ('Cannot tell the media type of the system disk: MediaType {0}, BusType {1}, no SpindleSpeed' -f $media, $bus)
+}
+elseif ($spindle -eq 0) {
+    $type = 'ssd'
 }
 else {
-    throw ('Cannot tell the media type of the system disk: MediaType {0}, BusType {1}, SpindleSpeed {2}' -f $media, $bus, $spindle)
-}
-
-$model = ([string]$pd.FriendlyName).Trim()
-if ($model.Length -eq 0) {
-    $model = ([string]$disk.FriendlyName).Trim()
+    $type = 'hdd'
 }
 
 [pscustomobject]@{

@@ -4,7 +4,7 @@
 # 事实：boot_sec、boot_time、after_update，以及 main_path_sec、post_boot_sec（有的话）。
 # 和任务要求的一处差异：最近一条如果是「装完更新后的第一次开机」（BootIsRebootAfterInstall = true），
 # 改用最近 10 条里最新的一次普通开机，避免把装更新时的慢开机当成问题；都是装更新后的开机时才用最近一条。
-# 没有事件 100 时脚本报错，显示「没查出来」。
+# 日志不存在（服务器版系统）或者没有事件 100（被精简系统关掉了）时返回 no-data，不显示。
 # 待真机验证：开着「快速启动」时，普通的关机再开机是否也记录事件 100。
 id: boot.last-boot-duration
 schema_version: 1
@@ -28,6 +28,10 @@ results:
     next:
       zh-CN: 打开「开机慢」，看看是哪些东西拖慢了开机。
     links: ["symptom:slow-boot"]
+  no-data:
+    status: na
+    message:
+      zh-CN: 这台电脑没有记录开机性能数据（可能是被精简系统关掉了），查不了开机用时。
 references:
   - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent
   - https://support.microsoft.com/en-us/windows/configure-startup-applications-in-windows-115a420a-0bff-4a6f-90e0-1934c844e473

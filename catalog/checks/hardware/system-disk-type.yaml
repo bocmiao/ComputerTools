@@ -1,9 +1,9 @@
 # 系统盘是固态硬盘还是机械硬盘。脚本：scripts/checks/hardware/system-disk-type.ps1
 # 顺着系统盘找到物理盘：Get-Partition → Get-Disk → Get-PhysicalDisk（按 DeviceId = 盘号对应，
 # 对不上时再按序列号），读 MediaType（HDD / SSD / SCM / Unspecified）和 BusType。
-# MediaType 为 Unspecified 时只用确定的线索：NVMe、SD、MMC、UFS、SCM 总线一定是闪存；
-# SpindleSpeed 不为 0（包括 0xFFFFFFFF「转速未知的机械盘」）一定是机械盘。别的情况（RAID、虚拟机的
-# 虚拟硬盘等）脚本报错，显示「没查出来」，不去猜。
+# 虚拟机的虚拟磁盘返回 virtual，不显示。MediaType 为 Unspecified 时：NVMe、SD、MMC、UFS、SCM 总线一定是闪存；
+# 按 MSFT_PhysicalDisk 的文档，SpindleSpeed 为 0 表示非旋转介质（固态）；其他转速（包括 0xFFFFFFFF「转速未知」）
+# 按机械盘处理。拿不到 SpindleSpeed 时脚本报错，显示「没查出来」。
 # 待真机验证：Intel RST / VMD 的 RAID 模式下能否对应到物理盘；eMMC 小本的 BusType。
 id: hardware.system-disk-type
 schema_version: 1
@@ -27,6 +27,10 @@ results:
     fixer: hardware
     next:
       zh-CN: 换一块固态硬盘是最有效的办法。可以找懂哥或电脑店帮忙安装，把系统迁移过去或者重装。换之前记得备份重要文件。
+  virtual:
+    status: na
+    message:
+      zh-CN: 系统装在虚拟机的虚拟磁盘上，不用检查。
 references:
   - https://learn.microsoft.com/en-us/powershell/module/storage/get-partition
   - https://learn.microsoft.com/en-us/powershell/module/storage/get-physicaldisk
