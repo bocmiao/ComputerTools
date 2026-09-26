@@ -63,6 +63,7 @@ mod os {
     use medkit_core::platform::windows::{WindowsPlatform, ensure_secure_dir, program_data};
     use medkit_core::script::{HostConfig, PowerShellHost, ScriptManifest, ScriptRunner};
     use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS, GetLastError};
+    use windows_sys::Win32::System::LibraryLoader::{LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, SetDefaultDllDirectories};
     use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
     use windows_sys::Win32::System::Threading::CreateMutexW;
     use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
@@ -109,6 +110,9 @@ mod os {
             // SAFETY: 在 main 最开头、还是单线程时调用，没有并发读写环境。
             unsafe { std::env::remove_var(name) };
         }
+        // 之后按名字加载的 DLL 只从程序目录和 System32 找，不再找当前目录和 PATH
+        // SAFETY: 只设置本进程的 DLL 搜索路径
+        unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS) };
     }
 
     /// 只允许同时开一个小药箱。两个实例各有各的锁，可能交错修改同一个位置、交错写同一份修改日志，

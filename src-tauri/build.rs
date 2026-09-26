@@ -20,12 +20,24 @@ const COMMANDS: &[&str] = &[
 
 fn main() {
     embed_bundle();
+    harden_dll_loading();
     let windows = tauri_build::WindowsAttributes::new().app_manifest(include_str!("windows/app.manifest"));
     let attrs = tauri_build::Attributes::new()
         .windows_attributes(windows)
         .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS));
     println!("cargo:rerun-if-changed=windows/app.manifest");
     tauri_build::try_build(attrs).expect("tauri-build 失败");
+}
+
+/// 程序自己的静态导入（uxtheme.dll、version.dll 这类）只从 System32 加载。
+/// 便携版常被放在「下载」这种普通用户能写的文件夹里，旁边要是被放了一个同名 DLL，
+/// 以管理员身份运行的小药箱就会把它加载进来。0x800 = LOAD_LIBRARY_SEARCH_SYSTEM32。
+fn harden_dll_loading() {
+    let msvc = std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc");
+    let windows = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows");
+    if msvc && windows {
+        println!("cargo:rustc-link-arg-bins=/DEPENDENTLOADFLAG:0x800");
+    }
 }
 
 fn embed_bundle() {
