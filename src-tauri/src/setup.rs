@@ -91,6 +91,24 @@ mod os {
             .any(|v| !v.is_empty() && v != "0.0.0.0")
     }
 
+    /// 启动最开头调用：清掉能改变 WebView2 行为的环境变量。
+    ///
+    /// 程序以管理员身份运行，但它的环境块是从启动它的那个（普通权限）进程继承来的。
+    /// 一个普通权限的程序如果先设好这些变量再启动小药箱，就能让提权后的 WebView2 去加载
+    /// 别处的 Edge 或者带上额外的浏览器参数。这里在初始化 WebView2 之前把它们清掉。
+    pub fn harden_environment() {
+        const VARS: &[&str] = &[
+            "WEBVIEW2_BROWSER_EXECUTABLE_FOLDER",
+            "WEBVIEW2_USER_DATA_FOLDER",
+            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+            "WEBVIEW2_RELEASE_CHANNEL_PREFERENCE",
+        ];
+        for name in VARS {
+            // SAFETY: 在 main 最开头、还是单线程时调用，没有并发读写环境。
+            unsafe { std::env::remove_var(name) };
+        }
+    }
+
     pub fn preflight() -> Result<(), String> {
         // 清单里要求了管理员权限，但用 __COMPAT_LAYER=RunAsInvoker 之类的方法仍然可以绕过
         if !WindowsPlatform::new().is_admin() {
@@ -155,6 +173,8 @@ mod os {
         std::fs::create_dir_all(dir)
     }
 
+    pub fn harden_environment() {}
+
     pub fn preflight() -> Result<(), String> {
         Ok(())
     }
@@ -173,4 +193,10 @@ mod os {
 }
 
 use os::{backend, data_root, secure_dir};
-pub use os::{fatal, preflight, webview2_hint};
+pub use os::{fatal, harden_environment, preflight, webview2_hint};
+
+/// 测试用：用假系统和真实的内嵌数据造一个 AppState，不碰真实系统、不落盘到固定位置。
+#[cfg(any(test, feature = "test-helpers"))]
+pub fn test_state() -> AppState {
+    AppState { engine: build_engine().map(Arc::new) }
+}

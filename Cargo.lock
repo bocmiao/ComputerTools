@@ -1862,6 +1862,7 @@ dependencies = [
 name = "medkit"
 version = "0.0.1"
 dependencies = [
+ "medkit",
  "medkit-core",
  "serde",
  "serde_json",

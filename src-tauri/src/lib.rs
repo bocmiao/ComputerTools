@@ -1,0 +1,44 @@
+//! 电脑小药箱的桌面外壳。拆成 lib + bin 两部分，是为了让 tests/ 里的集成测试能调用命令。
+//!
+//! 界面只能传 ID（见 docs/architecture.md 第 9 节），不能传命令字符串或路径。
+
+pub mod commands;
+pub mod setup;
+
+/// 注册 12 个命令的处理器。`run()` 和集成测试都用它，保证测的和真跑的是同一套。
+#[macro_export]
+macro_rules! command_handler {
+    () => {
+        tauri::generate_handler![
+            $crate::commands::system_info,
+            $crate::commands::catalog_summary,
+            $crate::commands::symptom_detail,
+            $crate::commands::run_profile,
+            $crate::commands::run_check,
+            $crate::commands::feature_detect,
+            $crate::commands::feature_preview,
+            $crate::commands::feature_apply,
+            $crate::commands::journal_list,
+            $crate::commands::journal_undo,
+            $crate::commands::journal_undo_session,
+            $crate::commands::report_generate,
+        ]
+    };
+}
+
+pub fn run() {
+    // 启动前先清掉可能被注入的 WebView2 环境变量（管理员进程会继承启动它的用户级进程的环境）。
+    setup::harden_environment();
+
+    if let Err(message) = setup::preflight() {
+        setup::fatal(&message);
+        return;
+    }
+    let state = setup::init();
+    let result =
+        tauri::Builder::default().manage(state).invoke_handler(command_handler!()).run(tauri::generate_context!());
+    if let Err(e) = result {
+        let message = setup::webview2_hint().unwrap_or_else(|| format!("界面启动失败：{e}"));
+        setup::fatal(&message);
+    }
+}

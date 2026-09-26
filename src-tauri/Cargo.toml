@@ -8,14 +8,33 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+# lib：给 tests/ 用；bin：真正的程序入口。名字带 _lib 是 Tauri 2 的惯例。
+[lib]
+name = "medkit_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "medkit"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 medkit-core.workspace = true
+
+[features]
+# 让 setup::test_state() 可用（tests/ 里用真实内嵌数据 + 假系统造引擎）
+test-helpers = []
 
 [dependencies]
 tauri = { version = "2.11.6", features = [] }
 medkit-core.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+# test：Tauri 的 mock 运行时和 IPC 测试辅助；test-helpers：本 crate 的测试构造
+tauri = { version = "2.11.6", features = ["test"] }
+medkit = { path = ".", features = ["test-helpers"] }
 serde_json.workspace = true
 
 [target.'cfg(windows)'.dependencies]
