@@ -1,0 +1,76 @@
+# hosts 文件有没有屏蔽、改指要紧的网站。脚本：scripts/checks/network/hosts.ps1
+# Windows 先查 hosts 文件、再问 DNS。hosts 所在的文件夹是 HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters 的
+# DataBasePath（微软文档：默认 %SystemRoot%\System32\Drivers\Etc），恶意软件有时会把它指到别处。
+# 规则在 shared block hosts-rules 里（和修复 network.hosts-cleanup 共用）：名字是下面几类网站或它们的子域名才算，
+#   杀毒、安全软件的网站（屏蔽它们是恶意软件的老手段，杀毒软件更新不了）；
+#   Windows 更新、激活、联网检测（屏蔽了右下角一直显示「无 Internet」）、Defender 和 SmartScreen、微软账户登录
+#     （微软文档「Connection endpoints for Windows 11」里列的地址；microsoft.com 只认本身和 www，
+#      屏蔽它的遥测子域名是有意的隐私设置，不算问题）；
+#   常用网站（搜索、聊天、购物、邮箱、视频、GitHub）。
+# 地址是 0.0.0.0、127.x、::、::1 的算「屏蔽」，别的地址算「改指」（被劫持，或者照网上「加速」「翻墙」教程写的固定地址，
+# 地址一变就打不开）。localhost 不算。
+# 结果（按这个顺序判断）：path-changed、blocks-security、redirects、blocks-microsoft、blocks-common、custom、default。
+# 事实：entries（记录的个数）、flagged（有问题的个数）、examples（结论涉及的前 5 个网站名）。
+id: network.hosts
+schema_version: 1
+title: { zh-CN: hosts 文件有没有屏蔽常用网站 }
+description:
+  zh-CN: 看看 hosts 文件有没有被改过：屏蔽了杀毒软件、Windows 更新或者常用网站，把网站指到了固定的地址，或者 hosts 文件的位置被改了。某个网站打不开、更新装不上、右下角一直显示「无 Internet」时常是这个原因。
+category: network
+requires_admin: false
+# 屏蔽广告的 hosts 列表可能有几万行，Windows PowerShell 5.1 里要读好几秒
+timeout_sec: 45
+probe:
+  script: checks/network/hosts.ps1
+results:
+  default:
+    status: ok
+    message:
+      zh-CN: hosts 文件是默认的，没有另外加的记录。
+  custom:
+    status: ok
+    message:
+      zh-CN: "hosts 文件里有 {entries} 条另外加的记录（可能是你自己、屏蔽广告的软件或者开发工具加的），没有影响常用网站、Windows 更新和杀毒软件。"
+  blocks-common:
+    status: advice
+    message:
+      zh-CN: "hosts 文件屏蔽了常用网站（{examples}），这些网站打不开。"
+    fixer: medkit
+    next:
+      zh-CN: 不是你自己有意加的，就点下面的「删掉 hosts 里有问题的记录」，只删这几行，别的记录不动，能撤销。
+    links: ["feature:network.hosts-cleanup"]
+  blocks-microsoft:
+    status: advice
+    message:
+      zh-CN: "hosts 文件屏蔽了 Windows 更新、激活或者联网检测用的网站（{examples}）：更新装不上、激活失败，或者右下角一直显示「无 Internet」。多半是「关更新」「激活」之类的工具加的。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的「删掉 hosts 里有问题的记录」，只删这几行，别的记录不动，能撤销。
+    links: ["feature:network.hosts-cleanup"]
+  redirects:
+    status: advice
+    message:
+      zh-CN: "hosts 文件把 {examples} 指到了固定的地址。可能是网上「加速」「翻墙」教程改的（地址一变就打不开），也可能是恶意软件在劫持（打开的是假网站）。"
+    fixer: medkit
+    next:
+      zh-CN: 不是你自己有意改的，就点下面的「删掉 hosts 里有问题的记录」，删掉以后按正常方式访问这些网站，能撤销。
+    links: ["feature:network.hosts-cleanup"]
+  blocks-security:
+    status: manual
+    message:
+      zh-CN: "hosts 文件屏蔽或者改指了杀毒、安全软件的网站（{examples}）。这是恶意软件常用的手段，让杀毒软件没法更新、没法下载。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的「删掉 hosts 里有问题的记录」，再打开「Windows 安全中心 → 病毒和威胁防护 → 扫描选项」，做一次「完全扫描」。
+    links: ["feature:network.hosts-cleanup"]
+  path-changed:
+    status: manual
+    message:
+      zh-CN: Windows 读的 hosts 文件不在默认的位置（注册表里的 DataBasePath 被改了）。这通常是恶意软件或者「优化」软件干的。
+    fixer: helper
+    next:
+      zh-CN: 请懂哥把注册表 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters 里的 DataBasePath 改回 %SystemRoot%\System32\drivers\etc，再用杀毒软件做一次完全扫描。
+references:
+  - https://support.microsoft.com/en-us/topic/how-to-reset-the-hosts-file-back-to-the-default-c2a43f9d-e176-c6f3-e4ef-3500277a6dae
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/tcpip-and-nbt-configuration-parameters
+  - https://learn.microsoft.com/en-us/windows/privacy/manage-windows-11-endpoints

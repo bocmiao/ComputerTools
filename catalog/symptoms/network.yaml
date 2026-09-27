@@ -1,12 +1,14 @@
 # 症状：上不了网。按链路顺序查，断在哪一环就停在哪一环（计划书 4.2）：
 #   1. network.connectivity：网卡和驱动、飞行模式、网线 / WiFi、有没有从路由器拿到地址、路由器通不通、宽带（断在宽带就给运营商电话）；
 #   2. network.dns：能不能查到网站的地址（网络本身不通时不怪 DNS）；
-#   3. network.proxy-dead：代理残留（→ 修复 network.proxy-off，局域网和拨号、VPN 连接都查）；
-#   4. system.clock：系统时间跳回了过去（主板电池没电时常见），所有 https 网站都会报证书错误。放在最后：时间不对不影响前三步，
-#      网络、DNS、代理都正常时，它常常就是网页打不开的原因。
+#   3. network.hosts：hosts 文件屏蔽、改指了常用网站、Windows 更新或者杀毒软件的网站（→ 修复 network.hosts-cleanup，
+#      只删有问题的那几行）；
+#   4. network.proxy-dead：代理残留（→ 修复 network.proxy-off，局域网和拨号、VPN 连接都查）；
+#   5. system.clock：系统时间跳回了过去（主板电池没电时常见），所有 https 网站都会报证书错误。放在最后：时间不对不影响前几步，
+#      网络、DNS、hosts、代理都正常时，它常常就是网页打不开的原因。
 # 前两步查出要用户动手的问题（advice / manual）就停；没查清楚（unknown，比如路由器和 DNS 都通、Windows 却说没网，
 # 常常就是代理残留或者要网页登录）就接着往下查。
-# 还没有做的环节：hosts、Winsock / LSP、重置 Winsock 和 TCP/IP，以及时间快了（查不出来），先写在图文指引里，
+# 还没有做的环节：Winsock / LSP、重置 Winsock 和 TCP/IP，以及时间快了（查不出来），先写在图文指引里，
 # 所以 maturity 仍是 semi。
 # 关键词里保留用户的口语「梯子」，界面文字里写「代理软件」。
 id: network
@@ -59,6 +61,9 @@ steps:
     stop_on: [advice, manual]
   - check: network.dns
     stop_on: [advice, manual]
+  - check: network.hosts
+    stop_on: [advice, manual]
+    fixes: [network.hosts-cleanup]
   - check: network.proxy-dead
     stop_on: [advice, manual]
     fixes: [network.proxy-off]

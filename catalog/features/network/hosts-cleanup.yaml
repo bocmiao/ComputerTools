@@ -1,0 +1,40 @@
+# 删掉 hosts 里有问题的记录（脚本类功能）。脚本在 scripts/features/network/ 下，规则在 shared block hosts-rules 里
+# （和检测 network.hosts 同一份）。
+# 只删有问题的那几行（屏蔽或改指了杀毒软件、Windows 更新和联网检测、常用网站的）；别的记录（自己加的、屏蔽广告的、
+# 开发工具加的）、注释和空行都不动。不照微软文档那样把整个文件换成默认的：那样会把用户有意加的记录一起清掉。
+#   hosts-cleanup-detect.ps1  还有有问题的行 → not-applied（引擎用 verify 检测 network.hosts 判断；撤销前用它核对）
+#   hosts-cleanup-run.ps1     -Prepare：before = { path, encoding, total（行数）, lines: [ { index, text } ] }（要删的行）；
+#                             执行：文件变过（路径、行数、那几行的内容）就跳过；按字节读写（Latin-1 一字节对一个字符，
+#                             任何代码页的注释都原样保留；UTF-16 按 UTF-16），字节顺序标记单独保留，行尾的 CR 跟着行走；
+#                             只读的文件写的时候临时去掉只读，写完改回；删完读回来核对，再清一次 DNS 缓存，马上生效
+#   hosts-cleanup-undo.ps1    把删掉的行按原来的行号插回去（从小到大），没有别的改动时和原来一个字节都不差
+#   hosts-cleanup-break.ps1   只在测试中使用：在末尾加一行屏蔽一个编出来的名字 medkit-roundtrip-test.baidu.com
+# 风险标「注意」：删的行也可能是用户有意加的（比如按教程给 GitHub 加速），预览和结论里都写明了，能撤销。
+id: network.hosts-cleanup
+schema_version: 1
+title: { zh-CN: 删掉 hosts 里有问题的记录 }
+description:
+  zh-CN: 删掉 hosts 文件里屏蔽、改指了杀毒软件、Windows 更新或者常用网站的那几行，别的记录（自己加的、屏蔽广告的）都不动。改完马上生效，不用重启；已经打开的网页刷新一下就行。如果那几行是你自己有意加的（比如按教程给某个网站加速），就不要用这个。能撤销。
+category: network
+risk: caution
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+verify: network.hosts
+detect:
+  script: features/network/hosts-cleanup-detect.ps1
+prepare:
+  script: features/network/hosts-cleanup-run.ps1
+run:
+  script: features/network/hosts-cleanup-run.ps1
+undo:
+  script: features/network/hosts-cleanup-undo.ps1
+break:
+  script: features/network/hosts-cleanup-break.ps1
+references:
+  - https://support.microsoft.com/en-us/topic/how-to-reset-the-hosts-file-back-to-the-default-c2a43f9d-e176-c6f3-e4ef-3500277a6dae
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/tcpip-and-nbt-configuration-parameters
+  - https://learn.microsoft.com/en-us/windows/privacy/manage-windows-11-endpoints

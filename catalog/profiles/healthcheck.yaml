@@ -19,6 +19,7 @@ checks:
   # 网络（DNS 只在「上不了网」里查：断网时它只会说「查不了」）
   - network.connectivity
   - network.proxy-dead
+  - network.hosts
   # 安全
   - security.bitlocker-status
   - security.secureboot-ca2023
