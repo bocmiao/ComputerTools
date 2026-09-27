@@ -1,0 +1,39 @@
+# 去掉浏览器快捷方式后面被加的网址（脚本类功能）。脚本在 scripts/features/security/ 下，找哪些快捷方式、怎么认网址都在
+# shared block browser-shortcuts 里（和检测 security.browser-shortcuts 同一份）。
+#   browser-shortcuts-detect.ps1  还有被加了网址的浏览器快捷方式 → not-applied（引擎用 verify 检测判断；撤销前用它核对）
+#   browser-shortcuts-run.ps1     -Prepare：before = { shortcuts: [ { folder, relative, arguments, rest } ] }：每个快捷方式在哪个
+#                                 文件夹（desktop、start-menu、quick-launch、public-desktop、common-start-menu）、在里面的路径、
+#                                 现在的参数、去掉网址以后的参数。只记文件夹代号和相对路径，不记完整路径（里面有用户名）。
+#                                 执行：参数还是记下的那样的才改（读回来核对），别的不动；一个都没改就返回 skipped
+#   browser-shortcuts-undo.ps1    参数还是改过以后的样子的，改回记下的原参数；后来又被改过、删掉的不动
+#   browser-shortcuts-break.ps1   只在测试中使用：在桌面上放一个「MedkitTest Browser.lnk」（Edge，参数里带一个网址）
+# 用 WScript.Shell（系统自己的 IShellLink）读写，快捷方式的图标、起始位置、快捷键、「以管理员身份运行」这些都不动；只读的
+# 快捷方式改的时候临时去掉只读，改完改回去。公用桌面和所有用户的开始菜单只有管理员能改，所以要管理员权限。
+# 风险标「注意」：参数里的网址也可能是用户特意加的（打开某个网站的快捷方式），检测结果和说明里都写了，能撤销。
+id: security.browser-shortcuts-clean
+schema_version: 1
+title: { zh-CN: 去掉浏览器快捷方式后面被加的网址 }
+description:
+  zh-CN: 把桌面、开始菜单、任务栏上浏览器快捷方式后面被加的网址去掉，从这些快捷方式打开浏览器就不会再先打开导航网站了。只去掉网址，快捷方式别的（图标、名字、别的参数）都不动。如果是你自己特意做的打开某个网站的快捷方式，就不要用这个。改完马上生效，能撤销。
+category: security
+risk: caution
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: none
+target: current-user
+verify: security.browser-shortcuts
+detect:
+  script: features/security/browser-shortcuts-detect.ps1
+prepare:
+  script: features/security/browser-shortcuts-run.ps1
+run:
+  script: features/security/browser-shortcuts-run.ps1
+undo:
+  script: features/security/browser-shortcuts-undo.ps1
+break:
+  script: features/security/browser-shortcuts-break.ps1
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/links
+  - https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinkw-setarguments

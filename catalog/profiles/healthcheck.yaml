@@ -21,6 +21,7 @@ checks:
   - network.proxy-dead
   - network.hosts
   # 安全
+  - security.browser-shortcuts
   - security.bitlocker-status
   - security.secureboot-ca2023
   - security.tpm

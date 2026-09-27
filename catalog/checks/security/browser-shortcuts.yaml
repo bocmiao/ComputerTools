@@ -1,0 +1,35 @@
+# 浏览器快捷方式后面被加了网址。脚本：scripts/checks/security/browser-shortcuts.ps1（和修复 security.browser-shortcuts-clean
+# 共用 shared block browser-shortcuts）。
+# 捆绑装上的「导航」「主页保护」软件常用的办法：在浏览器快捷方式的目标后面加一个网址（"…\chrome.exe" http://www.2345.com/?k123），
+# 从这个快捷方式打开浏览器就先打开它的导航网站，看起来就像主页被改了，在浏览器的设置里怎么改都没用。
+# 查登录用户的桌面、开始菜单、快速启动（任务栏上固定的也在这里）和公用桌面、所有用户的开始菜单里的快捷方式：目标是
+# 常见的浏览器（Chrome、Edge、Firefox、IE、360、QQ、搜狗、2345、猎豹、UC、傲游……），参数里有网址（http://、https://、
+# www. 开头的，或者像 2345.com 这样的域名）才算；--profile-directory=Default 这种开关、特意做的 --app=https://… 不算。
+# 只读。事实：count、sites（网址的域名，最多 5 个，逗号隔开）。不输出快捷方式的路径（里面有用户名）。
+id: security.browser-shortcuts
+schema_version: 1
+title: { zh-CN: 浏览器快捷方式有没有被加网址 }
+description:
+  zh-CN: 看看桌面、开始菜单、任务栏上浏览器的快捷方式后面有没有被加上网址。被加了的，一打开浏览器就先打开那个网址（常见的是 2345、hao123 这类导航网站），在浏览器的设置里怎么改主页都没用。
+category: security
+requires_admin: false
+user_hive: true
+timeout_sec: 60
+probe:
+  script: checks/security/browser-shortcuts.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 桌面、开始菜单、任务栏上浏览器的快捷方式都正常，后面没有被加网址。
+  hijacked:
+    status: advice
+    message:
+      zh-CN: "有 {count} 个浏览器快捷方式（桌面、开始菜单或者任务栏上的）后面被加了网址：{sites}。从这些快捷方式打开浏览器，都会先打开这个网址，看起来就像主页被改了。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮去掉这些网址（只去掉网址，快捷方式别的都不动，能撤销）。这多半是装软件时捆绑的「导航」「主页保护」软件改的：再用「装了哪些程序」看看最近装了什么不认识的软件，到「设置 → 应用」里卸载掉，不然过些天它可能又改回去。如果是你自己特意做的打开某个网站的快捷方式，就不用修。
+    links: ["feature:security.browser-shortcuts-clean", "tool:system.installed-programs", "tool:settings.apps"]
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/links
+  - https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinkw-setarguments
