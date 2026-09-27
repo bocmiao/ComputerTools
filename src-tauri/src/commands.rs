@@ -9,8 +9,8 @@ use medkit_core::views::{
 };
 use tauri::State;
 
-use crate::setup::AppState;
 use crate::rename::{self, RenamePreview};
+use crate::setup::AppState;
 
 type CmdResult<T> = Result<T, String>;
 
@@ -108,9 +108,11 @@ pub async fn startup_disable(state: State<'_, AppState>, id: String) -> CmdResul
 #[tauri::command]
 pub async fn rename_select_folder(state: State<'_, AppState>) -> CmdResult<Option<String>> {
     #[cfg(windows)]
-    let folder = tauri::async_runtime::spawn_blocking(|| rfd::FileDialog::new().set_title("选择要批量重命名的文件夹").pick_folder())
-        .await
-        .map_err(|e| format!("打开文件夹选择器失败：{e}"))?;
+    let folder = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new().set_title("选择要批量重命名的文件夹").pick_folder()
+    })
+    .await
+    .map_err(|e| format!("打开文件夹选择器失败：{e}"))?;
     #[cfg(not(windows))]
     let folder: Option<std::path::PathBuf> = None;
     let Some(folder) = folder else { return Ok(None) };

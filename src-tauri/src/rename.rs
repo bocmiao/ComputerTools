@@ -67,7 +67,8 @@ fn validate_prefix(prefix: &str) -> Result<(), String> {
     if prefix.is_empty() || prefix.chars().count() > 80 {
         return Err("前缀需要 1 到 80 个字符。".into());
     }
-    if prefix.ends_with(' ') || prefix.ends_with('.')
+    if prefix.ends_with(' ')
+        || prefix.ends_with('.')
         || prefix.chars().any(|c| c.is_control() || "<>:\"/\\|?*".contains(c))
     {
         return Err("前缀包含 Windows 文件名不允许的字符，或以空格、句点结尾。".into());
@@ -102,7 +103,8 @@ fn scan(folder: &Path, prefix: &str) -> Result<Snapshot, String> {
     let mut targets = HashSet::new();
     let mut snapshot = Vec::with_capacity(files.len());
     for (index, (source, meta)) in files.into_iter().enumerate() {
-        let extension = Path::new(&source).extension().and_then(|s| s.to_str()).map_or(String::new(), |s| format!(".{s}"));
+        let extension =
+            Path::new(&source).extension().and_then(|s| s.to_str()).map_or(String::new(), |s| format!(".{s}"));
         let target = format!("{prefix}{:0width$}{extension}", index + 1);
         if target.encode_utf16().count() > 255 {
             return Err("生成的文件名过长，请缩短前缀。".into());
@@ -126,7 +128,11 @@ pub fn preview(state: &mut RenameState, prefix: &str) -> Result<RenamePreview, S
     let snapshot = scan(folder, prefix)?;
     let result = RenamePreview {
         folder: folder.display().to_string(),
-        entries: snapshot.files.iter().map(|f| RenameEntry { source: f.source.clone(), target: f.target.clone() }).collect(),
+        entries: snapshot
+            .files
+            .iter()
+            .map(|f| RenameEntry { source: f.source.clone(), target: f.target.clone() })
+            .collect(),
     };
     state.preview = Some(snapshot);
     Ok(result)
@@ -138,7 +144,7 @@ pub fn apply(state: &mut RenameState) -> Result<usize, String> {
     if scan(folder, &expected.prefix)? != expected {
         return Err("预览后文件夹内容发生了变化，请重新预览。".into());
     }
-    let mut done = Vec::new();
+    let mut done: Vec<&FileSnapshot> = Vec::new();
     for file in &expected.files {
         if let Err(error) = move_new(&folder.join(&file.source), &folder.join(&file.target)) {
             let mut rollback_failed = 0;
@@ -147,7 +153,15 @@ pub fn apply(state: &mut RenameState) -> Result<usize, String> {
                     rollback_failed += 1;
                 }
             }
-            return Err(format!("重命名 {} 失败：{error}。{}", file.source, if rollback_failed == 0 { "已恢复先前改动。".to_string() } else { format!("有 {rollback_failed} 个文件未能恢复，请检查文件夹。") }));
+            return Err(format!(
+                "重命名 {} 失败：{error}。{}",
+                file.source,
+                if rollback_failed == 0 {
+                    "已恢复先前改动。".to_string()
+                } else {
+                    format!("有 {rollback_failed} 个文件未能恢复，请检查文件夹。")
+                }
+            ));
         }
         done.push(file);
     }
