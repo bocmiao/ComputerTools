@@ -18,6 +18,8 @@
     "allow-journal-undo-session",
     "allow-report-generate",
     "allow-tool-run",
-    "allow-tool-open"
+    "allow-tool-open",
+    "allow-startup-list",
+    "allow-startup-disable"
   ]
 }

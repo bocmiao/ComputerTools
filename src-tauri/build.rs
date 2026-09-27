@@ -18,6 +18,8 @@ const COMMANDS: &[&str] = &[
     "report_generate",
     "tool_run",
     "tool_open",
+    "startup_list",
+    "startup_disable",
 ];
 
 fn main() {
