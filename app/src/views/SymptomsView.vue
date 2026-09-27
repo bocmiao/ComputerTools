@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
-import { journalUndo, runCheck, startupDisable, startupList, symptomDetail } from '../api'
+import { journalUndo, runCheck, startupDisable, startupList, symptomDetail, toolOpen } from '../api'
 import type { ApplyResult, CheckResult, StartupItem, SymptomDetail, SymptomSummary } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
@@ -146,6 +146,15 @@ async function changeStartup(item: StartupItem): Promise<void> {
     startupError.value = errorText(e)
   } finally {
     startupBusy.value = null
+  }
+}
+
+async function openStartupSettings(): Promise<void> {
+  startupError.value = null
+  try {
+    await toolOpen('settings.startup-apps')
+  } catch (e) {
+    startupError.value = errorText(e)
   }
 }
 
@@ -481,7 +490,8 @@ watch(
             <h2 id="startup-title" class="section-title">管理开机启动项</h2>
             <button type="button" class="btn btn-secondary btn-small" :disabled="startupLoading || !!startupBusy" @click="loadStartup()">刷新列表</button>
           </div>
-          <p class="muted small">这里只显示注册表 Run 启动项。停用后，软件仍在电脑上，也能手动打开；下次登录时不再通过这条记录自动启动。这里无法判断任务管理器此前是否已禁用某项；任务计划和启动文件夹里的项目也请在任务管理器中查看。</p>
+          <p class="muted small">这里只显示注册表 Run 启动项。停用后，软件仍在电脑上，也能手动打开；下次登录时不再通过这条记录自动启动。这里无法判断 Windows 此前是否已禁用某项。其他启动应用可在 Windows 设置中管理。</p>
+          <button type="button" class="btn btn-secondary btn-small" @click="openStartupSettings()">管理其他启动应用</button>
           <p v-if="startupLoading" class="loading-line" role="status"><BusySpinner size="small" />正在读取启动项…</p>
           <p v-if="startupError" class="danger-text small" role="alert">{{ startupError }}</p>
           <p v-if="startupNotice" class="small" role="status">{{ startupNotice }}</p>

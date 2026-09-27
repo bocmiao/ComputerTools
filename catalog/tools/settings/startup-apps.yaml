@@ -1,0 +1,11 @@
+id: settings.startup-apps
+schema_version: 1
+group: open
+title: { zh-CN: Windows 启动应用设置 }
+description:
+  zh-CN: 打开 Windows 自带的启动应用开关。这里可以管理小药箱列表以外的软件，包括启动文件夹里的项目；改动由 Windows 管理，也能在这里重新开启。
+category: settings
+open: { settings: startupapps }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings
+  - https://support.microsoft.com/en-us/windows/configure-startup-applications-in-windows-115a420a-0bff-4a6f-90e0-1934c844e473

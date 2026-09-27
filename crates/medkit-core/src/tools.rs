@@ -38,6 +38,7 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "windowsupdate",
     "storagesense",
     "appsfeatures",
+    "startupapps",
     "defaultapps",
     "network-status",
     "printers",

@@ -1812,6 +1812,14 @@ const TOOL_LIST: MockTool[] = [
     'ms-settings:appsfeatures',
   ),
   openTool(
+    'settings.startup-apps',
+    'Windows 启动应用设置',
+    '管理小药箱列表以外的软件，关闭或重新开启开机自启。',
+    'settings',
+    'settings',
+    'ms-settings:startupapps',
+  ),
+  openTool(
     'settings.default-apps',
     '默认应用',
     '设置用哪个浏览器打开网页、用哪个软件看图片和视频。',
