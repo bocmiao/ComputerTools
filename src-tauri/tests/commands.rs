@@ -141,6 +141,9 @@ fn every_command_is_reachable_and_well_shaped() {
     // 修改日志、报告
     assert!(ok(&win, "journal_list", json!({})).is_array());
     assert!(ok(&win, "report_generate", json!({})).is_string());
+    // 界面传来的问题描述（参数名 note）会写进报告
+    let with_note = ok(&win, "report_generate", json!({ "note": "昨天开始上不了网" }));
+    assert!(with_note.as_str().unwrap().contains("昨天开始上不了网"), "{with_note}");
 
     // 小工具：结构和数据文件对得上；每一组都拿一个真调一次
     let tools = summary["tools"].as_array().unwrap();

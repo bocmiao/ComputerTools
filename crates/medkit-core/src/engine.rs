@@ -1510,7 +1510,9 @@ impl Engine {
 
     // ───────────── 报告 ─────────────
 
-    pub fn report_generate(&self) -> Result<String> {
+    /// 诊断报告（纯文本、已脱敏）。`note` 是用户自己写的「遇到了什么问题」，放在最前面，
+    /// 和报告的其余部分一起脱敏；太长的只留前 [`NOTE_MAX_CHARS`] 个字。
+    pub fn report_generate(&self, note: Option<&str>) -> Result<String> {
         let info = self.system_info();
         let os = self.platform.os_info();
         let mut out = String::new();
@@ -1530,6 +1532,17 @@ impl Engine {
             line(&mut out, "注意：程序是用另一个管理员账户运行的。");
         }
         line(&mut out, "");
+
+        if let Some(note) = note.map(str::trim).filter(|n| !n.is_empty()) {
+            line(&mut out, "== 我遇到的问题 ==");
+            let clean: String = note.chars().filter(|c| !c.is_control() || *c == '\n').collect();
+            let mut kept: String = clean.chars().take(NOTE_MAX_CHARS).collect();
+            if clean.chars().count() > NOTE_MAX_CHARS {
+                kept.push_str("……（后面的省略了）");
+            }
+            line(&mut out, kept.trim_end());
+            line(&mut out, "");
+        }
 
         let results = self.last_results.lock().unwrap().clone();
         line(&mut out, "== 最近一次体检 ==");
@@ -1609,6 +1622,9 @@ impl Engine {
         Ok(redact(&out, &secrets))
     }
 }
+
+/// 报告里「我遇到的问题」最多留多少个字。
+pub const NOTE_MAX_CHARS: usize = 1000;
 
 /// 值里可能有单位名、学校名、VPN 名的检测事实，写报告时隐藏。
 const SENSITIVE_FACTS: &[&str] =

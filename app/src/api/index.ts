@@ -91,9 +91,9 @@ export function journalUndoSession(sessionId: string): Promise<UndoResult[]> {
   return call('journal_undo_session', { sessionId })
 }
 
-/** 生成已脱敏的纯文本诊断报告 */
-export function reportGenerate(): Promise<string> {
-  return call('report_generate', {})
+/** 生成已脱敏的纯文本诊断报告。note 是用户自己写的「遇到了什么问题」，会和报告一起脱敏 */
+export function reportGenerate(note?: string): Promise<string> {
+  return call('report_generate', note ? { note } : {})
 }
 
 /** 跑一个「看信息」或「一键处理」小工具。不改设置，也不记进修改日志 */

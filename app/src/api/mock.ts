@@ -1386,7 +1386,7 @@ const REPORT_STATUS: Record<CheckResult['status'], string> = {
   na: '不适用',
 }
 
-function buildReport(): string {
+function buildReport(note?: string): string {
   const profile = PROFILES.healthcheck
   const results = (profile?.checks ?? []).map(runMockCheck).filter((r) => r.status !== 'na')
   const order = { manual: 0, advice: 1, unknown: 2, ok: 3, na: 4 } as const
@@ -1398,6 +1398,7 @@ function buildReport(): string {
     `生成时间：${localTime(Date.now())}`,
     `小药箱版本：${SYSTEM.appVersion}（数据版本 ${SYSTEM.catalogVersion}）`,
     '',
+    ...(note?.trim() ? ['== 我遇到的问题 ==', note.trim(), ''] : []),
     '【这台电脑】',
     `系统：${SYSTEM.osCaption.replace(/^Microsoft\s+/, '')}，版本号 ${SYSTEM.build}`,
     `以管理员身份运行：${SYSTEM.isAdmin ? '是' : '否'}`,
@@ -2077,7 +2078,7 @@ const handlers: Handlers = {
       .map((e) => undoOne(e, false, true))
   },
 
-  report_generate: () => buildReport(),
+  report_generate: ({ note }) => buildReport(note),
 
   tool_run: ({ id }) => runMockTool(id),
 

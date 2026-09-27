@@ -266,7 +266,7 @@ fn every_check_runs_cleanly_on_windows_powershell() {
     for id in profiles {
         engine.run_profile(&id).unwrap();
     }
-    let report = engine.report_generate().unwrap();
+    let report = engine.report_generate(None).unwrap();
     if let Some(me) = platform.process_user()
         && let Some((_, short)) = me.name.rsplit_once('\\')
         && short.chars().count() >= 2

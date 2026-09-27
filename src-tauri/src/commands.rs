@@ -80,9 +80,10 @@ pub async fn journal_undo_session(state: State<'_, AppState>, session_id: String
     with_engine(state, move |e| e.journal_undo_session(&session_id)).await
 }
 
+/// `note`：用户自己写的「遇到了什么问题」（可以不传），和报告一起脱敏。
 #[tauri::command]
-pub async fn report_generate(state: State<'_, AppState>) -> CmdResult<String> {
-    with_engine(state, |e| e.report_generate()).await
+pub async fn report_generate(state: State<'_, AppState>, note: Option<String>) -> CmdResult<String> {
+    with_engine(state, move |e| e.report_generate(note.as_deref())).await
 }
 
 #[tauri::command]

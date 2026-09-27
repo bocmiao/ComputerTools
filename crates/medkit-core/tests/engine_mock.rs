@@ -785,7 +785,7 @@ fn report_is_redacted() {
     assert_eq!(results.len(), 2);
     w.engine.feature_apply("explorer.show-extensions").unwrap();
 
-    let report = w.engine.report_generate().unwrap();
+    let report = w.engine.report_generate(None).unwrap();
     assert!(report.contains("还剩 80 GB"), "{report}");
     assert!(report.contains("显示文件扩展名"), "{report}");
     for leaked in ["xiaoming", "MOCK-PC", "1000-2000-3000"] {
@@ -1095,13 +1095,34 @@ fn undo_tells_what_is_needed_to_see_the_change() {
     assert_eq!(serde_json::to_value(&u).unwrap()["reboot"], "explorer");
 }
 
+/// 用户自己写的问题描述放在报告最前面，和其余部分一样脱敏；太长的截断，空的不写这一节。
+#[test]
+fn the_users_own_note_is_redacted_and_kept_short() {
+    let w = world();
+    let note = "  我是xiaoming，MOCK-PC 昨天开始上不了网，路由器是192.168.1.1\u{7}，电话13812345678  ";
+    let report = w.engine.report_generate(Some(note)).unwrap();
+    let section = report.split("== 我遇到的问题 ==\n").nth(1).expect("有这一节");
+    let first = section.lines().next().unwrap();
+    assert_eq!(first, "我是<已隐藏>，<已隐藏> 昨天开始上不了网，路由器是<IP>，电话<手机号>");
+    assert!(report.find("== 我遇到的问题 ==").unwrap() < report.find("== 最近一次体检 ==").unwrap());
+
+    let long = "网".repeat(medkit_core::engine::NOTE_MAX_CHARS + 50);
+    let report = w.engine.report_generate(Some(&long)).unwrap();
+    assert!(report.contains(&format!("{}……（后面的省略了）", "网".repeat(medkit_core::engine::NOTE_MAX_CHARS))));
+    assert!(!report.contains(&"网".repeat(medkit_core::engine::NOTE_MAX_CHARS + 1)));
+
+    for empty in [None, Some(""), Some("  \n ")] {
+        assert!(!w.engine.report_generate(empty).unwrap().contains("我遇到的问题"));
+    }
+}
+
 /// 直接去「按症状修」查过、没做过体检的人，报告里也要有那几项的结论（断网求助时正是这样）。
 #[test]
 fn checks_run_outside_the_health_check_appear_in_the_report() {
     let w = world();
     w.runner.returns("checks/system/admin-only.ps1", json!({ "result": "ok", "facts": {} }));
     w.engine.run_check("system.admin-only").unwrap();
-    let report = w.engine.report_generate().unwrap();
+    let report = w.engine.report_generate(None).unwrap();
     assert!(report.contains("单独检查过的项目"), "{report}");
     assert!(report.contains("需要管理员的检测"), "{report}");
     // 时间按「年-月-日 时:分」显示（换成本机时间），不是 RFC 3339 原文

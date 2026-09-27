@@ -327,7 +327,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `journal_list` | — | `JournalSession[]`（新的在前） |
 | `journal_undo` | `entryId`、`force` | `UndoResult` |
 | `journal_undo_session` | `sessionId` | `UndoResult[]` |
-| `report_generate` | — | `string`（已脱敏的纯文本） |
+| `report_generate` | `note?`（用户自己写的「遇到了什么问题」，最多 1000 字） | `string`（已脱敏的纯文本；`note` 放在最前面，一起脱敏） |
 | `tool_run` | `id` | `ToolResult`（只能用于 `info`、`action` 小工具） |
 | `tool_open` | `id` | `null`（只能用于 `open` 小工具；打不开时返回错误字符串） |
 | `startup_list` | — | `StartupItem[]`（登录用户和所有用户的 Run 项、「启动」文件夹，开关状态和任务管理器一致） |
