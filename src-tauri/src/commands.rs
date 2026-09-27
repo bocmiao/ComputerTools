@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use medkit_core::Engine;
 use medkit_core::views::{
-    ApplyResult, CatalogSummary, CheckResult, FeatureState, JournalSession, Preview, SymptomDetail, SystemInfo,
-    ToolResult, UndoResult,
+    ApplyResult, CatalogSummary, CheckResult, FeatureState, JournalSession, Preview, StartupItem, SymptomDetail,
+    SystemInfo, ToolResult, UndoResult,
 };
 use tauri::State;
 
@@ -92,4 +92,14 @@ pub async fn tool_run(state: State<'_, AppState>, id: String) -> CmdResult<ToolR
 #[tauri::command]
 pub async fn tool_open(state: State<'_, AppState>, id: String) -> CmdResult<()> {
     with_engine(state, move |e| e.tool_open(&id)).await
+}
+
+#[tauri::command]
+pub async fn startup_list(state: State<'_, AppState>) -> CmdResult<Vec<StartupItem>> {
+    with_engine(state, |e| e.startup_list()).await
+}
+
+#[tauri::command]
+pub async fn startup_disable(state: State<'_, AppState>, id: String) -> CmdResult<String> {
+    with_engine(state, move |e| e.startup_disable(&id)).await
 }

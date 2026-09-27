@@ -37,6 +37,7 @@ import type {
   Status,
   SymptomDetail,
   SystemInfo,
+  StartupItem,
   ToolResult,
   ToolRow,
   ToolSection,
@@ -959,6 +960,15 @@ const CHECKS: Record<string, MockCheck> = {
     title: 'Win10 安全更新登记',
     evaluate: () => ({ status: 'na', resultCode: 'not-win10', message: '这台电脑是 Win11，不需要登记。' }),
   },
+  'boot.last-boot-duration': {
+    title: '开机用时',
+    evaluate: () => ({
+      status: DEMO_ALL_OK ? 'ok' : 'advice',
+      message: DEMO_ALL_OK ? '最近一次开机用了 28 秒，速度正常。' : '最近一次开机用了 96 秒，有点慢。',
+      fixer: 'user',
+      next: '可以在下面逐项停用不需要的 Run 启动项。',
+    }),
+  },
 }
 
 function runMockCheck(id: string): CheckResult {
@@ -1019,6 +1029,16 @@ interface MockSymptom {
 }
 
 const SYMPTOMS: MockSymptom[] = [
+  {
+    id: 'slow-boot',
+    title: '开机慢',
+    summary: '开机要等好几分钟，进了桌面还卡半天。',
+    keywords: ['开机慢', '启动慢', '开机自启动太多'],
+    maturity: 'semi',
+    causes: ['开机自动启动的软件太多', '系统装在机械硬盘上', '内存不足'],
+    guide: '上面只管理注册表 Run 启动项。任务计划和启动文件夹里的项目，可在任务管理器的「启动应用」里查看。',
+    steps: [{ check: 'boot.last-boot-duration', fixes: [] }],
+  },
   {
     id: 'network',
     title: '上不了网',
@@ -1135,7 +1155,7 @@ interface EntryOptions {
 
 /** 和后端的规则一样：没撤销过、改成功了（或者状态不确定），而且功能本身能撤销 */
 function canUndo(e: JournalEntryView): boolean {
-  const reversible = FEATURES.get(e.feature)?.summary.reversible ?? false
+  const reversible = e.feature === 'boot.startup-disable' || (FEATURES.get(e.feature)?.summary.reversible ?? false)
   return !e.undone && (e.ok || e.pending) && reversible
 }
 
@@ -1318,6 +1338,10 @@ function undoOne(entry: JournalEntryView, force: boolean, inSession: boolean): U
     }
   }
   values.set(entry.target, entry.before)
+  if (entry.feature === 'boot.startup-disable') {
+    const item = startupMock.find((x) => `startup:${x.id}` === entry.target)
+    if (item) item.disabledEntry = null
+  }
   entry.undone = true
   entry.undoneAt = iso(Date.now())
   entry.canUndo = false
@@ -1795,6 +1819,13 @@ function openMockTool(id: string): null {
 
 type Handlers = { [K in CommandName]: (args: CommandArgs<K>) => CommandResult<K> }
 
+const startupMock: StartupItem[] = [
+  { id: 'user-chat', name: '聊天软件', command: 'C:\\Program Files\\Chat\\chat.exe', scope: '当前用户', active: true, disabledEntry: null },
+  { id: 'user-cloud', name: '网盘同步', command: 'C:\\Program Files\\Cloud\\cloud.exe', scope: '当前用户', active: true, disabledEntry: null },
+  { id: 'all-audio', name: '声卡控制面板', command: 'C:\\Program Files\\Audio\\control.exe', scope: '所有用户', active: true, disabledEntry: null },
+]
+for (const item of startupMock) values.set(`startup:${item.id}`, item.command)
+
 const handlers: Handlers = {
   system_info: () => SYSTEM,
 
@@ -1945,6 +1976,23 @@ const handlers: Handlers = {
   tool_run: ({ id }) => runMockTool(id),
 
   tool_open: ({ id }) => openMockTool(id),
+
+  startup_list: () => startupMock.map((item) => ({ ...item, active: values.get(`startup:${item.id}`) !== '（不存在）' })),
+
+  startup_disable: ({ id }) => {
+    const item = startupMock.find((x) => x.id === id && values.get(`startup:${x.id}`) !== '（不存在）')
+    if (!item) throw '这个启动项已经不存在或已停用，请刷新列表。'
+    const session = ensureSession()
+    const entry: JournalEntryView = {
+      id: uuid(), sessionId: session.id, time: iso(Date.now()), feature: 'boot.startup-disable',
+      featureTitle: '停用开机启动项', target: `startup:${item.id}`, before: item.command,
+      after: '（不存在）', ok: true, pending: false, undone: false, undoneAt: null, canUndo: true, error: null,
+    }
+    session.entries.push(entry)
+    values.set(entry.target, entry.after)
+    item.disabledEntry = entry.id
+    return entry.id
+  },
 }
 
 /** 个别小工具要多等一会儿（读电脑配置、重启资源管理器），好看清「正在…」的样子 */

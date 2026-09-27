@@ -7,6 +7,7 @@ import type {
   Preview,
   SymptomDetail,
   SystemInfo,
+  StartupItem,
   ToolResult,
   UndoResult,
 } from './types'
@@ -33,6 +34,8 @@ export type CommandMap = {
   report_generate: { args: NoArgs; result: string }
   tool_run: { args: { id: string }; result: ToolResult }
   tool_open: { args: { id: string }; result: null }
+  startup_list: { args: NoArgs; result: StartupItem[] }
+  startup_disable: { args: { id: string }; result: string }
 }
 
 export type CommandName = keyof CommandMap

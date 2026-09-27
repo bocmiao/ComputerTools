@@ -305,6 +305,41 @@ fn hide_ext(w: &World) -> Option<RegValue> {
 }
 
 #[test]
+fn startup_run_entry_can_be_disabled_and_restored_after_restart() {
+    let w = world();
+    let run = r"Software\Microsoft\Windows\CurrentVersion\Run";
+    w.platform.seed_value(&user(), run, "Chat", RegValue::String(r"C:\Chat\chat.exe".into()));
+    w.platform.seed_value(&RegRoot::LocalMachine, run, "Audio", RegValue::String(r"C:\Audio\audio.exe".into()));
+    let items = w.engine.startup_list().unwrap();
+    assert_eq!(items.len(), 2);
+    let chat = items.iter().find(|item| item.name == "chat").unwrap();
+    let entry_id = w.engine.startup_disable(&chat.id).unwrap();
+    assert_eq!(w.platform.reg_get(&user(), run, "Chat").unwrap(), None);
+    assert!(w.engine.startup_disable(&chat.id).is_err());
+
+    let restarted = engine_on(&w.journal_path, w.platform.clone(), w.runner.clone());
+    let disabled = restarted.startup_list().unwrap();
+    let chat = disabled.iter().find(|item| item.name == "chat").unwrap();
+    assert!(!chat.active);
+    assert_eq!(chat.disabled_entry.as_deref(), Some(entry_id.as_str()));
+    assert!(restarted.journal_undo(&entry_id, false).unwrap().ok);
+    assert_eq!(w.platform.reg_get(&user(), run, "Chat").unwrap(), Some(RegValue::String(r"C:\Chat\chat.exe".into())));
+}
+
+#[test]
+fn startup_restore_does_not_overwrite_a_new_value() {
+    let w = world();
+    let run = r"Software\Microsoft\Windows\CurrentVersion\Run";
+    w.platform.seed_value(&user(), run, "Chat", RegValue::String("old.exe".into()));
+    let id = w.engine.startup_list().unwrap()[0].id.clone();
+    let entry_id = w.engine.startup_disable(&id).unwrap();
+    w.platform.seed_value(&user(), run, "Chat", RegValue::String("new.exe".into()));
+    let result = w.engine.journal_undo(&entry_id, false).unwrap();
+    assert!(result.drift && !result.ok);
+    assert_eq!(w.platform.reg_get(&user(), run, "Chat").unwrap(), Some(RegValue::String("new.exe".into())));
+}
+
+#[test]
 fn fixture_catalog_passes_validation() {
     let data = fixture_data();
     let problems = catalog::validate(&data, &fixture_scripts(&data));

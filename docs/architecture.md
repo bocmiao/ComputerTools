@@ -325,6 +325,10 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `report_generate` | — | `string`（已脱敏的纯文本） |
 | `tool_run` | `id` | `ToolResult`（只能用于 `info`、`action` 小工具） |
 | `tool_open` | `id` | `null`（只能用于 `open` 小工具；打不开时返回错误字符串） |
+| `startup_list` | — | `StartupItem[]`（当前登录用户和所有用户的 Run 项，以及小药箱停用的项） |
+| `startup_disable` | `id` | `string`（修改日志条目 ID；仅接受当前列表中的项目 ID） |
+
+启动项操作只管理三个注册表 Run 路径：HKCU、HKLM 和 HKLM 的 32 位路径。停用前保存原值并删除 Run 值；恢复走 `journal_undo`，会核对该值是否被其他程序改过。任务计划、启动文件夹和任务管理器自己的启停状态不在此接口范围。
 
 TypeScript 类型如下（字段名是 camelCase，所有文本已经渲染成中文）：
 

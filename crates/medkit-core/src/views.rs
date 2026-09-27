@@ -220,6 +220,18 @@ pub struct ApplyResult {
     pub error: Option<String>,
 }
 
+/// 注册表 Run 项；disabled_entry 只表示由小药箱停用且仍可恢复的项。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupItem {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+    pub scope: String,
+    pub active: bool,
+    pub disabled_entry: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JournalEntryView {

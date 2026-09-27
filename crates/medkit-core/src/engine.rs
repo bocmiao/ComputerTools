@@ -5,7 +5,7 @@
 //! - 一个功能里的原语是一个整体，中途失败就把已改的按倒序退回；
 //! - 撤销前先核对当前值是否还是当初写进去的值，不是就提示「被改过」，由用户决定。
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -29,8 +29,8 @@ use crate::script::ScriptRunner;
 use crate::tools;
 use crate::views::{
     ApplyResult, CatalogSummary, CheckResult, FeatureState, FeatureStateKind, FeatureSummary, JournalEntryView,
-    JournalSession, Preview, PreviewChange, ProfileSummary, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo,
-    ToolOpens, ToolResult, ToolSummary, UndoResult,
+    JournalSession, Preview, PreviewChange, ProfileSummary, StartupItem, SymptomDetail, SymptomStep, SymptomSummary,
+    SystemInfo, ToolOpens, ToolResult, ToolSummary, UndoResult,
 };
 
 const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -38,6 +38,9 @@ const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
 const WIN11_BUILD: u32 = 22000;
 const RESTORE_POINT_TIMEOUT: Duration = Duration::from_secs(300);
 pub const RESTORE_POINT_SCRIPT: &str = "host/restore-point.ps1";
+const STARTUP_FEATURE: &str = "boot.startup-disable";
+const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+const WOW_RUN_KEY: &str = r"Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run";
 
 /// 一个原语没改成功。
 struct StepError {
@@ -742,7 +745,7 @@ impl Engine {
             {
                 continue;
             }
-            match self.apply_one(f, i, a) {
+            match self.apply_one(&f.id, i, a) {
                 Ok((rec, after)) => {
                     entry_ids.push(rec.id.clone());
                     done.push((rec, after));
@@ -779,7 +782,12 @@ impl Engine {
 
     /// 执行一个原语：先写 apply（原值），再改，再写 commit（结果）。
     /// 失败时返回（已写入的 apply 记录 ID，错误）。
-    fn apply_one(&self, f: &Feature, index: usize, a: &Action) -> std::result::Result<(ApplyRecord, State), StepError> {
+    fn apply_one(
+        &self,
+        feature_id: &str,
+        index: usize,
+        a: &Action,
+    ) -> std::result::Result<(ApplyRecord, State), StepError> {
         let desired = Desired::of(a).map_err(StepError::early)?;
         let (target, mut before) = self.current(a).map_err(StepError::early)?;
 
@@ -806,7 +814,7 @@ impl Engine {
             id: new_id(),
             session: self.session.clone(),
             time: now_rfc3339(),
-            feature: f.id.clone(),
+            feature: feature_id.to_owned(),
             action: index,
             target: target.clone(),
             before,
@@ -996,6 +1004,130 @@ impl Engine {
             }
         }
         Ok(())
+    }
+
+    // ───────────── 开机启动项 ─────────────
+
+    fn startup_locations(&self) -> [(RegRoot, &'static str, &'static str); 3] {
+        let user = self
+            .platform
+            .interactive_user()
+            .filter(|u| is_sid(&u.sid))
+            .map_or(RegRoot::CurrentUser, |u| RegRoot::User(u.sid));
+        [
+            (user, RUN_KEY, "当前用户"),
+            (RegRoot::LocalMachine, RUN_KEY, "所有用户"),
+            (RegRoot::LocalMachine, WOW_RUN_KEY, "所有用户（32 位）"),
+        ]
+    }
+
+    fn startup_id(root: &RegRoot, key: &str, name: &str) -> String {
+        hex::encode(format!(
+            "{}\0{}\0{}",
+            root.to_string().to_ascii_lowercase(),
+            key.to_ascii_lowercase(),
+            name.to_lowercase()
+        ))
+    }
+
+    fn startup_command(value: &RegValue) -> Option<&str> {
+        match value {
+            RegValue::String(s) | RegValue::ExpandString(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// 只管理常见的 Run 项。由小药箱停用的项从修改日志中显示，保留恢复入口。
+    pub fn startup_list(&self) -> Result<Vec<StartupItem>> {
+        let locations = self.startup_locations();
+        let mut items = BTreeMap::new();
+        for (root, key, scope) in &locations {
+            for (name, value) in self.platform.reg_values(root, key)? {
+                if name.is_empty() || name.contains('\0') {
+                    continue;
+                }
+                let Some(command) = Self::startup_command(&value) else {
+                    continue;
+                };
+                let id = Self::startup_id(root, key, &name);
+                items.insert(
+                    id.clone(),
+                    StartupItem {
+                        id,
+                        name,
+                        command: command.to_owned(),
+                        scope: (*scope).to_owned(),
+                        active: true,
+                        disabled_entry: None,
+                    },
+                );
+            }
+        }
+        for entry in self.journal.entries()? {
+            if entry.apply.feature != STARTUP_FEATURE || !self.can_undo(&entry) {
+                continue;
+            }
+            let (TargetRef::Registry { root, key, name }, State::Registry { value: Some(value), .. }) =
+                (&entry.apply.target, &entry.apply.before)
+            else {
+                continue;
+            };
+            let Some(command) = Self::startup_command(value) else {
+                continue;
+            };
+            let Some((_, _, scope)) = locations.iter().find(|(r, k, _)| r == root && k.eq_ignore_ascii_case(key))
+            else {
+                continue;
+            };
+            if self.platform.reg_get(root, key, name)?.is_some() {
+                continue;
+            }
+            let id = Self::startup_id(root, key, name);
+            items.insert(
+                id.clone(),
+                StartupItem {
+                    id,
+                    name: name.clone(),
+                    command: command.to_owned(),
+                    scope: (*scope).to_owned(),
+                    active: false,
+                    disabled_entry: Some(entry.apply.id),
+                },
+            );
+        }
+        Ok(items.into_values().collect())
+    }
+
+    /// 停用一个当前确实存在的 Run 项；修改前写日志，失败时自动恢复。
+    pub fn startup_disable(&self, id: &str) -> Result<String> {
+        let _guard = self.apply_lock.lock().unwrap();
+        let item = self
+            .startup_list()?
+            .into_iter()
+            .find(|item| item.id == id && item.active)
+            .ok_or_else(|| Error::Invalid("这个启动项已经不存在或已停用，请刷新列表。".to_owned()))?;
+        let (root, key, _) = self
+            .startup_locations()
+            .into_iter()
+            .find(|(root, key, _)| Self::startup_id(root, key, &item.name) == id)
+            .ok_or_else(|| Error::Invalid("找不到这个启动项。".to_owned()))?;
+        let prefix = if root == RegRoot::LocalMachine { "HKLM" } else { "HKCU" };
+        let action = Action::Registry(RegistryAction {
+            key: format!("{prefix}\\{key}"),
+            name: item.name,
+            value_type: None,
+            value: None,
+            delete: true,
+        });
+        let (target, state) = self.current(&action)?;
+        if !matches!(target, TargetRef::Registry { root: ref actual, .. } if actual == &root)
+            || !matches!(state, State::Registry { value: Some(ref value), .. }
+                if Self::startup_command(value) == Some(item.command.as_str()))
+        {
+            return Err(Error::Invalid("启动项刚刚被其他程序修改，请刷新列表。".to_owned()));
+        }
+        let (record, _) = self.apply_one(STARTUP_FEATURE, 0, &action).map_err(|step| step.error)?;
+        Ok(record.id)
     }
 
     // ───────────── 撤销 ─────────────
@@ -1272,10 +1404,13 @@ impl Engine {
         let mut sessions: Vec<JournalSession> = Vec::new();
         let mut index: HashMap<String, usize> = HashMap::new();
         for e in entries {
-            let feature_title = self
-                .catalog
-                .feature(&e.apply.feature)
-                .map_or_else(|| e.apply.feature.clone(), |f| f.title.get(&self.lang).to_owned());
+            let feature_title = if e.apply.feature == STARTUP_FEATURE {
+                "停用开机启动项".to_owned()
+            } else {
+                self.catalog
+                    .feature(&e.apply.feature)
+                    .map_or_else(|| e.apply.feature.clone(), |f| f.title.get(&self.lang).to_owned())
+            };
             let (ok, after, error) = match &e.commit {
                 Some(c) => (c.ok, c.after.as_ref().map(Self::state_label).unwrap_or_default(), c.error.clone()),
                 None => (
@@ -1287,6 +1422,9 @@ impl Engine {
             // 脚本类修改的原状态是脚本自己的数据（例如一段十六进制），给用户看没有意义，说清楚记没记下就行
             let saved_before = matches!(&e.apply.before, State::Script { data } if !data.is_null());
             let (before, after) = match (&e.apply.target, &e.commit) {
+                (TargetRef::Registry { .. }, _) if e.apply.feature == STARTUP_FEATURE => {
+                    ("启动命令已保存（可恢复）".to_owned(), if ok { "已停用自启" } else { "（状态不确定）" }.to_owned())
+                }
                 (TargetRef::Script { .. }, Some(c)) => {
                     let recorded = saved_before
                         || matches!(&c.after, Some(State::Script { data })

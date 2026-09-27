@@ -1,4 +1,4 @@
-//! 界面和后端的接线测试：用 Tauri 的 mock 运行时，把 14 个命令一个个真调一遍，
+//! 界面和后端的接线测试：用 Tauri 的 mock 运行时，把界面命令逐个真调一遍，
 //! 确认它们能过权限校验、能序列化成界面期望的 camelCase 结构。
 //!
 //! 引擎用的是真实的内嵌数据（catalog/）+ 假系统（MockPlatform / MockRunner），所以不碰真实系统。
@@ -164,6 +164,7 @@ fn every_command_is_reachable_and_well_shaped() {
     }
     // open：假系统上直接成功，返回 null
     assert!(ok(&win, "tool_open", json!({ "id": of_group("open") })).is_null());
+    assert!(ok(&win, "startup_list", json!({})).is_array());
 }
 
 #[test]
@@ -187,6 +188,7 @@ fn unknown_ids_come_back_as_string_errors() {
         ("feature_apply", json!({ "id": "nope" })),
         ("tool_run", json!({ "id": "nope" })),
         ("tool_open", json!({ "id": "nope" })),
+        ("startup_disable", json!({ "id": "nope" })),
     ] {
         let e = invoke(&win, cmd, args).unwrap_err();
         assert!(e.is_string(), "{cmd} 对未知 ID 应返回字符串错误，实际：{e}");

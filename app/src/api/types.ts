@@ -62,6 +62,11 @@ export interface UndoResult {
   reboot: Reboot               // 恢复以后要做什么才看得到效果；没恢复成功时是 'none'
 }
 
+export interface StartupItem {
+  id: string; name: string; command: string; scope: string
+  active: boolean; disabledEntry: string | null
+}
+
 // 小工具（第 11 节）
 export type ToolGroup = 'info' | 'action' | 'open'
 export type ToolOpens = 'program' | 'settings'

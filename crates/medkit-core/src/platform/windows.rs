@@ -392,6 +392,21 @@ fn edition_label(id: &str) -> &'static str {
 }
 
 impl Platform for WindowsPlatform {
+    fn reg_values(&self, root: &RegRoot, key: &str) -> PResult<Vec<(String, RegValue)>> {
+        let (base, path) = base(root, key);
+        let k = match base.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
+            Ok(k) => k,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(map_io(&format!("{root}\\{key}"), e)),
+        };
+        k.enum_values()
+            .map(|entry| {
+                let (name, value) = entry.map_err(|e| map_io(&format!("{root}\\{key}"), e))?;
+                Ok((name, from_winreg(&value)?))
+            })
+            .collect()
+    }
+
     fn reg_get(&self, root: &RegRoot, key: &str, name: &str) -> PResult<Option<RegValue>> {
         let (base, path) = base(root, key);
         let k = match base.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {

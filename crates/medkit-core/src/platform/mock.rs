@@ -115,6 +115,14 @@ impl MockPlatform {
 }
 
 impl Platform for MockPlatform {
+    fn reg_values(&self, root: &RegRoot, key: &str) -> PResult<Vec<(String, RegValue)>> {
+        let st = self.state.lock().unwrap();
+        Ok(st
+            .values
+            .get(&(root.clone(), norm(key)))
+            .map_or_else(Vec::new, |m| m.iter().map(|(name, value)| (name.clone(), value.clone())).collect()))
+    }
+
     fn reg_get(&self, root: &RegRoot, key: &str, name: &str) -> PResult<Option<RegValue>> {
         let st = self.state.lock().unwrap();
         Ok(st.values.get(&(root.clone(), norm(key))).and_then(|m| m.get(&name.to_ascii_lowercase())).cloned())

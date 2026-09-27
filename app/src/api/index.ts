@@ -9,6 +9,7 @@ import type {
   Preview,
   SymptomDetail,
   SystemInfo,
+  StartupItem,
   ToolResult,
   UndoResult,
 } from './types'
@@ -103,4 +104,14 @@ export function toolRun(id: string): Promise<ToolResult> {
 /** 打开一个系统自带的工具，或「设置」里的一页。打不开时 reject 一句说明（例如这台电脑上没有这个工具） */
 export function toolOpen(id: string): Promise<null> {
   return call('tool_open', { id })
+}
+
+/** 当前用户和所有用户的注册表 Run 启动项 */
+export function startupList(): Promise<StartupItem[]> {
+  return call('startup_list', {})
+}
+
+/** 停用一项并记录可恢复的快照 */
+export function startupDisable(id: string): Promise<string> {
+  return call('startup_disable', { id })
 }

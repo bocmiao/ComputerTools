@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
-import { runCheck, symptomDetail } from '../api'
-import type { ApplyResult, CheckResult, SymptomDetail, SymptomSummary } from '../api/types'
+import { journalUndo, runCheck, startupDisable, startupList, symptomDetail } from '../api'
+import type { ApplyResult, CheckResult, StartupItem, SymptomDetail, SymptomSummary } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
@@ -80,6 +80,11 @@ interface StepRun {
 const runs = ref<StepRun[]>([])
 const checking = ref(false)
 const checkedOnce = ref(false)
+const startupItems = ref<StartupItem[]>([])
+const startupLoading = ref(false)
+const startupError = ref<string | null>(null)
+const startupNotice = ref<string | null>(null)
+const startupBusy = ref<string | null>(null)
 /** 切换症状或返回列表时作废正在进行的检查 */
 let runToken = 0
 
@@ -91,18 +96,57 @@ async function open(id: string): Promise<void> {
   runs.value = []
   checking.value = false
   checkedOnce.value = false
+  startupItems.value = []
+  startupNotice.value = null
   const token = runToken
   try {
     const d = await symptomDetail(id)
     if (token !== runToken) return
     detail.value = d
     runs.value = d.steps.map(() => ({ state: 'pending', result: null, error: null }))
+    if (id === 'slow-boot') void loadStartup()
   } catch (e) {
     if (token !== runToken) return
     detailError.value = errorText(e)
   }
   await nextTick()
   detailHeading.value?.focus()
+}
+
+async function loadStartup(): Promise<void> {
+  startupLoading.value = true
+  startupError.value = null
+  try {
+    const items = await startupList()
+    if (selectedId.value === 'slow-boot') startupItems.value = items
+  } catch (e) {
+    if (selectedId.value === 'slow-boot') startupError.value = errorText(e)
+  } finally {
+    if (selectedId.value === 'slow-boot') startupLoading.value = false
+  }
+}
+
+async function changeStartup(item: StartupItem): Promise<void> {
+  if (startupBusy.value) return
+  startupBusy.value = item.id
+  startupError.value = null
+  startupNotice.value = null
+  try {
+    if (item.active) {
+      await startupDisable(item.id)
+      startupNotice.value = `已停用「${item.name}」的开机自启；软件本身仍可手动打开。`
+    } else if (item.disabledEntry) {
+      const result = await journalUndo(item.disabledEntry, false)
+      if (!result.ok) throw new Error(result.message + (result.error ? ` ${result.error}` : ''))
+      startupNotice.value = `已恢复「${item.name}」的开机自启。`
+    }
+    markHealthStale()
+    await loadStartup()
+  } catch (e) {
+    startupError.value = errorText(e)
+  } finally {
+    startupBusy.value = null
+  }
 }
 
 async function back(): Promise<void> {
@@ -432,6 +476,30 @@ watch(
           </ol>
         </section>
 
+        <section v-if="detail.id === 'slow-boot'" class="card block" aria-labelledby="startup-title">
+          <div class="steps-head">
+            <h2 id="startup-title" class="section-title">管理开机启动项</h2>
+            <button type="button" class="btn btn-secondary btn-small" :disabled="startupLoading || !!startupBusy" @click="loadStartup()">刷新列表</button>
+          </div>
+          <p class="muted small">这里只显示注册表 Run 启动项。停用后，软件仍在电脑上，也能手动打开；下次登录时不再通过这条记录自动启动。这里无法判断任务管理器此前是否已禁用某项；任务计划和启动文件夹里的项目也请在任务管理器中查看。</p>
+          <p v-if="startupLoading" class="loading-line" role="status"><BusySpinner size="small" />正在读取启动项…</p>
+          <p v-if="startupError" class="danger-text small" role="alert">{{ startupError }}</p>
+          <p v-if="startupNotice" class="small" role="status">{{ startupNotice }}</p>
+          <p v-if="!startupLoading && !startupError && startupItems.length === 0" class="muted small">没有找到可管理的 Run 启动项。</p>
+          <ul v-if="startupItems.length" class="fixes">
+            <li v-for="item in startupItems" :key="item.id" class="fix">
+              <div class="fix-main">
+                <p class="fix-title">{{ item.name }} <TagPill :tone="item.active ? 'info' : 'neutral'">{{ item.active ? 'Run 项存在' : '已停用' }}</TagPill></p>
+                <p class="muted small">{{ item.scope }}</p>
+                <p class="muted small startup-command" :title="item.command">{{ item.command }}</p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-small" :disabled="!!startupBusy" @click="changeStartup(item)">
+                <BusySpinner v-if="startupBusy === item.id" size="small" />{{ item.active ? '停用自启' : '恢复自启' }}
+              </button>
+            </li>
+          </ul>
+        </section>
+
         <section v-if="detail.guide" class="card block" aria-labelledby="guide-title">
           <h2 id="guide-title" class="section-title">手动步骤</h2>
           <p class="pre-text guide">{{ detail.guide }}</p>
@@ -585,6 +653,10 @@ watch(
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+}
+
+.startup-command {
+  overflow-wrap: anywhere;
 }
 
 .fix-title {
