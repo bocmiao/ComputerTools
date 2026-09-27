@@ -217,6 +217,22 @@ export function pdfReveal(): Promise<null> {
   return call('pdf_reveal', {})
 }
 
+/**
+ * 长图拼接：弹出系统的「另存为」对话框，把拼好的长图（JPG 或 PNG）存到用户选的地方。
+ * 返回存好的完整路径；用户点了「取消」返回 null。内容直接作为二进制请求体传，建议的文件名按 URL 编码放进请求头。
+ */
+export function longImageSave(name: string, bytes: Uint8Array): Promise<string | null> {
+  if (isTauri()) {
+    return invoke<string | null>('long_image_save', bytes, { headers: { 'x-medkit-name': encodeURIComponent(name) } })
+  }
+  return callMock('long_image_save', { name, bytes })
+}
+
+/** 长图拼接：在资源管理器里显示刚存好的长图 */
+export function longImageReveal(): Promise<null> {
+  return call('long_image_reveal', {})
+}
+
 /** U 盘里的文件不见了：用系统的选择框选 U 盘（系统盘不行），列出被藏起来的东西；取消返回 null */
 export function hiddenPickFolder(): Promise<HiddenReport | null> {
   return call('hidden_pick_folder', {})

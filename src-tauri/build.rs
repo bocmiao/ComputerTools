@@ -33,6 +33,8 @@ const COMMANDS: &[&str] = &[
     "image_open_folder",
     "pdf_save",
     "pdf_reveal",
+    "long_image_save",
+    "long_image_reveal",
     "hidden_pick_folder",
     "hidden_rescan",
     "hidden_restore",

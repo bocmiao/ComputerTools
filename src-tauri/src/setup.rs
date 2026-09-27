@@ -24,6 +24,7 @@ pub struct AppState {
     pub images: Arc<Mutex<crate::images::ImageState>>,
     /// 「图片合成 PDF」最近一次存好的文件
     pub pdf: Arc<Mutex<crate::pdf::PdfState>>,
+    pub long_image: Arc<Mutex<crate::long_image::LongImageState>>,
     /// 「U 盘里的文件不见了」选的文件夹、最近一次结果和能撤销的改动
     pub hidden: Arc<Mutex<crate::hidden::HiddenState>>,
     /// 硬盘测速：正在测的时候锁着，同一时间只测一个
@@ -43,6 +44,7 @@ pub fn init() -> AppState {
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
         pdf: Arc::new(Mutex::new(Default::default())),
+        long_image: Arc::new(Mutex::new(Default::default())),
         hidden: Arc::new(Mutex::new(Default::default())),
         disk_speed: Arc::new(Mutex::new(())),
         awake: Arc::new(Mutex::new(Default::default())),
@@ -256,6 +258,7 @@ pub fn test_state() -> AppState {
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
         pdf: Arc::new(Mutex::new(Default::default())),
+        long_image: Arc::new(Mutex::new(Default::default())),
         hidden: Arc::new(Mutex::new(Default::default())),
         disk_speed: Arc::new(Mutex::new(())),
         awake: Arc::new(Mutex::new(Default::default())),

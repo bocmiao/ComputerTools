@@ -5,6 +5,8 @@
 //! - 只收开头是 `%PDF-`、最后有 `%%EOF` 的内容，最大 [`MAX_BYTES`]；
 //! - 选的名字不是 .pdf 结尾的，后面补上 .pdf；补出来的名字已经有文件了就不存（对话框没问过要不要替换它）；
 //! - 先写进同一个文件夹里的临时文件，写完再换上正式的名字：写到一半失败时，原来的同名文件不受影响。
+//!
+//! 长图拼接（long_image.rs）存 JPG、PNG 也用这里的 [`target_with`] 和 [`write`]。
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -40,11 +42,17 @@ pub fn check(bytes: &[u8]) -> Result<(), String> {
 
 /// 对话框返回的路径：不是 .pdf 结尾的补上 .pdf。第二个值说明对话框有没有就这个名字问过要不要替换。
 pub fn target(chosen: PathBuf) -> (PathBuf, bool) {
-    if chosen.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
+    target_with(chosen, &["pdf"])
+}
+
+/// 同上，扩展名是 `extensions` 里的任何一个都行（不分大小写），都不是就补上第一个。
+pub fn target_with(chosen: PathBuf, extensions: &[&str]) -> (PathBuf, bool) {
+    if chosen.extension().is_some_and(|e| extensions.iter().any(|x| e.eq_ignore_ascii_case(x))) {
         return (chosen, true);
     }
     let mut name = chosen.into_os_string();
-    name.push(".pdf");
+    name.push(".");
+    name.push(extensions.first().copied().unwrap_or("pdf"));
     (PathBuf::from(name), false)
 }
 
@@ -122,6 +130,9 @@ mod tests {
         assert_eq!(target(PathBuf::from("材料.PDF")), (PathBuf::from("材料.PDF"), true));
         assert_eq!(target(PathBuf::from("材料")), (PathBuf::from("材料.pdf"), false));
         assert_eq!(target(PathBuf::from("材料.jpg")), (PathBuf::from("材料.jpg.pdf"), false));
+        assert_eq!(target_with(PathBuf::from("长图.JPEG"), &["jpg", "jpeg"]), (PathBuf::from("长图.JPEG"), true));
+        assert_eq!(target_with(PathBuf::from("长图"), &["jpg", "jpeg"]), (PathBuf::from("长图.jpg"), false));
+        assert_eq!(target_with(PathBuf::from("长图.jpg"), &["png"]), (PathBuf::from("长图.jpg.png"), false));
 
         let d = Dir::new("extension");
         fs::write(d.0.join("材料.pdf"), b"old").unwrap();

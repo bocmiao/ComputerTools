@@ -341,6 +341,27 @@ fn pdf_commands_pass_the_permission_check() {
     assert!(invoke_body(&win, "pdf_save", InvokeBody::Raw(pdf), headers).unwrap().is_null());
 }
 
+/// 长图拼接的命令也要登记进权限清单；图片内容走二进制请求体，存到哪里只能在系统的「另存为」对话框里选。
+#[test]
+fn long_image_commands_pass_the_permission_check() {
+    let win = app();
+    let e = invoke(&win, "long_image_reveal", json!({})).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("还没有存过长图")), "{e}");
+
+    let mut headers = tauri::http::HeaderMap::new();
+    headers.insert("x-medkit-name", "%E9%95%BF%E5%9B%BE.jpg".parse().unwrap());
+    // 用 JSON 传图片内容不行
+    let e = invoke(&win, "long_image_save", json!({ "bytes": [255, 216, 255] })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("二进制")), "{e}");
+    // 不是 JPG、PNG 的不存，也不弹对话框
+    let e = invoke_body(&win, "long_image_save", InvokeBody::Raw(b"%PDF-1.4\n%%EOF".to_vec()), headers.clone())
+        .unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("不是 JPG 或 PNG")), "{e}");
+    // mock 运行时里没有「另存为」对话框：和点了「取消」一样返回 null
+    let jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0xFF, 0xD9];
+    assert!(invoke_body(&win, "long_image_save", InvokeBody::Raw(jpeg), headers).unwrap().is_null());
+}
+
 /// 「U 盘里的文件不见了」的命令也要登记进权限清单；U 盘只能在系统的选择框里选，界面只传结果里的编号。
 #[test]
 fn hidden_file_commands_pass_the_permission_check() {

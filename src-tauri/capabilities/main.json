@@ -34,6 +34,8 @@
     "allow-image-open-folder",
     "allow-pdf-save",
     "allow-pdf-reveal",
+    "allow-long-image-save",
+    "allow-long-image-reveal",
     "allow-hidden-pick-folder",
     "allow-hidden-rescan",
     "allow-hidden-restore",

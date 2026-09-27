@@ -350,6 +350,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `image_open_folder` | — | `null`（按「文件夹」类型交给资源管理器打开选定的保存目录） |
 | `pdf_save` | 请求体是界面拼好的 PDF（二进制）；请求头 `x-medkit-name`（URL 编码的建议文件名） | `string \| null`（弹出系统的「另存为」对话框，存到用户选的地方，返回完整路径；点了取消返回 null。只收开头是 `%PDF-`、最后有 `%%EOF` 的内容；先写临时文件再换名，写失败时原来的同名文件不受影响；选的名字不是 .pdf 结尾的补上 .pdf，补出来的名字已经有文件时不存） |
 | `pdf_reveal` | — | `null`（在资源管理器里打开刚存好的 PDF 所在的文件夹并选中它） |
+| `long_image_save` | 请求体是界面拼好的长图（JPG 或 PNG，二进制）；请求头 `x-medkit-name`（URL 编码的建议文件名） | `string \| null`（弹出系统的「另存为」对话框，只列这一种图片，建议的名字换成它的扩展名；存到用户选的地方，返回完整路径；点了取消返回 null。只收完整的 JPG（FF D8 FF 开头、FF D9 结尾）和 PNG（签名开头、IEND 结尾），最大 300 MB；存法和 `pdf_save` 一样：先写临时文件再换名，选的名字没有扩展名时补上，补出来的名字已经有文件时不存） |
+| `long_image_reveal` | — | `null`（在资源管理器里打开刚存好的长图所在的文件夹并选中它） |
 | `hidden_pick_folder` | — | `HiddenReport \| null`（用系统的文件夹选择框选 U 盘；Windows 所在的盘报错。列出所选文件夹里直接的、带隐藏或系统属性的文件和文件夹，被藏起来的程序和脚本文件、病毒放的快捷方式单独列出；取消返回 null） |
 | `hidden_rescan` | — | `HiddenReport \| null`（把上次选的再查一遍；没选过返回 null） |
 | `hidden_restore` | `ids`（结果里的编号） | `HiddenRestore`（去掉这些文件、文件夹连同里面一切的隐藏、系统属性，原来带着的也去掉只读；程序和脚本文件照样藏着；原属性都记下来，返回改了多少和重新查的结果） |

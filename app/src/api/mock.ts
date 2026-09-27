@@ -2345,6 +2345,18 @@ const handlers: Handlers = {
     if (!demoPdfSaved) throw '还没有存过 PDF。'
     return null
   },
+  long_image_save: ({ name, bytes }) => {
+    // 和后端一样只收完整的 JPG、PNG
+    const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+    const png = bytes[0] === 0x89 && new TextDecoder().decode(bytes.subarray(1, 4)) === 'PNG'
+    if (!jpeg && !png) throw '内容不是 JPG 或 PNG 图片，没有保存。'
+    demoLongImageSaved = true
+    return `${DEMO_IMAGE_FOLDER}\\${name}`
+  },
+  long_image_reveal: () => {
+    if (!demoLongImageSaved) throw '还没有存过长图。'
+    return null
+  },
   lockers_pick_files: () => {
     demoLockTarget = 'files'
     demoLockClosed = false
@@ -2523,6 +2535,7 @@ let demoShutdown: { at: number; restart: boolean } | null = null
 // ── 图片批量处理的演示（浏览器里真的处理图片，但不保存）──
 const DEMO_IMAGE_FOLDER = '演示文件夹（浏览器里不会真的保存）'
 let demoPdfSaved = false
+let demoLongImageSaved = false
 let demoImageFolder = false
 const demoSaved = new Set<string>()
 
