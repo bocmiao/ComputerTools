@@ -7,6 +7,7 @@ import type {
   FeatureState,
   FileLockReport,
   JournalSession,
+  NewMenuItem,
   Preview,
   RenamePreview,
   RenameRules,
@@ -47,6 +48,8 @@ export type CommandMap = {
   startup_set: { args: { id: string; enabled: boolean }; result: ApplyResult }
   context_menu_list: { args: NoArgs; result: ContextMenuItem[] }
   context_menu_set: { args: { id: string; visible: boolean }; result: ApplyResult }
+  new_menu_list: { args: NoArgs; result: NewMenuItem[] }
+  new_menu_set: { args: { id: string; visible: boolean }; result: ApplyResult }
   rename_select_folder: { args: NoArgs; result: string | null }
   rename_preview: { args: { rules: RenameRules }; result: RenamePreview }
   rename_apply: { args: NoArgs; result: number }

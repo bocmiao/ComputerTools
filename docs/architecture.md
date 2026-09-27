@@ -339,6 +339,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `startup_set` | `id`、`enabled` | `ApplyResult`（停用或恢复；只接受最近一次列表里的 ID，记进修改日志） |
 | `context_menu_list` | — | `ContextMenuItem[]`（右键菜单里第三方软件加的命令、外壳扩展和 Windows 11 新菜单里应用的项目，显示不显示由引擎自己读） |
 | `context_menu_set` | `id`、`visible` | `ApplyResult`（拿掉或恢复；只接受最近一次列表里的 ID，记进修改日志；外壳扩展和应用的项目 `reboot` 为 `explorer`） |
+| `new_menu_list` | — | `NewMenuItem[]`（右键「新建」菜单里的项：扩展名下的 ShellNew 键，机器的和登录用户的；文件夹、快捷方式、库不列；显示不显示由引擎按注册表里现在的值读） |
+| `new_menu_set` | `id`（扩展名）、`visible` | `ApplyResult`（关掉：把 FileName、Command、Data、NullFile、Handler 这几个值改名成 `MedkitHidden.<原名>`，类型和数据不变；恢复：改回来。扩展名下所有 ShellNew 键一起改，每个值写新名字、删旧名字两条修改日志；只接受最近一次列表里的 ID；改完删掉资源管理器的「新建」菜单缓存，不记进日志） |
 | `rename_select_folder` | — | `string \| null`（系统对话框选定的目录；取消返回 null） |
 | `rename_preview` | `rules` | `RenamePreview`（最多 500 个直属普通文件的原名、新名、名字变不变；不处理的文件数） |
 | `rename_apply` | — | `number`（执行已预览、文件夹没有变化的改名，返回改了几个） |

@@ -95,6 +95,16 @@ export interface ContextMenuItem {
   note: string                 // 补充说明，没有是空的
 }
 
+/** 右键「新建」菜单里的一项（软件加的「新建 Word 文档」这类，也有 Windows 自带的） */
+export interface NewMenuItem {
+  id: string                   // 扩展名（小写），改开关时原样传回
+  title: string                // 菜单上的字
+  ext: string
+  windowsOwn: boolean          // Windows 自带的（位图图像、文本文档、压缩文件夹这类）
+  location: string             // 「所有用户」「当前用户」「所有用户和当前用户」
+  visible: boolean             // 现在在菜单里显示不显示
+}
+
 /** 别让电脑自己睡着：只在小药箱开着时有效 */
 export interface AwakeStatus { on: boolean; display: boolean }
 

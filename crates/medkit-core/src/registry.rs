@@ -135,6 +135,21 @@ impl RegValue {
         })
     }
 
+    /// 反过来：数据文件里的 `type` 和 `value`（原样复制一个值时用，`from_spec` 读回来还是它）。
+    pub fn to_spec(&self) -> (RegType, serde_json::Value) {
+        use serde_json::Value as J;
+        match self {
+            Self::Dword(n) => (RegType::Dword, J::from(*n)),
+            Self::Qword(n) => (RegType::Qword, J::from(*n)),
+            Self::String(s) => (RegType::String, J::String(s.clone())),
+            Self::ExpandString(s) => (RegType::ExpandString, J::String(s.clone())),
+            Self::MultiString(items) => {
+                (RegType::MultiString, J::Array(items.iter().cloned().map(J::String).collect()))
+            }
+            Self::Binary(bytes) => (RegType::Binary, J::String(hex::encode(bytes))),
+        }
+    }
+
     pub fn type_name(&self) -> &'static str {
         match self {
             Self::Dword(_) => "dword",
@@ -184,6 +199,21 @@ mod hex_bytes {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn to_spec_reads_back_as_the_same_value() {
+        for v in [
+            RegValue::Dword(u32::MAX),
+            RegValue::Qword(u64::MAX),
+            RegValue::String(String::new()),
+            RegValue::ExpandString(r"@%SystemRoot%\system32\notepad.exe,-470".to_owned()),
+            RegValue::MultiString(vec!["a".to_owned(), String::new()]),
+            RegValue::Binary(vec![0x50, 0x4b, 0x05, 0x06, 0x00]),
+        ] {
+            let (t, j) = v.to_spec();
+            assert_eq!(RegValue::from_spec(t, &j).unwrap(), v);
+        }
+    }
+
     use super::*;
     use serde_json::json;
 

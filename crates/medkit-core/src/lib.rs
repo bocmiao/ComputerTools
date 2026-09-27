@@ -20,6 +20,7 @@ pub mod journal;
 pub mod lint;
 pub mod lockers;
 pub mod model;
+pub mod new_menu;
 pub mod platform;
 pub mod registry;
 pub mod render;

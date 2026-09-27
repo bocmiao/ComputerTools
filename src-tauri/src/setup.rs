@@ -224,9 +224,10 @@ mod os {
 
     pub fn backend(_scripts: PathBuf, _manifest: ScriptManifest) -> (Arc<dyn Platform>, Arc<dyn ScriptRunner>) {
         let runner = MockRunner::new();
-        // 假系统上没有开机启动项，右键菜单里也没有软件加的项目
+        // 假系统上没有开机启动项，右键菜单和「新建」菜单里也没有软件加的项目
         runner.returns(medkit_core::startup::LIST_SCRIPT, serde_json::json!({ "result": "ok", "items": [] }));
         runner.returns(medkit_core::context_menu::LIST_SCRIPT, serde_json::json!({ "result": "ok", "items": [] }));
+        runner.returns(medkit_core::new_menu::LIST_SCRIPT, serde_json::json!({ "result": "ok", "items": [] }));
         (Arc::new(MockPlatform::new()), Arc::new(runner))
     }
 

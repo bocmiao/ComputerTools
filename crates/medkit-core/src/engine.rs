@@ -22,6 +22,7 @@ use crate::journal::{
 use crate::model::{
     Action, Check, Feature, RegType, RegistryAction, Risk, StartType, Status, Symptom, Target, Tool, ToolGroup, Undo,
 };
+use crate::new_menu;
 use crate::platform::{OpenRequest, Platform, PlatformError};
 use crate::registry::{RegRoot, RegValue, SpecRoot, display_opt, is_sid, key_ancestors, split_key};
 use crate::render::render;
@@ -31,9 +32,9 @@ use crate::startup;
 use crate::tools;
 use crate::views::{
     ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, ContextMenuKind, FeatureState, FeatureStateKind,
-    FeatureSummary, FileLockReport, JournalEntryView, JournalSession, Preview, PreviewChange, ProfileSummary,
-    StartupItem, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo, ToolOpens, ToolResult, ToolSummary,
-    UndoResult,
+    FeatureSummary, FileLockReport, JournalEntryView, JournalSession, NewMenuItem, Preview, PreviewChange,
+    ProfileSummary, StartupItem, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo, ToolOpens, ToolResult,
+    ToolSummary, UndoResult,
 };
 
 const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -47,6 +48,7 @@ const LEGACY_STARTUP_FEATURE: &str = "boot.startup-disable";
 const STARTUP_LIST_TIMEOUT: Duration = Duration::from_secs(90);
 /// 列右键菜单要查程序的签名、读应用清单；脚本自己有时间上限，这里再留些余量
 const CONTEXT_MENU_LIST_TIMEOUT: Duration = Duration::from_secs(120);
+const NEW_MENU_LIST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// 一个原语没改成功。
 struct StepError {
@@ -123,6 +125,8 @@ pub struct Engine {
     startup_items: Mutex<Vec<startup::RawItem>>,
     /// 最近一次列出的右键菜单项目：改开关时只认这里面有的
     context_menu: Mutex<Vec<context_menu::Group>>,
+    /// 最近一次列出的「新建」菜单项目：改开关时只认这里面有的
+    new_menu: Mutex<Vec<new_menu::Group>>,
 }
 
 impl Engine {
@@ -150,6 +154,7 @@ impl Engine {
             local_offset: time::UtcOffset::current_local_offset().ok(),
             startup_items: Mutex::new(Vec::new()),
             context_menu: Mutex::new(Vec::new()),
+            new_menu: Mutex::new(Vec::new()),
         }
     }
 
@@ -1411,6 +1416,180 @@ impl Engine {
         }
     }
 
+    // ───────────── 「新建」菜单 ─────────────
+
+    /// 「新建」菜单里的项（软件加的和 Windows 自带的），按名字排好。
+    pub fn new_menu_list(&self) -> Result<Vec<NewMenuItem>> {
+        let mut args = Map::new();
+        args.insert("UserHive".into(), Value::String(self.user_hive()));
+        let v = self
+            .runner
+            .run(new_menu::LIST_SCRIPT, &args, NEW_MENU_LIST_TIMEOUT)
+            .map_err(|e| Error::Invalid(format!("没能列出「新建」菜单：{e}")))?;
+        let groups = new_menu::group(new_menu::parse_list(&v).map_err(Error::Invalid)?);
+        let mut items = Vec::with_capacity(groups.len());
+        for g in &groups {
+            items.push(NewMenuItem {
+                id: g.ext.clone(),
+                title: self.new_menu_title(g),
+                ext: g.ext.clone(),
+                windows_own: g.windows_own(),
+                location: g.scope().to_owned(),
+                // 按注册表里现在的值（和改开关时用的是同一个判断）
+                visible: self.new_menu_visible(g)?,
+            });
+        }
+        items.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+        *self.new_menu.lock().unwrap() = groups;
+        Ok(items)
+    }
+
+    /// 从「新建」菜单里关掉（`visible` 为 false）或者恢复一项，记进修改日志，能撤销。只认最近一次列出来的项目。
+    pub fn new_menu_set(&self, id: &str, visible: bool) -> Result<ApplyResult> {
+        let _guard = self.apply_lock.lock().unwrap();
+        let group = self
+            .new_menu
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|g| g.ext == id)
+            .cloned()
+            .ok_or_else(|| Error::Invalid("这一项不在刚才的列表里了，请刷新一下再试。".to_owned()))?;
+        let mut r = ApplyResult {
+            feature: new_menu::FEATURE_ID.to_owned(),
+            session_id: self.session.clone(),
+            entry_ids: Vec::new(),
+            ok: true,
+            verified: FeatureStateKind::Applied,
+            message: "本来就是这样，不用改。".to_owned(),
+            reboot: crate::model::Reboot::None,
+            notes: Vec::new(),
+            error: None,
+        };
+        if self.new_menu_visible(&group)? == visible {
+            return Ok(r);
+        }
+        // 关掉：让它出现的值改名；恢复：改回来。按键里现在的值来（列表可能是一会儿以前的）
+        let mut actions = Vec::new();
+        for loc in &group.locations {
+            let key = loc.key();
+            for name in new_menu::DEFINING {
+                let (from, to) = if visible {
+                    (new_menu::hidden_name(name), (*name).to_owned())
+                } else {
+                    ((*name).to_owned(), new_menu::hidden_name(name))
+                };
+                let Some(value) = self.new_menu_value(&key, &from)? else {
+                    continue;
+                };
+                // 恢复时原来的名字已经有值了（软件自己又写了一遍）：留着它，只删掉改过名的
+                if !(visible && self.new_menu_value(&key, &to)?.is_some()) {
+                    actions.push(Self::value_action(&key, &to, Some(&value)));
+                }
+                actions.push(Self::value_action(&key, &from, None));
+            }
+        }
+        let (entry_ids, failure) = self.apply_actions(new_menu::FEATURE_ID, &actions);
+        r.entry_ids = entry_ids;
+        if let Some(failed) = failure {
+            r.ok = false;
+            r.verified = FeatureStateKind::Unknown;
+            r.message = if failed.rolled_back {
+                "没有改成功，已经退回原样。".to_owned()
+            } else {
+                "没有改成功，而且改动没能自动退回，请在修改日志里手动恢复。".to_owned()
+            };
+            r.error = Some(failed.error.to_string());
+            return Ok(r);
+        }
+        self.clear_new_menu_cache();
+        if self.new_menu_visible(&group)? != visible {
+            r.verified = FeatureStateKind::NotApplied;
+        }
+        r.message = if visible {
+            "已经恢复了，下次在右键「新建」里就能看到。"
+        } else {
+            "已经从右键「新建」菜单里拿掉了。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。"
+        }
+        .to_owned();
+        Ok(r)
+    }
+
+    /// 菜单上的字：MenuText、ItemName、类型名，`@…` 解开，去掉快捷键的 `&`；都没有就用扩展名。
+    fn new_menu_title(&self, g: &new_menu::Group) -> String {
+        [&g.menu_text, &g.item_name, &g.type_name]
+            .into_iter()
+            .find_map(|text| {
+                let text = text.trim();
+                let resolved =
+                    if text.starts_with('@') { self.platform.indirect_string(text)? } else { text.to_owned() };
+                let clean = context_menu::strip_accelerator(&resolved);
+                (!clean.is_empty() && clean.chars().count() <= 80).then_some(clean)
+            })
+            .unwrap_or_else(|| g.ext.clone())
+    }
+
+    /// 现在显示不显示：资源管理器用的键里（按注册表里现在的值）有没有让它出现的值
+    fn new_menu_visible(&self, g: &new_menu::Group) -> Result<bool> {
+        for loc in g.locations.iter().filter(|l| l.counts(&g.current_progid)) {
+            for name in new_menu::DEFINING {
+                if self.new_menu_value(&loc.key(), name)?.is_some() {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    fn new_menu_value(&self, key: &str, name: &str) -> Result<Option<RegValue>> {
+        Ok(match self.current(&Self::value_action(key, name, None))?.1 {
+            State::Registry { value, .. } => value,
+            _ => None,
+        })
+    }
+
+    /// 写一个值（`value` 给了），或者删掉它。
+    fn value_action(key: &str, name: &str, value: Option<&RegValue>) -> Action {
+        let spec = value.map(RegValue::to_spec);
+        Action::Registry(RegistryAction {
+            key: key.to_owned(),
+            name: name.to_owned(),
+            delete: spec.is_none(),
+            value_type: spec.as_ref().map(|(t, _)| *t),
+            value: spec.map(|(_, v)| v),
+        })
+    }
+
+    /// 删掉资源管理器对「新建」菜单的缓存（它下次打开菜单时重建），不记进修改日志：缓存不是设置。删不掉也不要紧。
+    fn clear_new_menu_cache(&self) {
+        let key = format!(r"HKCU\{}", new_menu::CACHE_KEY);
+        for name in new_menu::CACHE_VALUES {
+            let Action::Registry(action) = Self::value_action(&key, name, None) else {
+                continue;
+            };
+            if let Ok((root, sub)) = self.resolve_registry(&action) {
+                let _ = self.platform.reg_delete_value(&root, &sub, name);
+            }
+        }
+    }
+
+    fn new_menu_journal_title(&self, key: &str) -> String {
+        let Some(ext) = new_menu::ext_of_key(key) else {
+            return key.to_owned();
+        };
+        let cached = self.new_menu.lock().unwrap().iter().find(|g| g.ext == ext).cloned();
+        cached.map_or(ext, |g| self.new_menu_title(&g))
+    }
+
+    /// 修改日志里「新建」菜单开关的状态：原来的值在是「显示」，改过名的值在是「不显示」。
+    fn new_menu_state_label(state: &State, renamed: bool) -> String {
+        match state {
+            State::Registry { value, .. } if value.is_some() != renamed => "显示".to_owned(),
+            State::Registry { .. } => "不显示（已关掉）".to_owned(),
+            other => Self::state_label(other),
+        }
+    }
+
     // ───────────── 撤销 ─────────────
 
     /// 把一条修改恢复成 before（不做漂移检查，不写日志）。
@@ -1691,11 +1870,18 @@ impl Engine {
             // 右键菜单的开关也一样：标题用项目的名字，状态说「显示 / 不显示」
             let menu_entry = e.apply.feature == context_menu::FEATURE_ID
                 && matches!(&e.apply.target, TargetRef::Registry { key, name, .. } if context_menu::is_menu_target(key, name));
+            // 「新建」菜单也一样；一次开关是改名，写新名字、删旧名字两条，状态都说「显示 / 不显示」
+            let new_menu_entry = e.apply.feature == new_menu::FEATURE_ID
+                && matches!(&e.apply.target, TargetRef::Registry { key, name, .. } if new_menu::is_new_menu_target(key, name));
+            let renamed =
+                matches!(&e.apply.target, TargetRef::Registry { name, .. } if new_menu::original_name(name).is_some());
             let label = |s: &State| {
                 if startup_entry {
                     Self::startup_state_label(s)
                 } else if menu_entry {
                     Self::menu_state_label(s)
+                } else if new_menu_entry {
+                    Self::new_menu_state_label(s, renamed)
                 } else {
                     Self::state_label(s)
                 }
@@ -1704,6 +1890,9 @@ impl Engine {
                 TargetRef::Registry { name, .. } if startup_entry => format!("开机启动项：{name}"),
                 TargetRef::Registry { key, name, .. } if menu_entry => {
                     format!("右键菜单：{}", self.menu_journal_title(key, name))
+                }
+                TargetRef::Registry { key, .. } if new_menu_entry => {
+                    format!("「新建」菜单：{}", self.new_menu_journal_title(key))
                 }
                 _ if e.apply.feature == LEGACY_STARTUP_FEATURE => "停用开机启动项".to_owned(),
                 _ => self

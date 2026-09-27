@@ -317,6 +317,23 @@ pub struct ContextMenuItem {
     pub note: String,
 }
 
+/// 「新建」菜单里的一项（软件加的「新建 Word 文档」这类）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewMenuItem {
+    /// 扩展名（小写），改开关时原样传回来
+    pub id: String,
+    /// 菜单上的字
+    pub title: String,
+    pub ext: String,
+    /// Windows 自带的（位图图像、文本文档、压缩文件夹这类）
+    pub windows_own: bool,
+    /// 在谁的注册表里：「所有用户」「当前用户」「所有用户和当前用户」
+    pub location: String,
+    /// 现在在菜单里显示不显示
+    pub visible: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JournalEntryView {

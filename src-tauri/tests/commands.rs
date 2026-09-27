@@ -261,6 +261,14 @@ fn context_menu_commands_pass_the_permission_check() {
     assert!(e.as_str().is_some_and(|m| m.contains("不在刚才的列表里")), "{e}");
 }
 
+#[test]
+fn new_menu_commands_pass_the_permission_check() {
+    let win = app();
+    assert!(ok(&win, "new_menu_list", json!({})).is_array());
+    let e = invoke(&win, "new_menu_set", json!({ "id": ".nope", "visible": false })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("不在刚才的列表里")), "{e}");
+}
+
 /// 批量重命名的命令也要登记进权限清单（以前漏了，真程序里一点就报「不允许」）。
 #[test]
 fn rename_commands_pass_the_permission_check() {

@@ -311,6 +311,7 @@ pub fn scope_labels(entries: &[RawEntry]) -> Vec<String> {
 
 /// 菜单上的字去掉快捷键标记（`&E` 的 `&`；`&&` 是真的 `&`）。
 pub fn strip_accelerator(text: &str) -> String {
+    let text = without_bracketed_accelerator(text);
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
@@ -324,6 +325,24 @@ pub fn strip_accelerator(text: &str) -> String {
         out.push(c);
     }
     out.trim().to_owned()
+}
+
+/// 中文、日文菜单把快捷键写在最后的括号里：「打开(&O)」「新建(&W)」。整个括号去掉。
+fn without_bracketed_accelerator(text: &str) -> &str {
+    let t = text.trim_end();
+    for (open, close) in [('(', ')'), ('（', '）')] {
+        let Some(rest) = t.strip_suffix(close) else {
+            continue;
+        };
+        let mut back = rest.chars().rev();
+        if let (Some(key), Some('&'), Some(o)) = (back.next(), back.next(), back.next())
+            && o == open
+            && key != '&'
+        {
+            return rest[..rest.len() - key.len_utf8() - 1 - open.len_utf8()].trim_end();
+        }
+    }
+    t
 }
 
 /// 应用清单里的 DisplayName 是 `ms-resource:` 时，拼成 SHLoadIndirectString 认的样子。
@@ -463,6 +482,11 @@ mod tests {
         assert_eq!(strip_accelerator("Edit with &Notepad++"), "Edit with Notepad++");
         assert_eq!(strip_accelerator("Save && Exit"), "Save & Exit");
         assert_eq!(strip_accelerator("用 360 &强力删除"), "用 360 强力删除");
+        assert_eq!(strip_accelerator("用记事本打开(&N)"), "用记事本打开");
+        assert_eq!(strip_accelerator("XMind 思维导图（&X）"), "XMind 思维导图");
+        assert_eq!(strip_accelerator("预览(&V) "), "预览");
+        assert_eq!(strip_accelerator("Tom && Jerry(&&)"), "Tom & Jerry(&)", "&& 是字面的 &，不是快捷键");
+        assert_eq!(strip_accelerator("(&A)"), "");
         assert_eq!(
             package_resource("ms-resource:AppName", "NanaZip_5.0.1252.0_x64__gnj4mf6z9tkrc", "NanaZip").as_deref(),
             Some("@{NanaZip_5.0.1252.0_x64__gnj4mf6z9tkrc?ms-resource://NanaZip/Resources/AppName}")

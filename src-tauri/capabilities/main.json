@@ -23,6 +23,8 @@
     "allow-startup-set",
     "allow-context-menu-list",
     "allow-context-menu-set",
+    "allow-new-menu-list",
+    "allow-new-menu-set",
     "allow-rename-select-folder",
     "allow-rename-preview",
     "allow-rename-apply",

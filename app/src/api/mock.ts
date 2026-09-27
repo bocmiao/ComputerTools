@@ -34,14 +34,15 @@ import type {
   FeatureSummary,
   FileLockReport,
   FileLockUser,
-  SpaceReport,
   JournalEntryView,
   JournalSession,
+  NewMenuItem,
   Preview,
+  SpaceReport,
+  StartupItem,
   Status,
   SymptomDetail,
   SystemInfo,
-  StartupItem,
   ToolResult,
   ToolRow,
   ToolSection,
@@ -1976,6 +1977,19 @@ for (const item of startupMock) values.set(`startup:${item.id}`, item.enabled ? 
 // ── 右键菜单里软件加的项目（演示）──
 const MENU_SHOWN = '显示'
 const MENU_HIDDEN = '不显示（已拿掉）'
+// 「新建」菜单（演示）：WPS、XMind 加的和 Windows 自带的几项
+const NEW_MENU_SHOWN = '显示'
+const NEW_MENU_HIDDEN = '不显示（已关掉）'
+const newMenuMock: NewMenuItem[] = [
+  { id: '.docx', title: 'DOCX 文档', ext: '.docx', windowsOwn: false, location: '所有用户', visible: true },
+  { id: '.xlsx', title: 'XLSX 工作表', ext: '.xlsx', windowsOwn: false, location: '所有用户', visible: true },
+  { id: '.pptx', title: 'PPTX 演示文稿', ext: '.pptx', windowsOwn: false, location: '所有用户', visible: true },
+  { id: '.xmind', title: 'XMind 思维导图', ext: '.xmind', windowsOwn: false, location: '当前用户', visible: true },
+  { id: '.bmp', title: 'BMP 图像', ext: '.bmp', windowsOwn: true, location: '所有用户', visible: true },
+  { id: '.contact', title: '联系人', ext: '.contact', windowsOwn: true, location: '所有用户', visible: true },
+  { id: '.txt', title: '文本文档', ext: '.txt', windowsOwn: true, location: '所有用户', visible: true },
+  { id: '.zip', title: '压缩(zipped)文件夹', ext: '.zip', windowsOwn: true, location: '所有用户', visible: true },
+].sort((a, b) => (a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1)) // 和引擎一样按名字排
 const contextMenuMock: ContextMenuItem[] = [
   {
     id: 'menu-rar', kind: 'extension', title: 'WinRAR shell extension', program: 'rarext.dll',
@@ -2211,6 +2225,33 @@ const handlers: Handlers = {
       : command
         ? '已经从右键菜单里拿掉了，下次右键就看不到了。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。'
         : '已经拿掉了，重启资源管理器（或者注销再登录）以后生效。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。'
+    return result
+  },
+
+  new_menu_list: () => newMenuMock.map((item) => ({ ...item, visible: values.get(`newmenu:${item.id}`) !== NEW_MENU_HIDDEN })),
+
+  new_menu_set: ({ id, visible }) => {
+    const item = newMenuMock.find((x) => x.id === id)
+    if (!item) throw '这一项不在刚才的列表里了，请刷新一下再试。'
+    const target = `newmenu:${item.id}`
+    const before = values.get(target) ?? NEW_MENU_SHOWN
+    const result: ApplyResult = {
+      feature: 'new-menu', sessionId: ensureSession().id, entryIds: [], ok: true, verified: 'applied',
+      message: '本来就是这样，不用改。', reboot: 'none', notes: [], error: null,
+    }
+    if ((before !== NEW_MENU_HIDDEN) === visible) return result
+    const session = ensureSession()
+    const entry: JournalEntryView = {
+      id: uuid(), sessionId: session.id, time: iso(Date.now()), feature: 'new-menu',
+      featureTitle: `「新建」菜单：${item.title}`, target, before, after: visible ? NEW_MENU_SHOWN : NEW_MENU_HIDDEN,
+      ok: true, pending: false, undone: false, undoneAt: null, canUndo: true, error: null,
+    }
+    session.entries.push(entry)
+    values.set(target, entry.after)
+    result.entryIds = [entry.id]
+    result.message = visible
+      ? '已经恢复了，下次在右键「新建」里就能看到。'
+      : '已经从右键「新建」菜单里拿掉了。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。'
     return result
   },
 

@@ -5,6 +5,7 @@ import type { ApplyResult, FeatureState, FeatureSummary } from '../api/types'
 import BulkApplyDialog from '../components/BulkApplyDialog.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import ContextMenuManager from '../components/ContextMenuManager.vue'
+import NewMenuManager from '../components/NewMenuManager.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import TagPill from '../components/TagPill.vue'
 import {
@@ -19,7 +20,7 @@ import { catalog, goTo, markHealthStale } from '../state'
 import { errorText } from '../utils/format'
 
 // 常用设置：只列资源管理器、桌面、任务栏、开始菜单、推荐和广告、键盘和鼠标、电源这几类。每次进入页面都重新检测一遍当前状态。
-// 最下面是右键菜单里软件加的项目（ContextMenuManager，点了才列）。
+// 最下面是右键菜单里软件加的项目（ContextMenuManager）和「新建」菜单里的项目（NewMenuManager），都是点了才列。
 // 这台电脑用不了的项（系统版本不对等）照样列出来，但只说明原因：不检测、不给执行、不放进「只应用推荐项」。
 
 const categoryIds = new Set<string>(settingsCategories.map((c) => c.id))
@@ -243,6 +244,7 @@ function onApplied(r: ApplyResult): void {
     </section>
 
     <ContextMenuManager v-if="catalog" />
+    <NewMenuManager v-if="catalog" />
 
     <PreviewDialog v-if="previewId" :feature-id="previewId" @close="previewId = null" @applied="onApplied" />
     <BulkApplyDialog

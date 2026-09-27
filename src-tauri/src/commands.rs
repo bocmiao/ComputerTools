@@ -5,8 +5,8 @@ use std::sync::Arc;
 use medkit_core::Engine;
 use medkit_core::lockers::LockTarget;
 use medkit_core::views::{
-    ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, FeatureState, FileLockReport, JournalSession, Preview,
-    StartupItem, SymptomDetail, SystemInfo, ToolResult, UndoResult,
+    ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, FeatureState, FileLockReport, JournalSession,
+    NewMenuItem, Preview, StartupItem, SymptomDetail, SystemInfo, ToolResult, UndoResult,
 };
 use tauri::State;
 
@@ -122,6 +122,18 @@ pub async fn context_menu_list(state: State<'_, AppState>) -> CmdResult<Vec<Cont
 #[tauri::command]
 pub async fn context_menu_set(state: State<'_, AppState>, id: String, visible: bool) -> CmdResult<ApplyResult> {
     with_engine(state, move |e| e.context_menu_set(&id, visible)).await
+}
+
+/// 右键「新建」菜单里的项（软件加的和 Windows 自带的）。
+#[tauri::command]
+pub async fn new_menu_list(state: State<'_, AppState>) -> CmdResult<Vec<NewMenuItem>> {
+    with_engine(state, |e| e.new_menu_list()).await
+}
+
+/// 从「新建」菜单里关掉（visible 为 false）或者恢复一项，记进修改日志。只接受最近一次列表里的 ID（扩展名）。
+#[tauri::command]
+pub async fn new_menu_set(state: State<'_, AppState>, id: String, visible: bool) -> CmdResult<ApplyResult> {
+    with_engine(state, move |e| e.new_menu_set(&id, visible)).await
 }
 
 /// 批量重命名：用系统的文件夹选择框选一个文件夹。界面拿不到、也传不了别的路径。

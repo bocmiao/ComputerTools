@@ -940,3 +940,91 @@ fn photo_viewer_and_new_menu_facts() {
     eprintln!("{}", String::from_utf8_lossy(&out.stderr));
     assert!(out.status.success(), "脚本出错：{:?}", out.status);
 }
+
+/// 「新建」菜单：在当前用户的注册表里造两个测试用的项（ProgID 下的写法，和直接写在扩展名下、数据是二进制的），
+/// 用真的脚本列出来；关掉、恢复、在修改日志里撤销，逐个核对注册表里的值；再把 Windows 自带的「位图图像」（HKLM）
+/// 关掉再恢复。结束时（包括断言失败时）删掉测试用的键。
+#[test]
+#[ignore = "会临时改动「新建」菜单（结束时恢复）；需要管理员权限"]
+fn new_menu_entries_are_listed_hidden_and_restored() {
+    let hkcu = RegRoot::CurrentUser;
+    let first = r"Software\Classes\.medkittest";
+    let second = r"Software\Classes\.medkittest2";
+    let progid = r"Software\Classes\MedkitTest.Document";
+    struct Cleanup(Vec<&'static str>);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            for key in &self.0 {
+                let _ = Command::new("reg.exe").args(["delete", &format!(r"HKCU\{key}"), "/f"]).output();
+            }
+        }
+    }
+    let _cleanup = Cleanup(vec![first, second, progid]);
+    let platform = WindowsPlatform::new();
+    let s = |v: &str| RegValue::String(v.to_owned());
+    platform.reg_set(&hkcu, first, "", &s("MedkitTest.Document")).unwrap();
+    platform.reg_set(&hkcu, progid, "FriendlyTypeName", &s("小药箱测试文档")).unwrap();
+    let first_new = format!(r"{first}\MedkitTest.Document\ShellNew");
+    platform.reg_set(&hkcu, &first_new, "NullFile", &s("")).unwrap();
+    let second_new = format!(r"{second}\ShellNew");
+    let data = RegValue::Binary(vec![0x50, 0x4b, 0x05, 0x06, 0x00]);
+    platform.reg_set(&hkcu, &second_new, "Data", &data).unwrap();
+    platform.reg_set(&hkcu, &second_new, "MenuText", &s("小药箱测试二(&T)")).unwrap();
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    let started = std::time::Instant::now();
+    let items = engine.new_menu_list().unwrap();
+    eprintln!("列「新建」菜单用了 {} 毫秒：", started.elapsed().as_millis());
+    for i in &items {
+        eprintln!(
+            "  {:<16} {:<24} {} {} {}",
+            i.ext,
+            i.title,
+            i.location,
+            if i.visible { "显示" } else { "不显示" },
+            i.windows_own
+        );
+    }
+    let find = |items: &[medkit_core::views::NewMenuItem], ext: &str| {
+        items.iter().find(|i| i.ext == ext).cloned().unwrap_or_else(|| panic!("没列出 {ext}"))
+    };
+    let test1 = find(&items, ".medkittest");
+    assert_eq!((test1.title.as_str(), test1.location.as_str(), test1.visible), ("小药箱测试文档", "当前用户", true));
+    assert_eq!(find(&items, ".medkittest2").title, "小药箱测试二");
+    let txt = find(&items, ".txt");
+    assert!(txt.windows_own && txt.visible && !txt.title.starts_with('@'), "{txt:?}");
+    assert!(items.iter().all(|i| i.ext != ".lnk"), "快捷方式不列");
+
+    let r = engine.new_menu_set(".medkittest", false).unwrap();
+    assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
+    assert_eq!(platform.reg_get(&hkcu, &first_new, "NullFile").unwrap(), None);
+    assert_eq!(platform.reg_get(&hkcu, &first_new, "MedkitHidden.NullFile").unwrap(), Some(s("")));
+    assert!(!find(&engine.new_menu_list().unwrap(), ".medkittest").visible);
+    let r = engine.new_menu_set(".medkittest", true).unwrap();
+    assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
+    assert_eq!(platform.reg_get(&hkcu, &first_new, "NullFile").unwrap(), Some(s("")));
+    assert_eq!(platform.reg_get(&hkcu, &first_new, "MedkitHidden.NullFile").unwrap(), None);
+
+    let r = engine.new_menu_set(".medkittest2", false).unwrap();
+    assert_eq!(platform.reg_get(&hkcu, &second_new, "MedkitHidden.Data").unwrap(), Some(data.clone()));
+    for id in r.entry_ids.iter().rev() {
+        assert!(engine.journal_undo(id, false).unwrap().ok);
+    }
+    assert_eq!(platform.reg_get(&hkcu, &second_new, "Data").unwrap(), Some(data));
+    assert_eq!(platform.reg_get(&hkcu, &second_new, "MedkitHidden.Data").unwrap(), None);
+
+    // Windows 自带的、在 HKLM 里的
+    let bmp = r"SOFTWARE\Classes\.bmp\ShellNew";
+    let hklm = RegRoot::LocalMachine;
+    if find(&items, ".bmp").visible {
+        let before = platform.reg_get(&hklm, bmp, "NullFile").unwrap();
+        let r = engine.new_menu_set(".bmp", false).unwrap();
+        assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
+        assert_eq!(platform.reg_get(&hklm, bmp, "NullFile").unwrap(), None);
+        let r = engine.new_menu_set(".bmp", true).unwrap();
+        assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
+        assert_eq!(platform.reg_get(&hklm, bmp, "NullFile").unwrap(), before);
+        assert_eq!(platform.reg_get(&hklm, bmp, "MedkitHidden.NullFile").unwrap(), None);
+    }
+}
