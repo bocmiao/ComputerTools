@@ -1,0 +1,73 @@
+# 症状：电脑蓝屏、自己重启、自己关机。先看最近 7 天的崩溃和蓝屏（system.reliability-recent，有蓝屏时链接到小工具
+# 「最近的蓝屏」：按终止代码说原因和办法，也分得清意外关机、Windows 更新重启），再看几样常见的硬件原因：设备和驱动、
+# 硬盘健康、硬盘读写错误、笔记本电池。蓝屏没有一键修复，给图文指引。
+id: bluescreen
+schema_version: 1
+title: { zh-CN: 电脑蓝屏、自己重启 }
+summary:
+  zh-CN: 突然蓝屏，屏幕上写着「你的设备遇到问题，需要重启」；或者没有蓝屏，电脑自己重启、自己关机了。
+keywords:
+  - 蓝屏
+  - 电脑蓝屏
+  - 老是蓝屏
+  - 经常蓝屏
+  - 突然蓝屏
+  - 蓝屏重启
+  - 蓝屏代码
+  - 终止代码
+  - 你的设备遇到问题
+  - 你的电脑遇到问题
+  - 遇到问题需要重启
+  - 自己重启
+  - 自动重启
+  - 突然重启
+  - 电脑自己重启
+  - 电脑自动重启
+  - 自己关机
+  - 自动关机
+  - 突然关机
+  - 电脑自己关机
+  - 黑屏重启
+  - 死机重启
+  - CRITICAL_PROCESS_DIED
+  - IRQL_NOT_LESS_OR_EQUAL
+  - DRIVER_IRQL_NOT_LESS_OR_EQUAL
+  - MEMORY_MANAGEMENT
+  - PAGE_FAULT_IN_NONPAGED_AREA
+  - SYSTEM_SERVICE_EXCEPTION
+  - SYSTEM_THREAD_EXCEPTION_NOT_HANDLED
+  - KERNEL_SECURITY_CHECK_FAILURE
+  - DPC_WATCHDOG_VIOLATION
+  - VIDEO_TDR_FAILURE
+  - WHEA_UNCORRECTABLE_ERROR
+  - DRIVER_POWER_STATE_FAILURE
+  - INACCESSIBLE_BOOT_DEVICE
+causes:
+  - zh-CN: 驱动程序出错（最常见）：新装或者更新了显卡、网卡驱动；安全软件、游戏加速器、反作弊程序也会装驱动
+  - zh-CN: 内存条有问题、接触不好，或者超频不稳定
+  - zh-CN: 硬盘有坏道、快坏了
+  - zh-CN: 过热、供电不足（没有蓝屏就突然黑屏重启、关机的常见原因），笔记本电池老化
+  - zh-CN: 系统文件损坏
+  - zh-CN: Windows 更新装完以后自己重启（这个不是故障）
+maturity: semi
+steps:
+  - check: system.reliability-recent
+  - check: hardware.device-problems
+  - check: disk.smart-health
+  - check: disk.error-events
+  - check: hardware.battery-health
+guide:
+  zh-CN: |
+    先看上面的检查结果，再打开小工具里的「最近的蓝屏」：它列出最近 30 天每一种蓝屏的终止代码（蓝屏时屏幕上那串大写英文，比如 CRITICAL_PROCESS_DIED），说清楚多半是什么原因、该怎么办；电脑自己重启、关机的，也能看出是蓝屏、意外关机，还是 Windows 更新重启的。
+
+    常见的几种情况：
+
+    1. 装了或者更新了什么以后才开始蓝屏的：先把那个软件卸载，或者在「设备管理器」里回退那个驱动。安全软件、游戏加速器、游戏反作弊、虚拟光驱这类软件都会装驱动，也常引起蓝屏。
+    2. 驱动太旧：到电脑品牌的官网（或者显卡的官网：NVIDIA、AMD、Intel）下载最新的显卡、网卡、芯片组驱动装上。
+    3. 内存：在开始菜单里搜索「Windows 内存诊断」，选「立即重新启动并检查问题」，查十几分钟。超过频、在 BIOS 里开了 XMP 的，先恢复默认。
+    4. 硬盘：上面「硬盘健康」「硬盘读写错误」报了问题的，先备份重要文件，尽快换硬盘。
+    5. 没有蓝屏，直接黑屏重启或者关机：多半是过热或者供电的问题。清一清出风口的灰，留意是不是在玩游戏、负载很重的时候出现；笔记本电池老化了也会突然关机。
+    6. 系统文件损坏：用管理员身份打开命令提示符，运行「sfc /scannow」。
+    7. 蓝屏以后开不了机：开机时连续两三次没能进入系统，Windows 会进入「自动修复」，在「高级选项」里可以选「启动修复」「系统还原」或者「卸载更新」。
+
+    还是解决不了的，把「最近的蓝屏」的结果和诊断报告发给懂哥看看；蓝屏时保存的诊断文件在 C:\Windows\Minidump 文件夹里。

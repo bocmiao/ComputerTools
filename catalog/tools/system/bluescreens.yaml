@@ -1,0 +1,124 @@
+# 最近的蓝屏（info）。脚本：scripts/tools/system/bluescreens.ps1
+# 读系统日志里最近 30 天的记录，只读：
+#   蓝屏：两种事件，都是蓝屏以后重新开机时记下的。WER-SystemErrorReporting 1001（旧系统是 BugCheck 1001）：保存了
+#         诊断文件才有，第一个值是「0x0000009f (0x..., ...)」，开头就是终止代码；Kernel-Power 41「没有正常关机就重新
+#         启动了」：Windows 来得及记下终止代码时，BugcheckCode（十进制）就是它，没保存诊断文件也有。同一次蓝屏两种都有
+#         （代码一样，1001 在 41 之后 30 分钟以内）的只算一次。
+#         按终止代码分组，最近出现的在前，最多 10 种：名字（照微软的 Bug Check Code Reference）、次数、第一次和最近一次、
+#         可能的原因和怎么办。脚本把认识的代码归成几类（驱动、显卡、硬盘、内存、硬件、睡眠唤醒、系统、开机、USB、网卡、
+#         BIOS、卡死后长按电源键、有人故意触发、驱动程序验证程序），每类一段原因和一段办法；不认识的只显示代码。
+#   意外关机：BugcheckCode 是 0 的 41：断电、死机后强制关机，或者来不及记下终止代码；PowerButtonTimestamp 不是 0
+#         （或者 LongPowerButtonPressDetected 是 true）的是长按了电源键。
+#   Windows 更新让电脑重启、关机：User32 1074「进程 X 发起了重启 / 关机」里的进程是 Windows 更新的程序
+#         （MoUsoCoreWorker.exe、UsoClient.exe、MusNotification.exe、TrustedInstaller.exe、wuauclt.exe、SetupHost.exe 这些）。
+#         1074 里有电脑名、用户名和程序路径，只数次数、取时间，一样都不输出。
+#   蓝屏信息记不下来：这次开机以后有 volmgr 46「Crash dump initialization failed!」：没有分页文件（虚拟内存）也没有
+#         专门的转储文件，蓝屏时保存不了诊断信息，也就不会有 1001。很多「优化」软件、教程会让人关掉虚拟内存腾 C 盘空间。
+# 时间都是事件记下的时间，也就是蓝屏、关机以后重新开机的时间。
+# 结果：listed（有蓝屏）、shutdowns（没有蓝屏，有意外关机）、no-dump（都没有，但蓝屏了也记不下来）、
+# updates（只有 Windows 更新重启的）、none。事实：days、count、codes、shutdowns、power_button、updates、dump_off。
+# 待真机验证：Windows 更新重启时 1074 里是哪个程序、各版本上 41 的字段名，见 docs/real-machine-checklist.md。
+id: system.bluescreens
+schema_version: 1
+group: info
+title: { zh-CN: 最近的蓝屏 }
+description:
+  zh-CN: 看看最近 30 天有没有蓝屏、意外关机：每种蓝屏的终止代码是什么意思、多半是什么原因、该怎么处理；电脑自己重启的，也能看出是不是 Windows 更新重启的。只看不改。
+category: system
+requires_admin: false
+timeout_sec: 60
+run:
+  script: tools/system/bluescreens.ps1
+results:
+  listed:
+    status: advice
+    message:
+      zh-CN: "最近 {days} 天蓝屏了 {count} 次。下面按终止代码（蓝屏时屏幕上那串大写英文）列出可能的原因和办法。"
+    fixer: helper
+    next:
+      zh-CN: 蓝屏大多是驱动或者硬件的问题：按每一种下面「怎么办」的说法处理，处理完用几天看看还会不会蓝屏。要请懂哥帮忙的，把终止代码告诉他；蓝屏时保存的诊断文件在 C:\Windows\Minidump 文件夹里，懂哥可以用它查出是哪个驱动出的错。
+    links: ["tool:open.device-manager", "tool:open.memory-diagnostic", "tool:open.reliability"]
+  shutdowns:
+    status: advice
+    message:
+      zh-CN: "最近 {days} 天没有蓝屏的记录，但有 {shutdowns} 次没有正常关机就重新开机了：突然断电、卡死以后强制关机，或者蓝屏时没来得及记下原因。"
+    fixer: user
+    next:
+      zh-CN: 看下面「意外关机」里的说法。经常卡死、只能长按电源键的，按「电脑卡、风扇狂转」查一查。
+    links: ["symptom:slow-pc", "tool:open.reliability"]
+  no-dump:
+    status: advice
+    message:
+      zh-CN: "最近 {days} 天没有蓝屏的记录，但这台电脑现在蓝屏了也记不下来：开机时 Windows 没能准备好保存蓝屏信息的地方（一般是虚拟内存被关掉了）。"
+    fixer: user
+    next:
+      zh-CN: 按下面「蓝屏信息记不下来」里的办法把虚拟内存改回自动管理，以后再蓝屏就能在这里看到原因了。
+  updates:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天没有蓝屏，也没有意外关机；有 {updates} 次是 Windows 更新让电脑重启或者关机的。"
+    next:
+      zh-CN: 更新时重启是正常的。不想在用电脑的时候被重启，就按下面的说法设好「使用时段」。
+    links: ["tool:settings.windows-update"]
+  none:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天没有蓝屏，也没有意外关机的记录。"
+    next:
+      zh-CN: 刚蓝屏过、这里却没有记录的，打开「可靠性历史记录」看看那一天有没有红色叉号；下次蓝屏时，可以用手机拍下屏幕上的终止代码。
+    links: ["tool:open.reliability"]
+labels:
+  sections:
+    bluescreen: { zh-CN: 蓝屏 }
+    shutdowns: { zh-CN: 意外关机 }
+    updates: { zh-CN: Windows 更新让电脑重启、关机 }
+    dump: { zh-CN: 蓝屏信息记不下来 }
+  rows:
+    times: { zh-CN: 次数 }
+    first: { zh-CN: 第一次 }
+    last: { zh-CN: 最近一次 }
+    code: { zh-CN: 代码 }
+    cause: { zh-CN: 可能的原因 }
+    advice: { zh-CN: 怎么办 }
+    power_button: { zh-CN: 其中长按电源键关机 }
+    state: { zh-CN: 情况 }
+  values:
+    driver: { zh-CN: 某个驱动程序出错了（最常见）。安全软件、游戏加速器、游戏反作弊、虚拟光驱这类软件也会装驱动，它们出问题一样会蓝屏。 }
+    gpu: { zh-CN: 显卡驱动出错了，或者显卡本身有问题（过热、供电不够）。 }
+    disk: { zh-CN: 读写硬盘时出错了：硬盘可能有坏道、快坏了，或者数据线接触不好。 }
+    memory: { zh-CN: 内存出错了：内存条有问题或者接触不好；也可能是某个驱动程序把内存写乱了。 }
+    hardware: { zh-CN: 硬件报告了没法纠正的错误：处理器、内存、主板有问题，超频、过热、供电不稳也会这样。 }
+    power: { zh-CN: 电脑睡眠、唤醒或者关机的时候，某个设备的驱动没有及时响应。 }
+    system: { zh-CN: Windows 自己的关键程序出错退出了：系统文件损坏、硬盘读写出错都可能引起。 }
+    boot: { zh-CN: 开机时读不了系统盘：硬盘出了问题、数据线松了，或者 BIOS 里的硬盘设置被改过。 }
+    usb: { zh-CN: USB 设备或者它的驱动出错了。 }
+    network: { zh-CN: 网卡（有线或者无线）的驱动出错了。 }
+    bios: { zh-CN: 主板的 BIOS（固件）有问题，或者和处理器不匹配。 }
+    hang: { zh-CN: 电脑卡死了，有人长按了电源键，系统借这个机会记下了当时的状态。 }
+    manual: { zh-CN: 是有人故意触发的（调试时按了特定的组合键或者运行了命令），不是故障。 }
+    verifier: { zh-CN: 「驱动程序验证程序」查出了驱动的问题。这是开发、维修人员排查驱动用的工具，开着它电脑很容易蓝屏。 }
+    unknown: { zh-CN: 小药箱不认识这个终止代码。 }
+    driver-advice: { zh-CN: 想一想蓝屏是从哪天开始的（看「第一次」），那之前装了或者更新了什么软件、驱动，先把它卸载或者回退。再到电脑（或者主板）品牌的官网下载最新的驱动，重点是显卡、网卡、声卡和芯片组，然后打开「设备管理器」看看有没有带黄色感叹号的设备。还是蓝屏的话，用「Windows 内存诊断」查一查内存。 }
+    gpu-advice: { zh-CN: 到显卡官网（NVIDIA、AMD、Intel）或者电脑品牌的官网下载最新的显卡驱动装上；更新了显卡驱动以后才开始蓝屏的，在「设备管理器」里回退显卡驱动。玩游戏时蓝屏的，清一清灰、看看显卡温度，超过频的恢复默认。 }
+    disk-advice: { zh-CN: 先把重要的文件备份出来。然后看体检里的「硬盘健康」和「硬盘读写错误」；台式机可以请懂哥重新插一下硬盘的数据线和电源线。硬盘报了问题的，尽快换硬盘。 }
+    memory-advice: { zh-CN: 用「Windows 内存诊断」查一查内存（要重启电脑，查十几分钟）。查出问题的，把内存条拔下来擦一擦金手指再插回去，或者换一根；超过频、在 BIOS 里开了 XMP / EXPO 的，先恢复默认。内存没查出问题的，按驱动的问题处理：更新驱动。 }
+    hardware-advice: { zh-CN: 先在 BIOS 里恢复默认设置（取消超频），清一清机箱和散热器的灰，留意是不是在很热或者负载很重的时候出现。经常出现的，可能是处理器、内存、主板或者电源有问题，请懂哥或者售后检查。 }
+    power-advice: { zh-CN: 多半出在睡眠、唤醒的时候：到官网更新显卡、网卡和芯片组的驱动。一时解决不了的，先不用睡眠，不用电脑时直接关机。 }
+    system-advice: { zh-CN: 用管理员身份打开命令提示符，运行「sfc /scannow」修复系统文件，再看看体检里的「硬盘健康」。经常出现、甚至开不了机的，用「系统还原」回到出问题之前。 }
+    boot-advice: { zh-CN: 开不了机时出现的：进 BIOS 看看还能不能认出硬盘，硬盘模式（AHCI、RAID）有没有被改过；台式机重新插一下硬盘的数据线。能开机的话，先备份重要文件，再看体检里的「硬盘健康」。 }
+    usb-advice: { zh-CN: 把最近插上的 USB 设备（U 盘、移动硬盘、扩展坞、USB 网卡）拔掉试试，或者换一个 USB 口；到电脑品牌的官网更新芯片组和 USB 驱动。 }
+    network-advice: { zh-CN: 到电脑品牌或者网卡厂家的官网下载最新的网卡驱动（有线、无线的都更新）；装了 VPN、游戏加速器、网络监控软件的，先卸载试试。 }
+    bios-advice: { zh-CN: 到电脑或者主板品牌的官网看看有没有新的 BIOS，按官网的说明更新（更新时不能断电）；拿不准的请懂哥或者售后帮忙。 }
+    hang-advice: { zh-CN: 想一想卡死之前在做什么。经常卡死的，按「电脑卡、风扇狂转」查一查；也可能是驱动或者硬件的问题，按其他蓝屏的办法处理。 }
+    manual-advice: { zh-CN: 不是故障，不用处理。 }
+    verifier-advice: { zh-CN: 不是你或者维修人员有意打开的，就把它关掉：用管理员身份打开命令提示符，运行「verifier /reset」，然后重启电脑。 }
+    unknown-advice: { zh-CN: 把代码（0x 开头的那串）拿到网上搜一搜，或者把诊断报告发给懂哥看看。 }
+    shutdown-advice: { zh-CN: 拔了电源、停电、笔记本没电引起的，不用管。没有断电却突然黑屏、重启的，多半是过热或者供电的问题（台式机的电源，笔记本的电池和充电器）：清一清灰，留意是不是在玩游戏、负载很重的时候出现。长按电源键关机的，是因为电脑卡死了。 }
+    update-advice: { zh-CN: 如果不是你自己点的「更新并重启」：打开「Windows 更新」设置，在「使用时段」里设好平时用电脑的时间，Windows 就不会在这段时间里自己重启。有更新要重启时它会先提醒，也可以自己选一个方便的时间。 }
+    dump-off: { zh-CN: 这次开机时，Windows 没能准备好保存蓝屏信息的地方，一般是因为虚拟内存（分页文件）被关掉了。这时候蓝屏了，也记不下是什么原因。 }
+    dump-advice: { zh-CN: 在开始菜单里搜索「查看高级系统设置」打开它，点「高级」→ 性能下面的「设置」→「高级」→ 虚拟内存下面的「更改」，勾选「自动管理所有驱动器的分页文件大小」，确定以后重启电脑。 }
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/event-id-41-restart
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/event-id-46-start-a-computer
+  - https://support.microsoft.com/windows/troubleshooting-windows-unexpected-restarts-and-stop-code-errors-60b01860-58f2-be66-7516-5c45a66ae3c6
