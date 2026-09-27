@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:easeofaccess-keyboard（辅助功能 → 键盘），由系统打开。
+# 筛选键、粘滞键的开关都在这一页；鼠标键在「鼠标」那一页（settings.mouse-keys）。
+id: settings.keyboard-aids
+schema_version: 1
+group: open
+title: { zh-CN: 键盘的辅助功能 }
+description:
+  zh-CN: 打开「设置」里的辅助功能 → 键盘：在这里关掉「筛选键」（按键要按住一会儿才算数）和「粘滞键」（Shift、Ctrl 按一下就一直算按着）。键盘按了没反应、字母莫名变成大写时，先来这里看看。
+category: settings
+open: { settings: easeofaccess-keyboard }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/windows/make-your-mouse-keyboard-and-other-input-devices-easier-to-use-10733da7-fa82-88be-0672-f123d4b3dcfe

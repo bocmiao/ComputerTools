@@ -64,6 +64,19 @@ results:
 references: [ "https://example.com/hib-state" ]
 "#,
     r#"
+id: system.keys
+schema_version: 1
+title: { zh-CN: 键盘的辅助功能 }
+category: system
+probe: { builtin: keyboard-aids }
+results:
+  ok: { status: ok, message: { zh-CN: 都没开。 } }
+  filter-keys: { status: advice, message: { zh-CN: 筛选键开着。 }, fixer: user }
+  sticky-keys: { status: advice, message: { zh-CN: 粘滞键开着。 }, fixer: user }
+  mouse-keys: { status: advice, message: { zh-CN: 鼠标键开着。 }, fixer: user }
+references: [ "https://example.com/keys" ]
+"#,
+    r#"
 id: system.admin-only
 schema_version: 1
 title: { zh-CN: 需要管理员的检测 }
@@ -1093,6 +1106,22 @@ fn undo_tells_what_is_needed_to_see_the_change() {
     assert!(u.ok);
     assert_eq!(u.reboot, Reboot::Explorer);
     assert_eq!(serde_json::to_value(&u).unwrap()["reboot"], "explorer");
+}
+
+/// 内置检测读的是平台报告的实际状态（Windows 上是 SystemParametersInfo），不经过脚本。
+#[test]
+fn keyboard_aids_are_read_from_the_platform() {
+    let w = world();
+    assert_eq!(w.engine.run_check("system.keys").unwrap().status, Status::Ok);
+
+    let mut platform = MockPlatform::new();
+    platform.keyboard.sticky_keys = true;
+    platform.keyboard.mouse_keys = true;
+    let w = world_with(platform);
+    let r = w.engine.run_check("system.keys").unwrap();
+    assert_eq!((r.status, r.message.as_str()), (Status::Advice, "粘滞键开着。"));
+    assert_eq!(Value::Object(r.facts), json!({ "filter_keys": false, "sticky_keys": true, "mouse_keys": true }));
+    assert!(w.runner.calls().is_empty(), "不该跑脚本：{:?}", w.runner.calls());
 }
 
 /// 用户自己写的问题描述放在报告最前面，和其余部分一样脱敏；太长的截断，空的不写这一节。

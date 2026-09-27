@@ -52,6 +52,8 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "privacy-microphone",
     "privacy-webcam",
     "dateandtime",
+    "easeofaccess-keyboard",
+    "easeofaccess-mouse",
 ];
 
 pub fn program(name: &str) -> Option<&'static Program> {

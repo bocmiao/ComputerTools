@@ -44,7 +44,7 @@ use winreg::enums::{
     KEY_WRITE, RegType as WinRegType,
 };
 
-use super::{OpenRequest, OsInfo, PResult, Platform, PlatformError, UserIdentity, edition_from_id};
+use super::{KeyboardAids, OpenRequest, OsInfo, PResult, Platform, PlatformError, UserIdentity, edition_from_id};
 use crate::model::StartType;
 use crate::registry::{RegRoot, RegValue};
 
@@ -580,6 +580,52 @@ impl Platform for WindowsPlatform {
             edition_id,
             computer_name: std::env::var("COMPUTERNAME").unwrap_or_default(),
         }
+    }
+
+    fn keyboard_aids(&self) -> PResult<KeyboardAids> {
+        use windows_sys::Win32::UI::Accessibility::{FILTERKEYS, MOUSEKEYS, SKF_STICKYKEYSON, STICKYKEYS};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            FKF_FILTERKEYSON, MKF_MOUSEKEYSON, SPI_GETFILTERKEYS, SPI_GETMOUSEKEYS, SPI_GETSTICKYKEYS,
+            SystemParametersInfoW,
+        };
+
+        /// 读一个以 cbSize 开头的结构体。
+        fn get<T>(action: u32, value: &mut T, what: &str) -> PResult<()> {
+            let size = u32::try_from(std::mem::size_of::<T>()).unwrap_or(u32::MAX);
+            // SAFETY: value 是一个完整的 T（cbSize 已经填好），系统最多写 size 个字节
+            if unsafe { SystemParametersInfoW(action, size, std::ptr::from_mut(value).cast(), 0) } == 0 {
+                return Err(map_io(what, last_error()));
+            }
+            Ok(())
+        }
+        let size = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+
+        let mut filter = FILTERKEYS {
+            cbSize: size(std::mem::size_of::<FILTERKEYS>()),
+            dwFlags: 0,
+            iWaitMSec: 0,
+            iDelayMSec: 0,
+            iRepeatMSec: 0,
+            iBounceMSec: 0,
+        };
+        get(SPI_GETFILTERKEYS, &mut filter, "读筛选键的状态")?;
+        let mut sticky = STICKYKEYS { cbSize: size(std::mem::size_of::<STICKYKEYS>()), dwFlags: 0 };
+        get(SPI_GETSTICKYKEYS, &mut sticky, "读粘滞键的状态")?;
+        let mut mouse = MOUSEKEYS {
+            cbSize: size(std::mem::size_of::<MOUSEKEYS>()),
+            dwFlags: 0,
+            iMaxSpeed: 0,
+            iTimeToMaxSpeed: 0,
+            iCtrlSpeed: 0,
+            dwReserved1: 0,
+            dwReserved2: 0,
+        };
+        get(SPI_GETMOUSEKEYS, &mut mouse, "读鼠标键的状态")?;
+        Ok(KeyboardAids {
+            filter_keys: filter.dwFlags & FKF_FILTERKEYSON != 0,
+            sticky_keys: sticky.dwFlags & SKF_STICKYKEYSON != 0,
+            mouse_keys: mouse.dwFlags & MKF_MOUSEKEYSON != 0,
+        })
     }
 
     fn open(&self, request: &OpenRequest) -> PResult<()> {

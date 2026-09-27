@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:easeofaccess-mouse（辅助功能 → 鼠标），由系统打开。
+# 「鼠标键」的开关在这一页：开着时小键盘（右边的数字键）用来移动鼠标指针，按了不出数字。
+id: settings.mouse-keys
+schema_version: 1
+group: open
+title: { zh-CN: 鼠标键 }
+description:
+  zh-CN: 打开「设置」里的辅助功能 → 鼠标：在这里关掉「鼠标键」。它开着时，小键盘（右边的数字键）用来移动鼠标指针，按了不出数字。
+category: settings
+open: { settings: easeofaccess-mouse }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/accessibility/windows/use-mouse-keys-to-move-the-mouse-pointer

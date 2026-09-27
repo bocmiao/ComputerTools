@@ -26,6 +26,18 @@ pub enum PlatformError {
 
 pub type PResult<T> = Result<T, PlatformError>;
 
+/// 键盘的几项辅助功能在这次登录里实际开没开（系统当下生效的状态，不是注册表里存的）。
+/// 不小心打开以后，看起来就像键盘「按了没反应」。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct KeyboardAids {
+    /// 筛选键：按键要按住一会儿才算数，短按、连按被忽略（按住右 Shift 8 秒会打开）
+    pub filter_keys: bool,
+    /// 粘滞键：Shift、Ctrl、Alt 按一下就一直算「按着」（连按 5 次 Shift 会打开）
+    pub sticky_keys: bool,
+    /// 鼠标键：小键盘用来移动鼠标指针，按了不出数字（左 Alt + 左 Shift + Num Lock 会打开）
+    pub mouse_keys: bool,
+}
+
 /// 要打开的系统工具，已经按 [`crate::tools`] 的名单解析过（数据里只能写名单里的名字）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpenRequest {
@@ -79,6 +91,9 @@ pub trait Platform: Send + Sync {
     fn process_user(&self) -> Option<UserIdentity>;
     fn is_admin(&self) -> bool;
     fn os_info(&self) -> OsInfo;
+
+    /// 键盘的几项辅助功能在这次登录里实际开没开。
+    fn keyboard_aids(&self) -> PResult<KeyboardAids>;
 
     /// 打开一个系统工具或「设置」里的一页，不等它关掉。
     /// 程序不存在（精简系统删掉了）时返回 [`PlatformError::NotFound`]，内容是缺的文件名。

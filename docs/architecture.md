@@ -91,6 +91,7 @@ references:
 |---|---|---|
 | `cpu-features` | `popcnt`、`sse42`、`windows11`（布尔值） | `ok`（都支持）、`missing`（缺任意一项，而且装的是 Windows 11）、`missing-win10`（缺，但装的是 Windows 10 或服务器版，只做提示） |
 | `clock` | `today`（电脑上的日期）、`build_date`（这个版本的构建日期），都是 `YYYY-MM-DD` | `ok`、`behind`（电脑上的日期比构建日期早一天以上，时间肯定错了） |
+| `keyboard-aids` | `filter_keys`、`sticky_keys`、`mouse_keys`（布尔值：这次登录里实际开没开，用 SystemParametersInfo 读，不读注册表） | `ok`、`filter-keys`、`sticky-keys`、`mouse-keys`（几项都开着时按这个顺序报一项） |
 
 `clock` 的构建日期：编译时的环境变量 `SOURCE_DATE_EPOCH`（CI 构建安装包时设成提交时间），没有时用 `builtin.rs` 里写死的日期（发版前顺手改成最近的日期）。这个日期只能早不能晚，晚于真实日期会让所有人都被误报；单元测试会拦住写成将来日期的情况。
 
@@ -528,7 +529,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `control-panel` | `control.exe` |
 
 settings 页面：`windowsupdate`、`storagesense`、`storagepolicies`、`appsfeatures`、`defaultapps`、`network-status`、`printers`、
-`sound`、`powersleep`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`。
+`sound`、`powersleep`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`。
 
 - 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。
 - 精简系统上被删掉的工具，打开时如实说「这台电脑上没有这个工具」，不去别处找。

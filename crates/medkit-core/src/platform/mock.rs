@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
-use super::{OpenRequest, OsInfo, PResult, Platform, PlatformError, UserIdentity};
+use super::{KeyboardAids, OpenRequest, OsInfo, PResult, Platform, PlatformError, UserIdentity};
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue, key_ancestors};
 
@@ -35,6 +35,7 @@ pub struct MockPlatform {
     pub process: Option<UserIdentity>,
     pub admin: bool,
     pub os: OsInfo,
+    pub keyboard: KeyboardAids,
 }
 
 fn norm(key: &str) -> String {
@@ -57,6 +58,7 @@ impl Default for MockPlatform {
                 edition: Some(Edition::Home),
                 computer_name: "MOCK-PC".into(),
             },
+            keyboard: KeyboardAids::default(),
         }
     }
 }
@@ -204,6 +206,10 @@ impl Platform for MockPlatform {
 
     fn os_info(&self) -> OsInfo {
         self.os.clone()
+    }
+
+    fn keyboard_aids(&self) -> PResult<KeyboardAids> {
+        Ok(self.keyboard)
     }
 
     fn open(&self, request: &OpenRequest) -> PResult<()> {

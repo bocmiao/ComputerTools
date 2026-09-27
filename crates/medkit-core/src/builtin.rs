@@ -4,21 +4,41 @@
 use serde_json::{Value, json};
 use time::{Date, OffsetDateTime};
 
-use crate::platform::OsInfo;
+use crate::platform::{KeyboardAids, OsInfo, Platform};
 
 /// 内置检测能用到的信息。
 pub struct Env<'a> {
     pub os: &'a OsInfo,
     /// 电脑上现在的时间（本机时区；读不到时区时是 UTC）
     pub now: OffsetDateTime,
+    pub platform: &'a dyn Platform,
 }
 
 pub fn run(name: &str, env: &Env<'_>) -> Result<Value, String> {
     match name {
         "cpu-features" => Ok(cpu_features(env.os)),
         "clock" => Ok(clock(env.now.date(), build_date())),
+        "keyboard-aids" => env.platform.keyboard_aids().map(keyboard_aids).map_err(|e| e.to_string()),
         _ => Err(format!("不认识的内置检测：{name}")),
     }
+}
+
+/// 键盘的辅助功能开着哪一项。几项都开着时按「最像键盘坏了」的顺序报：筛选键（短按全被忽略）、
+/// 粘滞键（Shift、Ctrl 一直「按着」）、鼠标键（小键盘不出数字）；三项的状态都记在事实里。
+fn keyboard_aids(aids: KeyboardAids) -> Value {
+    let result = if aids.filter_keys {
+        "filter-keys"
+    } else if aids.sticky_keys {
+        "sticky-keys"
+    } else if aids.mouse_keys {
+        "mouse-keys"
+    } else {
+        "ok"
+    };
+    json!({
+        "result": result,
+        "facts": { "filter_keys": aids.filter_keys, "sticky_keys": aids.sticky_keys, "mouse_keys": aids.mouse_keys }
+    })
 }
 
 /// 已经装了 Windows 11（版本号 22000 起；服务器版不算）。
@@ -129,6 +149,17 @@ mod tests {
         assert_eq!(clock(date!(2026 - 09 - 26), built)["result"], "ok");
         assert_eq!(clock(date!(2026 - 09 - 25), built)["result"], "behind");
         assert_eq!(clock(date!(2031 - 01 - 01), built)["result"], "ok");
+    }
+
+    #[test]
+    fn the_keyboard_aid_most_like_a_broken_keyboard_is_reported_first() {
+        let aids = |filter_keys, sticky_keys, mouse_keys| KeyboardAids { filter_keys, sticky_keys, mouse_keys };
+        assert_eq!(keyboard_aids(aids(false, false, false))["result"], "ok");
+        assert_eq!(keyboard_aids(aids(true, true, true))["result"], "filter-keys");
+        assert_eq!(keyboard_aids(aids(false, true, true))["result"], "sticky-keys");
+        let v = keyboard_aids(aids(false, false, true));
+        assert_eq!(v["result"], "mouse-keys");
+        assert_eq!(v["facts"], json!({ "filter_keys": false, "sticky_keys": false, "mouse_keys": true }));
     }
 
     #[test]

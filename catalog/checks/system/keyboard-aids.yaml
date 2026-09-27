@@ -1,0 +1,50 @@
+# 键盘的辅助功能（筛选键、粘滞键、鼠标键）开没开。内置检测（Rust 实现，见 crates/medkit-core/src/builtin.rs），没有脚本。
+# 用 SystemParametersInfo（SPI_GETFILTERKEYS / SPI_GETSTICKYKEYS / SPI_GETMOUSEKEYS）读这次登录里实际生效的状态，
+# 不读注册表：用快捷键打开的，注册表里不一定有。小药箱和登录用户在同一个会话里，读到的就是用户眼前的状态。
+# 这三样都是不小心按出来的常见「键盘坏了」（微软：Windows keyboard shortcuts for accessibility）：
+#   筛选键：按住右 Shift 8 秒打开，之后按键要按住一会儿才算数，短按、连按都被忽略；
+#   粘滞键：连按 5 次 Shift 打开，Shift、Ctrl、Alt 按一下就一直算「按着」，字母变大写、快捷键乱；
+#   鼠标键：左 Alt + 左 Shift + Num Lock 打开，小键盘用来移动鼠标指针，按了不出数字。
+# 几项都开着时按上面的顺序报一项（事实里有三项的状态）。只检测、不改：关掉它们用「设置」里的开关或同一个快捷键。
+# 事实：filter_keys、sticky_keys、mouse_keys。
+id: system.keyboard-aids
+schema_version: 1
+title: { zh-CN: 键盘的辅助功能 }
+description:
+  zh-CN: 看看筛选键、粘滞键、鼠标键是不是被不小心打开了。它们开着时，键盘看起来就像按了没反应。
+category: system
+requires_admin: false
+probe:
+  builtin: keyboard-aids
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 筛选键、粘滞键、鼠标键都没开，不是它们的问题。
+  filter-keys:
+    status: advice
+    message:
+      zh-CN: 「筛选键」开着：按键要按住一会儿才算数，短按、连按都会被忽略，看起来就像键盘按了没反应。多半是不小心按住右 Shift 键超过 8 秒打开的。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「设置」里的键盘页，把「筛选键」关掉；也可以再按住右 Shift 键 8 秒关掉它。
+    links: ["tool:settings.keyboard-aids"]
+  sticky-keys:
+    status: advice
+    message:
+      zh-CN: 「粘滞键」开着：Shift、Ctrl、Alt 按一下就一直算「按着」，打出来的字母会莫名变成大写，快捷键也不对劲。多半是连按了 5 次 Shift 键打开的。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「设置」里的键盘页，把「粘滞键」关掉；也可以再连按 5 次 Shift 键关掉它。
+    links: ["tool:settings.keyboard-aids"]
+  mouse-keys:
+    status: advice
+    message:
+      zh-CN: 「鼠标键」开着：小键盘（右边的数字键）用来移动鼠标指针，按了不出数字。多半是不小心同时按了左 Alt、左 Shift 和 Num Lock 打开的。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「设置」里的鼠标页，把「鼠标键」关掉；也可以再同时按一次左 Alt、左 Shift 和 Num Lock 关掉它。
+    links: ["tool:settings.mouse-keys"]
+references:
+  - https://support.microsoft.com/en-us/windows/windows-keyboard-shortcuts-for-accessibility-021bcb62-45c8-e4ef-1e4f-41b8c1fc87fd
+  - https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfow

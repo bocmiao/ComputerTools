@@ -545,3 +545,44 @@ fn startup_items_are_listed_disabled_and_restored() {
     assert!(u.ok, "{u:?}");
     assert_eq!(platform.reg_get(&root, APPROVED, &name).unwrap(), None, "撤销后开关要恢复成原来的「没有这个值」");
 }
+
+/// 键盘的辅助功能：临时打开粘滞键（只改这次登录，不写注册表），内置检测要读得出来；关掉以后也要读得出来。
+/// 结束时（包括断言失败时）恢复原来的设置。
+#[test]
+#[ignore = "会临时打开粘滞键（结束时恢复）"]
+fn keyboard_aids_follow_the_live_state() {
+    use windows_sys::Win32::UI::Accessibility::{SKF_STICKYKEYSON, STICKYKEYS};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SPI_GETSTICKYKEYS, SPI_SETSTICKYKEYS, SystemParametersInfoW};
+
+    fn call(action: u32, value: &mut STICKYKEYS) -> bool {
+        let size = u32::try_from(std::mem::size_of::<STICKYKEYS>()).unwrap();
+        // SAFETY: value 是完整的 STICKYKEYS，cbSize 已经填好；fWinIni 为 0，不写注册表
+        unsafe { SystemParametersInfoW(action, size, std::ptr::from_mut(value).cast(), 0) != 0 }
+    }
+    struct Restore(STICKYKEYS);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let mut v = self.0;
+            call(SPI_SETSTICKYKEYS, &mut v);
+        }
+    }
+
+    let mut original = STICKYKEYS { cbSize: u32::try_from(std::mem::size_of::<STICKYKEYS>()).unwrap(), dwFlags: 0 };
+    assert!(call(SPI_GETSTICKYKEYS, &mut original), "读不了粘滞键：{}", std::io::Error::last_os_error());
+    let _restore = Restore(original);
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+
+    for on in [true, false] {
+        let mut v = original;
+        v.dwFlags = if on { v.dwFlags | SKF_STICKYKEYSON } else { v.dwFlags & !SKF_STICKYKEYSON };
+        if !call(SPI_SETSTICKYKEYS, &mut v) {
+            println!("::notice title=keyboard-aids::这台 CI 机器上改不了粘滞键：{}", std::io::Error::last_os_error());
+            return;
+        }
+        let r = engine.run_check("system.keyboard-aids").unwrap();
+        assert!(r.error.is_none(), "{r:?}");
+        assert_eq!(r.facts["sticky_keys"], on, "{r:?}");
+        eprintln!("粘滞键 {}：{}", if on { "开" } else { "关" }, r.message);
+    }
+}
