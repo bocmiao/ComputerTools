@@ -894,12 +894,9 @@ impl Engine {
         self.journal.append(&Record::Apply(rec.clone()))?;
         let outcome = self.runner.run(&run.script, &self.script_args(f, hive.as_deref()), SCRIPT_FEATURE_TIMEOUT);
         let (ok, after, error, left_changes) = match &outcome {
-            Ok(v) if f.reversible() && v.get("before").is_none_or(Value::is_null) => (
-                false,
-                None,
-                Some("脚本没有返回修改前的设置，无法保证恢复原状".to_owned()),
-                true,
-            ),
+            Ok(v) if f.reversible() && v.get("before").is_none_or(Value::is_null) => {
+                (false, None, Some("脚本没有返回修改前的设置，无法保证恢复原状".to_owned()), true)
+            }
             Ok(v) => (
                 true,
                 Some(State::Script {
