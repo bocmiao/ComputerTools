@@ -1,0 +1,91 @@
+# 能不能免费升级 Windows 11（info，调研 T 系列 / 建议 22）。脚本：scripts/tools/system/win11-readiness.ps1
+# 只读。先看 Windows 自己的评估：「Microsoft Compatibility Appraiser」计划任务会给每个它评估过的 Windows 11 版本写
+# HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\TargetVersionUpgradeExperienceIndicators\<版本>，
+# 里面的 UpgEx（Green / Yellow / Orange / Red）、RedReason（None，或者用空格隔开的原因：CpuFms 处理器不在支持列表里、
+# Tpm、UefiSecureBoot……）、DestBuildNum（版本号）、SystemDriveTooFull（1 = 系统盘空间不够）。取版本号最大的那一个。
+# 小药箱不自己维护处理器支持列表（微软会改），处理器支持不支持以 Windows 的评估为准；没认出来的原因照原文显示，不猜。
+# 再列出小药箱自己查到的几项（处理器名称、TPM、安全启动、内存、系统盘大小），没有评估结果时也能对照。
+# 结果：already（已经是 Windows 11）、server（服务器版）、ready（RedReason 是 None、结论不是 Red、系统盘空间够）、
+# blocked、not-assessed（没有评估结果：刚装的系统、评估任务被关了）。事实：appraised、target、blocks。
+# 待真机验证：Windows 10 上这个键下面的版本名（NI22H2、GE24H2 这类）、RedReason 里还会出现哪些词，
+# 见 docs/real-machine-checklist.md。
+id: system.win11-readiness
+schema_version: 1
+group: info
+title: { zh-CN: 能不能升级 Windows 11 }
+description:
+  zh-CN: Windows 10 的电脑能不能免费升级到 Windows 11：先看 Windows 自己的评估结论，再列出处理器、TPM、安全启动、内存、系统盘这几项要求，不满足的写清楚是哪一项。
+category: system
+requires_admin: true
+timeout_sec: 30
+run:
+  script: tools/system/win11-readiness.ps1
+results:
+  already:
+    status: ok
+    message:
+      zh-CN: 这台电脑已经是 Windows 11 了，不用升级。
+  server:
+    status: na
+    message:
+      zh-CN: 这是服务器版 Windows，不在这个范围里。
+  ready:
+    status: ok
+    message:
+      zh-CN: Windows 自己评估过了：这台电脑可以免费升级到 Windows 11。
+    next:
+      zh-CN: 升级是免费的：打开「Windows 更新」，看有没有「升级到 Windows 11」的提示，按提示下载安装。升级前先把重要文件备份到 U 盘或网盘；开了 BitLocker 的，先把恢复密钥抄下来。升级以后 10 天内，可以在「设置 → 系统 → 恢复」里退回 Windows 10。
+    links: ["tool:settings.windows-update", "tool:security.bitlocker-keys"]
+  blocked:
+    status: manual
+    message:
+      zh-CN: Windows 自己评估过了：这台电脑现在还不能直接升级到 Windows 11，原因见下面的表格。
+    fixer: helper
+    next:
+      zh-CN: TPM、安全启动这两项，很多电脑只是在 BIOS 里没打开，可以请懂哥帮忙打开（打开安全启动前要确认系统盘是 GPT 分区；开了 BitLocker 的，先把恢复密钥抄下来）。处理器不在支持列表里的，没法按官方的办法升级；Windows 10 还能用多久，看体检里的「系统支持期」。系统盘空间不够的，先按「C 盘满了」腾出空间。
+    links: ["tool:security.bitlocker-keys", "symptom:disk-full"]
+  not-assessed:
+    status: unknown
+    message:
+      zh-CN: Windows 还没评估过这台电脑能不能升级 Windows 11（刚装的系统常见），下面只列出小药箱自己查到的几项。
+    next:
+      zh-CN: 处理器在不在微软的支持列表里，小药箱查不了。可以过几天再来看（Windows 会自己评估），或者装微软官方的「电脑健康状况检查」应用（PC Health Check）查一下。
+labels:
+  sections:
+    windows: { zh-CN: Windows 自己的评估 }
+    hardware: { zh-CN: 小药箱查到的 }
+  rows:
+    target: { zh-CN: 评估的版本号 }
+    verdict: { zh-CN: 结论 }
+    block: { zh-CN: 不满足 }
+    block_other: { zh-CN: 不满足（原文） }
+    drive_full: { zh-CN: 系统盘空间 }
+    cpu: { zh-CN: 处理器 }
+    tpm: { zh-CN: TPM 安全芯片（要 2.0） }
+    secure_boot: { zh-CN: 安全启动 }
+    memory: { zh-CN: 内存（至少 4 GB） }
+    system_disk: { zh-CN: 系统盘（至少 64 GB） }
+  values:
+    green: { zh-CN: 可以升级 }
+    yellow: { zh-CN: 可以升级，但有的软件可能要先处理 }
+    orange: { zh-CN: 可以升级，但有几样要先处理 }
+    red: { zh-CN: 硬件不满足要求 }
+    other: { zh-CN: 没认出来 }
+    cpu: { zh-CN: 处理器不在微软的支持列表里（一般是 Intel 第 8 代、AMD 锐龙 2000 系列以前的处理器） }
+    tpm: { zh-CN: 没有可用的 TPM 2.0 }
+    secure_boot: { zh-CN: 不是 UEFI 启动，或者用不了安全启动 }
+    memory: { zh-CN: 内存不够 }
+    disk: { zh-CN: 系统盘太小 }
+    "yes": { zh-CN: 不够放升级文件，要先腾出空间 }
+    tpm2: { zh-CN: 有 TPM 2.0，开着 }
+    tpm2-off: { zh-CN: 有 TPM 2.0，但没有打开（可以在 BIOS 里打开） }
+    tpm12: { zh-CN: 只有 TPM 1.2，不够 }
+    none: { zh-CN: 没找到（可能在 BIOS 里关着：Intel 叫 PTT，AMD 叫 fTPM） }
+    unknown: { zh-CN: 没查出来 }
+    "on": { zh-CN: 开着 }
+    "off": { zh-CN: 支持，但没有打开（可以在 BIOS 里打开） }
+    legacy: { zh-CN: 传统 BIOS 启动，用不了安全启动 }
+references:
+  - https://www.microsoft.com/en-us/windows/windows-11-specifications
+  - https://learn.microsoft.com/en-us/windows-hardware/design/minimum/supported/windows-11-supported-intel-processors
+  - https://www.deploymentresearch.com/understanding-upgrade-experience-indicators-for-windows-11-upgrade-readiness/
