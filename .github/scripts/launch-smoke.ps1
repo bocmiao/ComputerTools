@@ -97,8 +97,17 @@ try {
 
     # 2. WebView2 started for this app (its browser process carries the host exe name).
     $exeName = [System.IO.Path]::GetFileName($Exe)
-    $webview = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
-        Where-Object { ($_.ParentProcessId -eq $app.Id) -or ($_.CommandLine -like "*--webview-exe-name=$exeName*") })
+    # The Tauri window can appear before WebView2 has finished starting on a
+    # cold runner. Give the child process a bounded startup window.
+    $webviewDeadline = (Get-Date).AddSeconds(20)
+    $webview = @()
+    do {
+        if ($app.HasExited) { throw "the app exited while WebView2 was starting with code $($app.ExitCode)" }
+        $webview = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
+            Where-Object { ($_.ParentProcessId -eq $app.Id) -or ($_.CommandLine -like "*--webview-exe-name=$exeName*") })
+        if ($webview.Count -gt 0) { break }
+        Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $webviewDeadline)
     if ($webview.Count -eq 0) { throw 'no WebView2 process was started for the app' }
     Write-Output "WebView2 processes: $($webview.Count)"
 
