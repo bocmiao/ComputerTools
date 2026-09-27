@@ -407,7 +407,7 @@ $beforeConnections = [ordered]@{}
 foreach ($name in $toChange) {
     $beforeConnections[$name] = ConvertTo-HexString $blobs[$name]
 }
-$before = [ordered]@{
+$snapshot = [ordered]@{
     proxy_enable   = $oldEnable
     legacy_changed = $changeLegacy
     connections    = $beforeConnections
@@ -415,15 +415,15 @@ $before = [ordered]@{
 
 if ($Prepare) {
     # Engine saves this snapshot to disk before calling the script again to write.
-    return [pscustomobject]@{ before = $before }
+    return [pscustomobject]@{ before = $snapshot }
 }
 if ([string]::IsNullOrWhiteSpace($Before)) {
     throw 'The saved pre-change state is required'
 }
 $savedBefore = $Before | ConvertFrom-Json
 if (($null -eq $savedBefore) -or
-    ($savedBefore.proxy_enable -ne $before.proxy_enable) -or
-    ([bool]$savedBefore.legacy_changed -ne $before.legacy_changed)) {
+    ($savedBefore.proxy_enable -ne $snapshot.proxy_enable) -or
+    ([bool]$savedBefore.legacy_changed -ne $snapshot.legacy_changed)) {
     return [pscustomobject]@{ skipped = $true }
 }
 $savedConnections = @($savedBefore.connections.PSObject.Properties)
@@ -490,7 +490,7 @@ $after = [ordered]@{
 }
 
 [pscustomobject]@{
-    before = $before
+    before = $snapshot
     after  = $after
     facts  = [ordered]@{
         legacy_was_enabled = ($oldEnable -eq 1)
