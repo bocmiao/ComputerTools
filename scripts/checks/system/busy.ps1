@@ -124,18 +124,42 @@ function Read-ProcessTime {
     return $times
 }
 
+# The program file of a process, or ''. Protected processes (Windows Security)
+# do not give their path to Get-Process, which asks for more rights than WMI
+# needs; a service's registered command line names its program too.
+function Get-ExecutablePath {
+    param($Process)
+    $path = [string]$Process.Path
+    if ($path.Length -gt 0) {
+        return $path
+    }
+    $filter = 'ProcessId = {0}' -f $Process.Id
+    $path = [string](Get-CimInstance -ClassName Win32_Process -Filter $filter -Property ExecutablePath).ExecutablePath
+    if ($path.Length -gt 0) {
+        return $path
+    }
+    $service = @(Get-CimInstance -ClassName Win32_Service -Filter $filter -Property PathName) | Select-Object -First 1
+    $command = [Environment]::ExpandEnvironmentVariables([string]$service.PathName).Trim()
+    if ($command.StartsWith('"')) {
+        $end = $command.IndexOf('"', 1)
+        if ($end -gt 1) {
+            return $command.Substring(1, $end - 1)
+        }
+        return ''
+    }
+    $match = [regex]::Match($command, '^.*?\.exe', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ($match.Success) {
+        return $match.Value
+    }
+    return ''
+}
+
 # What Task Manager shows for a program: the file description of its
 # executable, or the process name.
 function Get-FileDescription {
     param([string]$Name, $Process)
     try {
-        $path = [string]$Process.Path
-        if ($path.Length -eq 0) {
-            # Protected processes (Windows Security) do not give their path to
-            # Get-Process, which asks for more rights than WMI needs.
-            $wmi = Get-CimInstance -ClassName Win32_Process -Filter ('ProcessId = {0}' -f $Process.Id) -Property ExecutablePath
-            $path = [string]$wmi.ExecutablePath
-        }
+        $path = Get-ExecutablePath $Process
         if ($path.Length -gt 0) {
             $description = ([string][System.Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileDescription).Trim()
             if ($description.Length -gt 0) {

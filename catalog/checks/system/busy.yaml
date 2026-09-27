@@ -10,7 +10,8 @@
 # 服务主机、桌面窗口管理器……）、other；否则内存用到 90% 以上是 memory-full（最占内存的不算 Memory Compression 这类
 # 内核的部分）；否则 ok。
 # 事实：cpu_pct、memory_pct、busiest（最忙的程序名）、top_cpu（最多 3 个「名字 35%」）、top_memory（最多 3 个「名字 1.2 GB」）。
-# 程序名用程序文件里写的说明（和任务管理器显示的一样；Windows 安全中心这类受保护的进程，Get-Process 读不到路径，改用 WMI 读），
+# 程序名用程序文件里写的说明（和任务管理器显示的一样；Windows 安全中心这类受保护的进程，Get-Process 读不到路径，改用 WMI 读，
+# 再读不到就用它的服务登记的启动命令），
 # 没有就用进程名。不读窗口标题、命令行。小药箱自己运行脚本的 PowerShell 不算在内。
 # 待真机验证：见 docs/real-machine-checklist.md。
 id: system.busy
