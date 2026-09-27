@@ -22,8 +22,10 @@
 #   restart / power off ...") whose process is one of $updatePrograms. Only
 #   counted: 1074 also holds the computer name, the user name and the path.
 #   Crash dumps off: volmgr 46 ("Crash dump initialization failed!") since the
-#   last start: no page file (or dump file) to save a crash dump to, so a blue
-#   screen leaves no record (Microsoft, "Event ID 46").
+#   last start: no page file on the system drive (or dump file) to save a crash
+#   dump to, so a blue screen leaves no record (Microsoft, "Event ID 46"). The
+#   page file was turned off or moved to another drive; GitHub's Windows VMs
+#   keep it on the temporary drive D:, so CI shows this.
 # Times are those of the events, that is when the PC started again.
 # The query filters by log, ID and time only and the provider is matched here
 # (see checks/disk/error-events.ps1 for why).
