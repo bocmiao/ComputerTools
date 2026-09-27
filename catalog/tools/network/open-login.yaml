@@ -17,6 +17,12 @@ results:
     next:
       zh-CN: 登录后回到小药箱，重新运行「上不了网」诊断。
     links: ["symptom:network"]
+  no-browser:
+    status: advice
+    message:
+      zh-CN: 没能自动打开浏览器。请手动打开浏览器，在地址栏输入 http://www.msftconnecttest.com/redirect。
+    next:
+      zh-CN: 如果跳出了登录页，先确认是当前 WiFi 提供方的页面，再输入信息。
 references:
   - https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/internet-explorer-edge-open-connect-corporate-public-network
   - https://learn.microsoft.com/en-us/windows-server/networking/ncsi/ncsi-overview
