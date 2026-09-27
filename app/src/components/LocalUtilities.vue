@@ -7,6 +7,7 @@ import BatchRenameTool from './BatchRenameTool.vue'
 import BatchImageTool from './BatchImageTool.vue'
 import FileLockers from './FileLockers.vue'
 import SpaceFinder from './SpaceFinder.vue'
+import TextQrTool from './TextQrTool.vue'
 
 const selectedFile = ref<File | null>(null)
 const digests = ref<FileDigests | null>(null)
@@ -243,6 +244,7 @@ async function copy(value: string): Promise<void> {
           <button type="button" class="btn btn-secondary btn-small self-start" @click="copy(textOutput)">复制结果</button>
         </template>
       </article>
+      <TextQrTool />
       <BatchImageTool />
       <ImagePrivacyTool />
       <BatchRenameTool />
