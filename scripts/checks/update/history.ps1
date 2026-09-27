@@ -6,7 +6,12 @@
 # update installed later: the same KB number, or the same title once the
 # numbers are left out (so that a later cumulative update, driver or Defender
 # update of the same kind counts too).
-# The error code decides the result code (the texts live in the YAML):
+# The update and its error code decide the result code (the texts live in the
+# YAML; meanings from Microsoft's Windows Update error references):
+#   failed-winre     the Windows Recovery Environment update (KB5034441, later
+#                    KB5042320): the recovery partition needs 250 MB free, and
+#                    resetting Windows Update does not help
+#   failed-blocked   Windows Update is turned off (service disabled, or a policy)
 #   failed-space     not enough disk space
 #   failed-network   could not reach Windows Update (network, proxy, time)
 #   failed-files     damaged or missing update files (reset the components)
@@ -26,9 +31,19 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $days = 30
-$maxEntries = 300
+# The history is read newest first, a page at a time, until it is older than
+# $days (Defender updates alone add a few entries a day), up to $maxEntries.
+$pageSize = 100
+$maxEntries = 1000
+# Updates whose failure has its own cause.
+$winreUpdates = @('KB5034441', 'KB5042320')
 # Error codes (as Windows shows them) -> result code.
 $codes = @{
+    '0x80070422' = 'failed-blocked'
+    '0x8024002F' = 'failed-blocked'
+    '0x80240025' = 'failed-blocked'
+    '0x8024002E' = 'failed-blocked'
+    '0x80244011' = 'failed-blocked'
     '0x80070070' = 'failed-space'
     '0x80070027' = 'failed-space'
     '0x8024402C' = 'failed-network'
@@ -46,7 +61,6 @@ $codes = @{
     '0x800F081F' = 'failed-files'
     '0x800F0831' = 'failed-files'
     '0x80240034' = 'failed-files'
-    '0x80246017' = 'failed-files'
     '0x80070020' = 'failed-restart'
     '0xC1900107' = 'failed-restart'
     '0xC1900101' = 'failed-upgrade'
@@ -91,13 +105,21 @@ function Get-KindKey {
     return ([regex]::Replace($Title, '[\d.]+', '#')).Trim()
 }
 
+$since = [DateTime]::UtcNow.AddDays(-$days)
 try {
     $session = New-Object -ComObject Microsoft.Update.Session
     $searcher = $session.CreateUpdateSearcher()
-    $total = [int]$searcher.GetTotalHistoryCount()
-    $entries = @()
-    if ($total -gt 0) {
-        $entries = @($searcher.QueryHistory(0, [math]::Min($total, $maxEntries)))
+    $total = [math]::Min([int]$searcher.GetTotalHistoryCount(), $maxEntries)
+    $entries = New-Object System.Collections.Generic.List[object]
+    for ($start = 0; $start -lt $total; $start += $pageSize) {
+        $page = @($searcher.QueryHistory($start, [math]::Min($pageSize, $total - $start)))
+        foreach ($entry in $page) {
+            $entries.Add($entry)
+        }
+        # Newest first: once a page reaches back past $days, the rest is older.
+        if (($page.Count -eq 0) -or (@($page | Where-Object { ($null -ne $_.Date) -and ([DateTime]$_.Date -lt $since) }).Count -gt 0)) {
+            break
+        }
     }
 }
 catch {
@@ -119,7 +141,6 @@ if ($installs.Count -eq 0) {
     return
 }
 
-$since = [DateTime]::UtcNow.AddDays(-$days)
 $installedKeys = New-Object System.Collections.Generic.HashSet[string]
 $installedKinds = New-Object System.Collections.Generic.HashSet[string]
 $failures = New-Object System.Collections.Generic.List[object]
@@ -160,7 +181,10 @@ if ($failures.Count -eq 0) {
 $latest = $failures[0]
 $errorCode = Format-ErrorCode $latest.HResult
 $result = $codes[$errorCode]
-if ($null -eq $result) {
+if ($winreUpdates -contains (Get-UpdateKey ([string]$latest.Title))) {
+    $result = 'failed-winre'
+}
+elseif ($null -eq $result) {
     $result = 'failed-other'
 }
 [pscustomobject]@{

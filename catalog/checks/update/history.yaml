@@ -4,7 +4,11 @@
 # 算「装失败」的：最近 30 天里安装失败（ResultCode 4）或者带错误代码中止（5）的，而且后来没有装上——
 # 同一个 KB 编号后来装上了，或者把标题里的数字去掉以后一样的更新后来装上了（下个月的累积更新、同一个驱动的
 # 新版本、Defender 的新病毒库），都算已经解决。没有错误代码的中止（装的时候重启了、用户取消了）不算。
-# 按最近一次失败的错误代码分类，给不同的建议：
+# 按最近一次失败的更新和错误代码分类，给不同的建议（错误代码的含义按微软的 Windows 更新错误代码文档）：
+#   failed-winre    Windows 恢复环境（WinRE）的更新 KB5034441（后来换成 KB5042320）：恢复分区要有 250 MB 空闲，
+#                   不够就一直装不上（常见的 0x80070643），重置更新组件也没用
+#   failed-blocked  更新被关掉了：服务被禁用（0x80070422），或者被策略挡住（0x8024002F、0x80240025、0x8024002E、
+#                   0x80244011）
 #   failed-space    C 盘空间不够（0x80070070、0x80070027）
 #   failed-network  连不上 Windows 更新的服务器：网络、代理、系统时间（0x8024402C、0x80072EE2、0x80072EFD、0x80072F8F 等）
 #   failed-files    更新文件坏了或者缺了（0x80070002、0x80070003、0x8007000D、0x80073712、0x800F081F 等）
@@ -13,6 +17,7 @@
 #   failed-other    别的代码
 # 另有：ok（最近 30 天没有装失败的）、empty（没有任何记录：刚装的系统，或者更新组件重置过）、
 # off（Windows Update 服务被禁用，读不了记录，0x80070422）。
+# 记录按从新到旧一次读 100 条，读到 30 天以前就停（Defender 的病毒库更新一天就有好几条），最多读 1000 条。
 # 事实：failed_title（更新的标题）、error_code、failed_date、failed_count、last_install（最近一次装成功的日期）。
 # 待真机验证：见 docs/real-machine-checklist.md。
 id: update.history
@@ -42,6 +47,20 @@ results:
     next:
       zh-CN: 先按「Windows 更新有没有被关掉」的提示，把更新服务恢复过来。
     links: ["feature:update.enable-services"]
+  failed-winre:
+    status: advice
+    message:
+      zh-CN: "{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）。这是 Windows 恢复环境（WinRE）的更新：硬盘上的恢复分区至少要有 250 MB 空闲，不够就一直装不上。"
+    fixer: helper
+    next:
+      zh-CN: 不影响平时用电脑，也不影响别的更新。重试、重置更新组件都没用；要扩大恢复分区（按微软的说明调整分区，有丢数据的风险），请懂哥帮忙，或者先不管它。
+  failed-blocked:
+    status: advice
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：更新被关掉了（服务被禁用，或者被策略挡住）。"
+    next:
+      zh-CN: 按「Windows 更新有没有被关掉」的提示处理，处理完再在「Windows 更新」里点「重试」。
+    links: ["tool:settings.windows-update"]
   failed-space:
     status: advice
     message:
@@ -80,16 +99,21 @@ results:
       zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 升级「{failed_title}」时失败了（错误代码 {error_code}），系统已经退回了原来的版本，文件和软件都还在。"
     fixer: helper
     next:
-      zh-CN: 大版本升级失败，多半是某个驱动（显卡、声卡、杀毒软件的驱动）或者软件不兼容。可以先更新显卡驱动、暂时卸载第三方杀毒软件再试，或者等微软修好了再升级；急着升级的，请懂哥看看。
+      zh-CN: 大版本升级失败，要么是电脑不满足新版本的要求（0xC1900200，看看「能不能升级 Windows 11」），要么是某个驱动（显卡、声卡、杀毒软件的驱动）或者软件不兼容。可以先更新显卡驱动、暂时卸载第三方杀毒软件再试，或者等微软修好了再升级；急着升级的，请懂哥看看。
+    links: ["tool:system.win11-readiness"]
   failed-other:
     status: advice
     message:
       zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）。"
     fixer: helper
     next:
-      zh-CN: 先重启电脑，再在「Windows 更新」里点「重试」；还不行，运行 Windows 自带的「Windows 更新」疑难解答。都不行的话，把错误代码发给懂哥，或者用「诊断报告」里的「复制给 AI」问问。
+      zh-CN: 先重启电脑，开着 VPN、「梯子」、加速器的先关掉，再在「Windows 更新」里点「重试」；还不行，运行 Windows 自带的「Windows 更新」疑难解答。都不行的话，把错误代码发给懂哥，或者用「诊断报告」里的「复制给 AI」问问。
     links: ["tool:settings.windows-update"]
 references:
   - https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-queryhistory
+  - https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iupdatehistoryentry
+  - https://support.microsoft.com/en-us/topic/kb5034441-windows-recovery-environment-update-for-windows-10-version-21h2-and-22h2-january-9-2024-62c04204-aaa5-4fee-a02a-2fdea17075a8
+  - https://support.microsoft.com/en-us/topic/kb5028997-instructions-to-manually-resize-your-partition-to-install-the-winre-update-400faa27-9343-461c-ada9-24c8229763bf
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/deployment/windows-10-upgrade-resolution-procedures
   - https://learn.microsoft.com/en-us/troubleshoot/windows-client/installing-updates-features-roles/common-windows-update-errors
   - https://learn.microsoft.com/en-us/windows/deployment/update/windows-update-error-reference

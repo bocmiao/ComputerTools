@@ -1,45 +1,48 @@
 # 重置更新组件（action；计划书 4.2「系统更新失败」的修复）。脚本：scripts/tools/update/reset-components.ps1
-# 照微软文档里「手动重置 Windows 更新组件」的做法，但只做最核心、最安全的一步：停下用到更新缓存的几个服务
-# （更新编排器、Windows Update、BITS、传递优化），把 C:\Windows\SoftwareDistribution 改名成
-# SoftwareDistribution.old-<时间>（不删除），再把原来在运行的服务启动起来。Windows 下次检查更新时会重建一个新的。
-# 借鉴 wureset 的教训（计划书第七节）：服务没停下来就不改名；缓存目录改名不删除；不重置权限；不重新注册 DLL；
+# 照微软文档「重置 Windows 更新组件」（Windows 10、11，2026-08 更新）里的做法，只做核心、安全的一步：停下 Windows Update
+# 和 BITS（必须停下来，否则什么都不改；更新编排器、传递优化能停就停，传递优化是受保护的服务，可能停不了），
+# 把 C:\Windows\SoftwareDistribution 里的 DataStore（更新数据库，设置里的「更新历史记录」也在里面）和 Download
+# （下载好的更新）改名成「原名.old-<时间>」，不删除，再把原来在运行的服务启动起来。Windows 下次检查更新时会重建。
+# 两个文件夹有一个改不了名，就把已经改了的改回去，什么都不留下。
+# 借鉴 wureset 的教训（计划书第七节）、也照微软文档的提醒：服务没停下来就不改名；改名不删除；不重置服务权限
+# （sc sdset，微软说会覆盖原来的权限）；不重新注册 DLL（文档里那串 DLL 很多是 XP、Vista 时代的）；不重置 Winsock；
 # 不碰 catroot2（要停加密服务，会连带停掉依赖它的服务）。
-# 不做的情况（什么都不改）：有更新在等重启（restart-first，这时改名可能把更新弄坏）、Windows 正在装更新
-# （installing，TiWorker 在运行）、Windows Update 服务被禁用（disabled，先用「恢复 Windows 更新服务」）。
-# 设置里的「更新历史记录」会从头开始（旧的记录在改名后的文件夹里）。旧文件夹确认更新正常以后可以删掉。
-# 不是「修复」（没有撤销）：更新缓存会自动重建，改名留下的旧文件夹就是后路。
+# 不做的情况（什么都不改）：有更新在等重启（restart-first：两个等重启的注册表键，或者 Windows 模块安装程序把自己改成了
+# 自动启动；这时改名，更新重启后的结果可能对不上）、Windows 正在装更新（installing，TiWorker 在运行）、Windows Update
+# 服务被禁用（disabled，先用「恢复 Windows 更新服务」）。
+# 不是「修复」（没有撤销）：这两个文件夹 Windows 会自己重建，改名留下的旧文件夹就是后路。
 id: update.reset-components
 schema_version: 1
 group: action
 title: { zh-CN: 重置更新组件 }
 description:
-  zh-CN: 更新老是下载失败、装不上时用：把 Windows 更新的下载缓存换成一个新的，旧的改个名字留着，不删除。Windows 会重新下载要装的更新。
+  zh-CN: 更新老是下载失败、同一个更新反复装不上时用：把 Windows 更新的下载缓存和更新数据库换成新的，旧的改个名字留着，不删除。之后要装的更新会重新下载。
 category: update
 requires_admin: true
 timeout_sec: 180
 run:
   script: tools/update/reset-components.ps1
 confirm:
-  zh-CN: 会先停下 Windows 更新的几个服务，把更新的下载缓存（C:\Windows\SoftwareDistribution）改个名字留着，再把服务启动起来，要一两分钟。之后要装的更新会重新下载，设置里的「更新历史记录」也会从头开始记。现在重置吗？
+  zh-CN: 会先停下 Windows 更新的几个服务，把 C:\Windows\SoftwareDistribution 里的 DataStore 和 Download 两个文件夹改个名字留着（不删除），再把服务启动起来，要一两分钟。之后要装的更新会重新下载，设置里的「更新历史记录」也会从头开始记。现在重置吗？
 results:
   reset:
     status: ok
     message:
-      zh-CN: "更新的下载缓存已经换成新的了，旧的改名成了 {old_folder}。"
+      zh-CN: "更新的下载缓存和更新数据库已经换成新的了。旧的留在 {folder} 里，名字后面加上了「.old-{stamp}」。"
     next:
       zh-CN: 打开「Windows 更新」，点「检查更新」，让它重新下载安装。确认更新能装上以后，旧文件夹可以删掉，腾出空间。
     links: ["tool:settings.windows-update"]
   no-cache:
     status: ok
     message:
-      zh-CN: 更新的下载缓存本来就是空的（没有这个文件夹），不用重置，小药箱什么都没改。
+      zh-CN: 更新的下载缓存本来就是空的，不用重置，小药箱什么都没改。
     next:
       zh-CN: 打开「Windows 更新」，点「检查更新」试试。
     links: ["tool:settings.windows-update"]
   restart-first:
     status: advice
     message:
-      zh-CN: 有更新装好了、正等着重启，这时候重置可能把它弄坏，小药箱什么都没改。
+      zh-CN: 有更新装好了、正等着重启，这时候重置可能让它重启后的结果对不上，小药箱什么都没改。
     next:
       zh-CN: 先重启电脑（开始 → 电源 → 更新并重启），再看更新还有没有问题。
   installing:
@@ -58,14 +61,15 @@ results:
   not-stopped:
     status: manual
     message:
-      zh-CN: 有个更新服务停不下来，小药箱没有改名，已经把停下的服务重新启动了。
+      zh-CN: Windows Update 或者 BITS 服务停不下来，小药箱没有改名，已经把停下的服务重新启动了。
     next:
       zh-CN: 重启电脑以后再试一次；还不行，请懂哥看看。
   in-use:
     status: manual
     message:
-      zh-CN: 更新的下载缓存正被别的程序占用，改不了名，小药箱已经把服务重新启动了。
+      zh-CN: 更新的文件夹正被别的程序占用，改不了名，小药箱已经把改了一半的改回去、把服务重新启动了。
     next:
       zh-CN: 重启电脑以后先不要打开别的软件，马上再试一次；还不行，请懂哥看看。
 references:
   - https://learn.microsoft.com/en-us/troubleshoot/windows-client/installing-updates-features-roles/additional-resources-for-windows-update
+  - https://learn.microsoft.com/en-us/windows/deployment/update/windows-update-troubleshooting

@@ -22,16 +22,19 @@ $ErrorActionPreference = 'Stop'
 # ---- shared block update-services: identical in checks/update/blocked.ps1 and features/update/enable-services-*.ps1 (medkit-data check compares them) ----
 # The services Windows Update needs, with the start type Windows gives each of
 # them (the names sc.exe uses: auto, delayed-auto, demand). "Optimizer" tools
-# set them to Disabled. Windows Update Medic (WaaSMedicSvc) is checked as well,
-# but Windows does not let administrators change it: it has no start type
-# here, and the fix leaves it alone.
+# set them to Disabled. BITS switches itself between demand and delayed-auto,
+# and Windows Modules Installer (TrustedInstaller) to auto while an update
+# waits for a restart; both are fine. Windows Update Medic (WaaSMedicSvc) and
+# Delivery Optimization (DoSvc) are protected services: the service manager
+# refuses to change them even for administrators, so they have no start type
+# here, and the fix leaves them alone (the check reports them).
 $updateServiceDefaults = [ordered]@{
     'wuauserv'         = 'demand'
     'UsoSvc'           = 'delayed-auto'
     'BITS'             = 'demand'
     'CryptSvc'         = 'auto'
     'TrustedInstaller' = 'demand'
-    'DoSvc'            = 'delayed-auto'
+    'DoSvc'            = ''
     'WaaSMedicSvc'     = ''
 }
 

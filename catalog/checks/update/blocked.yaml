@@ -4,17 +4,22 @@
 #   服务：更新要用的几个服务（Windows Update、更新编排器 UsoSvc、BITS、加密服务 CryptSvc、Windows 模块安装程序
 #         TrustedInstaller、传递优化 DoSvc、Windows 更新医生 WaaSMedicSvc）被设成「禁用」，或者被精简系统删掉了；
 #         Windows Update 服务的「登录身份」被改成了别的账户（教程的招数：服务启动不了，更新医生也修不回来）。
-#         账户名不输出（可能是用户名）。
-#   策略（HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate 和 \AU，只读——小药箱不写更新策略，
-#         计划书第五节第 5 条，数据黑名单里也挡着）：SetDisableUXWUAccess（设置里的 Windows 更新点不了）、
-#         UseWUServer + WUServer（从单位的更新服务器更新；家用电脑上多半指向一个不存在的地址）、
-#         NoAutoUpdate（不自动更新，手动检查还能用）。
-#   暂停（HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings）：PauseUpdatesExpiryTime、PauseFeatureUpdatesEndTime、
-#         PauseQualityUpdatesEndTime 里最晚的一个（UTC 时间）；设置里最多只能暂停 5 周，超过 36 天就算
-#         「暂停了很久」（多半是改了 FlightSettingsMaxPauseDays 以后暂停的）。
-# 结果（按这个顺序判断，小药箱能修的排在前面）：disabled（给「恢复 Windows 更新服务」）、missing、logon、medic-disabled（只有更新医生被禁用：
-# Windows 不让管理员改它，修复也不动它）、no-access、update-server、
-# paused-long、auto-off、paused、ok。
+#         账户名不输出（可能是用户名）。传递优化和更新医生是受保护的服务，管理员也改不了（服务管理器拒绝），
+#         单独报 protected-disabled，修复不动它们。
+#   策略（只读——小药箱不写更新策略，计划书第五节第 5 条，数据黑名单里也挡着。微软只给专业版及以上写了文档，
+#         家庭版上是否生效没有写明，见真机验证清单）：
+#         DisableWindowsUpdateAccess（「关闭对所有 Windows 更新功能的访问」，检查更新会失败，0x8024002F）、
+#         SetDisableUXWUAccess（「删除使用所有 Windows 更新功能的访问权限」：设置里的「检查更新」用不了，
+#         后台的自动更新照常）、UseWUServer（从单位的更新服务器更新；家用电脑上多半指向一个不存在的地址，
+#         或者根本没写地址，都会让检查更新失败）、NoAutoUpdate（不自动更新，手动检查还能用）、
+#         SettingsPageVisibility（把设置里的 Windows 更新页面藏起来）。
+#   暂停（HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings，设置里暂停时写的值；暂停结束后值还留着，
+#         所以按结束时间判断）：PauseUpdatesExpiryTime、PauseFeatureUpdatesEndTime、PauseQualityUpdatesEndTime
+#         里最晚的一个（UTC 时间，形如 2025-03-10T09:22:08Z）；设置里最多只能暂停 5 周（各个版本都一样），
+#         超过 36 天就算「暂停了很久」（多半是改了 FlightSettingsMaxPauseDays 以后暂停的）。
+# 结果（按这个顺序判断：小药箱能修的排在前面，再是让更新完全停掉的）：disabled（给「恢复 Windows 更新服务」）、
+# missing、logon、protected-disabled、update-server、access-off、paused-long、all-off（不自动更新，又不让手动检查）、
+# auto-off、no-check、page-hidden、paused、ok。
 # 公司、学校的电脑，策略是单位下发的，结论里都写了「单位的电脑不要改」；小药箱不提供清除策略的修复。
 # 待真机验证：见 docs/real-machine-checklist.md。
 id: update.blocked
@@ -38,14 +43,35 @@ results:
     next:
       zh-CN: 想现在就更新的话，打开「Windows 更新」，点「继续更新」。
     links: ["tool:settings.windows-update"]
+  page-hidden:
+    status: advice
+    message:
+      zh-CN: 「设置」里的「Windows 更新」页面被策略藏起来了（组策略「设置页面可见性」），打开它只会跳回设置首页。
+    fixer: helper
+    next:
+      zh-CN: 公司、学校的电脑，这是单位的设置，不要改。自己的电脑，多半是「优化」软件或者网上的教程改的，请懂哥把这条策略改回「未配置」。小药箱不改这类策略。
+  no-check:
+    status: advice
+    message:
+      zh-CN: 组策略「删除使用所有 Windows 更新功能的访问权限」被打开了：设置里的「检查更新」用不了，只能等后台自动更新。
+    fixer: helper
+    next:
+      zh-CN: 公司、学校的电脑，这是单位的设置，不要改。自己的电脑，多半是「关更新」的软件或者网上的教程改的，请懂哥把这条策略改回「未配置」。小药箱不改更新策略。
   auto-off:
     status: advice
     message:
       zh-CN: 自动更新被策略关掉了（组策略「配置自动更新」设成了「已禁用」）：Windows 不会自己下载、安装更新，安全补丁一直装不上。
     fixer: helper
     next:
-      zh-CN: 在「Windows 更新」里点「检查更新」还能手动装。公司、学校的电脑，这是单位的设置，不要改；自己的电脑，多半是「关更新」的软件或者网上的教程改的，想恢复自动更新，请懂哥把这条策略改回「未配置」。
+      zh-CN: 在「Windows 更新」里点「检查更新」还能手动装。公司、学校的电脑，这是单位的设置，不要改；自己的电脑，多半是「关更新」的软件或者网上的教程改的，想恢复自动更新，请懂哥把这条策略改回「未配置」。小药箱不改更新策略。
     links: ["tool:settings.windows-update"]
+  all-off:
+    status: manual
+    message:
+      zh-CN: 自动更新被策略关掉了，设置里的「检查更新」也被策略拿掉了：这台电脑既不会自己更新，也没法手动更新，安全补丁一直装不上。
+    fixer: helper
+    next:
+      zh-CN: 公司、学校的电脑，这是单位的设置，不要改。自己的电脑，多半是「关更新」的软件或者网上的教程改的，请懂哥把组策略「配置自动更新」和「删除使用所有 Windows 更新功能的访问权限」都改回「未配置」。小药箱不改更新策略。
   paused-long:
     status: advice
     message:
@@ -54,20 +80,27 @@ results:
     next:
       zh-CN: 打开「Windows 更新」，点「继续更新」就恢复了。这多半是「关更新」的软件或者网上的教程改的。
     links: ["tool:settings.windows-update"]
-  update-server:
+  access-off:
     status: manual
     message:
-      zh-CN: 更新被组策略指到了一台「单位的更新服务器」（WSUS），不从微软下载。
-    fixer: helper
-    next:
-      zh-CN: 公司、学校的电脑，这是单位的设置，不要改。自己的电脑，多半是「关更新」的软件把它指到了一个不存在的地址，这样永远检查不到更新；请懂哥把组策略「指定 Intranet Microsoft 更新服务位置」改回「未配置」。小药箱不改更新策略。
-  no-access:
-    status: manual
-    message:
-      zh-CN: 组策略「删除使用所有 Windows 更新功能的访问权限」被打开了：设置里的 Windows 更新用不了，也不会自己更新。
+      zh-CN: 组策略「关闭对所有 Windows 更新功能的访问」被打开了：检查更新会失败（错误代码 0x8024002F），更新装不上。
     fixer: helper
     next:
       zh-CN: 公司、学校的电脑，这是单位的设置，不要改。自己的电脑，多半是「关更新」的软件或者网上的教程改的，请懂哥把这条策略改回「未配置」。小药箱不改更新策略。
+  update-server:
+    status: manual
+    message:
+      zh-CN: 更新被组策略指到了「单位的更新服务器」（WSUS），不从微软下载。
+    fixer: helper
+    next:
+      zh-CN: 公司、学校的电脑，这是单位的设置，不要改。自己的电脑，多半是「关更新」的软件把它指到了一个不存在的地址（或者干脆没写地址），这样永远检查不到更新；请懂哥把组策略「指定 Intranet Microsoft 更新服务位置」改回「未配置」。小药箱不改更新策略。
+  protected-disabled:
+    status: manual
+    message:
+      zh-CN: "这几个更新要用的服务被设成了「禁用」：{protected_disabled}。它们受 Windows 保护，管理员也改不了，能改它们的多半是专门「关更新」的软件。"
+    fixer: helper
+    next:
+      zh-CN: 小药箱改不回它们。平时更新能用的话可以先不管；更新老是出问题，请懂哥看看是哪个软件改的，用那个软件把更新恢复。
   logon:
     status: manual
     message:
@@ -76,13 +109,13 @@ results:
     next:
       zh-CN: 请懂哥在「服务」里打开 Windows Update 的属性，在「登录」这一页改回「本地系统帐户」。
     links: ["tool:open.services"]
-  medic-disabled:
+  missing:
     status: manual
     message:
-      zh-CN: 「Windows 更新医生服务」（WaaSMedicSvc）被设成了「禁用」。它负责在更新坏了的时候自动修好，Windows 不允许管理员改它，能改它的多半是专门「关更新」的软件。
+      zh-CN: "这台电脑上找不到这几个更新要用的服务：{missing_services}。多半是用了精简过的系统，Windows 更新可能完全用不了。"
     fixer: helper
     next:
-      zh-CN: 小药箱改不回它。平时更新能用的话可以先不管；更新老是出问题，请懂哥看看是哪个软件改的，用那个软件把它恢复。
+      zh-CN: 精简系统删掉的东西装不回来。请懂哥看看；想正常更新，只能先备份文件，再重装微软官方的原版系统。
   disabled:
     status: advice
     message:
@@ -91,13 +124,12 @@ results:
     next:
       zh-CN: 点下面的「恢复 Windows 更新服务」，改回 Windows 默认的启动方式；以后想改回去，在修改日志里撤销就行。
     links: ["feature:update.enable-services"]
-  missing:
-    status: manual
-    message:
-      zh-CN: "这台电脑上找不到这几个更新要用的服务：{missing_services}。多半是用了精简过的系统，Windows 更新可能完全用不了。"
-    fixer: helper
-    next:
-      zh-CN: 精简系统删掉的东西装不回来。请懂哥看看；想正常更新，只能先备份文件，再重装微软官方的原版系统。
 references:
   - https://learn.microsoft.com/en-us/windows/deployment/update/waas-wu-settings
   - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-update
+  - https://support.microsoft.com/en-us/windows/deployment/updates-lifecycle/pause-updates-in-windows
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-server-update-services/deploy/4-configure-group-policy-settings-for-automatic-updates
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-icm
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-settings
+  - https://learn.microsoft.com/en-us/windows/deployment/update/windows-update-client-policies
+  - https://learn.microsoft.com/en-us/windows/win32/api/winsvc/ns-winsvc-service_launch_protected_info

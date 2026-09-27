@@ -1,14 +1,17 @@
 # 恢复 Windows 更新服务（脚本类功能；计划书 4.2「系统更新失败」「被禁用的恢复为默认」、4.3）。
 # 脚本在 scripts/features/update/ 下。更新要用的服务和各自的默认启动方式写在 shared block update-services 里，
-# 和检测 update.blocked 共用：
-#   Windows Update（wuauserv）手动、更新编排器（UsoSvc）自动（延迟启动）、BITS 手动、加密服务（CryptSvc）自动、
-#   Windows 模块安装程序（TrustedInstaller）手动、传递优化（DoSvc）自动（延迟启动）。
-#   Windows 更新医生（WaaSMedicSvc）Windows 不让管理员改，这里不动（检测里单独报 medic-disabled）。
+# 和检测 update.blocked 共用（微软没有公布客户端的默认值表，下面按社区整理的 Win10 22H2、Win11 23H2～25H2 默认值）：
+#   Windows Update（wuauserv）手动、更新编排器（UsoSvc）自动（延迟启动）、BITS 手动（有下载任务时它自己改成
+#   自动（延迟启动））、加密服务（CryptSvc）自动、Windows 模块安装程序（TrustedInstaller）手动（有更新等重启时
+#   它自己改成自动）。
+#   传递优化（DoSvc）、Windows 更新医生（WaaSMedicSvc）是受保护的服务，服务管理器连管理员也不让改，这里不动
+#   （检测里单独报 protected-disabled）。
 # 只改被设成「禁用」的那几个，其他的原样不动；用 sc.exe 通过服务管理器改（不直接写注册表：直接写要重启才生效），
 # 改完读回来核对。然后把自动启动的几个启动起来（尽力而为），手动的等 Windows 更新用到时自己启动。
 #   enable-services-detect.ps1  有被禁用的 → not-applied，没有 → applied（找不到的服务留给检测去报）
 #   enable-services-run.ps1     -Prepare：before = 每个服务的启动方式；执行：有变化或者没有被禁用的就跳过
-#   enable-services-undo.ps1    把原来是「禁用」的改回「禁用」（已经在运行的服务等停下或者重启以后才停）
+#   enable-services-undo.ps1    把原来是「禁用」的改回「禁用」（BITS、模块安装程序会自己改启动方式，所以不看
+#                               它们现在是什么；已经在运行的服务等停下或者重启以后才停）
 # 为什么没有 break（测试用的「制造故障」脚本）：制造故障就是禁用 Windows 更新服务，这种脚本不放进安装包
 # （计划书第五节第 5 条）。CI 里由 crates/medkit-core/tests/windows.rs 的 update_services_are_restored_and_undone
 # 直接改服务来制造故障，再执行、撤销、核对；通用的往返测试跳过这一项（catalog.rs 的 BREAK_IN_TESTS）。

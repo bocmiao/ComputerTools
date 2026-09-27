@@ -1,8 +1,9 @@
 # Feature: update.enable-services -- undo
 # Sets the services that were Disabled before the run script (-Before) back
-# to Disabled, if they still start the way the run script set them (the
-# Windows default). A service changed again since then is left as it is.
-# Services that are running keep running until they stop or the PC restarts.
+# to Disabled, unless they are missing now. (BITS and Windows Modules
+# Installer change their own start type after the fix, so what they start as
+# now is not compared with the run script's value.) Services that are running
+# keep running until they stop or the PC restarts.
 
 [CmdletBinding()]
 param(
@@ -14,16 +15,19 @@ $ErrorActionPreference = 'Stop'
 # ---- shared block update-services: identical in checks/update/blocked.ps1 and features/update/enable-services-*.ps1 (medkit-data check compares them) ----
 # The services Windows Update needs, with the start type Windows gives each of
 # them (the names sc.exe uses: auto, delayed-auto, demand). "Optimizer" tools
-# set them to Disabled. Windows Update Medic (WaaSMedicSvc) is checked as well,
-# but Windows does not let administrators change it: it has no start type
-# here, and the fix leaves it alone.
+# set them to Disabled. BITS switches itself between demand and delayed-auto,
+# and Windows Modules Installer (TrustedInstaller) to auto while an update
+# waits for a restart; both are fine. Windows Update Medic (WaaSMedicSvc) and
+# Delivery Optimization (DoSvc) are protected services: the service manager
+# refuses to change them even for administrators, so they have no start type
+# here, and the fix leaves them alone (the check reports them).
 $updateServiceDefaults = [ordered]@{
     'wuauserv'         = 'demand'
     'UsoSvc'           = 'delayed-auto'
     'BITS'             = 'demand'
     'CryptSvc'         = 'auto'
     'TrustedInstaller' = 'demand'
-    'DoSvc'            = 'delayed-auto'
+    'DoSvc'            = ''
     'WaaSMedicSvc'     = ''
 }
 
@@ -80,7 +84,8 @@ foreach ($name in $updateServiceDefaults.Keys) {
     if (($updateServiceDefaults[$name].Length -eq 0) -or ([string]$recorded.$name -ne 'disabled')) {
         continue
     }
-    if ((Get-ServiceStart $name) -ne $updateServiceDefaults[$name]) {
+    $now = Get-ServiceStart $name
+    if (($now -eq 'missing') -or ($now -eq 'disabled')) {
         continue
     }
     $exitCode = Set-ServiceStart $name 'disabled'

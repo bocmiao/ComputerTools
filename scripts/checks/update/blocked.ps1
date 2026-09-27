@@ -6,33 +6,50 @@
 #   Windows Update (wuauserv) set to log on as some account other than Local
 #   System (a guide trick: the service then cannot start, and Windows Update
 #   Medic cannot repair it). The account name is not reported.
-# Policies (HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate and \AU),
-# read only: medkit never writes there (plan section 5, item 5):
-#   SetDisableUXWUAccess = 1          no access to Windows Update in Settings
-#   UseWUServer = 1 with WUServer     updates come from an update server of an
-#                                     organization; on a home PC it usually
-#                                     points nowhere
-#   NoAutoUpdate = 1                  no automatic updates (checking by hand
-#                                     still works)
-# Pause (HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings):
+# Policies, read only: medkit never writes them (plan section 5, item 5).
+# Microsoft documents them for Pro and up; Home is not covered by its docs.
+#   HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate:
+#     DisableWindowsUpdateAccess = 1  "Turn off access to all Windows Update
+#                                     features": scans fail (0x8024002F)
+#     SetDisableUXWUAccess = 1        "Remove access to use all Windows Update
+#                                     features": no "Check for updates" in
+#                                     Settings; updates in the background go on
+#   ...\WindowsUpdate\AU:
+#     UseWUServer = 1                 updates come from the update server of an
+#                                     organization (WUServer); on a home PC it
+#                                     usually points nowhere, or is missing
+#     NoAutoUpdate = 1                no automatic updates (checking by hand
+#                                     still works, unless SetDisableUXWUAccess)
+#   HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer:
+#     SettingsPageVisibility          hides the Windows Update page of Settings
+#                                     ("hide:...windowsupdate..." or a
+#                                     "showonly:" list without it)
+# Pause (HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings, what Settings
+# writes; the values stay after a pause ends, so the end time decides):
 #   PauseUpdatesExpiryTime, PauseFeatureUpdatesEndTime,
 #   PauseQualityUpdatesEndTime        when a pause ends (UTC, ISO 8601)
 #   FlightSettingsMaxPauseDays        a raised limit for pausing in Settings
-# Result codes, in this order (what medkit can fix first):
-#   disabled       an update service is Disabled (fix: update.enable-services)
-#   missing        an update service does not exist (a stripped-down Windows)
-#   logon          Windows Update logs on as another account
-#   medic-disabled only Windows Update Medic is Disabled (the fix cannot
-#                  change it)
-#   no-access      SetDisableUXWUAccess
-#   update-server  updates come from an update server (UseWUServer, WUServer)
-#   paused-long    paused for longer than Settings allows ($maxPauseDays)
-#   auto-off       NoAutoUpdate
-#   paused         paused within the normal limit
+# Result codes, in this order (what medkit can fix first, then what blocks
+# updates completely):
+#   disabled            an update service is Disabled (fix: update.enable-services)
+#   missing             an update service does not exist (a stripped-down Windows)
+#   logon               Windows Update logs on as another account
+#   protected-disabled  a protected update service is Disabled (the fix
+#                       cannot change it)
+#   update-server       UseWUServer
+#   access-off          DisableWindowsUpdateAccess
+#   paused-long         paused for longer than Settings allows ($maxPauseDays)
+#   all-off             NoAutoUpdate and SetDisableUXWUAccess together
+#   auto-off            NoAutoUpdate
+#   no-check            SetDisableUXWUAccess
+#   page-hidden         SettingsPageVisibility hides the page
+#   paused              paused within the normal limit
 #   ok
-# Facts: disabled_services, missing_services (display names), no_access,
-# update_server, auto_off (true/false), paused_until (local date or ''),
-# pause_days (days left), pause_limit_days (FlightSettingsMaxPauseDays or 0).
+# Facts: disabled_services, missing_services, protected_disabled (names as the
+# Services window shows them), logon_changed, update_server, access_off,
+# no_check, auto_off, page_hidden (true/false), paused_until (local date or
+# ''), pause_days (days left), pause_limit_days (FlightSettingsMaxPauseDays
+# or 0).
 
 [CmdletBinding()]
 param()
@@ -42,16 +59,19 @@ $ErrorActionPreference = 'Stop'
 # ---- shared block update-services: identical in checks/update/blocked.ps1 and features/update/enable-services-*.ps1 (medkit-data check compares them) ----
 # The services Windows Update needs, with the start type Windows gives each of
 # them (the names sc.exe uses: auto, delayed-auto, demand). "Optimizer" tools
-# set them to Disabled. Windows Update Medic (WaaSMedicSvc) is checked as well,
-# but Windows does not let administrators change it: it has no start type
-# here, and the fix leaves it alone.
+# set them to Disabled. BITS switches itself between demand and delayed-auto,
+# and Windows Modules Installer (TrustedInstaller) to auto while an update
+# waits for a restart; both are fine. Windows Update Medic (WaaSMedicSvc) and
+# Delivery Optimization (DoSvc) are protected services: the service manager
+# refuses to change them even for administrators, so they have no start type
+# here, and the fix leaves them alone (the check reports them).
 $updateServiceDefaults = [ordered]@{
     'wuauserv'         = 'demand'
     'UsoSvc'           = 'delayed-auto'
     'BITS'             = 'demand'
     'CryptSvc'         = 'auto'
     'TrustedInstaller' = 'demand'
-    'DoSvc'            = 'delayed-auto'
+    'DoSvc'            = ''
     'WaaSMedicSvc'     = ''
 }
 
@@ -117,27 +137,34 @@ function Test-One {
     }
 }
 
-# Services. Display names are what the Services window shows.
+# The name the Services window shows, or the service name when Windows cannot
+# resolve it (Windows Update Medic often shows "@WaaSMedicSvcImpl.dll,-100").
+function Get-ServiceLabel {
+    param([string]$Name)
+    $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($null -ne $service) {
+        $label = [string]$service.DisplayName
+        if (($label.Length -gt 0) -and (-not $label.StartsWith('@'))) {
+            return $label
+        }
+    }
+    return $Name
+}
+
+# Services
 $disabled = New-Object System.Collections.Generic.List[string]
 $missing = New-Object System.Collections.Generic.List[string]
-$medicDisabled = $false
+$protected = New-Object System.Collections.Generic.List[string]
 foreach ($name in $updateServiceDefaults.Keys) {
     $start = Get-ServiceStart $name
     if ($start -eq 'missing') {
         $missing.Add($name)
     }
+    elseif (($start -eq 'disabled') -and ($updateServiceDefaults[$name].Length -gt 0)) {
+        $disabled.Add((Get-ServiceLabel $name))
+    }
     elseif ($start -eq 'disabled') {
-        if ($updateServiceDefaults[$name].Length -eq 0) {
-            $medicDisabled = $true
-            continue
-        }
-        $service = Get-Service -Name $name -ErrorAction SilentlyContinue
-        if ($null -ne $service) {
-            $disabled.Add([string]$service.DisplayName)
-        }
-        else {
-            $disabled.Add($name)
-        }
+        $protected.Add((Get-ServiceLabel $name))
     }
 }
 $logonChanged = $false
@@ -149,10 +176,18 @@ if (($null -ne $wu) -and ([string]$wu.StartName).Length -gt 0) {
 # Policies
 $policyKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
 $auKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
-$noAccess = Test-One (Get-Value $policyKey 'SetDisableUXWUAccess')
-$server = [string](Get-Value $policyKey 'WUServer')
-$updateServer = (Test-One (Get-Value $auKey 'UseWUServer')) -and ($server.Trim().Length -gt 0)
+$accessOff = Test-One (Get-Value $policyKey 'DisableWindowsUpdateAccess')
+$noCheck = Test-One (Get-Value $policyKey 'SetDisableUXWUAccess')
+$updateServer = Test-One (Get-Value $auKey 'UseWUServer')
 $autoOff = Test-One (Get-Value $auKey 'NoAutoUpdate')
+$pageHidden = $false
+$visibility = ([string](Get-Value 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' 'SettingsPageVisibility')).Trim().ToLowerInvariant()
+if ($visibility.Contains(':')) {
+    $mode = $visibility.Substring(0, $visibility.IndexOf(':'))
+    $pages = @($visibility.Substring($visibility.IndexOf(':') + 1).Split(';') | ForEach-Object { $_.Trim() })
+    $listed = ($pages -contains 'windowsupdate')
+    $pageHidden = (($mode -eq 'hide') -and $listed) -or (($mode -eq 'showonly') -and (-not $listed))
+}
 
 # Pause
 $uxKey = 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings'
@@ -198,20 +233,29 @@ elseif ($missing.Count -gt 0) {
 elseif ($logonChanged) {
     $result = 'logon'
 }
-elseif ($medicDisabled) {
-    $result = 'medic-disabled'
-}
-elseif ($noAccess) {
-    $result = 'no-access'
+elseif ($protected.Count -gt 0) {
+    $result = 'protected-disabled'
 }
 elseif ($updateServer) {
     $result = 'update-server'
 }
+elseif ($accessOff) {
+    $result = 'access-off'
+}
 elseif ($pauseDays -gt $maxPauseDays) {
     $result = 'paused-long'
 }
+elseif ($autoOff -and $noCheck) {
+    $result = 'all-off'
+}
 elseif ($autoOff) {
     $result = 'auto-off'
+}
+elseif ($noCheck) {
+    $result = 'no-check'
+}
+elseif ($pageHidden) {
+    $result = 'page-hidden'
 }
 elseif ($pauseDays -gt 0) {
     $result = 'paused'
@@ -220,15 +264,17 @@ elseif ($pauseDays -gt 0) {
 [pscustomobject]@{
     result = $result
     facts  = [ordered]@{
-        disabled_services = $disabled.ToArray()
-        missing_services  = $missing.ToArray()
-        medic_disabled    = $medicDisabled
-        logon_changed     = $logonChanged
-        no_access         = $noAccess
-        update_server     = $updateServer
-        auto_off          = $autoOff
-        paused_until      = $pausedUntil
-        pause_days        = $pauseDays
-        pause_limit_days  = $pauseLimit
+        disabled_services  = $disabled.ToArray()
+        missing_services   = $missing.ToArray()
+        protected_disabled = $protected.ToArray()
+        logon_changed      = $logonChanged
+        update_server      = $updateServer
+        access_off         = $accessOff
+        no_check           = $noCheck
+        auto_off           = $autoOff
+        page_hidden        = $pageHidden
+        paused_until       = $pausedUntil
+        pause_days         = $pauseDays
+        pause_limit_days   = $pauseLimit
     }
 }
