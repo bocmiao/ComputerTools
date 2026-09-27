@@ -1,0 +1,43 @@
+# Windows 防火墙有没有被关掉。脚本：scripts/checks/security/firewall.ps1
+# 看专用网络、公用网络两种（Get-NetFirewallProfile -PolicyStore ActiveStore，设置和策略合在一起的实际状态）；域网络只在单位
+# 网络里有用，不判断。装了别的安全软件、它自带的防火墙开着时，Windows 会按设计把自己的防火墙关掉：在 root\SecurityCenter2 的
+# FirewallProduct 里登记了、状态是开着（productState 的 0xF000 位是 0x1000）、不是微软的，就算「由它接管」，不报问题。
+# 服务器版没有 SecurityCenter2，当作没装别的防火墙。
+# 只读。小药箱不开关防火墙（计划书第五节第 22 条，引擎的黑名单也不许写防火墙的设置）：给按钮打开防火墙设置，让用户自己开。
+# 结果：ok、third-party、off、unknown-state（读不到：防火墙服务被停了、被精简掉了）。事实：private、public、products。
+id: security.firewall
+schema_version: 1
+title: { zh-CN: Windows 防火墙 }
+description:
+  zh-CN: 看看 Windows 防火墙有没有被关掉。连在酒店、咖啡店、学校这些公共 WiFi 上时，防火墙挡着同一个网络里别的电脑直接连进来。
+category: security
+requires_admin: false
+probe:
+  script: checks/security/firewall.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: Windows 防火墙开着（专用网络和公用网络都开着），没问题。
+  third-party:
+    status: ok
+    message:
+      zh-CN: "Windows 自己的防火墙关着，由「{products}」的防火墙接管，这是正常的。"
+  off:
+    status: advice
+    message:
+      zh-CN: Windows 防火墙被关掉了（专用网络或者公用网络），也没有别的安全软件的防火墙开着。连在酒店、咖啡店、学校这些公共 WiFi 上时，同一个网络里的其他电脑能直接连到你的电脑上，病毒也更容易传进来。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「Windows Defender 防火墙」，点左边的「启用或关闭 Windows Defender 防火墙」，把专用网络和公用网络都选「启用」，点「确定」。当初是为了玩游戏联机、局域网共享才关的，打开以后在防火墙里允许那个游戏或者共享就行，不用整个关掉。单位、学校统一设置的电脑不要改。
+    links: ["tool:open.firewall"]
+  unknown-state:
+    status: unknown
+    message:
+      zh-CN: 没读到防火墙的状态（防火墙的服务可能被停掉了，或者被精简系统删掉了）。
+    next:
+      zh-CN: 点下面的按钮打开「Windows Defender 防火墙」看看。打不开或者说服务没有运行的，请懂哥帮忙看看。
+    links: ["tool:open.firewall"]
+references:
+  - https://support.microsoft.com/en-us/windows/turn-microsoft-defender-firewall-on-or-off-ec0844f7-aebd-0583-67fe-601ecf5d774f
+  - https://learn.microsoft.com/en-us/powershell/module/netsecurity/get-netfirewallprofile

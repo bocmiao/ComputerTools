@@ -32,6 +32,7 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     ("event-viewer", Program { exe: "mmc.exe", args: &["eventvwr.msc"] }),
     ("control-panel", Program { exe: "control.exe", args: &[] }),
     ("uac-settings", Program { exe: "UserAccountControlSettings.exe", args: &[] }),
+    ("firewall", Program { exe: "control.exe", args: &["firewall.cpl"] }),
 ];
 
 /// 「设置」里能打开的页面（ms-settings:<页面>）。

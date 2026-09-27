@@ -1,0 +1,12 @@
+# 打开控制面板里的「Windows Defender 防火墙」（control.exe firewall.cpl），左边有「启用或关闭 Windows Defender 防火墙」。
+# 体检 security.firewall 查出防火墙被关掉时，用户在这里自己打开（小药箱不开关防火墙：计划书第五节第 22 条）。
+id: open.firewall
+schema_version: 1
+group: open
+title: { zh-CN: Windows 防火墙 }
+description:
+  zh-CN: 打开控制面板里的「Windows Defender 防火墙」，看看专用网络、公用网络的防火墙是不是开着；左边的「启用或关闭 Windows Defender 防火墙」可以改。
+category: security
+open: { program: firewall }
+references:
+  - https://support.microsoft.com/en-us/windows/turn-microsoft-defender-firewall-on-or-off-ec0844f7-aebd-0583-67fe-601ecf5d774f

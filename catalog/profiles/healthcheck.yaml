@@ -23,6 +23,7 @@ checks:
   # 安全
   - security.browser-shortcuts
   - security.uac
+  - security.firewall
   - security.bitlocker-status
   - security.secureboot-ca2023
   - security.tpm
