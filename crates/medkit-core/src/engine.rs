@@ -1515,9 +1515,10 @@ impl Engine {
         Ok(r)
     }
 
-    /// 菜单上的字：MenuText、ItemName、类型名，`@…` 解开，去掉快捷键的 `&`；都没有就用扩展名。
+    /// 菜单上的字：MenuText，没有就是类型名（资源管理器也是这样显示的），再没有才用 ItemName（新建出来的文件的
+    /// 名字，比如「新建 文本文档」）；`@…` 解开，去掉快捷键的 `&`；都没有就用扩展名。
     fn new_menu_title(&self, g: &new_menu::Group) -> String {
-        [&g.menu_text, &g.item_name, &g.type_name]
+        [&g.menu_text, &g.type_name, &g.item_name]
             .into_iter()
             .find_map(|text| {
                 let text = text.trim();

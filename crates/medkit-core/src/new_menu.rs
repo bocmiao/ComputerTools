@@ -151,7 +151,7 @@ pub struct Group {
     pub ext: String,
     pub current_progid: String,
     pub locations: Vec<Location>,
-    /// 菜单上的字：MenuText、ItemName、类型名（可能是 `@文件,-编号`，引擎解开）
+    /// 菜单上的字：MenuText、类型名、ItemName（新建出来的文件的名字），可能是 `@文件,-编号`，引擎解开
     pub menu_text: String,
     pub item_name: String,
     pub type_name: String,

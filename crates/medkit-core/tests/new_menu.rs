@@ -38,7 +38,9 @@ fn world() -> World {
     let dir = tempfile::tempdir().unwrap();
     let platform = Arc::new(MockPlatform::new());
     platform.set_indirect("@C:\\Program Files\\WPS\\wps.exe,-100", "WPS 文字 文档");
-    platform.set_indirect(r"@%SystemRoot%\system32\notepad.exe,-470", "文本文档");
+    // ItemName 是新建出来的文件的名字，菜单上显示的是类型名
+    platform.set_indirect(r"@%SystemRoot%\system32\notepad.exe,-470", "新建 文本文档");
+    platform.set_indirect(r"@%SystemRoot%\system32\notepad.exe,-469", "文本文档");
     let m = RegRoot::LocalMachine;
     platform.reg_set(&m, WPS, "NullFile", &empty()).unwrap();
     // Word 的那个现在不用（.docx 被 WPS 接管了），但也一起关，免得换回 Word 以后又冒出来
@@ -63,7 +65,8 @@ fn world() -> World {
                  json!({ "type_name": "@C:\\Program Files\\WPS\\wps.exe,-100" })),
             item("machine", ".docx", "Word.Document.12", "KWPS.Document.12", json!(["FileName"]), json!({})),
             item("machine", ".txt", "", "txtfile", json!(["ItemName", "NullFile"]),
-                 json!({ "item_name": "@%SystemRoot%\\system32\\notepad.exe,-470" })),
+                 json!({ "item_name": "@%SystemRoot%\\system32\\notepad.exe,-470",
+                         "type_name": "@%SystemRoot%\\system32\\notepad.exe,-469" })),
             item("user", ".xmind", "", "", json!("Data"), json!({ "menu_text": "XMind 思维导图(&X)" })),
             // 快捷方式：不列
             item("machine", ".lnk", "", "lnkfile", json!(["NullFile", "Handler"]), json!({})),

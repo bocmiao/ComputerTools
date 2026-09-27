@@ -10,8 +10,8 @@
 #                              extension's current ProgID counts
 # An entry is made by one of the values FileName, Command, Data or NullFile
 # (Microsoft, "Extending the New Submenu"); Handler names a COM class that
-# makes it. Its text is MenuText, else ItemName, else the type name of the
-# extension's current ProgID.
+# makes it. Its text is MenuText, else the type name of the extension's
+# current ProgID (ItemName is the name of the new file: "New Text Document").
 # Output: result = 'ok', items = one object per ShellNew key: hive (machine /
 # user), ext, progid ('' for the direct form), current_progid (the default
 # value of the extension, the user's classes first), values (the names of the
