@@ -1,0 +1,43 @@
+id: system.sync-time
+schema_version: 1
+group: action
+title: { zh-CN: 同步系统时间 }
+description:
+  zh-CN: 请求 Windows 从这台电脑已配置的时间源校准时钟。不会改时区或时间服务器；需要联网，单位电脑仍使用单位的时间源。
+category: system
+requires_admin: true
+timeout_sec: 45
+run:
+  script: tools/system/sync-time.ps1
+results:
+  requested:
+    status: ok
+    message:
+      zh-CN: 已请求 Windows 同步时间。请再看任务栏时钟和时区是否正确；若日期仍不对，打开日期和时间设置检查。
+    next:
+      zh-CN: 如果每次断电后时间又跳回过去，可能需要更换主板电池。
+    links: ["tool:settings.date-time"]
+  disabled:
+    status: advice
+    message:
+      zh-CN: Windows 时间服务被禁用了，小药箱没有修改它的启动方式。
+    next:
+      zh-CN: 个人电脑可以在「服务」中找到 Windows Time，确认原因后恢复启动；单位电脑请联系管理员。
+    links: ["tool:open.services", "tool:settings.date-time"]
+  service-failed:
+    status: advice
+    message:
+      zh-CN: Windows 时间服务没能启动，所以这次没有同步时间。
+    next:
+      zh-CN: 可以打开日期和时间设置，尝试「立即同步」；单位电脑请联系管理员。
+    links: ["tool:settings.date-time"]
+  no-time-data:
+    status: advice
+    message:
+      zh-CN: Windows 时间服务没有从当前时间源取得可用数据，这次没有确认同步成功。
+    next:
+      zh-CN: 先检查网络和时区，再到日期和时间设置尝试「立即同步」。单位电脑请联系管理员。
+    links: ["tool:settings.date-time", "symptom:network"]
+references:
+  - https://learn.microsoft.com/en-us/windows-server/networking/windows-time-service/Windows-Time-Service-Tools-and-Settings
+  - https://support.microsoft.com/en-us/windows/experience/personalization/set-time-date-and-time-zone-settings-in-windows

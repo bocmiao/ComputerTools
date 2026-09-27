@@ -1654,6 +1654,23 @@ const TOOL_LIST: MockTool[] = [
   ),
   defineTool(
     {
+      id: 'network.open-login',
+      title: '打开网络登录页',
+      description: '酒店、校园或商场的 WiFi 连上后仍没网时，打开 Windows 使用的联网检测地址，让网络跳转到登录页。',
+      category: 'network',
+      group: 'action',
+    },
+    {
+      run: () => ({
+        status: 'ok', resultCode: 'opened',
+        message: '已在默认浏览器中打开联网检测地址。如果跳出了登录页，确认是当前 WiFi 提供方的页面后再登录。',
+        next: '登录后回到小药箱，重新运行「上不了网」诊断。',
+        links: ['symptom:network'],
+      }),
+    },
+  ),
+  defineTool(
+    {
       id: 'system.restart-explorer',
       title: '重启资源管理器',
       description: '任务栏点不动、桌面图标不见了、文件夹窗口卡住时，把资源管理器关掉再重新打开，不用重启电脑。',
@@ -1679,6 +1696,23 @@ const TOOL_LIST: MockTool[] = [
               message: '资源管理器已经重新打开了。桌面和任务栏要是还没出来，稍等几秒钟。',
             },
       slowMs: 1500,
+    },
+  ),
+  defineTool(
+    {
+      id: 'system.sync-time',
+      title: '同步系统时间',
+      description: '请求 Windows 从已配置的时间源校准时钟，不改时区或时间服务器。',
+      category: 'system', group: 'action',
+    },
+    {
+      run: () => ({
+        status: 'ok', resultCode: 'requested',
+        message: '已请求 Windows 同步时间。请再看任务栏时钟和时区是否正确。',
+        next: '如果每次断电后时间又跳回过去，可能需要更换主板电池。',
+        links: ['tool:settings.date-time'],
+      }),
+      requiresAdmin: true,
     },
   ),
   defineTool(

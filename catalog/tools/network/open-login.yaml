@@ -1,0 +1,22 @@
+id: network.open-login
+schema_version: 1
+group: action
+title: { zh-CN: 打开网络登录页 }
+description:
+  zh-CN: 酒店、校园或商场的 WiFi 连上后仍没网时，打开 Windows 使用的联网检测地址。网络需要登录的话，浏览器通常会跳到该网络的登录页；家里的网络不需要此操作。
+category: network
+requires_admin: false
+timeout_sec: 15
+run:
+  script: tools/network/open-login.ps1
+results:
+  opened:
+    status: ok
+    message:
+      zh-CN: 已在默认浏览器中打开联网检测地址。如果跳出了登录页，确认是当前 WiFi 提供方的页面后再登录；若打开的是普通网页或打不开，请继续排查网络。
+    next:
+      zh-CN: 登录后回到小药箱，重新运行「上不了网」诊断。
+    links: ["symptom:network"]
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/internet-explorer-edge-open-connect-corporate-public-network
+  - https://learn.microsoft.com/en-us/windows-server/networking/ncsi/ncsi-overview

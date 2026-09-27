@@ -25,7 +25,7 @@ results:
     fixer: user
     next:
       zh-CN: 打开「日期和时间」，打开「自动设置时间」，再点「立即同步」（要连着网；网页打不开不影响同步时间）。同步不了的话，关掉「自动设置时间」，点「更改」手动改对。如果每次关机再开机，时间又变回去了，多半是主板上的纽扣电池没电了：台式机可以自己换一颗（常见型号 CR2032），笔记本请找售后或懂哥。
-    links: ["tool:settings.date-time"]
+    links: ["tool:system.sync-time", "tool:settings.date-time"]
 references:
   - https://support.microsoft.com/en-us/windows/how-to-set-your-time-and-time-zone-dfaa7122-479f-5b98-2a7b-fa0b6e01b261
   - https://support.google.com/chrome/answer/6098869
