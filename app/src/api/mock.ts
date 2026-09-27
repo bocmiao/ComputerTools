@@ -1193,7 +1193,7 @@ interface EntryOptions {
 
 /** 和后端的规则一样：没撤销过、改成功了（或者状态不确定），而且功能本身能撤销 */
 function canUndo(e: JournalEntryView): boolean {
-  const reversible = e.feature === 'boot.startup-disable' || (FEATURES.get(e.feature)?.summary.reversible ?? false)
+  const reversible = e.feature === 'startup' || (FEATURES.get(e.feature)?.summary.reversible ?? false)
   return !e.undone && (e.ok || e.pending) && reversible
 }
 
@@ -1376,10 +1376,6 @@ function undoOne(entry: JournalEntryView, force: boolean, inSession: boolean): U
     }
   }
   values.set(entry.target, entry.before)
-  if (entry.feature === 'boot.startup-disable') {
-    const item = startupMock.find((x) => `startup:${x.id}` === entry.target)
-    if (item) item.disabledEntry = null
-  }
   entry.undone = true
   entry.undoneAt = iso(Date.now())
   entry.canUndo = false
@@ -1909,12 +1905,36 @@ function openMockTool(id: string): null {
 
 type Handlers = { [K in CommandName]: (args: CommandArgs<K>) => CommandResult<K> }
 
+// 开机启动项：开关的值用和后端修改日志一样的说法
+const STARTUP_ON = '开机自动启动（默认）'
+const STARTUP_OFF = '不自动启动（已停用）'
 const startupMock: StartupItem[] = [
-  { id: 'user-chat', name: '聊天软件', command: 'C:\\Program Files\\Chat\\chat.exe', scope: '当前用户', active: true, disabledEntry: null },
-  { id: 'user-cloud', name: '网盘同步', command: 'C:\\Program Files\\Cloud\\cloud.exe', scope: '当前用户', active: true, disabledEntry: null },
-  { id: 'all-audio', name: '声卡控制面板', command: 'C:\\Program Files\\Audio\\control.exe', scope: '所有用户', active: true, disabledEntry: null },
+  {
+    id: 'user-chat', source: 'user-run', name: 'WeChat', title: '微信', program: 'WeChat.exe',
+    path: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe', exists: true,
+    publisher: 'Tencent Technology(Shenzhen) Company Limited', signature: 'valid', location: '当前用户（注册表）',
+    enabled: true, advice: 'can-disable', reason: '不需要一开机就用的话，可以停用；软件本身还在，想用时照样能打开。',
+  },
+  {
+    id: 'user-cloud', source: 'user-folder', name: '网盘同步.lnk', title: '网盘同步', program: 'cloud.exe',
+    path: 'C:\\Program Files\\Cloud\\cloud.exe', exists: true, publisher: null, signature: 'unsigned',
+    location: '当前用户（启动文件夹）', enabled: true, advice: 'can-disable',
+    reason: '不需要一开机就用的话，可以停用；软件本身还在，想用时照样能打开。',
+  },
+  {
+    id: 'all-audio', source: 'machine-run', name: 'RtkAudUService', title: 'Realtek HD Audio Universal Service',
+    program: 'RtkAudUService64.exe', path: 'C:\\Windows\\System32\\RtkAudUService64.exe', exists: true,
+    publisher: 'Realtek Semiconductor Corp.', signature: 'valid', location: '所有用户（注册表）', enabled: true,
+    advice: 'keep', reason: '硬件驱动或电脑厂商的功能（触控板、声音、快捷键这类），停用后可能不好用，建议保持原样。',
+  },
+  {
+    id: 'all-old', source: 'machine-run32', name: 'OldUpdater', title: 'OldUpdater', program: 'updater.exe',
+    path: 'C:\\Program Files (x86)\\Old\\updater.exe', exists: false, publisher: null, signature: 'unknown',
+    location: '所有用户（注册表）', enabled: false, advice: 'can-disable',
+    reason: '找不到它要启动的程序，软件可能已经卸载了，停用它没有坏处。',
+  },
 ]
-for (const item of startupMock) values.set(`startup:${item.id}`, item.command)
+for (const item of startupMock) values.set(`startup:${item.id}`, item.enabled ? STARTUP_ON : STARTUP_OFF)
 
 const handlers: Handlers = {
   system_info: () => SYSTEM,
@@ -2067,21 +2087,31 @@ const handlers: Handlers = {
 
   tool_open: ({ id }) => openMockTool(id),
 
-  startup_list: () => startupMock.map((item) => ({ ...item, active: values.get(`startup:${item.id}`) !== '（不存在）' })),
+  startup_list: () => startupMock.map((item) => ({ ...item, enabled: values.get(`startup:${item.id}`) !== STARTUP_OFF })),
 
-  startup_disable: ({ id }) => {
-    const item = startupMock.find((x) => x.id === id && values.get(`startup:${x.id}`) !== '（不存在）')
-    if (!item) throw '这个启动项已经不存在或已停用，请刷新列表。'
+  startup_set: ({ id, enabled }) => {
+    const item = startupMock.find((x) => x.id === id)
+    if (!item) throw '这个启动项不在刚才的列表里了，请刷新一下再试。'
+    const target = `startup:${item.id}`
+    const before = values.get(target) ?? STARTUP_ON
+    const result: ApplyResult = {
+      feature: 'startup', sessionId: ensureSession().id, entryIds: [], ok: true, verified: 'applied',
+      message: '本来就是这样，不用改。', reboot: 'none', notes: [], error: null,
+    }
+    if ((before !== STARTUP_OFF) === enabled) return result
     const session = ensureSession()
     const entry: JournalEntryView = {
-      id: uuid(), sessionId: session.id, time: iso(Date.now()), feature: 'boot.startup-disable',
-      featureTitle: '停用开机启动项', target: `startup:${item.id}`, before: item.command,
-      after: '（不存在）', ok: true, pending: false, undone: false, undoneAt: null, canUndo: true, error: null,
+      id: uuid(), sessionId: session.id, time: iso(Date.now()), feature: 'startup',
+      featureTitle: `开机启动项：${item.name}`, target, before, after: enabled ? '开机自动启动' : STARTUP_OFF,
+      ok: true, pending: false, undone: false, undoneAt: null, canUndo: true, error: null,
     }
     session.entries.push(entry)
-    values.set(entry.target, entry.after)
-    item.disabledEntry = entry.id
-    return entry.id
+    values.set(target, entry.after)
+    result.entryIds = [entry.id]
+    result.message = enabled
+      ? '已经恢复：下次开机登录时，它会自动启动。'
+      : '已经停用：下次开机登录时，它不会再自动启动。软件本身还在，想用时照样能打开；想改回来，在这里或者任务管理器的「启动应用」里都行。'
+    return result
   },
   rename_select_folder: () => '演示文件夹（不会改动真实文件）',
   rename_preview: ({ prefix }) => ({

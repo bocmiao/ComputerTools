@@ -62,9 +62,21 @@ export interface UndoResult {
   reboot: Reboot               // 恢复以后要做什么才看得到效果；没恢复成功时是 'none'
 }
 
+// 开机启动项（第 9 节）：开关和任务管理器的「启动应用」是同一个
+export type StartupSource = 'user-run' | 'machine-run' | 'machine-run32' | 'user-folder' | 'common-folder'
+export type StartupSignature = 'valid' | 'unsigned' | 'invalid' | 'unknown' | 'skipped'
+export type StartupAdvice = 'keep' | 'can-disable'
 export interface StartupItem {
-  id: string; name: string; command: string; scope: string
-  active: boolean; disabledEntry: string | null
+  id: string                   // 改开关时原样传回
+  source: StartupSource
+  name: string                 // 注册表里的值名，或「启动」文件夹里的文件名
+  title: string                // 程序文件里写的说明，没有就是 name
+  program: string; path: string; exists: boolean
+  publisher: string | null     // 签名的发布者，没有签名时是文件里写的公司名
+  signature: StartupSignature
+  location: string             // 「当前用户（注册表）」这类说明
+  enabled: boolean             // 开机时会不会自动启动
+  advice: StartupAdvice; reason: string
 }
 
 // 小工具（第 11 节）

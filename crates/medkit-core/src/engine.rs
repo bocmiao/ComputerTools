@@ -5,9 +5,9 @@
 //! - 一个功能里的原语是一个整体，中途失败就把已改的按倒序退回；
 //! - 撤销前先核对当前值是否还是当初写进去的值，不是就提示「被改过」，由用户决定。
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use serde_json::{Map, Value};
 
@@ -19,13 +19,14 @@ use crate::journal::{
     new_id, now_rfc3339,
 };
 use crate::model::{
-    Action, Check, Feature, RegistryAction, Risk, StartType, Status, Symptom, Target, Tool, ToolGroup, Undo,
+    Action, Check, Feature, RegType, RegistryAction, Risk, StartType, Status, Symptom, Target, Tool, ToolGroup, Undo,
 };
 use crate::platform::{OpenRequest, Platform, PlatformError};
 use crate::registry::{RegRoot, RegValue, SpecRoot, display_opt, is_sid, key_ancestors, split_key};
 use crate::render::render;
 use crate::report::redact;
 use crate::script::ScriptRunner;
+use crate::startup;
 use crate::tools;
 use crate::views::{
     ApplyResult, CatalogSummary, CheckResult, FeatureState, FeatureStateKind, FeatureSummary, JournalEntryView,
@@ -38,9 +39,10 @@ const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
 const WIN11_BUILD: u32 = 22000;
 const RESTORE_POINT_TIMEOUT: Duration = Duration::from_secs(300);
 pub const RESTORE_POINT_SCRIPT: &str = "host/restore-point.ps1";
-const STARTUP_FEATURE: &str = "boot.startup-disable";
-const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-const WOW_RUN_KEY: &str = r"Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run";
+/// 旧的做法（删掉 Run 值来停用启动项）留在修改日志里的记录，仍然按原样显示、可以撤销
+const LEGACY_STARTUP_FEATURE: &str = "boot.startup-disable";
+/// 列启动项要查每个程序的签名，大文件慢；脚本自己有时间上限，这里再留些余量
+const STARTUP_LIST_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// 一个原语没改成功。
 struct StepError {
@@ -106,6 +108,8 @@ pub struct Engine {
     other_results: Mutex<Vec<CheckResult>>,
     /// 本机时区。启动时读一次：之后多线程时，有的系统上读不到
     local_offset: Option<time::UtcOffset>,
+    /// 最近一次列出的开机启动项：改开关时只认这里面有的
+    startup_items: Mutex<Vec<startup::RawItem>>,
 }
 
 impl Engine {
@@ -131,6 +135,7 @@ impl Engine {
             last_profile_time: Mutex::new(None),
             other_results: Mutex::new(Vec::new()),
             local_offset: time::UtcOffset::current_local_offset().ok(),
+            startup_items: Mutex::new(Vec::new()),
         }
     }
 
@@ -1008,126 +1013,127 @@ impl Engine {
 
     // ───────────── 开机启动项 ─────────────
 
-    fn startup_locations(&self) -> [(RegRoot, &'static str, &'static str); 3] {
-        let user = self
-            .platform
-            .interactive_user()
-            .filter(|u| is_sid(&u.sid))
-            .map_or(RegRoot::CurrentUser, |u| RegRoot::User(u.sid));
-        [
-            (user, RUN_KEY, "当前用户"),
-            (RegRoot::LocalMachine, RUN_KEY, "所有用户"),
-            (RegRoot::LocalMachine, WOW_RUN_KEY, "所有用户（32 位）"),
-        ]
-    }
-
-    fn startup_id(root: &RegRoot, key: &str, name: &str) -> String {
-        hex::encode(format!(
-            "{}\0{}\0{}",
-            root.to_string().to_ascii_lowercase(),
-            key.to_ascii_lowercase(),
-            name.to_lowercase()
-        ))
-    }
-
-    fn startup_command(value: &RegValue) -> Option<&str> {
-        match value {
-            RegValue::String(s) | RegValue::ExpandString(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    /// 只管理常见的 Run 项。由小药箱停用的项从修改日志中显示，保留恢复入口。
+    /// 列出开机启动项。开关状态由引擎自己读，和改的时候读写同一个位置（登录用户的 HKCU）。
     pub fn startup_list(&self) -> Result<Vec<StartupItem>> {
-        let locations = self.startup_locations();
-        let mut items = BTreeMap::new();
-        for (root, key, scope) in &locations {
-            for (name, value) in self.platform.reg_values(root, key)? {
-                if name.is_empty() || name.contains('\0') {
-                    continue;
-                }
-                let Some(command) = Self::startup_command(&value) else {
-                    continue;
-                };
-                let id = Self::startup_id(root, key, &name);
-                items.insert(
-                    id.clone(),
-                    StartupItem {
-                        id,
-                        name,
-                        command: command.to_owned(),
-                        scope: (*scope).to_owned(),
-                        active: true,
-                        disabled_entry: None,
-                    },
-                );
-            }
+        let mut args = Map::new();
+        args.insert("UserHive".into(), Value::String(self.user_hive()));
+        let v = self
+            .runner
+            .run(startup::LIST_SCRIPT, &args, STARTUP_LIST_TIMEOUT)
+            .map_err(|e| Error::Invalid(format!("没能列出开机启动项：{e}")))?;
+        let raw = startup::parse_list(&v).map_err(Error::Invalid)?;
+        let mut items = Vec::with_capacity(raw.len());
+        for r in &raw {
+            let enabled = self.startup_enabled(r.source, &r.name)?;
+            items.push(Self::startup_view(r, enabled));
         }
-        for entry in self.journal.entries()? {
-            if entry.apply.feature != STARTUP_FEATURE || !self.can_undo(&entry) {
-                continue;
-            }
-            let (TargetRef::Registry { root, key, name }, State::Registry { value: Some(value), .. }) =
-                (&entry.apply.target, &entry.apply.before)
-            else {
-                continue;
-            };
-            let Some(command) = Self::startup_command(value) else {
-                continue;
-            };
-            let Some((_, _, scope)) = locations.iter().find(|(r, k, _)| r == root && k.eq_ignore_ascii_case(key))
-            else {
-                continue;
-            };
-            if self.platform.reg_get(root, key, name)?.is_some() {
-                continue;
-            }
-            let id = Self::startup_id(root, key, name);
-            items.insert(
-                id.clone(),
-                StartupItem {
-                    id,
-                    name: name.clone(),
-                    command: command.to_owned(),
-                    scope: (*scope).to_owned(),
-                    active: false,
-                    disabled_entry: Some(entry.apply.id),
-                },
-            );
-        }
-        Ok(items.into_values().collect())
+        *self.startup_items.lock().unwrap() = raw;
+        Ok(items)
     }
 
-    /// 停用一个当前确实存在的 Run 项；修改前写日志，失败时自动恢复。
-    pub fn startup_disable(&self, id: &str) -> Result<String> {
+    /// 停用或恢复一个开机启动项：和任务管理器「启动应用」写同一个开关，只停用、不删除，记进修改日志，能撤销。
+    /// 只认最近一次列出来的启动项。
+    pub fn startup_set(&self, id: &str, enabled: bool) -> Result<ApplyResult> {
         let _guard = self.apply_lock.lock().unwrap();
-        let item = self
-            .startup_list()?
-            .into_iter()
-            .find(|item| item.id == id && item.active)
-            .ok_or_else(|| Error::Invalid("这个启动项已经不存在或已停用，请刷新列表。".to_owned()))?;
-        let (root, key, _) = self
-            .startup_locations()
-            .into_iter()
-            .find(|(root, key, _)| Self::startup_id(root, key, &item.name) == id)
-            .ok_or_else(|| Error::Invalid("找不到这个启动项。".to_owned()))?;
-        let prefix = if root == RegRoot::LocalMachine { "HKLM" } else { "HKCU" };
-        let action = Action::Registry(RegistryAction {
-            key: format!("{prefix}\\{key}"),
-            name: item.name,
-            value_type: None,
-            value: None,
-            delete: true,
-        });
-        let (target, state) = self.current(&action)?;
-        if !matches!(target, TargetRef::Registry { root: ref actual, .. } if actual == &root)
-            || !matches!(state, State::Registry { value: Some(ref value), .. }
-                if Self::startup_command(value) == Some(item.command.as_str()))
-        {
-            return Err(Error::Invalid("启动项刚刚被其他程序修改，请刷新列表。".to_owned()));
+        let (source, name) = self
+            .startup_items
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|i| startup::item_id(i.source, &i.name) == id)
+            .map(|i| (i.source, i.name.clone()))
+            .ok_or_else(|| Error::Invalid("这个启动项不在刚才的列表里了，请刷新一下再试。".to_owned()))?;
+        let mut r = ApplyResult {
+            feature: startup::FEATURE_ID.to_owned(),
+            session_id: self.session.clone(),
+            entry_ids: Vec::new(),
+            ok: true,
+            verified: FeatureStateKind::Applied,
+            message: "本来就是这样，不用改。".to_owned(),
+            reboot: crate::model::Reboot::None,
+            notes: Vec::new(),
+            error: None,
+        };
+        if self.startup_enabled(source, &name)? == enabled {
+            return Ok(r);
         }
-        let (record, _) = self.apply_one(STARTUP_FEATURE, 0, &action).map_err(|step| step.error)?;
-        Ok(record.id)
+        let action = Self::startup_action(source, &name, &startup::approved_value(enabled, SystemTime::now()));
+        match self.apply_one(startup::FEATURE_ID, 0, &action) {
+            Ok((rec, _)) => {
+                r.entry_ids.push(rec.id);
+                r.message = if enabled {
+                    "已经恢复：下次开机登录时，它会自动启动。".to_owned()
+                } else {
+                    "已经停用：下次开机登录时，它不会再自动启动。软件本身还在，想用时照样能打开；想改回来，在这里或者任务管理器的「启动应用」里都行。".to_owned()
+                };
+            }
+            Err(step) => {
+                r.ok = false;
+                r.verified = FeatureStateKind::Unknown;
+                r.entry_ids.extend(step.entry);
+                r.message = if step.left_changes {
+                    "没有改成功，而且改动没能自动退回，请在修改日志里手动恢复。".to_owned()
+                } else {
+                    "没有改成功，已经退回原样。".to_owned()
+                };
+                r.error = Some(step.error.to_string());
+            }
+        }
+        Ok(r)
+    }
+
+    fn startup_action(source: startup::Source, name: &str, value: &[u8]) -> Action {
+        Action::Registry(RegistryAction {
+            key: source.approved_key(),
+            name: name.to_owned(),
+            value_type: Some(RegType::Binary),
+            value: Some(Value::String(hex::encode(value))),
+            delete: false,
+        })
+    }
+
+    fn startup_enabled(&self, source: startup::Source, name: &str) -> Result<bool> {
+        let (_, state) = self.current(&Self::startup_action(source, name, &[]))?;
+        Ok(match state {
+            State::Registry { value: Some(RegValue::Binary(bytes)), .. } => startup::is_enabled(Some(&bytes)),
+            // 没有这个值是启用；类型不对的值任务管理器也不认，按启用算
+            _ => true,
+        })
+    }
+
+    fn startup_view(r: &startup::RawItem, enabled: bool) -> StartupItem {
+        let (advice, reason) = startup::advise(r);
+        let program = r.path.rsplit(['\\', '/']).next().unwrap_or_default().to_owned();
+        let title = if r.description.trim().is_empty() { r.name.clone() } else { r.description.trim().to_owned() };
+        let publisher =
+            [&r.signer, &r.company].into_iter().map(|s| s.trim()).find(|s| !s.is_empty()).map(str::to_owned);
+        StartupItem {
+            id: startup::item_id(r.source, &r.name),
+            source: r.source,
+            name: r.name.clone(),
+            title,
+            program,
+            path: r.path.clone(),
+            exists: r.exists,
+            publisher,
+            signature: r.signature,
+            location: r.source.label().to_owned(),
+            enabled,
+            advice,
+            reason: reason.to_owned(),
+        }
+    }
+
+    /// 修改日志里启动项开关的状态，说人话。
+    fn startup_state_label(state: &State) -> String {
+        match state {
+            State::Registry { value: Some(RegValue::Binary(bytes)), .. } if !startup::is_enabled(Some(bytes)) => {
+                "不自动启动（已停用）".to_owned()
+            }
+            State::Registry { value: None, .. } => "开机自动启动（默认）".to_owned(),
+            State::Registry { .. } => "开机自动启动".to_owned(),
+            other => Self::state_label(other),
+        }
     }
 
     // ───────────── 撤销 ─────────────
@@ -1404,15 +1410,20 @@ impl Engine {
         let mut sessions: Vec<JournalSession> = Vec::new();
         let mut index: HashMap<String, usize> = HashMap::new();
         for e in entries {
-            let feature_title = if e.apply.feature == STARTUP_FEATURE {
-                "停用开机启动项".to_owned()
-            } else {
-                self.catalog
+            // 开机启动项的开关不是数据文件里的功能：标题用启动项的名字，状态说「自动启动 / 已停用」
+            let startup_entry = e.apply.feature == startup::FEATURE_ID
+                && matches!(&e.apply.target, TargetRef::Registry { key, .. } if startup::is_approved_key(key));
+            let label = |s: &State| if startup_entry { Self::startup_state_label(s) } else { Self::state_label(s) };
+            let feature_title = match &e.apply.target {
+                TargetRef::Registry { name, .. } if startup_entry => format!("开机启动项：{name}"),
+                _ if e.apply.feature == LEGACY_STARTUP_FEATURE => "停用开机启动项".to_owned(),
+                _ => self
+                    .catalog
                     .feature(&e.apply.feature)
-                    .map_or_else(|| e.apply.feature.clone(), |f| f.title.get(&self.lang).to_owned())
+                    .map_or_else(|| e.apply.feature.clone(), |f| f.title.get(&self.lang).to_owned()),
             };
             let (ok, after, error) = match &e.commit {
-                Some(c) => (c.ok, c.after.as_ref().map(Self::state_label).unwrap_or_default(), c.error.clone()),
+                Some(c) => (c.ok, c.after.as_ref().map(label).unwrap_or_default(), c.error.clone()),
                 None => (
                     false,
                     "（状态不确定）".to_owned(),
@@ -1422,7 +1433,7 @@ impl Engine {
             // 脚本类修改的原状态是脚本自己的数据（例如一段十六进制），给用户看没有意义，说清楚记没记下就行
             let saved_before = matches!(&e.apply.before, State::Script { data } if !data.is_null());
             let (before, after) = match (&e.apply.target, &e.commit) {
-                (TargetRef::Registry { .. }, _) if e.apply.feature == STARTUP_FEATURE => {
+                (TargetRef::Registry { .. }, _) if e.apply.feature == LEGACY_STARTUP_FEATURE => {
                     ("启动命令已保存（可恢复）".to_owned(), if ok { "已停用自启" } else { "（状态不确定）" }.to_owned())
                 }
                 (TargetRef::Script { .. }, Some(c)) => {
@@ -1446,7 +1457,7 @@ impl Engine {
                     .to_owned(),
                     after,
                 ),
-                _ => (Self::state_label(&e.apply.before), after),
+                _ => (label(&e.apply.before), after),
             };
             let view = JournalEntryView {
                 id: e.apply.id.clone(),

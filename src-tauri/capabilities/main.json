@@ -20,6 +20,6 @@
     "allow-tool-run",
     "allow-tool-open",
     "allow-startup-list",
-    "allow-startup-disable"
+    "allow-startup-set"
   ]
 }

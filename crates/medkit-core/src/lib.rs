@@ -7,6 +7,7 @@
 //! - [`platform`]：和操作系统打交道的接口（Windows 实现 + 测试用的模拟实现）
 //! - [`script`]：PowerShell 宿主
 //! - [`tools`]：小工具能打开的程序名单、info 小工具的表格渲染
+//! - [`startup`]：开机启动项的开关（和任务管理器同一个）
 
 pub mod builtin;
 pub mod bundle;
@@ -21,6 +22,7 @@ pub mod registry;
 pub mod render;
 pub mod report;
 pub mod script;
+pub mod startup;
 pub mod tools;
 pub mod views;
 mod yaml;

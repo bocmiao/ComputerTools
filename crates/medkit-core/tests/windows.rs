@@ -477,3 +477,67 @@ fn open_tools_launch_or_explain_why_not() {
     }
     assert!(failures.is_empty(), "有打开类小工具不对：\n{}", failures.join("\n"));
 }
+
+/// 开机启动项：在 HKCU 的 Run 里放一个测试用的启动项（指向记事本），列出来、停用（写和任务管理器同一个开关，
+/// 不删 Run 值）、再撤销，最后删掉。顺便把这台机器上的启动项都打印出来，看看列表和建议对不对。
+#[test]
+#[ignore]
+fn startup_items_are_listed_disabled_and_restored() {
+    use medkit_core::startup::Source;
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_SET_VALUE};
+
+    const RUN: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+    const APPROVED: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+    struct Cleanup(String);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let hkcu = winreg::RegKey::predef(HKEY_CURRENT_USER);
+            for key in [RUN, APPROVED] {
+                if let Ok(k) = hkcu.open_subkey_with_flags(key, KEY_SET_VALUE) {
+                    let _ = k.delete_value(&self.0);
+                }
+            }
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    let name = format!("MedkitTest-{}", new_id());
+    let _cleanup = Cleanup(name.clone());
+    let (run, _) = winreg::RegKey::predef(HKEY_CURRENT_USER).create_subkey(RUN).unwrap();
+    let windir = std::env::var("SystemRoot").unwrap();
+    let command = format!("\"{windir}\\System32\\notepad.exe\" /medkit-test");
+    run.set_value(&name, &command).unwrap();
+
+    let items = engine.startup_list().unwrap();
+    for i in &items {
+        eprintln!(
+            "{:<14} {:<44} {} {:?} {:?} {}",
+            format!("{:?}", i.source),
+            i.title,
+            if i.enabled { "开" } else { "关" },
+            i.advice,
+            i.signature,
+            i.publisher.as_deref().unwrap_or("-")
+        );
+    }
+    let item = items.iter().find(|i| i.name == name).expect("测试用的启动项没有列出来");
+    assert_eq!(item.source, Source::UserRun);
+    assert!(item.exists && item.program.eq_ignore_ascii_case("notepad.exe"), "{item:?}");
+    assert!(item.enabled);
+
+    let r = engine.startup_set(&item.id, false).unwrap();
+    assert!(r.ok, "{r:?}");
+    let root =
+        platform.interactive_user().filter(|u| is_sid(&u.sid)).map_or(RegRoot::CurrentUser, |u| RegRoot::User(u.sid));
+    match platform.reg_get(&root, APPROVED, &name).unwrap() {
+        Some(RegValue::Binary(b)) => assert_eq!((b.len(), b[0]), (12, 3), "{b:?}"),
+        other => panic!("开关没写对：{other:?}"),
+    }
+    assert_eq!(run.get_value::<String, _>(&name).unwrap(), command, "只停用，不能删 Run 值");
+    assert!(!engine.startup_list().unwrap().iter().any(|i| i.name == name && i.enabled), "停用后列表里要显示成关");
+
+    let u = engine.journal_undo(&r.entry_ids[0], false).unwrap();
+    assert!(u.ok, "{u:?}");
+    assert_eq!(platform.reg_get(&root, APPROVED, &name).unwrap(), None, "撤销后开关要恢复成原来的「没有这个值」");
+}

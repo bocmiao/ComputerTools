@@ -1,7 +1,7 @@
 //! 界面拿到的数据（和 docs/architecture.md 第 9 节的 TypeScript 类型一一对应）。
 //! 字段名序列化成 camelCase，所有文本已经渲染成用户语言。
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::model::{Audience, Fixer, Level, Maturity, Reboot, Recommend, Risk, Status, ToolGroup};
@@ -220,16 +220,58 @@ pub struct ApplyResult {
     pub error: Option<String>,
 }
 
-/// 注册表 Run 项；disabled_entry 只表示由小药箱停用且仍可恢复的项。
+/// 开机启动项的程序签名（Get-AuthenticodeSignature 的结论）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StartupSignature {
+    /// 有有效的数字签名
+    Valid,
+    /// 没有签名
+    Unsigned,
+    /// 签名无效（文件被改过，或者证书不受信任）
+    Invalid,
+    /// 没查出来（找不到文件等）
+    #[default]
+    Unknown,
+    /// 来不及查（签名要读整个文件，大文件很慢，脚本有时间上限）
+    Skipped,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StartupAdvice {
+    /// 建议保持原样（杀毒软件、输入法、系统组件、硬件驱动）
+    Keep,
+    /// 不需要一开机就用的话，可以停用
+    CanDisable,
+}
+
+/// 一个开机启动项。路径只在本机界面上显示，不进诊断报告。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartupItem {
+    /// 改开关时原样传回来（来源加名字）
     pub id: String,
+    pub source: crate::startup::Source,
+    /// 注册表里的值名或者「启动」文件夹里的文件名
     pub name: String,
-    pub command: String,
-    pub scope: String,
-    pub active: bool,
-    pub disabled_entry: Option<String>,
+    /// 显示的名字：程序文件里写的说明，没有就用 name
+    pub title: String,
+    /// 程序的文件名
+    pub program: String,
+    /// 程序的完整路径（读不出来是空的）
+    pub path: String,
+    pub exists: bool,
+    /// 签名的发布者，没有签名时是文件里写的公司名
+    pub publisher: Option<String>,
+    pub signature: StartupSignature,
+    /// 「当前用户（注册表）」这类说明
+    pub location: String,
+    /// 开机时会不会自动启动（任务管理器里的开关）
+    pub enabled: bool,
+    pub advice: StartupAdvice,
+    /// 建议的理由
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

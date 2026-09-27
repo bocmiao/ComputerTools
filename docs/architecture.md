@@ -325,13 +325,19 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `report_generate` | — | `string`（已脱敏的纯文本） |
 | `tool_run` | `id` | `ToolResult`（只能用于 `info`、`action` 小工具） |
 | `tool_open` | `id` | `null`（只能用于 `open` 小工具；打不开时返回错误字符串） |
-| `startup_list` | — | `StartupItem[]`（当前登录用户和所有用户的 Run 项，以及小药箱停用的项） |
-| `startup_disable` | `id` | `string`（修改日志条目 ID；仅接受当前列表中的项目 ID） |
+| `startup_list` | — | `StartupItem[]`（登录用户和所有用户的 Run 项、「启动」文件夹，开关状态和任务管理器一致） |
+| `startup_set` | `id`、`enabled` | `ApplyResult`（停用或恢复；只接受最近一次列表里的 ID，记进修改日志） |
 | `rename_select_folder` | — | `string \| null`（系统对话框选定的目录；取消返回 null） |
 | `rename_preview` | `prefix` | `RenamePreview`（最多 500 个直属普通文件的原名与目标名） |
 | `rename_apply` | — | `number`（执行已预览且文件列表与属性未变化的重命名数量） |
 
-启动项操作只管理三个注册表 Run 路径：HKCU、HKLM 和 HKLM 的 32 位路径。停用前保存原值并删除 Run 值；恢复走 `journal_undo`，会核对该值是否被其他程序改过。任务计划、启动文件夹和任务管理器自己的启停状态不在此接口范围。
+开机启动项（`crates/medkit-core/src/startup.rs`）：
+
+- **列出**：脚本 `scripts/startup/list.ps1`（只读）列出登录用户的 Run、HKLM 的 Run 和它的 32 位路径、登录用户和所有用户的「启动」文件夹，给出每一项实际启动的程序（快捷方式会解析，rundll32、wscript 这类宿主程序取它运行的文件）、文件说明、公司和数字签名。路径只在本机界面显示，不进诊断报告。
+- **开关**：和任务管理器「启动应用」是同一个：`HKCU` 或 `HKLM` 的 `Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run`、`Run32`、`StartupFolder` 下和启动项同名的二进制值。第一个字节是单数（03，后面 8 个字节是停用的时间）表示停用；没有这个值、或者第一个字节是双数（02）表示启用。引擎自己读写这个值，只写这 5 个位置（写在代码里），只停用、不删除启动项本身，所以卸载小药箱以后在任务管理器里也能改回来。
+- **修改日志**：每次开关记一条（功能 ID 是 `startup`），撤销时核对这个值有没有被别人（比如任务管理器）改过。以前的版本用删除 Run 值来停用（功能 ID `boot.startup-disable`），那些记录照样能撤销。
+- **建议**：杀毒软件、输入法、Windows 自带的组件、硬件驱动和电脑厂商的功能标「建议保留」，其他的「不需要一开机就用的话，可以停用」；不说「建议停用」（原则 7）。
+- 应用商店的应用有自己的开关（`ms-settings:startupapps`），任务计划不在这里管。
 
 TypeScript 类型如下（字段名是 camelCase，所有文本已经渲染成中文）：
 

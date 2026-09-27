@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
-import { journalUndo, runCheck, startupDisable, startupList, symptomDetail, toolOpen } from '../api'
+import { runCheck, startupList, startupSet, symptomDetail, toolOpen } from '../api'
 import type { ApplyResult, CheckResult, StartupItem, SymptomDetail, SymptomSummary } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
@@ -132,20 +132,30 @@ async function changeStartup(item: StartupItem): Promise<void> {
   startupError.value = null
   startupNotice.value = null
   try {
-    if (item.active) {
-      await startupDisable(item.id)
-      startupNotice.value = `已停用「${item.name}」的开机自启；软件本身仍可手动打开。`
-    } else if (item.disabledEntry) {
-      const result = await journalUndo(item.disabledEntry, false)
-      if (!result.ok) throw new Error(result.message + (result.error ? ` ${result.error}` : ''))
-      startupNotice.value = `已恢复「${item.name}」的开机自启。`
-    }
+    const result = await startupSet(item.id, !item.enabled)
+    if (!result.ok) throw new Error(result.message + (result.error ? ` ${result.error}` : ''))
+    startupNotice.value = `「${item.title}」${result.message}`
     markHealthStale()
     await loadStartup()
   } catch (e) {
     startupError.value = errorText(e)
   } finally {
     startupBusy.value = null
+  }
+}
+
+/** 发布者和签名：有签名写发布者；没签名、签名无效的写明，免得被冒名 */
+function startupPublisher(item: StartupItem): string {
+  const who = item.publisher ?? '发布者不明'
+  switch (item.signature) {
+    case 'valid':
+      return item.publisher ?? '有数字签名'
+    case 'unsigned':
+      return `${who}（没有数字签名）`
+    case 'invalid':
+      return `${who}（数字签名无效）`
+    default:
+      return who
   }
 }
 
@@ -490,21 +500,26 @@ watch(
             <h2 id="startup-title" class="section-title">管理开机启动项</h2>
             <button type="button" class="btn btn-secondary btn-small" :disabled="startupLoading || !!startupBusy" @click="loadStartup()">刷新列表</button>
           </div>
-          <p class="muted small">这里只显示注册表 Run 启动项。停用后，软件仍在电脑上，也能手动打开；下次登录时不再通过这条记录自动启动。这里无法判断 Windows 此前是否已禁用某项。其他启动应用可在 Windows 设置中管理。</p>
+          <p class="muted small">这里列的是注册表 Run 项和「启动」文件夹里的启动项。开关和任务管理器的「启动应用」是同一个：在这里停用的，任务管理器里也显示为已禁用，在那边改的这里也看得到。只停用、不删除，软件本身还在，想用时照样能打开；每一次改动都记在「修改日志」里。从应用商店装的软件，在 Windows 设置里管理。</p>
           <button type="button" class="btn btn-secondary btn-small" @click="openStartupSettings()">管理其他启动应用</button>
           <p v-if="startupLoading" class="loading-line" role="status"><BusySpinner size="small" />正在读取启动项…</p>
           <p v-if="startupError" class="danger-text small" role="alert">{{ startupError }}</p>
           <p v-if="startupNotice" class="small" role="status">{{ startupNotice }}</p>
-          <p v-if="!startupLoading && !startupError && startupItems.length === 0" class="muted small">没有找到可管理的 Run 启动项。</p>
+          <p v-if="!startupLoading && !startupError && startupItems.length === 0" class="muted small">没有找到开机启动项。</p>
           <ul v-if="startupItems.length" class="fixes">
             <li v-for="item in startupItems" :key="item.id" class="fix">
               <div class="fix-main">
-                <p class="fix-title">{{ item.name }} <TagPill :tone="item.active ? 'info' : 'neutral'">{{ item.active ? 'Run 项存在' : '已停用' }}</TagPill></p>
-                <p class="muted small">{{ item.scope }}</p>
-                <p class="muted small startup-command" :title="item.command">{{ item.command }}</p>
+                <p class="fix-title">
+                  {{ item.title }}
+                  <TagPill :tone="item.enabled ? 'info' : 'neutral'">{{ item.enabled ? '开机自动启动' : '已停用' }}</TagPill>
+                  <TagPill v-if="item.advice === 'keep'" tone="advice">建议保留</TagPill>
+                </p>
+                <p class="muted small">{{ startupPublisher(item) }} · {{ item.location }}</p>
+                <p class="small">{{ item.reason }}</p>
+                <p v-if="item.path" class="muted small startup-command" :title="item.path">{{ item.path }}</p>
               </div>
               <button type="button" class="btn btn-secondary btn-small" :disabled="!!startupBusy" @click="changeStartup(item)">
-                <BusySpinner v-if="startupBusy === item.id" size="small" />{{ item.active ? '停用自启' : '恢复自启' }}
+                <BusySpinner v-if="startupBusy === item.id" size="small" />{{ item.enabled ? '停用自启' : '恢复自启' }}
               </button>
             </li>
           </ul>

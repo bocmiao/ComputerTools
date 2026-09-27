@@ -188,9 +188,17 @@ fn unknown_ids_come_back_as_string_errors() {
         ("feature_apply", json!({ "id": "nope" })),
         ("tool_run", json!({ "id": "nope" })),
         ("tool_open", json!({ "id": "nope" })),
-        ("startup_disable", json!({ "id": "nope" })),
     ] {
         let e = invoke(&win, cmd, args).unwrap_err();
         assert!(e.is_string(), "{cmd} 对未知 ID 应返回字符串错误，实际：{e}");
     }
+}
+
+#[test]
+fn startup_commands_pass_the_permission_check() {
+    let win = app();
+    assert!(ok(&win, "startup_list", json!({})).is_array());
+    // 不在列表里的启动项：引擎的说明，而不是权限错误
+    let e = invoke(&win, "startup_set", json!({ "id": "nope", "enabled": false })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("不在刚才的列表里")), "{e}");
 }

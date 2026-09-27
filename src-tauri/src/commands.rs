@@ -100,9 +100,10 @@ pub async fn startup_list(state: State<'_, AppState>) -> CmdResult<Vec<StartupIt
     with_engine(state, |e| e.startup_list()).await
 }
 
+/// 停用或恢复一个开机启动项（和任务管理器同一个开关）。只认最近一次列出来的启动项 ID。
 #[tauri::command]
-pub async fn startup_disable(state: State<'_, AppState>, id: String) -> CmdResult<String> {
-    with_engine(state, move |e| e.startup_disable(&id)).await
+pub async fn startup_set(state: State<'_, AppState>, id: String, enabled: bool) -> CmdResult<ApplyResult> {
+    with_engine(state, move |e| e.startup_set(&id, enabled)).await
 }
 
 #[tauri::command]

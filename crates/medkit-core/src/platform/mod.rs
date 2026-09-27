@@ -56,8 +56,6 @@ pub struct OsInfo {
 }
 
 pub trait Platform: Send + Sync {
-    /// 列出一个键里的值；键不存在时返回空列表。
-    fn reg_values(&self, root: &RegRoot, key: &str) -> PResult<Vec<(String, RegValue)>>;
     /// 读一个值；键或值不存在时返回 `Ok(None)`。
     fn reg_get(&self, root: &RegRoot, key: &str, name: &str) -> PResult<Option<RegValue>>;
     fn reg_key_exists(&self, root: &RegRoot, key: &str) -> PResult<bool>;

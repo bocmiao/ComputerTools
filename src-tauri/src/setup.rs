@@ -207,7 +207,10 @@ mod os {
     }
 
     pub fn backend(_scripts: PathBuf, _manifest: ScriptManifest) -> (Arc<dyn Platform>, Arc<dyn ScriptRunner>) {
-        (Arc::new(MockPlatform::new()), Arc::new(MockRunner::new()))
+        let runner = MockRunner::new();
+        // 假系统上没有开机启动项
+        runner.returns(medkit_core::startup::LIST_SCRIPT, serde_json::json!({ "result": "ok", "items": [] }));
+        (Arc::new(MockPlatform::new()), Arc::new(runner))
     }
 
     pub fn fatal(message: &str) {

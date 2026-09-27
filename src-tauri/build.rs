@@ -19,7 +19,7 @@ const COMMANDS: &[&str] = &[
     "tool_run",
     "tool_open",
     "startup_list",
-    "startup_disable",
+    "startup_set",
 ];
 
 fn main() {

@@ -106,14 +106,14 @@ export function toolOpen(id: string): Promise<null> {
   return call('tool_open', { id })
 }
 
-/** 当前用户和所有用户的注册表 Run 启动项 */
+/** 开机启动项：注册表 Run 项和「启动」文件夹，开关状态和任务管理器里的一样 */
 export function startupList(): Promise<StartupItem[]> {
   return call('startup_list', {})
 }
 
-/** 停用一项并记录可恢复的快照 */
-export function startupDisable(id: string): Promise<string> {
-  return call('startup_disable', { id })
+/** 停用（enabled 为 false）或恢复一个开机启动项；和任务管理器同一个开关，记进修改日志 */
+export function startupSet(id: string, enabled: boolean): Promise<ApplyResult> {
+  return call('startup_set', { id, enabled })
 }
 
 export function renameSelectFolder(): Promise<string | null> {

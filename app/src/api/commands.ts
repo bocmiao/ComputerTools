@@ -35,7 +35,7 @@ export type CommandMap = {
   tool_run: { args: { id: string }; result: ToolResult }
   tool_open: { args: { id: string }; result: null }
   startup_list: { args: NoArgs; result: StartupItem[] }
-  startup_disable: { args: { id: string }; result: string }
+  startup_set: { args: { id: string; enabled: boolean }; result: ApplyResult }
   rename_select_folder: { args: NoArgs; result: string | null }
   rename_preview: { args: { prefix: string }; result: { folder: string; entries: { source: string; target: string }[] } }
   rename_apply: { args: NoArgs; result: number }
