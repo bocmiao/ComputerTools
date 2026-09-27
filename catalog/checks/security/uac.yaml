@@ -1,0 +1,40 @@
+# 用户账户控制（UAC）有没有被关掉。脚本：scripts/checks/security/uac.ps1
+# 读 HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System：EnableLUA 是 0 = 整个关掉了（所有软件都直接以管理员
+# 身份运行，应用商店的应用、照片、计算器也可能打不开）；ConsentPromptBehaviorAdmin 是 0 = 滑块拉到了最下面「从不通知」。
+# PromptOnSecureDesktop 是 0（提示的时候桌面不变暗）是滑块的一格，用户自己选的，不报。
+# 只读。小药箱不改 UAC（计划书第五节第 22 条，引擎的黑名单也不许写这几个值）：让用户在「用户账户控制设置」里自己把滑块拉回去。
+# 事实：enable_lua、consent_admin、secure_desktop（没有这个值时是 -1）。
+# 待真机验证：EnableLUA 被改成 0 的电脑上，在「用户账户控制设置」里把滑块拉回第二格、确定，是不是会把 EnableLUA 改回 1、要不要重启。
+id: security.uac
+schema_version: 1
+title: { zh-CN: 用户账户控制（UAC） }
+description:
+  zh-CN: 看看用户账户控制有没有被关掉。它开着时，软件要改系统、装驱动之前，Windows 会先弹出来问你一下，病毒就不能不声不响地改系统。
+category: security
+requires_admin: false
+probe:
+  script: checks/security/uac.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 用户账户控制（UAC）开着，软件要改系统时 Windows 会先问你，没问题。
+  never-notify:
+    status: advice
+    message:
+      zh-CN: 用户账户控制（UAC）被设成了「从不通知」：软件要改系统设置、装驱动时，Windows 不再先问你，病毒和恶意软件也能不声不响地改。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「用户账户控制设置」，把滑块拉到从上往下第二格（系统默认），点「确定」。单位、学校统一设置的电脑不要改。
+    links: ["tool:open.uac-settings"]
+  off:
+    status: advice
+    message:
+      zh-CN: 用户账户控制（UAC）被整个关掉了：所有软件都直接用管理员身份运行，病毒和恶意软件能不声不响地改系统；照片、计算器、应用商店这些 Windows 自带的应用也可能打不开。很多「优化」教程和软件会让人这么做。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「用户账户控制设置」，把滑块拉到从上往下第二格（系统默认），点「确定」，然后重启电脑。单位、学校统一设置的电脑不要改；拉了滑块、重启以后体检还是这样的，请懂哥帮忙看看。
+    links: ["tool:open.uac-settings"]
+references:
+  - https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/settings-and-configuration
+  - https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/how-it-works

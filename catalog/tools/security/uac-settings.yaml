@@ -1,0 +1,12 @@
+# 打开「用户账户控制设置」（System32\UserAccountControlSettings.exe，控制面板里「更改用户账户控制设置」那个窗口）。
+# 体检 security.uac 查出 UAC 被关掉、设成「从不通知」时，用户在这里自己把滑块拉回默认（小药箱不改 UAC：计划书第五节第 22 条）。
+id: open.uac-settings
+schema_version: 1
+group: open
+title: { zh-CN: 用户账户控制设置 }
+description:
+  zh-CN: 打开「更改用户账户控制设置」：软件要改系统时，Windows 要不要先问你。从上往下第二格是系统默认。
+category: security
+open: { program: uac-settings }
+references:
+  - https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/settings-and-configuration
