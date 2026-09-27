@@ -22,8 +22,12 @@ export interface ImageRules {
   maxKb: number
   /** 新文件名在原名后面加的字 */
   suffix: string
-  /** 格式、尺寸都不变，处理完反而更大时，存原图 */
+  /** 格式、尺寸都不变，处理完反而更大时，存原图（加了水印时不存原图：原图上没有水印） */
   keepSmaller: boolean
+  /** 水印文字，空的就不加 */
+  watermark: string
+  /** 水印的不透明度，0–1 */
+  watermarkOpacity: number
 }
 
 /** 一张图片最多多少像素（1 亿：两亿像素的手机照片解码要将近 1 GB 内存，容易失败） */
@@ -134,6 +138,41 @@ export function drawPlan(w: number, h: number, rules: Pick<ImageRules, 'resize' 
     return { sx: (w - sw) / 2, sy: (h - sh) / 2, sw, sh, width: rules.width, height: rules.height }
   }
   return { ...whole, width: w, height: h }
+}
+
+/** 水印最多多少个字 */
+export const WATERMARK_MAX = 40
+export const WATERMARK_OPACITIES = [
+  { label: '淡', value: 0.25 },
+  { label: '中', value: 0.4 },
+  { label: '深', value: 0.6 },
+] as const
+
+export interface WatermarkPlan {
+  /** 字号（像素） */
+  fontSize: number
+  /** 旋转的角度（弧度）：斜着铺 */
+  angle: number
+  /** 旋转以后，同一行两处文字的间距、行距（像素） */
+  stepX: number
+  stepY: number
+  /** 以图片中心为原点，要铺到多远（对角线的一半）：转了角度也能铺满四个角 */
+  reach: number
+}
+
+/**
+ * 水印怎么铺：字号跟着短边走（短边的 1/16，至少 14 像素），斜 30 度，一行一行错开半个间距铺满整张图，
+ * 身份证复印件这类图片上哪一块都裁不掉。measure 给出这个字号下整段文字有多宽。
+ */
+export function watermarkPlan(width: number, height: number, measure: (fontSize: number) => number): WatermarkPlan {
+  const fontSize = Math.max(14, Math.round(Math.min(width, height) / 16))
+  return {
+    fontSize,
+    angle: -Math.PI / 6,
+    stepX: Math.ceil(measure(fontSize) + fontSize * 3),
+    stepY: Math.ceil(fontSize * 4),
+    reach: Math.ceil(Math.hypot(width, height) / 2),
+  }
 }
 
 /** 尺寸有没有变 */

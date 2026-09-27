@@ -11,6 +11,7 @@ import {
   sameFormat,
   suffixProblem,
   unsupportedReason,
+  watermarkPlan,
 } from '../src/utils/imageBatch.ts'
 
 test('HEIC, TIFF, SVG and non-images are explained, common images pass', () => {
@@ -134,4 +135,17 @@ test('the original is copied only when its content really is that format', () =>
   assert.ok(!matchesFormat(new Uint8Array(), 'image/jpeg'))
   assert.ok(sameFormat('image/jpg', 'image/jpeg'))
   assert.ok(!sameFormat('image/png', 'image/jpeg'))
+})
+
+test('watermarks follow the short edge and reach every corner', () => {
+  const measure = (size) => size * 12 // 12 个汉字
+  const photo = watermarkPlan(4000, 3000, measure)
+  assert.equal(photo.fontSize, 188, '短边 3000 的 1/16')
+  assert.equal(photo.stepX, Math.ceil(188 * 12 + 188 * 3))
+  assert.equal(photo.stepY, 188 * 4)
+  assert.equal(photo.reach, 2500, '对角线的一半：转了角度也铺得到四个角')
+  assert.ok(photo.angle < 0 && photo.angle > -Math.PI / 2, '往右上斜')
+  // 一寸照这么小，字也不小于 14 像素
+  assert.equal(watermarkPlan(295, 413, measure).fontSize, 18)
+  assert.equal(watermarkPlan(100, 100, measure).fontSize, 14)
 })

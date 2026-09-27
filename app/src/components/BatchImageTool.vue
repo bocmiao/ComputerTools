@@ -19,15 +19,19 @@ import {
   sameFormat,
   suffixProblem,
   unsupportedReason,
+  watermarkPlan,
+  WATERMARK_MAX,
+  WATERMARK_OPACITIES,
   type Encoder,
   type Fitted,
   type ImageRules,
   type OutputMime,
 } from '../utils/imageBatch'
 
-// 图片批量压缩、转格式、改尺寸。图片在这里用 WebView2 自带的解码器打开、画到画布上、重新编码；
+// 图片批量压缩、转格式、改尺寸、加水印。图片在这里用 WebView2 自带的解码器打开、画到画布上、重新编码；
 // 保存交给后端：只能存进用系统对话框选的文件夹，只新建、不覆盖，所以原图不会被改动。
 // 重新编码以后，拍摄时间、地点、设备这些信息都不会带过去（「存原图」的那几张除外）。
+// 水印：文字斜着铺满整张图（交身份证复印件时写上用途）；加了水印就不存原图（原图上没有水印）。
 
 type ItemStatus = 'waiting' | 'working' | 'done' | 'skipped' | 'failed'
 interface Item {
@@ -52,7 +56,10 @@ const rules = reactive<ImageRules>({
   maxKb: 200,
   suffix: '',
   keepSmaller: true,
+  watermark: '',
+  watermarkOpacity: WATERMARK_OPACITIES[1].value,
 })
+const watermarkText = computed(() => rules.watermark.trim())
 const limitSize = ref(false)
 /** 固定尺寸选的是哪一个：证件照尺寸的序号，或者 custom */
 const fixedPreset = ref<string>('0')
@@ -177,6 +184,28 @@ function toBlob(canvas: HTMLCanvasElement, type: OutputMime, quality: number): P
   })
 }
 
+const WATERMARK_FONT = (size: number) => `${size}px "Microsoft YaHei", "PingFang SC", sans-serif`
+
+/** 斜着铺满整张图的水印文字（灰色，半透明，深浅图上都看得见） */
+function drawWatermark(context: CanvasRenderingContext2D, width: number, height: number, text: string, opacity: number): void {
+  context.save()
+  const plan = watermarkPlan(width, height, (size) => {
+    context.font = WATERMARK_FONT(size)
+    return context.measureText(text).width
+  })
+  context.font = WATERMARK_FONT(plan.fontSize)
+  context.fillStyle = `rgba(128, 128, 128, ${opacity})`
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.translate(width / 2, height / 2)
+  context.rotate(plan.angle)
+  for (let y = -plan.reach, row = 0; y <= plan.reach; y += plan.stepY, row++) {
+    const offset = row % 2 ? plan.stepX / 2 : 0
+    for (let x = -plan.reach - offset; x <= plan.reach + plan.stepX; x += plan.stepX) context.fillText(text, x, y)
+  }
+  context.restore()
+}
+
 /** 处理一张：返回要存的内容和说明；处理不了时抛出一句给用户看的话 */
 async function processOne(file: File, canvas: HTMLCanvasElement): Promise<{ bytes: Uint8Array; mime: OutputMime; note: string }> {
   const reason = unsupportedReason(file.name, file.type)
@@ -210,6 +239,7 @@ async function processOne(file: File, canvas: HTMLCanvasElement): Promise<{ byte
         context.fillRect(0, 0, width, height)
       }
       context.drawImage(bitmap, plan.sx, plan.sy, plan.sw, plan.sh, 0, 0, width, height)
+      if (watermarkText.value) drawWatermark(context, width, height, watermarkText.value, rules.watermarkOpacity)
       const blob = await toBlob(canvas, mime, quality)
       if (blob.type !== mime) throw new Error(`这台电脑存不了 ${formatLabel(mime)} 格式。`)
       return { size: blob.size, data: blob }
@@ -229,7 +259,7 @@ async function processOne(file: File, canvas: HTMLCanvasElement): Promise<{ byte
     else if (lossy && limitSize.value && out.quality < quality - 0.001) notes.push(`质量降到了 ${Math.round(out.quality * 100)}`)
     // 格式、尺寸都不变，处理完反而更大：存原图（原图的开头要真的是这种格式）。限了大小时也一样：
     // 原图比处理完的还小，自然也在限制以内
-    if (rules.keepSmaller && out.size >= file.size && sameFormat(file.type, mime) && keepsSize(plan, bitmap.width, bitmap.height)) {
+    if (rules.keepSmaller && !watermarkText.value && out.size >= file.size && sameFormat(file.type, mime) && keepsSize(plan, bitmap.width, bitmap.height)) {
       const original = new Uint8Array(await file.arrayBuffer())
       if (matchesFormat(original.subarray(0, 12), mime)) {
         return { bytes: original, mime, note: '处理完反而更大，存的是原图，原图带的拍摄信息也留着' }
@@ -284,7 +314,7 @@ async function start(): Promise<void> {
 
 <template>
   <article class="card image-card">
-    <h3 class="section-title">图片批量压缩、转格式、改尺寸</h3>
+    <h3 class="section-title">图片批量压缩、转格式、改尺寸、加水印</h3>
     <p class="muted small">
       选一些图片（也可以直接拖到下面的框里），按设置处理，存进你选的文件夹。原图不动，也不会覆盖任何已有的文件（重名的在名字后面加「 (2)」）。处理后的图片不带拍摄时间、地点、设备这些信息。
     </p>
@@ -367,12 +397,29 @@ async function start(): Promise<void> {
       </label>
       <p v-if="limitSize" class="muted small">先降画质，还不够就缩小尺寸，直到放得下。PNG 只能靠缩小尺寸。</p>
 
+      <label class="field-label" for="image-watermark">加水印（可以不填）</label>
+      <input
+        id="image-watermark"
+        v-model="rules.watermark"
+        class="input"
+        type="text"
+        :maxlength="WATERMARK_MAX"
+        placeholder="例如：仅用于办理 XX 业务，他用无效"
+      />
+      <template v-if="watermarkText">
+        <div class="choices">
+          <span class="small">深浅</span>
+          <label v-for="o in WATERMARK_OPACITIES" :key="o.value"><input v-model.number="rules.watermarkOpacity" type="radio" :value="o.value" /> {{ o.label }}</label>
+        </div>
+        <p class="muted small">文字斜着铺满整张图。交身份证、户口本、银行卡的照片或复印件时写清楚用途和日期，别人拿去也没法挪作他用。</p>
+      </template>
+
       <label class="check">
         新文件名后面加
         <input v-model="rules.suffix" class="input small-input wide-select" type="text" maxlength="40" placeholder="可以不填，例如 _压缩" aria-label="新文件名后面加的字" />
       </label>
       <label class="check">
-        <input v-model="rules.keepSmaller" type="checkbox" /> 格式、尺寸都没变而压完反而更大的，存原图
+        <input v-model="rules.keepSmaller" type="checkbox" :disabled="!!watermarkText" /> 格式、尺寸都没变而压完反而更大的，存原图<template v-if="watermarkText">（加了水印时不存原图）</template>
       </label>
     </fieldset>
 
