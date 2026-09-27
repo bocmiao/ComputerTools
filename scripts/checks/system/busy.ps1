@@ -22,6 +22,7 @@
 # top_cpu (up to 3 "name 35%"), top_memory (up to 3 "name 1.2 GB").
 # Names are the file description of the program (what Task Manager shows),
 # or the process name when there is none. No window titles or command lines.
+# The PowerShell this script runs in is not counted.
 
 [CmdletBinding()]
 param()
@@ -129,6 +130,12 @@ function Get-FileDescription {
     param([string]$Name, $Process)
     try {
         $path = [string]$Process.Path
+        if ($path.Length -eq 0) {
+            # Protected processes (Windows Security) do not give their path to
+            # Get-Process, which asks for more rights than WMI needs.
+            $wmi = Get-CimInstance -ClassName Win32_Process -Filter ('ProcessId = {0}' -f $Process.Id) -Property ExecutablePath
+            $path = [string]$wmi.ExecutablePath
+        }
         if ($path.Length -gt 0) {
             $description = ([string][System.Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileDescription).Trim()
             if ($description.Length -gt 0) {
@@ -188,7 +195,9 @@ function Resolve-Program {
 $first = Read-ProcessTime
 $watch = [System.Diagnostics.Stopwatch]::StartNew()
 Start-Sleep -Seconds $sampleSeconds
-$processes = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne 0 })
+# This script's own PowerShell is left out: it is the tool looking, not what
+# keeps the PC busy.
+$processes = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { ($_.Id -ne 0) -and ($_.Id -ne $PID) })
 $elapsed = [math]::Max($watch.Elapsed.TotalSeconds, 1)
 $cores = [math]::Max([Environment]::ProcessorCount, 1)
 
