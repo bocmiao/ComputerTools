@@ -1,7 +1,10 @@
 # Feature: network.hosts-cleanup -- break (tests only)
 # Appends one line that blocks a made-up name under a common site
 # (medkit-roundtrip-test.baidu.com: nobody uses it), which the check reports
-# as blocks-common. Nothing else in the file changes.
+# as blocks-common. Nothing else in the file changes. Reads the file back at
+# once and a second later and throws when the line is not there (security
+# software or an agent that manages the hosts file can put it back), so that
+# a test says why instead of finding the fault missing.
 
 [CmdletBinding()]
 param()
@@ -227,6 +230,14 @@ $text = $file.Text
 if (($text.Length -gt 0) -and (-not $text.EndsWith([string][char]10))) {
     $text += "`r`n"
 }
-$text += "0.0.0.0 medkit-roundtrip-test.baidu.com`r`n"
+$line = '0.0.0.0 medkit-roundtrip-test.baidu.com'
+$text += $line + "`r`n"
 Write-HostsText $location.Path $text $file.Encoding $file.Bom
+if (-not (Read-HostsText $location.Path).Text.Contains($line)) {
+    throw 'The test line could not be written to the hosts file'
+}
+Start-Sleep -Seconds 1
+if (-not (Read-HostsText $location.Path).Text.Contains($line)) {
+    throw 'The hosts file was changed back by another program within a second'
+}
 [pscustomobject]@{ result = 'ok' }
