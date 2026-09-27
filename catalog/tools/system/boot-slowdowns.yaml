@@ -1,0 +1,97 @@
+# 开机慢在哪（info）。脚本：scripts/tools/system/boot-slowdowns.ps1
+# Windows 每次开机、关机都会计时，哪个程序、驱动、服务、设备比它平时慢了不少，就在
+# Microsoft-Windows-Diagnostics-Performance/Operational 日志里记一条（「事件 ID 101」那一组）。这里把最近 30 天的读出来，只读：
+#   开机：101 程序（开机自动启动的软件）启动得慢、102 驱动加载得慢、103 服务启动得慢、109 设备准备得慢；
+#   关机：201 程序退出得慢、202 设备、203 服务。
+#   每条有 Name（文件名、服务名）、FriendlyName（说明）、TotalTime（一共用了多久）、DegradationTime（比平时多用了多久），
+#   文件的还有 Path、ProductName、CompanyName。104～108、110（Windows 自己的开机阶段、预读、组策略）在家里没什么可做的，不列。
+# 按「开机 / 关机、哪一类、名字」合在一起：不是 Windows 自带的排在前面（有办法处理），再按一共多用的时间排；开机最多 8 个、关机最多 5 个。
+# Windows 自带的：厂家是 Microsoft 开头的；没有厂家的程序、服务，文件在 Windows 文件夹里的也算（驱动不算：别的厂家的驱动也放在
+# 那里；设备都不算）。
+# 隐私：Path 只用来判断是不是 Windows 自带的，不输出（里面可能有用户名）；名字里带路径的只留最后一段；设备的 Name 是设备实例 ID，
+# 可能带序列号，不用。
+# 最上面一张表是最近一次开机（事件 100，超过 30 天的也算）：到出现桌面用了多久、出现桌面以后又忙了多久、开机时自动启动了几个程序。
+# 结果：found（有不是 Windows 自带的）、windows-only（只有 Windows 自带的）、none（没有比平时慢的）、no-data（没有一条开机记录：
+# 服务器版系统没有这个日志，或者被精简系统关掉、清空了）。
+# 事实：days、boots（30 天里开机的次数）、items、others（不是 Windows 自带的）、shutdown_items；最近一次开机有的话还有 desktop_sec、startup_apps。
+# 待真机验证：各版本上 101～203 的字段名、103 的 Name 是服务名还是文件名、开着快速启动时开机是不是也记，见 docs/real-machine-checklist.md。
+id: system.boot-slowdowns
+schema_version: 1
+group: info
+title: { zh-CN: 开机慢在哪 }
+description:
+  zh-CN: Windows 每次开机、关机都会计时。这里列出最近 30 天里，是哪个软件、驱动、服务或者设备比平时慢，拖慢了开机、关机，每一个都说了怎么办。只看不改。
+category: system
+requires_admin: true
+timeout_sec: 60
+run:
+  script: tools/system/boot-slowdowns.ps1
+results:
+  found:
+    status: advice
+    message:
+      zh-CN: "最近 {days} 天，有 {items} 个软件、驱动、服务或者设备在开机、关机时比平时慢，下面把拖慢得最多的列出来了。"
+    fixer: user
+    next:
+      zh-CN: 每一个下面都写了怎么办。标着「软件」的，不需要一开机就用的，可以在「开机慢」里停用它的自启（随时能恢复）；驱动程序、设备，到官网更新驱动；Windows 自带的偶尔慢一次是正常的。
+    links: ["symptom:slow-boot", "tool:open.services", "tool:open.device-manager"]
+  windows-only:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天，开机、关机时比平时慢的只有 Windows 自带的程序和服务，偶尔慢一次是正常的（刚装完更新、在后台做检查都会这样）。"
+    next:
+      zh-CN: 开机还是慢的话，打开「开机慢」看看开机自动启动的软件是不是太多了。
+    links: ["symptom:slow-boot"]
+  none:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天，没有记录到哪个软件、驱动、服务拖慢了开机或者关机。"
+    next:
+      zh-CN: 开机还是慢的话，多半是开机自动启动的软件太多，或者系统装在机械硬盘上：打开「开机慢」看看。
+    links: ["symptom:slow-boot"]
+  no-data:
+    status: na
+    message:
+      zh-CN: 这台电脑没有记录开机、关机的性能数据（服务器版系统没有，也可能是被精简系统关掉了），查不了。
+labels:
+  sections:
+    boots: { zh-CN: 最近一次开机 }
+    boot: { zh-CN: 拖慢开机的 }
+    shutdown: { zh-CN: 拖慢关机的 }
+  rows:
+    when: { zh-CN: 时间 }
+    after_update: { zh-CN: 装完更新后的第一次开机 }
+    desktop: { zh-CN: 到出现桌面用了（秒） }
+    busy: { zh-CN: 出现桌面以后又忙了（秒） }
+    startup_apps: { zh-CN: 开机时自动启动的程序（个） }
+    boot_count: { zh-CN: 最近 30 天记录到的开机（次） }
+    kind: { zh-CN: 是什么 }
+    file: { zh-CN: 名称 }
+    maker: { zh-CN: 厂家 }
+    times: { zh-CN: 次数 }
+    slower: { zh-CN: 最多比平时慢了（秒） }
+    took: { zh-CN: 那一次一共用了（秒） }
+    last: { zh-CN: 最近一次 }
+    advice: { zh-CN: 怎么办 }
+  values:
+    app: { zh-CN: 软件 }
+    windows-app: { zh-CN: Windows 自带的程序 }
+    driver: { zh-CN: 驱动程序 }
+    windows-driver: { zh-CN: Windows 自带的驱动程序 }
+    service: { zh-CN: 服务（别的软件装的） }
+    windows-service: { zh-CN: Windows 自带的服务 }
+    device: { zh-CN: 设备 }
+    app-advice: { zh-CN: 开机时它启动得比平时慢，整个开机也跟着慢了。不需要一开机就用的软件，打开「开机慢」，在「管理开机启动项」里停用它的自启（随时能恢复）；要用的，看看它自己的设置里能不能关掉「开机自动启动」，或者更新到最新版。杀毒软件、输入法、声卡和触控板驱动带的程序别停。 }
+    driver-advice: { zh-CN: 这个驱动程序开机时加载得慢。到电脑品牌或者这个硬件厂家的官网下载最新的驱动装上；是某个软件装的驱动（安全软件、游戏加速器、虚拟光驱这类），不用这个软件了就把它卸载。 }
+    service-advice: { zh-CN: 这是别的软件装的服务，开机时启动得慢。不需要这个软件就把它卸载；要用的，更新到最新版。懂一点的，也可以在「服务管理」里把它的启动类型改成「自动（延迟启动）」。 }
+    device-advice: { zh-CN: 这个设备开机时准备得慢。外接的设备（U 盘、移动硬盘、读卡器、扩展坞、打印机）开机时先拔掉试试；电脑自己的设备，到电脑品牌的官网更新它的驱动，再打开「设备管理器」看看它有没有黄色感叹号。 }
+    windows-advice: { zh-CN: 这是 Windows 自带的，偶尔慢一次是正常的（刚装完更新、在后台做检查都会这样）。每次开机都有它的，看看体检里的「硬盘健康」；系统装在机械硬盘上的，换一块固态硬盘最见效。 }
+    shutdown-app-advice: { zh-CN: 关机时它退出得慢，关机也跟着慢了。关机前先把它关掉试试；一直这样的，更新到最新版。 }
+    shutdown-service-advice: { zh-CN: 关机时这个服务停得慢。它是别的软件装的：不需要这个软件就把它卸载，要用的更新到最新版。 }
+    shutdown-device-advice: { zh-CN: 关机时这个设备停得慢。外接的设备关机前先拔掉试试；电脑自己的设备，到电脑品牌的官网更新它的驱动。 }
+    shutdown-windows-advice: { zh-CN: 这是 Windows 自带的，偶尔慢一次是正常的（比如关机时在装更新）。 }
+references:
+  - https://learn.microsoft.com/en-us/archive/technet-wiki/3188.event-id-101-windows-diagnostics-performance
+  - https://learn.microsoft.com/en-us/archive/technet-wiki/3562.event-id-201-microsoft-windows-diagnostics-performance
+  - https://learn.microsoft.com/en-us/archive/technet-wiki/3572.event-id-203-microsoft-windows-diagnostics-performance
+  - https://support.microsoft.com/en-us/windows/configure-startup-applications-in-windows-115a420a-0bff-4a6f-90e0-1934c844e473
