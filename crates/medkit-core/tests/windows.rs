@@ -231,12 +231,13 @@ fn update_lock() -> MutexGuard<'static, ()> {
     UPDATE_SERVICES.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// 往返测试（里面有 network.hosts-cleanup）和 hosts_cleanup_removes_only_flagged_lines 都改 hosts 文件：错开，
-/// 免得一个测试加的记录被另一个的修复删掉
-static HOSTS_FILE: Mutex<()> = Mutex::new(());
+/// 往返测试会改所有修复动到的地方，有的修复另有专门的测试改同样的地方（network.hosts-cleanup 和
+/// hosts_cleanup_removes_only_flagged_lines 改 hosts 文件，explorer.photo-viewer 和
+/// photo_viewer_shows_up_in_open_with 改照片查看器的登记）：错开，免得一个测试改的被另一个退回去
+static ROUND_TRIP: Mutex<()> = Mutex::new(());
 
-fn hosts_lock() -> MutexGuard<'static, ()> {
-    HOSTS_FILE.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+fn round_trip_lock() -> MutexGuard<'static, ()> {
+    ROUND_TRIP.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[test]
@@ -333,7 +334,7 @@ fn restore(p: &WindowsPlatform, saved: &[Saved]) {
 #[test]
 #[ignore = "会临时改动本机设置（结束时恢复）；需要管理员权限"]
 fn every_feature_breaks_fixes_and_undoes() {
-    let _hosts = hosts_lock();
+    let _round_trip = round_trip_lock();
     let dir = tempfile::tempdir().unwrap();
     let (engine, bundle, platform) = real_engine(dir.path());
     let mut failures = Vec::new();
@@ -846,7 +847,7 @@ fn file_lockers_find_the_process_holding_a_file() {
 #[test]
 #[ignore = "会临时改动 hosts 文件（结束时恢复）；需要管理员权限"]
 fn hosts_cleanup_removes_only_flagged_lines() {
-    let _hosts = hosts_lock();
+    let _round_trip = round_trip_lock();
     let hosts = PathBuf::from(std::env::var("SystemRoot").unwrap()).join(r"System32\drivers\etc\hosts");
     let original = std::fs::read(&hosts).unwrap_or_default();
     // 只读的 hosts 先去掉只读，结束时连同只读一起恢复
@@ -939,4 +940,63 @@ fn photo_viewer_and_new_menu_facts() {
     eprintln!("{}", String::from_utf8_lossy(&out.stdout));
     eprintln!("{}", String::from_utf8_lossy(&out.stderr));
     assert!(out.status.success(), "脚本出错：{:?}", out.status);
+}
+
+/// 「打开方式」里 Windows 列出的程序（问资源管理器自己：SHAssocEnumHandlers），每行「扩展名 | 显示的名字 | 名字」。
+fn open_with(extensions: &[&str]) -> Vec<String> {
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("open-with.ps1");
+    std::fs::write(&script, include_str!("ps/open-with.ps1")).unwrap();
+    let out = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(&script)
+        .args(extensions)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "列「打开方式」的脚本出错：{}", String::from_utf8_lossy(&out.stderr));
+    String::from_utf8_lossy(&out.stdout).lines().map(str::to_owned).collect()
+}
+
+/// 找回 Windows 照片查看器：没登记时 .jpg 的「打开方式」里没有它；执行以后 JPG、PNG、BMP、GIF 的「打开方式」里
+/// 都有它（问 Windows 自己，不是只看写没写进注册表）；撤销以后又没有了。结束时恢复测试前的样子。
+#[test]
+#[ignore = "会临时登记 Windows 照片查看器（结束时恢复）；需要管理员权限"]
+fn photo_viewer_shows_up_in_open_with() {
+    let _round_trip = round_trip_lock();
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, bundle, platform) = real_engine(dir.path());
+    let id = "explorer.photo-viewer";
+    let f = bundle.catalog.features.iter().find(|f| f.id == id).unwrap();
+    let saved = snapshot(&platform, f);
+    struct Restore<'a>(&'a WindowsPlatform, Vec<Saved>);
+    impl Drop for Restore<'_> {
+        fn drop(&mut self) {
+            restore(self.0, &self.1);
+        }
+    }
+    let _restore = Restore(&platform, saved);
+    let viewer = |lines: &[String], ext: &str| {
+        lines.iter().any(|l| l.starts_with(&format!("{ext} |")) && l.to_lowercase().contains("photoviewer"))
+    };
+
+    engine.break_feature(id).unwrap();
+    let before = open_with(&[".jpg", ".tif"]);
+    eprintln!("没登记时：\n{}", before.join("\n"));
+    assert!(!viewer(&before, ".jpg"), "没登记时 .jpg 的「打开方式」里不该有照片查看器");
+    assert!(viewer(&before, ".tif"), "Windows 自己给 TIFF 登记了照片查看器，要能认出来");
+
+    let r = engine.feature_apply(id).unwrap();
+    assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
+    let exts = [".jpg", ".jpeg", ".png", ".bmp", ".gif"];
+    let after = open_with(&exts);
+    eprintln!("登记以后：\n{}", after.join("\n"));
+    for ext in exts {
+        assert!(viewer(&after, ext), "登记以后 {ext} 的「打开方式」里要有照片查看器");
+    }
+
+    for id in r.entry_ids.iter().rev() {
+        let u = engine.journal_undo(id, false).unwrap();
+        assert!(u.ok, "{u:?}");
+    }
+    assert!(!viewer(&open_with(&[".jpg"]), ".jpg"), "撤销以后 .jpg 的「打开方式」里又没有照片查看器了");
 }

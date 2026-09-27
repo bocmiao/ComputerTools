@@ -1,0 +1,429 @@
+# 找回 Windows 照片查看器（Windows 10、11）。
+# Windows 10 起看图默认用「照片」应用；老的「Windows 照片查看器」（%ProgramFiles%\Windows Photo Viewer\PhotoViewer.dll，
+# 用 rundll32 打开）其实还在，只是只给 TIFF 登记了（PhotoViewer.FileAssoc.Tiff），「打开方式」里找不到它。
+# 这里照着 Windows 自己的 PhotoViewer.FileAssoc.Tiff 给 JPEG、PNG、BMP、GIF 各建一个同样的类型：EditFlags、
+# ImageOptionFlags、类型名（FriendlyTypeName）和图标用系统自带的 jpegfile、pngfile、Paint.Picture、giffile 的，所以资源
+# 管理器里显示的类型和图标不变（网上常见的做法是全都指到 Tiff 那个类型，结果所有图片都显示成 TIFF 的图标）；打开命令、
+# 「预览」这个菜单文字和拖放处理和 Tiff 的一样。再在它的 Capabilities\FileAssociations 里登记这些扩展名（「默认应用」
+# 里能选它），并加到各扩展名的 OpenWithProgids（右键「打开方式」里直接出现）。
+# 只是登记，不改默认程序：Windows 10 起默认程序只能由用户自己选（「打开方式 → 选择其他应用 → 始终使用」或「默认应用」）。
+# 这些值是在 Windows CI（Windows Server 2025，和 Win11 24H2 同一版本）上读出来的（tests/facts/photo-viewer-and-new-menu.ps1）。
+# 能不能执行、改好没有看 system.photo-viewer（verify）：PhotoViewer.dll 不在（精简版系统）是 na，不给执行。
+# 恢复默认（windows_default）删掉这里写的值；撤销时引擎连同新建的键一起删掉。
+id: explorer.photo-viewer
+schema_version: 1
+title: { zh-CN: 找回 Windows 照片查看器 }
+description:
+  zh-CN: 老的「Windows 照片查看器」打开快、占内存少，其实还在系统里，只是 Windows 10 以后没登记成能打开 JPG、PNG 这些图片。这里把它登记回来（图片的类型和图标不变），之后在图片上点右键「打开方式」就能选它；想双击就用它打开，在「打开方式 → 选择其他应用」里选它并勾上「始终使用」。不改默认程序，不装任何东西，随时可以撤销。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: true
+reboot: none
+target: machine
+actions:
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg'
+      name: 'EditFlags'
+      type: dword
+      value: 2162688
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg'
+      name: 'FriendlyTypeName'
+      type: expand-string
+      value: '@%SystemRoot%\System32\shell32.dll,-30596'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg'
+      name: 'ImageOptionFlags'
+      type: dword
+      value: 1
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg\DefaultIcon'
+      name: ''
+      type: expand-string
+      value: '%SystemRoot%\System32\imageres.dll,-72'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg\shell\open'
+      name: 'MuiVerb'
+      type: expand-string
+      value: '@%ProgramFiles%\Windows Photo Viewer\photoviewer.dll,-3043'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg\shell\open\command'
+      name: ''
+      type: expand-string
+      value: '%SystemRoot%\System32\rundll32.exe "%ProgramFiles%\Windows Photo Viewer\PhotoViewer.dll", ImageView_Fullscreen %1'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg\shell\open\DropTarget'
+      name: 'Clsid'
+      type: string
+      value: '{FFE2A43C-56B9-4bf5-9A79-CC6D4285608A}'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png'
+      name: 'EditFlags'
+      type: dword
+      value: 2162688
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png'
+      name: 'FriendlyTypeName'
+      type: expand-string
+      value: '@%SystemRoot%\System32\shell32.dll,-30598'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png'
+      name: 'ImageOptionFlags'
+      type: dword
+      value: 1
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png\DefaultIcon'
+      name: ''
+      type: expand-string
+      value: '%SystemRoot%\System32\imageres.dll,-83'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png\shell\open'
+      name: 'MuiVerb'
+      type: expand-string
+      value: '@%ProgramFiles%\Windows Photo Viewer\photoviewer.dll,-3043'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png\shell\open\command'
+      name: ''
+      type: expand-string
+      value: '%SystemRoot%\System32\rundll32.exe "%ProgramFiles%\Windows Photo Viewer\PhotoViewer.dll", ImageView_Fullscreen %1'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png\shell\open\DropTarget'
+      name: 'Clsid'
+      type: string
+      value: '{FFE2A43C-56B9-4bf5-9A79-CC6D4285608A}'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap'
+      name: 'EditFlags'
+      type: dword
+      value: 2097152
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap'
+      name: 'FriendlyTypeName'
+      type: expand-string
+      value: '@%SystemRoot%\System32\shell32.dll,-30597'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap'
+      name: 'ImageOptionFlags'
+      type: dword
+      value: 1
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap\DefaultIcon'
+      name: ''
+      type: expand-string
+      value: '%SystemRoot%\System32\imageres.dll,-70'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap\shell\open'
+      name: 'MuiVerb'
+      type: expand-string
+      value: '@%ProgramFiles%\Windows Photo Viewer\photoviewer.dll,-3043'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap\shell\open\command'
+      name: ''
+      type: expand-string
+      value: '%SystemRoot%\System32\rundll32.exe "%ProgramFiles%\Windows Photo Viewer\PhotoViewer.dll", ImageView_Fullscreen %1'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap\shell\open\DropTarget'
+      name: 'Clsid'
+      type: string
+      value: '{FFE2A43C-56B9-4bf5-9A79-CC6D4285608A}'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif'
+      name: 'EditFlags'
+      type: dword
+      value: 2097152
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif'
+      name: 'FriendlyTypeName'
+      type: expand-string
+      value: '@%SystemRoot%\System32\shell32.dll,-30595'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif'
+      name: 'ImageOptionFlags'
+      type: dword
+      value: 0
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif\DefaultIcon'
+      name: ''
+      type: expand-string
+      value: '%SystemRoot%\System32\imageres.dll,-71'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif\shell\open'
+      name: 'MuiVerb'
+      type: expand-string
+      value: '@%ProgramFiles%\Windows Photo Viewer\photoviewer.dll,-3043'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif\shell\open\command'
+      name: ''
+      type: expand-string
+      value: '%SystemRoot%\System32\rundll32.exe "%ProgramFiles%\Windows Photo Viewer\PhotoViewer.dll", ImageView_Fullscreen %1'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif\shell\open\DropTarget'
+      name: 'Clsid'
+      type: string
+      value: '{FFE2A43C-56B9-4bf5-9A79-CC6D4285608A}'
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.jpg'
+      type: string
+      value: 'PhotoViewer.FileAssoc.Jpeg'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.jpg\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Jpeg'
+      type: string
+      value: ''
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.jpeg'
+      type: string
+      value: 'PhotoViewer.FileAssoc.Jpeg'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.jpeg\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Jpeg'
+      type: string
+      value: ''
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.jpe'
+      type: string
+      value: 'PhotoViewer.FileAssoc.Jpeg'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.jpe\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Jpeg'
+      type: string
+      value: ''
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.jfif'
+      type: string
+      value: 'PhotoViewer.FileAssoc.Jpeg'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.jfif\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Jpeg'
+      type: string
+      value: ''
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.png'
+      type: string
+      value: 'PhotoViewer.FileAssoc.Png'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.png\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Png'
+      type: string
+      value: ''
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.bmp'
+      type: string
+      value: 'PhotoViewer.FileAssoc.Bitmap'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.bmp\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Bitmap'
+      type: string
+      value: ''
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.dib'
+      type: string
+      value: 'PhotoViewer.FileAssoc.Bitmap'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.dib\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Bitmap'
+      type: string
+      value: ''
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.gif'
+      type: string
+      value: 'PhotoViewer.FileAssoc.Gif'
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.gif\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Gif'
+      type: string
+      value: ''
+windows_default:
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg'
+      name: 'EditFlags'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg'
+      name: 'FriendlyTypeName'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg'
+      name: 'ImageOptionFlags'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg\DefaultIcon'
+      name: ''
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg\shell\open'
+      name: 'MuiVerb'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg\shell\open\command'
+      name: ''
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Jpeg\shell\open\DropTarget'
+      name: 'Clsid'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png'
+      name: 'EditFlags'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png'
+      name: 'FriendlyTypeName'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png'
+      name: 'ImageOptionFlags'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png\DefaultIcon'
+      name: ''
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png\shell\open'
+      name: 'MuiVerb'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png\shell\open\command'
+      name: ''
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Png\shell\open\DropTarget'
+      name: 'Clsid'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap'
+      name: 'EditFlags'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap'
+      name: 'FriendlyTypeName'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap'
+      name: 'ImageOptionFlags'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap\DefaultIcon'
+      name: ''
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap\shell\open'
+      name: 'MuiVerb'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap\shell\open\command'
+      name: ''
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Bitmap\shell\open\DropTarget'
+      name: 'Clsid'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif'
+      name: 'EditFlags'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif'
+      name: 'FriendlyTypeName'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif'
+      name: 'ImageOptionFlags'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif\DefaultIcon'
+      name: ''
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif\shell\open'
+      name: 'MuiVerb'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif\shell\open\command'
+      name: ''
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\PhotoViewer.FileAssoc.Gif\shell\open\DropTarget'
+      name: 'Clsid'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.jpg'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.jpg\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Jpeg'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.jpeg'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.jpeg\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Jpeg'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.jpe'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.jpe\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Jpeg'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.jfif'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.jfif\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Jpeg'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.png'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.png\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Png'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.bmp'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.bmp\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Bitmap'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.dib'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.dib\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Bitmap'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations'
+      name: '.gif'
+      delete: true
+  - registry:
+      key: 'HKLM\SOFTWARE\Classes\.gif\OpenWithProgids'
+      name: 'PhotoViewer.FileAssoc.Gif'
+      delete: true
+undo: auto
+verify: system.photo-viewer
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/default-programs
+  - https://learn.microsoft.com/en-us/windows/win32/shell/how-to-include-an-application-on-the-open-with-dialog-box
+  - https://learn.microsoft.com/en-us/windows/win32/shell/fa-progids

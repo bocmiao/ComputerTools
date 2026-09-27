@@ -1,0 +1,28 @@
+# Windows 照片查看器能不能打开常见的图片：修复 explorer.photo-viewer 的复查检测（verify），不放进体检和症状。
+# 脚本：scripts/checks/system/photo-viewer.ps1。PhotoViewer.dll 不在（精简版系统）是 na——引擎不让执行修复，
+# 预览里拿这里的结论当原因；JPG、PNG、BMP、GIF 每一种都登记了（Capabilities\FileAssociations、OpenWithProgids，
+# 类型有打开命令）才算 ok。
+id: system.photo-viewer
+schema_version: 1
+title: { zh-CN: Windows 照片查看器能不能打开常见图片 }
+description:
+  zh-CN: 看看 Windows 照片查看器还在不在，有没有登记成能打开 JPG、PNG、BMP、GIF 图片。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/photo-viewer.ps1
+results:
+  registered:
+    status: ok
+    message:
+      zh-CN: Windows 照片查看器已经登记好了：在 JPG、PNG、BMP、GIF 图片上点右键「打开方式」就能选它。
+  not-registered:
+    status: advice
+    message:
+      zh-CN: Windows 照片查看器还在这台电脑上，只是没有登记成能打开这些图片：{unregistered}。
+  missing:
+    status: na
+    message:
+      zh-CN: 这台电脑上没有 Windows 照片查看器了（PhotoViewer.dll 不在，精简版系统常见），小药箱找不回来。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/default-programs
