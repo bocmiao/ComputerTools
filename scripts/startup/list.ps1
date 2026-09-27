@@ -95,6 +95,25 @@ function Get-Leaf {
     return $Path.Substring($Path.LastIndexOf('\') + 1)
 }
 
+# The folders of the machine-wide PATH (the system variable: not the user's,
+# and not this process's), for bare program names like powershell.exe.
+$machinePathDirs = @()
+try {
+    $envKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Control\Session Manager\Environment')
+    if ($null -ne $envKey) {
+        try {
+            $machinePathText = [string]$envKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        }
+        finally {
+            $envKey.Close()
+        }
+        $machinePathDirs = @($machinePathText.Split(';') | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_.Trim()).TrimEnd('\') } | Where-Object { $_ -match '^[A-Za-z]:\\' })
+    }
+}
+catch {
+    $machinePathDirs = @()
+}
+
 # A bare file name (ctfmon.exe) is looked up where Windows would find it.
 function Resolve-ProgramPath {
     param([string]$Path)
@@ -102,7 +121,7 @@ function Resolve-ProgramPath {
     if (($Path.Length -eq 0) -or $Path.Contains('\')) {
         return $Path
     }
-    foreach ($dir in @($system32, $windowsDir)) {
+    foreach ($dir in (@($system32, $windowsDir) + $machinePathDirs)) {
         $candidate = $dir + '\' + $Path
         try {
             if (Test-Path -LiteralPath $candidate -PathType Leaf) {

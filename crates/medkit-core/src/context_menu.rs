@@ -134,6 +134,9 @@ pub struct RawEntry {
     /// 文件在 Windows 目录里（不是 rundll32 这类宿主程序在运行别的文件）
     #[serde(default)]
     pub system: bool,
+    /// 路径在 Windows 目录下（文件不在了也算）
+    #[serde(default)]
+    pub in_windows: bool,
 }
 
 fn default_hive() -> Hive {
@@ -203,8 +206,15 @@ pub fn is_windows_own(e: &RawEntry) -> bool {
         Kind::Packaged => e.package_system,
         // CLSID 都没登记的外壳扩展：卸载后留下的空壳，谁的都一样，可以拿掉
         Kind::Handler if !e.class_found => false,
-        // 对不上程序的（没有命令、类里没写 DLL）不知道是谁加的，不列
-        Kind::Verb | Kind::Handler => e.system || is_microsoft(e) || e.path.is_empty(),
+        // 对不上程序的（没有命令、类里没写 DLL，或者只有文件名、在哪儿都找不到）不知道是谁加的，不列；
+        // 路径在 Windows 目录下的，文件不在了也是 Windows 自己的
+        Kind::Verb | Kind::Handler => {
+            e.system
+                || e.in_windows
+                || is_microsoft(e)
+                || e.path.is_empty()
+                || (!e.exists && !e.path.contains(['\\', '/']))
+        }
     }
 }
 
@@ -374,6 +384,10 @@ mod tests {
             // 没有程序可以对上号的：不知道是谁加的，不列
             json!({ "kind": "verb", "hive": "machine", "scope": "Folder", "key": "opennewwindow" }),
             json!({ "kind": "handler", "hive": "machine", "scope": "Folder", "key": "x", "clsid": "{21EC2020-3AEA-1069-A2DD-08002B30309D}" }),
+            // 命令里只写了 powershell.exe、找不到在哪：Windows 的「在此处打开 PowerShell 窗口」就是这样
+            json!({ "kind": "verb", "hive": "machine", "scope": "Directory", "key": "Powershell", "path": "powershell.exe", "exists": false }),
+            // 在 Windows 目录下、文件已经不在了的
+            json!({ "kind": "verb", "hive": "machine", "scope": "Drive", "key": "x", "path": "C:\\Windows\\System32\\gone.exe", "in_windows": true }),
         ];
         for v in own {
             assert!(is_windows_own(&entry(v.clone())), "{v}");

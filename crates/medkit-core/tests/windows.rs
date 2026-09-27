@@ -620,9 +620,14 @@ fn context_menu_entries_are_listed_hidden_and_restored() {
             i.publisher.as_deref().unwrap_or("-")
         );
     }
+    // Windows 自带的一项都不能列：程序不在 Windows 目录下，命令和扩展不是微软签名的，也不会只有个文件名
     let windir = std::env::var("SystemRoot").unwrap().to_lowercase();
     for i in &items {
-        assert!(!i.path.to_lowercase().starts_with(&windir) || !i.exists, "Windows 自带的不应该列出来：{i:?}");
+        assert!(!i.path.to_lowercase().starts_with(&windir), "Windows 自带的不应该列出来：{i:?}");
+        if i.kind != ContextMenuKind::App {
+            assert!(!i.publisher.as_deref().is_some_and(|p| p.starts_with("Microsoft")), "微软的不应该列出来：{i:?}");
+            assert!(i.path.is_empty() || i.path.contains('\\'), "只有文件名、找不到在哪的不应该列出来：{i:?}");
+        }
     }
     let command = items.iter().find(|i| i.title == "小药箱测试命令").expect("测试用的命令没有列出来");
     assert_eq!(command.kind, ContextMenuKind::Command);

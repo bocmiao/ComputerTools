@@ -32,7 +32,8 @@
 # (machine / user), scope, key (verb or handler key name; packaged: the Verb
 # Id), clsid, text, class_found (handler: the CLSID is registered), package
 # (full name), package_name, publisher (package PublisherDisplayName),
-# package_system (SignatureKind System), subcommands, extended, and what the
+# package_system (SignatureKind System), subcommands, extended, in_windows (the
+# path is under the Windows folder, even when the file is gone), and what the
 # file says about itself (program-info): path, exists, description, company,
 # signature, signer, system.
 # Paths stay on this PC: the engine shows them in the list, never in the
@@ -115,6 +116,25 @@ function Get-Leaf {
     return $Path.Substring($Path.LastIndexOf('\') + 1)
 }
 
+# The folders of the machine-wide PATH (the system variable: not the user's,
+# and not this process's), for bare program names like powershell.exe.
+$machinePathDirs = @()
+try {
+    $envKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Control\Session Manager\Environment')
+    if ($null -ne $envKey) {
+        try {
+            $machinePathText = [string]$envKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        }
+        finally {
+            $envKey.Close()
+        }
+        $machinePathDirs = @($machinePathText.Split(';') | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_.Trim()).TrimEnd('\') } | Where-Object { $_ -match '^[A-Za-z]:\\' })
+    }
+}
+catch {
+    $machinePathDirs = @()
+}
+
 # A bare file name (ctfmon.exe) is looked up where Windows would find it.
 function Resolve-ProgramPath {
     param([string]$Path)
@@ -122,7 +142,7 @@ function Resolve-ProgramPath {
     if (($Path.Length -eq 0) -or $Path.Contains('\')) {
         return $Path
     }
-    foreach ($dir in @($system32, $windowsDir)) {
+    foreach ($dir in (@($system32, $windowsDir) + $machinePathDirs)) {
         $candidate = $dir + '\' + $Path
         try {
             if (Test-Path -LiteralPath $candidate -PathType Leaf) {
@@ -394,6 +414,7 @@ function Add-Item {
         subcommands    = $false
         extended       = $false
         path           = $Program.Path
+        in_windows     = $Program.Path.StartsWith($windowsDir + '\', [System.StringComparison]::OrdinalIgnoreCase)
     }
     $facts = Get-CachedFacts -Path $Program.Path -Hosted $Program.Hosted
     foreach ($name in @($facts.Keys)) {
