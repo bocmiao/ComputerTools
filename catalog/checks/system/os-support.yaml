@@ -13,7 +13,8 @@
 #   长期服务版（EditionID 以 EnterpriseS / IoTEnterpriseS 开头，含 N 版）单独一张表：
 #     LTSB 2015 2025-10-14、LTSB 2016 2026-10-13、LTSC 2019 2029-01-09、
 #     LTSC 2021 2027-01-12（IoT 2032-01-13）、LTSC 2024 2029-10-09（IoT 2034-10-10）
-# 结果：supported（Win11 在支持期内）/ ltsc（长期服务版且没过期）/
+# 结果：supported（Win11 在支持期内）/ ending-soon（Win11，但 60 天内就到期：现在就装最新的功能更新）/
+#       ltsc（长期服务版且没过期）/ ltsc-ending-soon（长期服务版，60 天内到期）/
 #       win10（Win10 22H2 家庭版、专业版一族，ESU 还没结束，可以登记）/
 #       expired（22H2 之前的 Win10 家庭版、专业版一族：先更新到 22H2 再登记 ESU）/
 #       expired-win11（Win11 的这个版本过期了：装最新的功能更新）/
@@ -43,6 +44,14 @@ results:
     status: ok
     message:
       zh-CN: "你的系统是 {os} {version}，微软会提供安全更新到 {end_date}。"
+  ending-soon:
+    status: advice
+    message:
+      zh-CN: "你的系统是 {os} {version}，微软只提供安全更新到 {end_date}，还剩 {days_left} 天。"
+    fixer: user
+    next:
+      zh-CN: 打开「设置 → Windows 更新」（点下面的按钮就能直接打开），安装最新的功能更新（大版本更新），装好以后就能继续收到安全更新。Windows 更新一般也会自动推送，先保存好手头的文件，按提示重启就行。如果提示这台电脑不满足要求，请懂哥或售后帮忙看看。
+    links: ["tool:settings.windows-update"]
   win10:
     status: advice
     message:
@@ -74,6 +83,13 @@ results:
     fixer: helper
     next:
       zh-CN: 能不能升级到 Windows 11，先看看体检里「TPM 安全芯片」「CPU 是否支持新版 Windows 11」这两项，再请懂哥或售后帮忙确认；升级不了的，请他们帮忙换成还在支持期内的 Windows 版本。升级或换系统之前，一定要先备份重要文件。
+  ltsc-ending-soon:
+    status: advice
+    message:
+      zh-CN: "你的系统是 Windows 长期服务版（{version}），微软只提供安全更新到 {end_date}，还剩 {days_left} 天。长期服务版不会自动升级到新版本。"
+    fixer: helper
+    next:
+      zh-CN: 到期以后就收不到安全更新了。请懂哥或单位的电脑管理员帮忙换成还在支持期内的版本；换系统之前，一定要先备份重要文件。
   ltsc:
     status: ok
     message:

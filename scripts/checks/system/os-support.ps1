@@ -5,7 +5,10 @@
 # says "Windows 10" on Windows 11, so the OS is decided by build >= 22000.
 # Read-only. Result codes:
 #   supported       Windows 11 within its servicing period
+#   ending-soon     Windows 11, but support ends within 60 days
+#                   ($endingSoonDays): install the latest feature update now
 #   ltsc            long-term servicing edition within its servicing period
+#   ltsc-ending-soon  long-term servicing edition ending within 60 days
 #   win10           Windows 10 22H2, Home/Pro family: can enroll in consumer ESU
 #   expired         older Windows 10, Home/Pro family: update to 22H2, then ESU
 #   expired-win11   Windows 11 version past its end date: install the latest
@@ -62,6 +65,10 @@ $win10FinalBuild = 19045
 $win10EndDate = '2025-10-14'
 $esuEndDate = '2027-10-12'
 
+# Support that ends within this many days is advice, not "ok": the user still
+# has time to install the feature update (or move off an ending LTSC).
+$endingSoonDays = 60
+
 function Get-PropertyText {
     param($Object, [string]$Name)
     if ($null -eq $Object) {
@@ -76,10 +83,20 @@ function Get-PropertyText {
 
 $today = (Get-Date).Date
 
+function ConvertTo-Date {
+    param([string]$Date)
+    return [datetime]::ParseExact($Date, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Test-DatePassed {
     param([string]$Date)
-    $end = [datetime]::ParseExact($Date, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture)
-    return ($today -gt $end)
+    return ($today -gt (ConvertTo-Date $Date))
+}
+
+# Supported days left, today and the last day included (1 on the last day).
+function Get-DaysLeft {
+    param([string]$Date)
+    return [int](((ConvertTo-Date $Date) - $today).TotalDays) + 1
 }
 
 $cv = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
@@ -136,6 +153,9 @@ if ($isLtsc) {
     if (Test-DatePassed $endDate) {
         $result = 'expired-no-esu'
     }
+    elseif ((Get-DaysLeft $endDate) -le $endingSoonDays) {
+        $result = 'ltsc-ending-soon'
+    }
     else {
         $result = 'ltsc'
     }
@@ -152,6 +172,9 @@ elseif ($build -ge 22000) {
     }
     if (Test-DatePassed $endDate) {
         $result = 'expired-win11'
+    }
+    elseif ((Get-DaysLeft $endDate) -le $endingSoonDays) {
+        $result = 'ending-soon'
     }
     else {
         $result = 'supported'
@@ -192,6 +215,9 @@ $facts = [ordered]@{
 }
 if ($endDate.Length -gt 0) {
     $facts['end_date'] = $endDate
+}
+if (($result -eq 'ending-soon') -or ($result -eq 'ltsc-ending-soon')) {
+    $facts['days_left'] = Get-DaysLeft $endDate
 }
 if (($result -eq 'win10') -or ($result -eq 'expired')) {
     $facts['esu_end'] = $esuEndDate
