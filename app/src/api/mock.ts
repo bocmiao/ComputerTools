@@ -2331,6 +2331,17 @@ const handlers: Handlers = {
     if (!demoImageFolder) throw '还没有选择保存的文件夹。'
     return null
   },
+  // 演示里不弹「另存为」对话框，也不真的保存：假装存进了演示文件夹
+  pdf_save: ({ name, bytes }) => {
+    const text = new TextDecoder().decode(bytes.subarray(0, 5))
+    if (text !== '%PDF-') throw '内容不是 PDF，没有保存。'
+    demoPdfSaved = true
+    return `${DEMO_IMAGE_FOLDER}\\${name}`
+  },
+  pdf_reveal: () => {
+    if (!demoPdfSaved) throw '还没有存过 PDF。'
+    return null
+  },
   lockers_pick_files: () => {
     demoLockTarget = 'files'
     demoLockClosed = false
@@ -2436,6 +2447,7 @@ let demoShutdown: { at: number; restart: boolean } | null = null
 
 // ── 图片批量处理的演示（浏览器里真的处理图片，但不保存）──
 const DEMO_IMAGE_FOLDER = '演示文件夹（浏览器里不会真的保存）'
+let demoPdfSaved = false
 let demoImageFolder = false
 const demoSaved = new Set<string>()
 

@@ -5,6 +5,7 @@ import { applyTextAction, textStats, type TextAction } from '../utils/textTools'
 import ImagePrivacyTool from './ImagePrivacyTool.vue'
 import BatchRenameTool from './BatchRenameTool.vue'
 import BatchImageTool from './BatchImageTool.vue'
+import ImagesToPdfTool from './ImagesToPdfTool.vue'
 import FileLockers from './FileLockers.vue'
 import SpaceFinder from './SpaceFinder.vue'
 import TextQrTool from './TextQrTool.vue'
@@ -246,6 +247,7 @@ async function copy(value: string): Promise<void> {
       </article>
       <TextQrTool />
       <BatchImageTool />
+      <ImagesToPdfTool />
       <ImagePrivacyTool />
       <BatchRenameTool />
       <FileLockers />

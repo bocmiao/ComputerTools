@@ -321,6 +321,26 @@ fn image_commands_pass_the_permission_check_and_save_raw_bodies() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 图片合成 PDF 的命令也要登记进权限清单；PDF 内容走二进制请求体，存到哪里只能在系统的「另存为」对话框里选。
+#[test]
+fn pdf_commands_pass_the_permission_check() {
+    let win = app();
+    let e = invoke(&win, "pdf_reveal", json!({})).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("还没有存过")), "{e}");
+
+    let mut headers = tauri::http::HeaderMap::new();
+    headers.insert("x-medkit-name", "%E6%9D%90%E6%96%99.pdf".parse().unwrap());
+    // 用 JSON 传 PDF 内容不行
+    let e = invoke(&win, "pdf_save", json!({ "bytes": [37, 80, 68, 70] })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("二进制")), "{e}");
+    // 不是 PDF 的不存，也不弹对话框
+    let e = invoke_body(&win, "pdf_save", InvokeBody::Raw(b"MZ".to_vec()), headers.clone()).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("不是 PDF")), "{e}");
+    // mock 运行时里没有「另存为」对话框：和点了「取消」一样返回 null
+    let pdf = b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\n%%EOF\n".to_vec();
+    assert!(invoke_body(&win, "pdf_save", InvokeBody::Raw(pdf), headers).unwrap().is_null());
+}
+
 /// 「文件删不掉：是谁占着」的命令也要登记进权限清单；结果只有文件名、没有完整路径。
 #[test]
 fn locker_commands_pass_the_permission_check() {

@@ -31,6 +31,8 @@ const COMMANDS: &[&str] = &[
     "image_select_folder",
     "image_save",
     "image_open_folder",
+    "pdf_save",
+    "pdf_reveal",
     "screen_fullscreen",
     "awake_get",
     "awake_set",

@@ -196,6 +196,22 @@ export function imageOpenFolder(): Promise<null> {
   return call('image_open_folder', {})
 }
 
+/**
+ * 图片合成 PDF：弹出系统的「另存为」对话框，把拼好的 PDF 存到用户选的地方（同名时对话框会先问要不要替换）。
+ * 返回存好的完整路径；用户点了「取消」返回 null。内容直接作为二进制请求体传，建议的文件名按 URL 编码放进请求头。
+ */
+export function pdfSave(name: string, bytes: Uint8Array): Promise<string | null> {
+  if (isTauri()) {
+    return invoke<string | null>('pdf_save', bytes, { headers: { 'x-medkit-name': encodeURIComponent(name) } })
+  }
+  return callMock('pdf_save', { name, bytes })
+}
+
+/** 图片合成 PDF：在资源管理器里显示刚存好的 PDF */
+export function pdfReveal(): Promise<null> {
+  return call('pdf_reveal', {})
+}
+
 /** 屏幕坏点测试：小药箱窗口进入、退出全屏 */
 export function screenFullscreen(on: boolean): Promise<null> {
   return call('screen_fullscreen', { on })

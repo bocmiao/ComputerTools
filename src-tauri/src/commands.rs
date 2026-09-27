@@ -12,6 +12,7 @@ use tauri::State;
 
 use crate::awake::AwakeStatus;
 use crate::images;
+use crate::pdf;
 use crate::rename::{self, RenamePreview, RenameRules};
 use crate::setup::AppState;
 use crate::shutdown::{ShutdownCancel, ShutdownStatus};
@@ -246,6 +247,68 @@ pub async fn image_open_folder(state: State<'_, AppState>) -> CmdResult<()> {
     {
         let _ = folder;
         Err("只有在 Windows 上才能打开文件夹。".into())
+    }
+}
+
+/// 图片合成 PDF：用系统的「另存为」对话框选存到哪里、叫什么，把界面拼好的 PDF 存进去。
+/// PDF 内容就是请求体（二进制）；建议的文件名按 URL 编码放在请求头 `x-medkit-name` 里。
+/// 用户点了「取消」返回 null；存好了返回完整路径（只在界面上显示）。
+#[tauri::command]
+pub async fn pdf_save(state: State<'_, AppState>, request: tauri::ipc::Request<'_>) -> CmdResult<Option<String>> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("PDF 内容的格式不对（要直接传二进制）。".into());
+    };
+    pdf::check(bytes)?;
+    let suggested = request
+        .headers()
+        .get("x-medkit-name")
+        .and_then(|v| v.to_str().ok())
+        .and_then(images::decode_component)
+        .filter(|name| rename::check_name(name).is_ok())
+        .unwrap_or_else(|| pdf::DEFAULT_NAME.to_owned());
+    let bytes = bytes.clone();
+    #[cfg(windows)]
+    let chosen = tauri::async_runtime::spawn_blocking(move || {
+        rfd::FileDialog::new()
+            .set_title("把 PDF 存到哪里")
+            .set_file_name(suggested)
+            .add_filter("PDF 文件", &["pdf"])
+            .save_file()
+    })
+    .await
+    .map_err(|e| format!("打开「另存为」对话框失败：{e}"))?;
+    #[cfg(not(windows))]
+    let chosen: Option<std::path::PathBuf> = {
+        let _ = suggested;
+        None
+    };
+    let Some(chosen) = chosen else { return Ok(None) };
+    let (path, may_replace) = pdf::target(chosen);
+    let saved = path.clone();
+    tauri::async_runtime::spawn_blocking(move || pdf::write(&path, &bytes, may_replace))
+        .await
+        .map_err(|e| format!("内部错误：{e}"))??;
+    let display = saved.display().to_string();
+    state.pdf.lock().map_err(|_| "PDF 状态异常。")?.saved = Some(saved);
+    Ok(Some(display))
+}
+
+/// 图片合成 PDF：在资源管理器里显示刚存好的 PDF（打开它所在的文件夹并选中它）。
+#[tauri::command]
+pub async fn pdf_reveal(state: State<'_, AppState>) -> CmdResult<()> {
+    let path = state.pdf.lock().map_err(|_| "PDF 状态异常。")?.saved.clone();
+    let path = path.ok_or("还没有存过 PDF。")?;
+    #[cfg(windows)]
+    {
+        tauri::async_runtime::spawn_blocking(move || medkit_core::platform::windows::reveal_file(&path))
+            .await
+            .map_err(|e| format!("内部错误：{e}"))?
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Err("只有在 Windows 上才能打开资源管理器。".into())
     }
 }
 
