@@ -413,6 +413,14 @@ function Receive-DnsProbe {
 }
 # ---- end of shared block dns-probe ----
 
+# Names used when Windows gives none, in Chinese because they end up in the
+# messages ("wang luo kong zhi qi" network controller, "wang ka" network
+# adapter, "bo hao huo VPN lian jie" dial-up or VPN connection); the script
+# stays ASCII.
+$unnamedController = -join [char[]](0x7F51, 0x7EDC, 0x63A7, 0x5236, 0x5668)
+$unnamedAdapter = -join [char[]](0x7F51, 0x5361)
+$dialUpName = (-join [char[]](0x62E8, 0x53F7, 0x6216)) + ' VPN ' + (-join [char[]](0x8FDE, 0x63A5))
+
 # Gateway ping: a few short tries (a router answers within milliseconds).
 $pingTries = 3
 $pingTimeoutMs = 700
@@ -538,7 +546,7 @@ function Find-NetworkProblemDevice {
             continue
         }
         if ($name.Length -eq 0) {
-            $name = 'Network controller'
+            $name = $unnamedController
         }
         $candidate = [pscustomobject]@{ Name = $name; Code = $code }
         if (($code -eq 1) -or ($code -eq 28)) {
@@ -775,7 +783,7 @@ foreach ($adapter in $adapters) {
     # renamed by the user, so it never goes into the facts.
     $description = Get-Text $adapter.InterfaceDescription
     if ($description.Length -eq 0) {
-        $description = 'Network adapter'
+        $description = $unnamedAdapter
     }
     $infos.Add([pscustomobject]@{
             Index       = $index
@@ -918,7 +926,7 @@ foreach ($key in @($v4Routes.Keys)) {
     $lineInfo = [pscustomobject]@{
         Index       = [long]$key
         Guid        = ''
-        Description = 'Dial-up or VPN connection'
+        Description = $dialUpName
         Kind        = 'dial-up'
         State       = 'up'
         Physical    = $false

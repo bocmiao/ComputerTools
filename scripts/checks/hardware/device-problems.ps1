@@ -64,7 +64,9 @@ $ErrorActionPreference = 'Stop'
 # At most this many different names per list; the counts cover every device.
 $maxNames = 3
 $maxNameLength = 80
-$unnamedDevice = 'Unknown device'
+# A device without any name is listed the way Device Manager shows it on a
+# Chinese system, "wei zhi she bei" (unknown device); the script stays ASCII.
+$unnamedDevice = -join [char[]](0x672A, 0x77E5, 0x8BBE, 0x5907)
 
 $ignoredCodes = @(45, 47, 53)
 $missingCodes = @(1, 28)
