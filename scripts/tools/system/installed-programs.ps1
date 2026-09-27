@@ -43,6 +43,9 @@ function Get-Text {
 
 function Get-Prop {
     param($Object, [string]$Name)
+    if ($null -eq $Object) {
+        return ''
+    }
     $prop = $Object.PSObject.Properties[$Name]
     if ($null -eq $prop) {
         return ''
@@ -126,6 +129,10 @@ foreach ($root in $roots) {
             $entry = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction Stop
         }
         catch {
+            continue
+        }
+        # A key without values gives no object at all
+        if ($null -eq $entry) {
             continue
         }
         $name = Get-Prop $entry 'DisplayName'
