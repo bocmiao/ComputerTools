@@ -1,0 +1,176 @@
+# C 盘被什么占了（info）。脚本：scripts/tools/disk/disk-usage.ps1
+# 只看不删：数一数系统盘上几大块东西各占多少，告诉用户最大的那一块该在哪里处理。不删、不改、不写任何文件，不改权限，不联网。
+# 要管理员权限（系统文件夹、别的账户的回收站）和登录用户的注册表（user_hive）：用户目录按 -UserHive 里的 SID 在
+#   ProfileList\<SID>\ProfileImagePath 里找（-UserHive 是 HKCU: 时用 $env:USERPROFILE）；桌面、文档、下载、图片、视频的位置
+#   看用户注册表里的 User Shell Folders（可能搬到了 D 盘或 OneDrive）。路径里的 %USERPROFILE% 这类变量按登录用户的值展开
+#   （用户目录、用户注册表的 Environment 和 Volatile Environment），不用运行小药箱的管理员账户的值。
+# 数哪些（只数系统盘上的）：
+#   系统：休眠文件；虚拟内存（pagefile.sys 加 swapfile.sys）；用户的临时文件夹（用户注册表 Environment 里的 TEMP）；
+#         Windows\Temp；Windows 更新下载缓存（SoftwareDistribution\Download）；传递优化文件（默认位置
+#         %SystemRoot%\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache，
+#         微软文档：缓存默认在 %SYSTEMDRIVE%，日志在同一个 DeliveryOptimization 文件夹下）；Windows.old；
+#         内存转储（CrashControl 的 DumpFile 和 MinidumpDir，默认 %SystemRoot%\MEMORY.DMP 和 %SystemRoot%\Minidump）；
+#         回收站（系统盘的 $Recycle.Bin，所有账户合计，不列里面的文件）。
+#   你的文件：桌面、文档（不算里面的微信、QQ 文件夹，它们单独列）、下载、图片、视频；不在系统盘上的显示「在别的盘上」。
+#   聊天软件：微信 3.x（文档\WeChat Files）、微信 4.x（文档\xwechat_files）、QQ（文档\Tencent Files）。只看默认位置：
+#            User Shell Folders 里的文档，以及用户目录下的 Documents；改过存储位置的读不到，不显示。
+# 怎么数：.NET 的目录枚举加手写的栈，一个目录一个 try/catch（读不了的跳过，个数在事实 skipped 里）。大小是文件长度相加，
+#   和资源管理器的「大小」一样（硬链接会重复算，所以 Windows.old 可能比删掉后实际腾出的多一些；压缩和簇的零头不算）。
+#   - 不跟着 junction、符号链接、挂载点走（不死循环、不重复算），按 PowerShell 的 LinkType 认；OneDrive 的文件夹也是重解析点
+#     （powershell.exe 在 %SystemRoot% 下，Windows 会让它看到），但没有 LinkType，照常数。
+#   - 「仅在线」的文件（属性 Offline 0x1000、RecallOnOpen 0x40000、RecallOnDataAccess 0x400000）不占本地空间，不算；
+#     带这些属性的文件夹也不进去，免得网盘软件去云端拉目录。
+#   - 文件夹本身或上级是链接的，按链接指向的真实位置算：还在系统盘上就数那里，不在就显示「在别的盘上」。
+#   - 一个文件夹只算一次：文档里的微信文件夹只算在微信那一行；TEMP 设成 Windows\Temp 的，只算在「临时文件（系统的）」。
+# 时间：整个脚本 60 秒（timeout_sec 给 120）。各文件夹轮流数，每轮最多 1 秒，是剩下的时间平分给没数完的文件夹，
+#   一个文件夹一共最多 30 秒；读到一半的目录下一轮接着读，不重复。没数完的行用 *_partial（「没数完，至少有」）加已经数到的大小，
+#   一点都没来得及数的显示「没来得及数」，同时系统盘那张表里加一行「说明」。
+# 结果：按最大的一类（不算虚拟内存）给 top-*，message 说它有多大，next 说怎么处理；其余 1 GB 以上的几类放在
+#   「其他几块怎么处理」表里，一类一行。最大的一类也不到 1 GB 时是 ok。status 都是 ok：这个小工具只看不评判，
+#   空间够不够由检测 disk.system-free-space 说。
+#   分类：临时文件和缓存（两个临时文件夹、更新缓存、传递优化文件、内存转储）、回收站、休眠文件、Windows.old、
+#   微信和 QQ、你的文件；各类的处理办法和「C 盘满了」的图文指引一致。
+# 隐私：表格里只有固定的名字（下面的 labels）和大小，没有路径、文件名、用户名；报错信息里的用户目录、用户名、电脑名会被换掉。
+# 待真机验证：传递优化缓存管理员能不能读、OneDrive 文件夹、微信和 QQ 设置里的菜单名称、机械硬盘老电脑上的用时等，
+#   见 docs/real-machine-checklist.md。
+id: disk.usage
+schema_version: 1
+group: info
+title: { zh-CN: C 盘被什么占了 }
+description:
+  zh-CN: 看看 C 盘上几大块东西各占多少：临时文件、更新缓存、休眠文件、回收站、旧系统（Windows.old）、桌面和下载，还有微信、QQ 的聊天文件，再告诉你最大的几块该在哪里清理。只看不删；文件很多的电脑要等一会儿，最多一分钟左右。
+category: disk
+requires_admin: true
+timeout_sec: 120
+user_hive: true
+run:
+  script: tools/disk/disk-usage.ps1
+results:
+  top-cleanup:
+    status: ok
+    message:
+      zh-CN: "{drive} 盘一共 {total_gb} GB，还剩 {free_gb} GB。下面列出的几大块里，占得最多的是临时文件和缓存，一共 {top_gb} GB。"
+    next:
+      zh-CN: 打开「设置 → 系统 → 存储 → 临时文件」，勾选「临时文件」「Windows 更新清理」「传递优化文件」等，再点「删除文件」；也可以用「磁盘清理」，点「清理系统文件」后再勾选。「下载」这一项是你自己下载的东西，没看过的先别勾；最近蓝屏过的，「系统错误内存转储文件」先留着给懂哥分析。正在用的临时文件删不掉，是正常的。
+    links: ["tool:disk.clean-old-temp", "tool:settings.storage", "tool:open.disk-cleanup"]
+  top-recycle-bin:
+    status: ok
+    message:
+      zh-CN: "{drive} 盘一共 {total_gb} GB，还剩 {free_gb} GB。下面列出的几大块里，占得最多的是回收站里的东西，一共 {top_gb} GB。"
+    next:
+      zh-CN: 先打开桌面上的「回收站」看看，还要的文件右键「还原」；确认剩下的都不要了，再右键「回收站」选「清空回收站」。清空以后就找不回来了。
+  top-hibernation:
+    status: ok
+    message:
+      zh-CN: "{drive} 盘一共 {total_gb} GB，还剩 {free_gb} GB。下面列出的几大块里，占得最多的是休眠文件，有 {top_gb} GB。"
+    next:
+      zh-CN: 休眠文件是给「休眠」和「快速启动」用的，一般有内存的四成左右那么大。小药箱以后会加上一键「缩小休眠文件」；现在想缩小的话，右键「开始」按钮，打开「终端（管理员）」（Windows 10 叫「Windows PowerShell（管理员）」），输入 powercfg /h /type reduced 回车。缩小以后不能再「休眠」，「睡眠」和快速启动照常；想改回来就输入 powercfg /h /type full。拿不准的话请懂哥帮忙。
+  top-windows-old:
+    status: ok
+    message:
+      zh-CN: "{drive} 盘一共 {total_gb} GB，还剩 {free_gb} GB。下面列出的几大块里，占得最多的是旧系统文件夹 Windows.old，有 {top_gb} GB。"
+    next:
+      zh-CN: 这是升级或重装系统时留下的旧系统。删之前先打开 {drive}:\Windows.old\Users 看看，里面有没有你自己的桌面、文档（没格式化就重装系统时，旧文件只在这里），要的先拷出来。确认没有了，再打开「设置 → 系统 → 存储 → 临时文件」勾选「以前的 Windows 安装」删除，或者用「磁盘清理」→「清理系统文件」。删了就找不回来了，也不能再退回以前的系统版本。
+    links: ["tool:settings.storage", "tool:open.disk-cleanup"]
+  top-chat:
+    status: ok
+    message:
+      zh-CN: "{drive} 盘一共 {total_gb} GB，还剩 {free_gb} GB。下面列出的几大块里，占得最多的是微信、QQ 的聊天文件，一共 {top_gb} GB。"
+    next:
+      zh-CN: 在微信、QQ 自己的设置里清理：微信打开「设置」，在「存储空间」（有的版本叫「文件管理」）里可以清理缓存，也可以把存储位置换到 D 盘（换的时候微信会自己搬，期间不要关电脑）；QQ 在「设置」里找「存储管理」。聊天记录和聊天文件不要自己到文件夹里删，删错了就找不回来了。
+  top-user-files:
+    status: ok
+    message:
+      zh-CN: "{drive} 盘一共 {total_gb} GB，还剩 {free_gb} GB。下面列出的几大块里，占得最多的是你自己的文件（桌面、文档、下载、图片、视频），一共 {top_gb} GB。"
+    next:
+      zh-CN: 这些只能你自己挑：打开下面最大的那几个文件夹，在空白处右键「排序方式 → 大小」，把不要的大文件（安装包、压缩包、看过的视频）删掉，要留的搬到别的盘（比如 D 盘）。想让它们以后都存到 D 盘，看「C 盘满了」里「把桌面、文档、下载文件夹整体搬到 D 盘」那一步。
+    links: ["symptom:disk-full"]
+  ok:
+    status: ok
+    message:
+      zh-CN: "{drive} 盘一共 {total_gb} GB，还剩 {free_gb} GB。下面列出的这几块都不大，{drive} 盘主要是被系统本身和装的软件占了。"
+    next:
+      zh-CN: 打开「设置 → 系统 → 存储」可以看到哪一类最多。不用的大软件、大游戏可以在「设置 → 应用」里卸载；要用的，可以卸载后重新装到别的盘。
+    links: ["tool:settings.storage", "tool:settings.apps"]
+labels:
+  sections:
+    drive: { zh-CN: 系统盘 }
+    system: { zh-CN: 系统 }
+    user: { zh-CN: 你的文件 }
+    chat: { zh-CN: 聊天软件 }
+    advice: { zh-CN: 其他几块怎么处理 }
+  rows:
+    total: { zh-CN: 总容量 }
+    used: { zh-CN: 已用 }
+    free: { zh-CN: 剩余 }
+    note: { zh-CN: 说明 }
+    hiberfil: { zh-CN: 休眠文件 }
+    pagefile: { zh-CN: 虚拟内存（系统在用，不要删） }
+    user_temp: { zh-CN: 临时文件（你的） }
+    user_temp_partial: { zh-CN: 临时文件（你的；没数完，至少有） }
+    windows_temp: { zh-CN: 临时文件（系统的） }
+    windows_temp_partial: { zh-CN: 临时文件（系统的；没数完，至少有） }
+    update_cache: { zh-CN: Windows 更新缓存 }
+    update_cache_partial: { zh-CN: Windows 更新缓存（没数完，至少有） }
+    delivery_optimization: { zh-CN: 传递优化文件（更新缓存） }
+    delivery_optimization_partial: { zh-CN: 传递优化文件（没数完，至少有） }
+    windows_old: { zh-CN: 旧系统（Windows.old） }
+    windows_old_partial: { zh-CN: 旧系统（Windows.old；没数完，至少有） }
+    memory_dump: { zh-CN: 内存转储文件（蓝屏时留下的） }
+    memory_dump_partial: { zh-CN: 内存转储文件（没数完，至少有） }
+    recycle_bin: { zh-CN: 回收站 }
+    recycle_bin_partial: { zh-CN: 回收站（没数完，至少有） }
+    desktop: { zh-CN: 桌面 }
+    desktop_partial: { zh-CN: 桌面（没数完，至少有） }
+    documents: { zh-CN: 文档（不算微信、QQ） }
+    documents_partial: { zh-CN: 文档（不算微信、QQ；没数完，至少有） }
+    downloads: { zh-CN: 下载 }
+    downloads_partial: { zh-CN: 下载（没数完，至少有） }
+    pictures: { zh-CN: 图片 }
+    pictures_partial: { zh-CN: 图片（没数完，至少有） }
+    videos: { zh-CN: 视频 }
+    videos_partial: { zh-CN: 视频（没数完，至少有） }
+    wechat3: { zh-CN: 微信（3.x 旧版） }
+    wechat3_partial: { zh-CN: 微信（3.x 旧版；没数完，至少有） }
+    wechat4: { zh-CN: 微信（4.x 新版） }
+    wechat4_partial: { zh-CN: 微信（4.x 新版；没数完，至少有） }
+    qq: { zh-CN: QQ }
+    qq_partial: { zh-CN: QQ（没数完，至少有） }
+    cleanup: { zh-CN: 临时文件和缓存 }
+    chat: { zh-CN: 微信、QQ }
+    user_files: { zh-CN: 你的文件 }
+  values:
+    elsewhere: { zh-CN: 在别的盘上 }
+    unknown: { zh-CN: 没查出来 }
+    not-counted: { zh-CN: 没来得及数 }
+    unfinished:
+      zh-CN: 文件太多，1 分钟内没数完。标着「没数完」的几项实际比写的还多；过一会儿再点「重新查看」，第二次一般快得多。
+    no-profile:
+      zh-CN: 没找到正在用这台电脑的账户的文件夹，所以下面没有桌面、下载、微信这些，只列出了系统的部分。
+    wechat-both:
+      zh-CN: 新旧两版微信的文件夹都还在。升级到 4.x 以后，旧版的文件夹不会自动删掉：先确认新版微信里能看到以前的聊天记录，再在新版微信的「设置 → 存储空间」里清理旧版本的数据，不要直接删文件夹。
+    advice-cleanup:
+      zh-CN: 打开「设置 → 系统 → 存储 → 临时文件」勾选后删除，或者用「磁盘清理」→「清理系统文件」。「下载」那一项是你自己下载的东西，别跟着勾。
+    advice-recycle-bin:
+      zh-CN: 先打开回收站看看有没有还要的，确认都不要了再清空。清空以后就找不回来了。
+    advice-hibernation:
+      zh-CN: 给「休眠」和「快速启动」用的。小药箱以后会加一键「缩小休眠文件」；现在想缩小，可以请懂哥在管理员终端里运行 powercfg /h /type reduced（缩小以后不能再「休眠」，快速启动照常）。
+    advice-windows-old:
+      zh-CN: 升级或重装系统时留下的旧系统。先打开 Windows.old 里的 Users 文件夹，看看有没有自己的文件，要的先拷出来；再用「磁盘清理」→「清理系统文件」勾选「以前的 Windows 安装」删掉。删了就找不回来了。
+    advice-chat:
+      zh-CN: 在微信、QQ 自己的「设置」里清理缓存，或者把存储位置换到别的盘（微信在「存储空间」或「文件管理」里，QQ 在「存储管理」里）。聊天记录不要自己到文件夹里删。
+    advice-user-files:
+      zh-CN: 打开这几个文件夹按大小排序，不要的大文件删掉，要留的搬到别的盘（比如 D 盘）。
+references:
+  - https://support.microsoft.com/en-us/windows/free-up-drive-space-in-windows-85529ccb-c365-490d-b548-831022bc9b32
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-logicaldisk
+  - https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid
+  - https://learn.microsoft.com/en-us/windows/deployment/do/waas-delivery-optimization-reference
+  - https://learn.microsoft.com/en-us/windows/deployment/do/delivery-optimization-test
+  - https://learn.microsoft.com/en-us/windows/deployment/do/waas-delivery-optimization-faq
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/memory-dump-file-options
+  - https://learn.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants
+  - https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-points
+  - https://learn.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine
+  - https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options
+  - https://kf.qq.com/faq/190425ZFBzqa190425ZNNzQv.html
