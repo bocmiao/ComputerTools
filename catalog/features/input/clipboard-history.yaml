@@ -1,0 +1,34 @@
+# 打开「剪贴板历史记录」：按 Win + V 能看到最近复制过的文字、图片，点一下就粘贴。
+# HKCU\Software\Microsoft\Clipboard 的 EnableClipboardHistory（DWORD）：1 = 开，0 = 关；系统默认没有这个值（关着）。
+# 和「设置 → 系统 → 剪贴板 → 剪贴板历史记录」、按 Win + V 点「打开」是同一个开关。
+# 微软的说明：最多 25 条，每条最多 4 MB，支持文字、HTML 和位图；重启电脑就清空（固定的除外）；「跨设备同步」是另外一个
+# 开关，默认关着，这里不碰。组织用策略（AllowClipboardHistory）禁止了的电脑上，改了这个值也不会生效。
+# 直接改注册表以后，保险起见按注销再登录生效来说（设置里的开关会马上通知剪贴板服务，小药箱不调）。
+id: input.clipboard-history
+schema_version: 1
+title: { zh-CN: 打开剪贴板历史（Win + V） }
+description:
+  zh-CN: 复制过的文字、图片会记下来（最多 25 条，每条不超过 4 MB），按 Win + V 就能看到，点一下就粘贴，常用的还能固定住。只记在这台电脑上，重启电脑就清空（固定的除外），不会同步到别的设备。复制过的密码也会记下来，用完可以在 Win + V 里删掉。改完注销再登录生效。
+category: input
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: logoff
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Clipboard
+      name: EnableClipboardHistory
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Clipboard
+      name: EnableClipboardHistory
+      delete: true
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/clipboard-in-windows-c436501e-985d-1c8d-97ea-fe46ddf338c6
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-system#allowclipboardhistory

@@ -1,0 +1,61 @@
+# 连按 5 次 Shift 不再弹出「要启用粘滞键吗？」；按住右 Shift 8 秒不再打开「筛选键」；按住 Num Lock 5 秒不再打开「切换键」。
+# 玩游戏、打字时最常被这几个快捷键打断。HKCU\Control Panel\Accessibility 下三个字符串值 Flags：
+#   StickyKeys\Flags          默认 "510"，关掉快捷键是 "506"
+#   Keyboard Response\Flags   默认 "126"，关掉快捷键是 "122"
+#   ToggleKeys\Flags          默认 "62"，关掉快捷键是 "58"
+# 这几个数是 STICKYKEYS、FILTERKEYS、TOGGLEKEYS 结构里 dwFlags 的十进制：0x2 功能可用、0x4 快捷键有效（HOTKEYACTIVE）、
+# 0x8 用快捷键时先问一下、0x10 提示音、0x20 任务栏上显示状态……；510 = 0x1FE，去掉 0x4 就是 506，另外两个同理。
+# 最低位 0x1（功能本身开着）都是 0：改完这三项功能都是关着的，只是快捷键不再管用；要用时照样能在
+# 「设置 → 辅助功能 → 键盘」里打开。用的人改过别的位（比如提示音），执行前的预览里能看到原来的值，撤销会改回去。
+# 直接改注册表要注销再登录才生效（设置用 SystemParametersInfo 马上生效；小药箱以管理员身份运行，调它改不到登录用户，所以不调）。
+id: input.sticky-keys-shortcut-off
+schema_version: 1
+title: { zh-CN: 连按 5 次 Shift 不再弹出「粘滞键」 }
+description:
+  zh-CN: 玩游戏、打字时连按 Shift，不再弹出「要启用粘滞键吗？」；按住右 Shift 8 秒、按住 Num Lock 5 秒，也不再打开筛选键、切换键。只是关掉这几个快捷键，要用这些辅助功能时，照样能在「设置 → 辅助功能 → 键盘」里打开。改完注销再登录生效。
+category: input
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: logoff
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Control Panel\Accessibility\StickyKeys
+      name: Flags
+      type: string
+      value: "506"
+  - registry:
+      key: HKCU\Control Panel\Accessibility\Keyboard Response
+      name: Flags
+      type: string
+      value: "122"
+  - registry:
+      key: HKCU\Control Panel\Accessibility\ToggleKeys
+      name: Flags
+      type: string
+      value: "58"
+windows_default:
+  - registry:
+      key: HKCU\Control Panel\Accessibility\StickyKeys
+      name: Flags
+      type: string
+      value: "510"
+  - registry:
+      key: HKCU\Control Panel\Accessibility\Keyboard Response
+      name: Flags
+      type: string
+      value: "126"
+  - registry:
+      key: HKCU\Control Panel\Accessibility\ToggleKeys
+      name: Flags
+      type: string
+      value: "62"
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-stickykeys
+  - https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-filterkeys
+  - https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-togglekeys
+  - https://support.microsoft.com/en-us/windows/windows-keyboard-shortcuts-for-accessibility-021bcb62-45c8-e4ef-1e4f-41b8c1fc87fd
