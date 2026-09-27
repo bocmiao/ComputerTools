@@ -462,7 +462,7 @@ export interface ToolSummary {
   audience: Audience           // helper：给懂哥用的，界面上标出来
   confirm: string | null       // 只有 action 可能有：执行前要用户确认的说明
 }
-export interface ToolRow { label: string; value: string; secret: boolean }   // secret：默认遮住，不进「复制全部」
+export interface ToolRow { label: string; value: string; secret: boolean; qr: boolean }   // secret：默认遮住，不进「复制全部」；qr：值画成二维码（扫码连 WiFi，也是 secret）
 export interface ToolSection { title: string; rows: ToolRow[] }
 export interface ToolResult {
   id: string; title: string

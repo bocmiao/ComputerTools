@@ -34,6 +34,13 @@
 #             not-saved, unreadable (saved, but netsh returned it encrypted)
 #   security  wpa3-personal / wpa2-personal / wpa-personal / wep / open / owe /
 #             enterprise / other (MSM/security/authEncryption)
+#   join      (qr) the text of a "join this WiFi" QR code, as phone cameras
+#             read it: WIFI:T:<WPA|WEP|nopass>;S:<SSID>;P:<password>;[H:true;];
+#             with \ ; , : " escaped by a backslash. A secret value like the
+#             password; only when there is something to share (not enterprise
+#             networks, not unsaved or unreadable passwords). The SSID is
+#             SSIDConfig/SSID (name, or hex that is valid UTF-8), H:true when
+#             the network is hidden (SSIDConfig/nonBroadcast).
 # The same profile on two wireless adapters is shown once.
 #
 # Result codes: found (ok), found-partial (ok: some exported files could not be
@@ -262,6 +269,17 @@ function Read-WlanProfile {
         return $null
     }
 
+    # The network's own name for the QR code (the profile name can differ)
+    $ssid = Get-XmlText -Node $root -Names @('SSIDConfig', 'SSID', 'name')
+    if ($ssid.Length -eq 0) {
+        $hex = Get-XmlText -Node $root -Names @('SSIDConfig', 'SSID', 'hex')
+        $ssid = ConvertFrom-SsidHex $hex
+        if ($ssid -eq $hex) {
+            $ssid = ''
+        }
+    }
+    $hidden = (Get-XmlText -Node $root -Names @('SSIDConfig', 'nonBroadcast')) -eq 'true'
+
     $auth = Get-XmlText -Node $root -Names @('MSM', 'security', 'authEncryption', 'authentication')
     $encryption = Get-XmlText -Node $root -Names @('MSM', 'security', 'authEncryption', 'encryption')
     $oneX = (Get-XmlText -Node $root -Names @('MSM', 'security', 'authEncryption', 'useOneX')) -eq 'true'
@@ -289,10 +307,48 @@ function Read-WlanProfile {
 
     return [pscustomobject]@{
         Name     = $name
+        Ssid     = $ssid
+        Hidden   = $hidden
         Security = $security
         Password = $password
         Reason   = $reason
     }
+}
+
+function Protect-QrText {
+    param([string]$Text)
+    return ($Text -replace '([\\;,:"])', '\$1')
+}
+
+# The "join this WiFi" QR text (see the header), or '' when there is none.
+function Get-JoinText {
+    param($Wlan)
+    if ($Wlan.Ssid.Length -eq 0) {
+        return ''
+    }
+    $type = ''
+    switch ($Wlan.Security) {
+        'wpa3-personal' { $type = 'WPA' }
+        'wpa2-personal' { $type = 'WPA' }
+        'wpa-personal' { $type = 'WPA' }
+        'wep' { $type = 'WEP' }
+        'open' { $type = 'nopass' }
+        'owe' { $type = 'nopass' }
+    }
+    if ($type.Length -eq 0) {
+        return ''
+    }
+    $text = 'WIFI:T:' + $type + ';S:' + (Protect-QrText $Wlan.Ssid) + ';'
+    if ($type -ne 'nopass') {
+        if ($Wlan.Password.Length -eq 0) {
+            return ''
+        }
+        $text += 'P:' + (Protect-QrText $Wlan.Password) + ';'
+    }
+    if ($Wlan.Hidden) {
+        $text += 'H:true;'
+    }
+    return $text + ';'
 }
 
 # 32-bit PowerShell on 64-bit Windows sees SysWOW64 through "System32".
@@ -386,6 +442,10 @@ foreach ($p in @($unique.Values | Sort-Object -Property Name)) {
         $rows.Add([ordered]@{ id = 'password'; code = $p.Reason })
     }
     $rows.Add([ordered]@{ id = 'security'; code = $p.Security })
+    $join = Get-JoinText $p
+    if ($join.Length -gt 0) {
+        $rows.Add([ordered]@{ id = 'join'; value = $join; secret = $true; qr = $true })
+    }
     $sections.Add([ordered]@{ id = 'wifi'; name = $p.Name; rows = $rows.ToArray() })
 }
 if ($sections.Count -gt 0) {

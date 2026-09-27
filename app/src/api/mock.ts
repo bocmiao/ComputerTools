@@ -1486,8 +1486,8 @@ function openTool(
   return defineTool({ id, title, description, category, group: 'open', opens, audience }, { target })
 }
 
-function row(label: string, value: string, secret = false): ToolRow {
-  return { label, value, secret }
+function row(label: string, value: string, secret = false, qr = false): ToolRow {
+  return { label, value, secret, qr }
 }
 
 function hardwareSections(): ToolSection[] {
@@ -1560,11 +1560,21 @@ function hardwareSections(): ToolSection[] {
 const WIFI_SECTIONS: ToolSection[] = [
   {
     title: 'WiFi：我家的WiFi-5G',
-    rows: [row('密码', 'Lin1990@home', true), row('加密方式', 'WPA2 个人'), row('自动连接', '是')],
+    rows: [
+      row('密码', 'Lin1990@home', true),
+      row('加密方式', 'WPA2 个人'),
+      row('自动连接', '是'),
+      row('手机扫码连接', 'WIFI:T:WPA;S:我家的WiFi-5G;P:Lin1990@home;;', true, true),
+    ],
   },
   {
     title: 'WiFi：CMCC-WEB',
-    rows: [row('密码', '没有密码（开放的网络，谁都能连）'), row('加密方式', '不加密'), row('自动连接', '否')],
+    rows: [
+      row('密码', '没有密码（开放的网络，谁都能连）'),
+      row('加密方式', '不加密'),
+      row('自动连接', '否'),
+      row('手机扫码连接', 'WIFI:T:nopass;S:CMCC-WEB;;', true, true),
+    ],
   },
   {
     title: 'WiFi：eduroam',

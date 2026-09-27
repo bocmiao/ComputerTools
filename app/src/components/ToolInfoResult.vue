@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onDeactivated, reactive, ref, useId, useTemplateRef, watch } from 'vue'
 import type { ToolResult } from '../api/types'
 import AppIcon from './AppIcon.vue'
+import QrCode from './QrCode.vue'
 import ToolOutcome from './ToolOutcome.vue'
 
 // 「看信息」小工具的结果：结论、几张「标签：值」的小表、「复制全部」。
@@ -9,6 +10,7 @@ import ToolOutcome from './ToolOutcome.vue'
 // secret 的值（例如 WiFi 密码）默认遮住：点「显示」才放进页面，「复制全部」不带它们，
 // 要的话单独点那一行的「复制」。重新查看、离开这个页面时，全部重新遮住。
 // 这些值不写进控制台，也不放进 title、aria-label 这类属性。
+// qr 的行（扫码连 WiFi）也是 secret：点「显示二维码」才画出来，没有「复制」。
 
 const props = defineProps<{ result: ToolResult; running: boolean }>()
 const emit = defineEmits<{ preview: [featureId: string] }>()
@@ -156,7 +158,21 @@ async function copyAll(): Promise<void> {
                 <th scope="row" class="row-label">{{ r.label }}</th>
                 <td v-if="r.secret">
                   <div class="secret-cell">
-                    <div class="secret">
+                    <div v-if="r.qr" class="qr-cell">
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-small"
+                        :aria-expanded="revealed.has(r.key)"
+                        @click="toggle(r.key)"
+                      >
+                        {{ revealed.has(r.key) ? '收起二维码' : '显示二维码' }}
+                      </button>
+                      <template v-if="revealed.has(r.key)">
+                        <QrCode :text="r.value" :label="`${t.title}的二维码`" />
+                        <p class="small muted">用手机相机或者微信「扫一扫」扫这个码，就能连上这个 WiFi，不用输密码。</p>
+                      </template>
+                    </div>
+                    <div v-else class="secret">
                       <span v-if="revealed.has(r.key)" :id="valueId(r.key)" class="mono secret-value">{{ r.value }}</span>
                       <span v-else class="secret-mask">
                         <span aria-hidden="true">{{ MASK }}</span>
@@ -198,6 +214,7 @@ async function copyAll(): Promise<void> {
 </template>
 
 <style scoped>
+.qr-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .info-result {
   display: flex;
   flex-direction: column;

@@ -118,6 +118,8 @@ pub struct ToolRow {
     pub value: String,
     /// 默认遮住，不进「复制全部」（例如 WiFi 密码）
     pub secret: bool,
+    /// 值是给手机扫的二维码内容（例如扫码连 WiFi），界面画成二维码
+    pub qr: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

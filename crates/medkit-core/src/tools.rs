@@ -118,7 +118,8 @@ fn row(r: &Value, section: &str, labels: &ToolLabels, lang: &str, missing: &mut 
         }
     };
     let secret = r.get("secret").and_then(Value::as_bool).unwrap_or(false);
-    Some(ToolRow { label: label_text, value, secret })
+    let qr = r.get("qr").and_then(Value::as_bool).unwrap_or(false);
+    Some(ToolRow { label: label_text, value, secret, qr })
 }
 
 fn label(map: &BTreeMap<String, Text>, key: &str, lang: &str, kind: &str, missing: &mut Vec<String>) -> String {
@@ -155,7 +156,10 @@ mod tests {
             { "id": "disk", "name": "Samsung SSD 870", "rows": [
                 { "id": "size", "value": "466 GB" }, { "id": "type", "code": "ssd" }, { "id": "size", "value": 12 }
             ] },
-            { "id": "wifi", "name": "我家", "rows": [ { "id": "password", "value": "12345678", "secret": true } ] }
+            { "id": "wifi", "name": "我家", "rows": [
+                { "id": "password", "value": "12345678", "secret": true },
+                { "id": "password", "value": "WIFI:T:WPA;S:我家;P:12345678;;", "secret": true, "qr": true }
+            ] }
         ]);
         let mut missing = Vec::new();
         let s = render_sections(Some(&raw), &labels(), "zh-CN", &mut missing);
@@ -164,6 +168,8 @@ mod tests {
         assert_eq!((s[0].rows[1].label.as_str(), s[0].rows[1].value.as_str()), ("类型", "固态硬盘"));
         assert_eq!(s[0].rows[2].value, "12");
         assert!(!s[0].rows[0].secret && s[1].rows[0].secret);
+        // 二维码的行：原样带着 qr，界面画成二维码
+        assert!(!s[1].rows[0].qr && s[1].rows[1].qr && s[1].rows[1].secret);
         assert_eq!(s[1].title, "WiFi：我家");
     }
 
