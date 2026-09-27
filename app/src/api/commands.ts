@@ -10,10 +10,12 @@ import type {
   Preview,
   RenamePreview,
   RenameRules,
+  ShutdownCancel,
+  ShutdownStatus,
   SpaceReport,
+  StartupItem,
   SymptomDetail,
   SystemInfo,
-  StartupItem,
   ToolResult,
   UndoResult,
 } from './types'
@@ -55,6 +57,9 @@ export type CommandMap = {
   screen_fullscreen: { args: { on: boolean }; result: null }
   awake_get: { args: NoArgs; result: AwakeStatus }
   awake_set: { args: { on: boolean; display: boolean }; result: AwakeStatus }
+  shutdown_get: { args: NoArgs; result: ShutdownStatus }
+  shutdown_schedule: { args: { seconds: number; restart: boolean }; result: ShutdownStatus }
+  shutdown_cancel: { args: NoArgs; result: ShutdownCancel }
   lockers_pick_files: { args: NoArgs; result: FileLockReport | null }
   lockers_pick_folder: { args: NoArgs; result: FileLockReport | null }
   lockers_refresh: { args: NoArgs; result: FileLockReport | null }

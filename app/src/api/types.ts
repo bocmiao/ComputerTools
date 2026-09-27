@@ -98,6 +98,12 @@ export interface ContextMenuItem {
 /** 别让电脑自己睡着：只在小药箱开着时有效 */
 export interface AwakeStatus { on: boolean; display: boolean }
 
+/** 定时关机：小药箱安排的那一次（at 是 Unix 毫秒）。系统查不到别处安排的，重新打开小药箱也不知道 */
+export interface ShutdownPlan { at: number; restart: boolean }
+export interface ShutdownStatus { plan: ShutdownPlan | null }
+/** cancelled 为 false：本来就没有安排（可能已经在别处取消了） */
+export interface ShutdownCancel { cancelled: boolean }
+
 // 找大文件和重复文件（路径都是相对选的文件夹的）
 export interface SpaceFile {
   /** 「在资源管理器中显示」时传回去 */

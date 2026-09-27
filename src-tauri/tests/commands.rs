@@ -235,6 +235,24 @@ fn awake_commands_pass_the_permission_check() {
 }
 
 #[test]
+fn shutdown_commands_pass_the_permission_check() {
+    let win = app();
+    assert_eq!(ok(&win, "shutdown_get", json!({})), json!({ "plan": null }));
+    // 时间不对：引擎的说明，而不是权限错误；也不会真的去安排（在 Windows 上跑这个测试也不会关机）
+    let e = invoke(&win, "shutdown_schedule", json!({ "seconds": 1, "restart": false })).unwrap_err();
+    assert_eq!(e, json!("时间要在 1 分钟以后、24 小时以内。"));
+    // 真的安排和取消只在不是 Windows 的开发机上试（那里什么也不做）；Windows 上的真实测试见 medkit-core 的 tests/windows.rs
+    #[cfg(not(windows))]
+    {
+        let plan = ok(&win, "shutdown_schedule", json!({ "seconds": 3600, "restart": true }));
+        assert_eq!(plan["plan"]["restart"], json!(true));
+        assert!(plan["plan"]["at"].is_u64());
+        assert_eq!(ok(&win, "shutdown_cancel", json!({})), json!({ "cancelled": true }));
+        assert_eq!(ok(&win, "shutdown_get", json!({})), json!({ "plan": null }));
+    }
+}
+
+#[test]
 fn context_menu_commands_pass_the_permission_check() {
     let win = app();
     assert!(ok(&win, "context_menu_list", json!({})).is_array());

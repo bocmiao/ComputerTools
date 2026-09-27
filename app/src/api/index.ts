@@ -12,6 +12,8 @@ import type {
   Preview,
   RenamePreview,
   RenameRules,
+  ShutdownCancel,
+  ShutdownStatus,
   SpaceReport,
   StartupItem,
   SymptomDetail,
@@ -196,6 +198,21 @@ export function awakeGet(): Promise<AwakeStatus> {
 /** 别让电脑自己睡着：打开（display 为 true 时屏幕也亮着）或者关掉 */
 export function awakeSet(on: boolean, display: boolean): Promise<AwakeStatus> {
   return call('awake_set', { on, display })
+}
+
+/** 定时关机：小药箱安排的那一次 */
+export function shutdownGet(): Promise<ShutdownStatus> {
+  return call('shutdown_get', {})
+}
+
+/** 定时关机：seconds 秒以后关机（restart 时重启），到时间强制关掉所有程序；小药箱安排过的换成新的时间 */
+export function shutdownSchedule(seconds: number, restart: boolean): Promise<ShutdownStatus> {
+  return call('shutdown_schedule', { seconds, restart })
+}
+
+/** 定时关机：取消已经安排的关机或重启（不管是谁安排的） */
+export function shutdownCancel(): Promise<ShutdownCancel> {
+  return call('shutdown_cancel', {})
 }
 
 /** 文件删不掉：用系统的选择框选文件（可以多选），查哪些程序在用它们；取消返回 null */

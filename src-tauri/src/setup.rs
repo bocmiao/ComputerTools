@@ -23,6 +23,8 @@ pub struct AppState {
     pub rename: Arc<Mutex<crate::rename::RenameState>>,
     pub images: Arc<Mutex<crate::images::ImageState>>,
     pub awake: Arc<Mutex<crate::awake::AwakeState>>,
+    /// 小药箱安排的定时关机、定时重启
+    pub shutdown: Arc<Mutex<crate::shutdown::ShutdownState>>,
     /// 「文件删不掉：是谁占着」最近一次选的文件或文件夹（「再查一次」用）
     pub lockers: Arc<Mutex<Option<medkit_core::lockers::LockTarget>>>,
     /// 「找大文件和重复文件」选的文件夹和最近一次结果里的文件
@@ -35,6 +37,7 @@ pub fn init() -> AppState {
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
         awake: Arc::new(Mutex::new(Default::default())),
+        shutdown: Arc::new(Mutex::new(Default::default())),
         lockers: Arc::new(Mutex::new(None)),
         space: Arc::new(Mutex::new(Default::default())),
     }
@@ -243,6 +246,7 @@ pub fn test_state() -> AppState {
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
         awake: Arc::new(Mutex::new(Default::default())),
+        shutdown: Arc::new(Mutex::new(Default::default())),
         lockers: Arc::new(Mutex::new(None)),
         space: Arc::new(Mutex::new(Default::default())),
     }

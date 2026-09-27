@@ -14,6 +14,7 @@ use crate::awake::AwakeStatus;
 use crate::images;
 use crate::rename::{self, RenamePreview, RenameRules};
 use crate::setup::AppState;
+use crate::shutdown::{ShutdownCancel, ShutdownStatus};
 use crate::space::{self, SpaceReport};
 
 type CmdResult<T> = Result<T, String>;
@@ -252,6 +253,24 @@ pub async fn awake_get(state: State<'_, AppState>) -> CmdResult<AwakeStatus> {
 #[tauri::command]
 pub async fn awake_set(state: State<'_, AppState>, on: bool, display: bool) -> CmdResult<AwakeStatus> {
     state.awake.lock().map_err(|_| "状态异常。")?.set(on, display)
+}
+
+/// 定时关机：小药箱安排的那一次（没安排是 null）。
+#[tauri::command]
+pub async fn shutdown_get(state: State<'_, AppState>) -> CmdResult<ShutdownStatus> {
+    Ok(state.shutdown.lock().map_err(|_| "状态异常。")?.status())
+}
+
+/// 定时关机：`seconds` 秒以后关机（`restart` 时重启），到时间强制关掉所有程序；小药箱安排过的换成新的时间。
+#[tauri::command]
+pub async fn shutdown_schedule(state: State<'_, AppState>, seconds: u32, restart: bool) -> CmdResult<ShutdownStatus> {
+    state.shutdown.lock().map_err(|_| "状态异常。")?.schedule(seconds, restart)
+}
+
+/// 定时关机：取消已经安排的关机或重启（不管是谁安排的）。
+#[tauri::command]
+pub async fn shutdown_cancel(state: State<'_, AppState>) -> CmdResult<ShutdownCancel> {
+    state.shutdown.lock().map_err(|_| "状态异常。")?.cancel()
 }
 
 /// 「文件删不掉：是谁占着」：记下要查的文件或文件夹，查一次。

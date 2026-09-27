@@ -12,6 +12,8 @@ pub mod mock;
 #[cfg(windows)]
 mod restart_manager;
 #[cfg(windows)]
+pub mod shutdown;
+#[cfg(windows)]
 pub mod windows;
 
 #[derive(Debug, Clone, thiserror::Error)]

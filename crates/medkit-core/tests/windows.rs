@@ -897,3 +897,28 @@ fn hosts_cleanup_removes_only_flagged_lines() {
     }
     assert_eq!(std::fs::read(&hosts).unwrap(), broken, "撤销以后那一行回到原来的位置");
 }
+
+/// 定时关机：安排 10 小时以后关机，再安排一次报「已经安排了」，取消掉，再取消一次报「本来就没有」。
+/// 定 10 小时：万一取消失败，CI 机器早就用完收回了，不会真的关机。结束时（包括断言失败时）再取消一次。
+#[test]
+#[ignore = "会安排一次关机再马上取消；需要关机权限"]
+fn shutdown_can_be_scheduled_and_cancelled() {
+    use medkit_core::platform::shutdown::{self, ShutdownRequest};
+    struct Abort;
+    impl Drop for Abort {
+        fn drop(&mut self) {
+            let _ = shutdown::abort();
+        }
+    }
+    let _abort = Abort;
+    let message = "电脑小药箱的测试，马上会取消";
+    // CI 机器上本来安排了关机的话（一般没有），先取消
+    eprintln!("开始前取消：{:?}", shutdown::abort());
+    assert_eq!(shutdown::schedule(10 * 3600, false, message).unwrap(), ShutdownRequest::Scheduled);
+    assert_eq!(shutdown::schedule(10 * 3600, true, message).unwrap(), ShutdownRequest::AlreadyScheduled);
+    assert!(shutdown::abort().unwrap(), "安排了就能取消");
+    assert!(!shutdown::abort().unwrap(), "取消以后就没有安排了");
+    // 取消以后能重新安排（界面上「改成这个时间」就是先取消再安排）
+    assert_eq!(shutdown::schedule(10 * 3600, true, message).unwrap(), ShutdownRequest::Scheduled);
+    assert!(shutdown::abort().unwrap());
+}

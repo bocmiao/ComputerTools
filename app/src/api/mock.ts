@@ -2250,6 +2250,17 @@ const handlers: Handlers = {
     demoAwake = { on, display: on && display }
     return { ...demoAwake }
   },
+  shutdown_get: () => ({ plan: demoShutdown }),
+  shutdown_schedule: ({ seconds, restart }) => {
+    if (seconds < 60 || seconds > 24 * 3600 + 60) throw '时间要在 1 分钟以后、24 小时以内。'
+    demoShutdown = { at: Date.now() + seconds * 1000, restart }
+    return { plan: demoShutdown }
+  },
+  shutdown_cancel: () => {
+    const cancelled = demoShutdown !== null
+    demoShutdown = null
+    return { cancelled }
+  },
   image_open_folder: () => {
     if (!demoImageFolder) throw '还没有选择保存的文件夹。'
     return null
@@ -2353,6 +2364,9 @@ function demoLockReport(): FileLockReport {
 
 // ── 别让电脑自己睡着（演示）──
 let demoAwake = { on: false, display: false }
+
+// ── 定时关机（演示：只记着，不会真的关机）──
+let demoShutdown: { at: number; restart: boolean } | null = null
 
 // ── 图片批量处理的演示（浏览器里真的处理图片，但不保存）──
 const DEMO_IMAGE_FOLDER = '演示文件夹（浏览器里不会真的保存）'

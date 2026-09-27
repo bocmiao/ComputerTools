@@ -349,6 +349,9 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `screen_fullscreen` | `on` | `null`（屏幕坏点测试：窗口进入、退出全屏） |
 | `awake_get` | — | `AwakeStatus`（`{ on, display }`：「别让电脑自己睡着」开没开） |
 | `awake_set` | `on`、`display` | `AwakeStatus`（SetThreadExecutionState，只在小药箱开着时有效，不改电源设置） |
+| `shutdown_get` | — | `ShutdownStatus`（`{ plan: { at, restart } \| null }`：小药箱安排的定时关机；系统查不到别处安排的） |
+| `shutdown_schedule` | `seconds`（60 到 24 小时加 60 秒）、`restart` | `ShutdownStatus`（InitiateSystemShutdownExW，到时间强制关掉程序，和 `shutdown /s /t` 一样；小药箱安排过的先取消再换成新的时间；已经有别处安排的就报错，不去动它） |
+| `shutdown_cancel` | — | `ShutdownCancel`（`{ cancelled }`：AbortSystemShutdownW，不管是谁安排的；false 表示本来就没有安排） |
 | `lockers_pick_files` | — | `FileLockReport \| null`（系统的选择框选文件，可以多选；查哪些程序在用它们，取消时 `null`） |
 | `lockers_pick_folder` | — | `FileLockReport \| null`（选文件夹，查在用里面文件的程序） |
 | `lockers_refresh` | — | `FileLockReport \| null`（再查一次上次选的；还没选过时 `null`） |

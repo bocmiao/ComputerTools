@@ -8,6 +8,7 @@ pub mod commands;
 pub mod images;
 pub mod rename;
 pub mod setup;
+pub mod shutdown;
 pub mod space;
 
 /// 注册命令处理器。`run()` 和集成测试都用它，保证测的和真跑的是同一套。
@@ -43,6 +44,9 @@ macro_rules! command_handler {
             $crate::commands::screen_fullscreen,
             $crate::commands::awake_get,
             $crate::commands::awake_set,
+            $crate::commands::shutdown_get,
+            $crate::commands::shutdown_schedule,
+            $crate::commands::shutdown_cancel,
             $crate::commands::lockers_pick_files,
             $crate::commands::lockers_pick_folder,
             $crate::commands::lockers_refresh,
