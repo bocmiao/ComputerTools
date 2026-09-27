@@ -1,0 +1,95 @@
+# 最近的更新有没有装上（建议 3）。脚本：scripts/checks/update/history.ps1
+# 读「设置 → Windows 更新 → 更新历史记录」里的同一份记录（Windows 更新代理的 COM 接口 Microsoft.Update.Session，
+# QueryHistory）。只读，不检查、不下载、不安装更新，也不用联网。
+# 算「装失败」的：最近 30 天里安装失败（ResultCode 4）或者带错误代码中止（5）的，而且后来没有装上——
+# 同一个 KB 编号后来装上了，或者把标题里的数字去掉以后一样的更新后来装上了（下个月的累积更新、同一个驱动的
+# 新版本、Defender 的新病毒库），都算已经解决。没有错误代码的中止（装的时候重启了、用户取消了）不算。
+# 按最近一次失败的错误代码分类，给不同的建议：
+#   failed-space    C 盘空间不够（0x80070070、0x80070027）
+#   failed-network  连不上 Windows 更新的服务器：网络、代理、系统时间（0x8024402C、0x80072EE2、0x80072EFD、0x80072F8F 等）
+#   failed-files    更新文件坏了或者缺了（0x80070002、0x80070003、0x8007000D、0x80073712、0x800F081F 等）
+#   failed-restart  要先重启（0x80070020 文件被占用、0xC1900107 上一次升级还没清理完）
+#   failed-upgrade  Windows 大版本升级没装上（0xC1900101 驱动不兼容、0xC1900208 软件不兼容、0xC1900200 不满足要求）
+#   failed-other    别的代码
+# 另有：ok（最近 30 天没有装失败的）、empty（没有任何记录：刚装的系统，或者更新组件重置过）、
+# off（Windows Update 服务被禁用，读不了记录，0x80070422）。
+# 事实：failed_title（更新的标题）、error_code、failed_date、failed_count、last_install（最近一次装成功的日期）。
+# 待真机验证：见 docs/real-machine-checklist.md。
+id: update.history
+schema_version: 1
+title: { zh-CN: 最近的更新装上了吗 }
+description:
+  zh-CN: 看看「更新历史记录」里最近 30 天有没有装失败、后来也没装上的更新，把错误代码翻成大白话。只看记录，不会去检查或者安装更新。
+category: update
+requires_admin: false
+timeout_sec: 60
+probe:
+  script: checks/update/history.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 最近 30 天没有装失败的更新。
+  empty:
+    status: ok
+    message:
+      zh-CN: 还没有更新记录。刚装好的系统，或者更新组件被重置过，都是这样。
+  "off":
+    status: advice
+    message:
+      zh-CN: Windows Update 服务被禁用了，查不了更新记录，也装不了更新。
+    fixer: medkit
+    next:
+      zh-CN: 先按「Windows 更新有没有被关掉」的提示，把更新服务恢复过来。
+    links: ["feature:update.enable-services"]
+  failed-space:
+    status: advice
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：C 盘空间不够。"
+    fixer: user
+    next:
+      zh-CN: 先给 C 盘腾出空间（平时的更新至少留 10 GB，升级大版本要 20 GB 以上），再打开「Windows 更新」点「重试」。
+    links: ["symptom:disk-full", "tool:settings.windows-update"]
+  failed-network:
+    status: advice
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：连不上 Windows 更新的服务器。"
+    fixer: user
+    next:
+      zh-CN: 先确认能正常上网；开着「梯子」、加速器、代理的，先关掉再试；系统日期、时间不对也会这样。都没问题的话，过一会儿在「Windows 更新」里点「重试」。
+    links: ["symptom:network", "tool:settings.windows-update"]
+  failed-files:
+    status: advice
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：更新文件坏了，或者系统里缺了它要用的文件。"
+    fixer: medkit
+    next:
+      zh-CN: 先重启电脑，再在「Windows 更新」里点「重试」。还不行，点下面的「重置更新组件」，把下载坏了的更新文件换掉（旧的改名留着，不删除），再检查更新。
+    links: ["tool:update.reset-components", "tool:settings.windows-update"]
+  failed-restart:
+    status: advice
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：要先重启电脑。"
+    fixer: user
+    next:
+      zh-CN: 保存好手头的文件，重启一次电脑（开始 → 电源 → 重启），再在「Windows 更新」里点「重试」。
+    links: ["tool:settings.windows-update"]
+  failed-upgrade:
+    status: manual
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 升级「{failed_title}」时失败了（错误代码 {error_code}），系统已经退回了原来的版本，文件和软件都还在。"
+    fixer: helper
+    next:
+      zh-CN: 大版本升级失败，多半是某个驱动（显卡、声卡、杀毒软件的驱动）或者软件不兼容。可以先更新显卡驱动、暂时卸载第三方杀毒软件再试，或者等微软修好了再升级；急着升级的，请懂哥看看。
+  failed-other:
+    status: advice
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）。"
+    fixer: helper
+    next:
+      zh-CN: 先重启电脑，再在「Windows 更新」里点「重试」；还不行，运行 Windows 自带的「Windows 更新」疑难解答。都不行的话，把错误代码发给懂哥，或者用「诊断报告」里的「复制给 AI」问问。
+    links: ["tool:settings.windows-update"]
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-queryhistory
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/installing-updates-features-roles/common-windows-update-errors
+  - https://learn.microsoft.com/en-us/windows/deployment/update/windows-update-error-reference

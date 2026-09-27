@@ -191,6 +191,8 @@ break:   { script: features/disk/reduce-hiberfile-break.ps1 }   # 只在测试�
 verify:  disk.hiberfile                                         # 能不能执行、改好没有，看这个检测
 ```
 
+`break` 脚本也会打进安装包。制造故障本身是第五节不许做的事时（比如禁用 Windows 更新服务），不写 `break`，把功能的 ID 加进 `catalog.rs` 的 `BREAK_IN_TESTS`：校验不再提示缺 `break`，通用的往返测试跳过它，由 `tests/windows.rs` 里的专门测试直接制造故障。
+
 - 检测脚本的 `state` 取值：`applied` / `not-applied` / `partial` / `unknown`。
 - 可撤销脚本必须先用 `prepare` 读取原状态。引擎先把 `before` 写进修改日志，再把它以 `-Before` 传给执行脚本。执行脚本应在写入前核对快照仍然有效；撤销时，引擎把同一快照传给撤销脚本。
 - 不可撤销的功能写 `undo: none`，同时必须写 `irreversible_reason`。

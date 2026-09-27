@@ -139,7 +139,7 @@ references:
 | `prepare` | **只读取**原状态，执行前由引擎存入修改日志；可以和 `run` 指向同一脚本，以 `-Prepare $true` 区分 | `{ before }`（不能为空） |
 | `run` | 接收引擎传入的 `-Before`（JSON 字符串），核对状态没变后执行修复 | `{ after, facts }` |
 | `undo` | 撤销。参数 `-Before` 是执行前存入日志的状态 | 任意 |
-| `break` | 只在测试时使用，制造出需要修复的状态 | 任意 |
+| `break` | 只在测试时使用，制造出需要修复的状态。它也会打进安装包，所以制造故障本身是第五节不许做的事（比如禁用 Windows 更新服务）时不写，把功能的 ID 加进 `catalog.rs` 的 `BREAK_IN_TESTS`，在 `tests/windows.rs` 里写专门的测试直接制造故障（见 `update_services_are_restored_and_undone`） | 任意 |
 
 ```powershell
 # scripts/features/disk/reduce-hiberfile-run.ps1 (excerpt). Get-HiberState and Get-HiberBlock are

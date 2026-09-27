@@ -9,12 +9,12 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use medkit_core::Engine;
 use medkit_core::bundle::Bundle;
-use medkit_core::catalog::Catalog;
+use medkit_core::catalog::{BREAK_IN_TESTS, Catalog};
 use medkit_core::journal::{Journal, new_id};
 use medkit_core::model::{Action, Feature, StartType, ToolGroup};
 use medkit_core::platform::Platform;
@@ -223,8 +223,17 @@ fn is_contract_error(e: &str) -> bool {
     ["运行超时", "脚本文件校验失败", "脚本宿主出错", "脚本返回了没有定义的结果"].iter().any(|p| e.starts_with(p))
 }
 
+/// 会禁用、重启 Windows 更新服务的测试，和检测、小工具的冒烟测试不能同时跑：
+/// 服务被禁用的那一刻，更新相关的检测会查到一个测试造出来的故障。
+static UPDATE_SERVICES: Mutex<()> = Mutex::new(());
+
+fn update_lock() -> MutexGuard<'static, ()> {
+    UPDATE_SERVICES.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[test]
 fn every_check_runs_cleanly_on_windows_powershell() {
+    let _update = update_lock();
     let dir = tempfile::tempdir().unwrap();
     let (engine, bundle, platform) = real_engine(dir.path());
     let admin = platform.is_admin();
@@ -320,6 +329,10 @@ fn every_feature_breaks_fixes_and_undoes() {
     let (engine, bundle, platform) = real_engine(dir.path());
     let mut failures = Vec::new();
     for f in &bundle.catalog.features {
+        if BREAK_IN_TESTS.contains(&f.id.as_str()) {
+            eprintln!("跳过 {}：另有专门的测试", f.id);
+            continue;
+        }
         let preview = engine.feature_preview(&f.id).unwrap();
         if let Some(why) = preview.notes.iter().find(|n| n.starts_with("不能执行")) {
             eprintln!("跳过 {}：{why}", f.id);
@@ -373,6 +386,7 @@ fn every_feature_breaks_fixes_and_undoes() {
 #[test]
 #[ignore = "会重启资源管理器、刷新 DNS 缓存"]
 fn every_tool_runs_cleanly_on_windows_powershell() {
+    let _update = update_lock();
     let dir = tempfile::tempdir().unwrap();
     let (engine, bundle, platform) = real_engine(dir.path());
     let computer = std::env::var("COMPUTERNAME").unwrap_or_default().to_lowercase();
@@ -584,5 +598,64 @@ fn keyboard_aids_follow_the_live_state() {
         assert!(r.error.is_none(), "{r:?}");
         assert_eq!(r.facts["sticky_keys"], on, "{r:?}");
         eprintln!("粘滞键 {}：{}", if on { "开" } else { "关" }, r.message);
+    }
+}
+
+/// 恢复 Windows 更新服务。制造故障就是禁用 Windows 更新服务，这种脚本不放进安装包（catalog.rs 的
+/// BREAK_IN_TESTS），所以在这里直接改服务：把 Windows Update 和 BITS 设成禁用，执行修复，核对它们改回了
+/// 「手动」；再撤销，核对它们回到「禁用」。结束时（包括断言失败时）恢复原来的启动方式。
+#[test]
+#[ignore = "会临时禁用 Windows 更新服务（结束时恢复）；需要管理员权限"]
+fn update_services_are_restored_and_undone() {
+    const SERVICES: [&str; 2] = ["wuauserv", "BITS"];
+    struct Restore(Vec<(&'static str, StartType)>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let p = WindowsPlatform::new();
+            for (name, start) in &self.0 {
+                if let Err(e) = p.service_set(name, *start) {
+                    eprintln!("恢复 {name} 的启动方式失败：{e}");
+                }
+            }
+        }
+    }
+
+    let _update = update_lock();
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    let original: Vec<_> =
+        SERVICES.iter().map(|&n| (n, platform.service_get(n).unwrap().expect("有这个服务"))).collect();
+    let _restore = Restore(original.clone());
+    eprintln!("原来的启动方式：{original:?}");
+
+    for name in SERVICES {
+        platform.service_set(name, StartType::Disabled).unwrap();
+    }
+    let broken = engine.feature_detect("update.enable-services").unwrap();
+    assert_eq!(broken.state, FeatureStateKind::NotApplied, "{broken:?}");
+    // 看被禁用的服务列表：CI 机器上可能本来就有别的更新服务被禁用
+    let disabled_count =
+        |r: &medkit_core::views::CheckResult| r.facts["disabled_services"].as_array().map_or(0, Vec::len);
+    let check = engine.run_check("update.blocked").unwrap();
+    assert!(check.error.is_none(), "{check:?}");
+    assert!(disabled_count(&check) >= SERVICES.len(), "{check:?}");
+    eprintln!("禁用以后：{}", check.message);
+
+    let r = engine.feature_apply("update.enable-services").unwrap();
+    assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
+    for name in SERVICES {
+        assert_eq!(platform.service_get(name).unwrap(), Some(StartType::Manual), "{name} 应该改回「手动」");
+    }
+    let fixed = engine.run_check("update.blocked").unwrap();
+    assert!(fixed.error.is_none(), "{fixed:?}");
+    assert_eq!(disabled_count(&fixed), 0, "{fixed:?}");
+    eprintln!("修复以后：{}", fixed.message);
+
+    for id in r.entry_ids.iter().rev() {
+        let u = engine.journal_undo(id, false).unwrap();
+        assert!(u.ok, "{u:?}");
+    }
+    for name in SERVICES {
+        assert_eq!(platform.service_get(name).unwrap(), Some(StartType::Disabled), "撤销以后 {name} 应该回到「禁用」");
     }
 }

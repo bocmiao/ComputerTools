@@ -229,6 +229,10 @@ const DENIED_SERVICES: &[(&str, &str)] = &[
     ("mrxsmb10", "不开 SMB1（第五节第 22 条）"),
 ];
 
+/// 这些脚本类功能的「制造故障」要做的事正是第五节不许做的（禁用 Windows 更新服务），
+/// 这种脚本不放进安装包：故障由 tests/windows.rs 里的专门测试直接制造，通用的往返测试跳过它们。
+pub const BREAK_IN_TESTS: &[&str] = &["update.enable-services"];
+
 static CONTROL_SET_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^hklm\\system\\controlset\d+\\").unwrap());
 
 /// 黑名单比较用的键名：统一小写；`HKLM\SYSTEM\ControlSet001\…` 这类写法和
@@ -532,9 +536,16 @@ impl Validator<'_> {
                 }
                 match &f.break_script {
                     Some(b) => {
+                        if BREAK_IN_TESTS.contains(&f.id.as_str()) {
+                            self.err(
+                                &file,
+                                "这一项的故障由测试代码制造，不要写 break 脚本（见 BREAK_IN_TESTS）".into(),
+                            );
+                        }
                         let b = b.script.clone();
                         self.script_ref(&file, &b, "break");
                     }
+                    None if BREAK_IN_TESTS.contains(&f.id.as_str()) => {}
                     None => self.warn(&file, "最好写上 break（测试用的故障制造脚本）".into()),
                 }
                 if !f.break_actions.is_empty() || !f.windows_default.is_empty() {

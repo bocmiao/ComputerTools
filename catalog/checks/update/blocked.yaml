@@ -1,0 +1,103 @@
+# Windows 更新有没有被关掉（计划书 4.3「系统被改动体检」里和更新有关的部分；建议 3、17）。
+# 脚本：scripts/checks/update/blocked.ps1。只读。
+# 「优化」软件和网上「彻底关闭更新」的教程常用这几种办法，逐个查：
+#   服务：更新要用的几个服务（Windows Update、更新编排器 UsoSvc、BITS、加密服务 CryptSvc、Windows 模块安装程序
+#         TrustedInstaller、传递优化 DoSvc、Windows 更新医生 WaaSMedicSvc）被设成「禁用」，或者被精简系统删掉了；
+#         Windows Update 服务的「登录身份」被改成了别的账户（教程的招数：服务启动不了，更新医生也修不回来）。
+#         账户名不输出（可能是用户名）。
+#   策略（HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate 和 \AU，只读——小药箱不写更新策略，
+#         计划书第五节第 5 条，数据黑名单里也挡着）：SetDisableUXWUAccess（设置里的 Windows 更新点不了）、
+#         UseWUServer + WUServer（从单位的更新服务器更新；家用电脑上多半指向一个不存在的地址）、
+#         NoAutoUpdate（不自动更新，手动检查还能用）。
+#   暂停（HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings）：PauseUpdatesExpiryTime、PauseFeatureUpdatesEndTime、
+#         PauseQualityUpdatesEndTime 里最晚的一个（UTC 时间）；设置里最多只能暂停 5 周，超过 36 天就算
+#         「暂停了很久」（多半是改了 FlightSettingsMaxPauseDays 以后暂停的）。
+# 结果（按这个顺序判断，小药箱能修的排在前面）：disabled（给「恢复 Windows 更新服务」）、missing、logon、medic-disabled（只有更新医生被禁用：
+# Windows 不让管理员改它，修复也不动它）、no-access、update-server、
+# paused-long、auto-off、paused、ok。
+# 公司、学校的电脑，策略是单位下发的，结论里都写了「单位的电脑不要改」；小药箱不提供清除策略的修复。
+# 待真机验证：见 docs/real-machine-checklist.md。
+id: update.blocked
+schema_version: 1
+title: { zh-CN: Windows 更新有没有被关掉 }
+description:
+  zh-CN: 看看 Windows 更新是不是被「优化」软件或者网上的教程关掉了：更新要用的服务被禁用、被改了登录账户，被策略关掉，或者一暂停就是好几年。
+category: update
+requires_admin: false
+probe:
+  script: checks/update/blocked.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: Windows 更新没有被关掉：更新要用的服务、策略和暂停设置都正常。
+  paused:
+    status: ok
+    message:
+      zh-CN: "Windows 更新暂停到 {paused_until}，还有 {pause_days} 天，到期后会自动恢复。"
+    next:
+      zh-CN: 想现在就更新的话，打开「Windows 更新」，点「继续更新」。
+    links: ["tool:settings.windows-update"]
+  auto-off:
+    status: advice
+    message:
+      zh-CN: 自动更新被策略关掉了（组策略「配置自动更新」设成了「已禁用」）：Windows 不会自己下载、安装更新，安全补丁一直装不上。
+    fixer: helper
+    next:
+      zh-CN: 在「Windows 更新」里点「检查更新」还能手动装。公司、学校的电脑，这是单位的设置，不要改；自己的电脑，多半是「关更新」的软件或者网上的教程改的，想恢复自动更新，请懂哥把这条策略改回「未配置」。
+    links: ["tool:settings.windows-update"]
+  paused-long:
+    status: advice
+    message:
+      zh-CN: "Windows 更新被暂停到了 {paused_until}（还有 {pause_days} 天），远远超过系统允许的 5 周，等于把更新关掉了，安全补丁一直装不上。"
+    fixer: user
+    next:
+      zh-CN: 打开「Windows 更新」，点「继续更新」就恢复了。这多半是「关更新」的软件或者网上的教程改的。
+    links: ["tool:settings.windows-update"]
+  update-server:
+    status: manual
+    message:
+      zh-CN: 更新被组策略指到了一台「单位的更新服务器」（WSUS），不从微软下载。
+    fixer: helper
+    next:
+      zh-CN: 公司、学校的电脑，这是单位的设置，不要改。自己的电脑，多半是「关更新」的软件把它指到了一个不存在的地址，这样永远检查不到更新；请懂哥把组策略「指定 Intranet Microsoft 更新服务位置」改回「未配置」。小药箱不改更新策略。
+  no-access:
+    status: manual
+    message:
+      zh-CN: 组策略「删除使用所有 Windows 更新功能的访问权限」被打开了：设置里的 Windows 更新用不了，也不会自己更新。
+    fixer: helper
+    next:
+      zh-CN: 公司、学校的电脑，这是单位的设置，不要改。自己的电脑，多半是「关更新」的软件或者网上的教程改的，请懂哥把这条策略改回「未配置」。小药箱不改更新策略。
+  logon:
+    status: manual
+    message:
+      zh-CN: Windows Update 服务的「登录身份」被改成了别的账户（网上「彻底关闭更新」的教程常这样做），这个服务启动不了，更新也就检查不了。
+    fixer: helper
+    next:
+      zh-CN: 请懂哥在「服务」里打开 Windows Update 的属性，在「登录」这一页改回「本地系统帐户」。
+    links: ["tool:open.services"]
+  medic-disabled:
+    status: manual
+    message:
+      zh-CN: 「Windows 更新医生服务」（WaaSMedicSvc）被设成了「禁用」。它负责在更新坏了的时候自动修好，Windows 不允许管理员改它，能改它的多半是专门「关更新」的软件。
+    fixer: helper
+    next:
+      zh-CN: 小药箱改不回它。平时更新能用的话可以先不管；更新老是出问题，请懂哥看看是哪个软件改的，用那个软件把它恢复。
+  disabled:
+    status: advice
+    message:
+      zh-CN: "这几个更新要用的服务被设成了「禁用」：{disabled_services}。Windows 更新因此检查不了、下载不了或者装不上。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的「恢复 Windows 更新服务」，改回 Windows 默认的启动方式；以后想改回去，在修改日志里撤销就行。
+    links: ["feature:update.enable-services"]
+  missing:
+    status: manual
+    message:
+      zh-CN: "这台电脑上找不到这几个更新要用的服务：{missing_services}。多半是用了精简过的系统，Windows 更新可能完全用不了。"
+    fixer: helper
+    next:
+      zh-CN: 精简系统删掉的东西装不回来。请懂哥看看；想正常更新，只能先备份文件，再重装微软官方的原版系统。
+references:
+  - https://learn.microsoft.com/en-us/windows/deployment/update/waas-wu-settings
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-update

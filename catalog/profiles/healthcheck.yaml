@@ -10,6 +10,7 @@ checks:
   # 系统与更新（时间放最前面：时间不对时，支持期这些和日期有关的结论也不准）
   - system.clock
   - system.os-support
+  - update.blocked
   - system.pending-reboot
   - system.reliability-recent
   - boot.last-boot-duration
