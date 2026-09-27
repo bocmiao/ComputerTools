@@ -4,6 +4,7 @@ import type {
   ApplyResult,
   CatalogSummary,
   CheckResult,
+  ContextMenuItem,
   FeatureState,
   JournalSession,
   Preview,
@@ -120,6 +121,16 @@ export function startupList(): Promise<StartupItem[]> {
 /** 停用（enabled 为 false）或恢复一个开机启动项；和任务管理器同一个开关，记进修改日志 */
 export function startupSet(id: string, enabled: boolean): Promise<ApplyResult> {
   return call('startup_set', { id, enabled })
+}
+
+/** 右键菜单里软件加的项目（Windows 自带的不列），显示不显示和改的时候读写同一个位置 */
+export function contextMenuList(): Promise<ContextMenuItem[]> {
+  return call('context_menu_list', {})
+}
+
+/** 从右键菜单里拿掉（visible 为 false）或者恢复一项，记进修改日志；只接受最近一次列表里的 ID */
+export function contextMenuSet(id: string, visible: boolean): Promise<ApplyResult> {
+  return call('context_menu_set', { id, visible })
 }
 
 /** 批量重命名：用系统的选择框选文件夹；取消返回 null */

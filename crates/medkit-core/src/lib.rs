@@ -12,6 +12,7 @@
 pub mod builtin;
 pub mod bundle;
 pub mod catalog;
+pub mod context_menu;
 pub mod engine;
 pub mod error;
 pub mod journal;

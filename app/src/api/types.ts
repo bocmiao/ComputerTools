@@ -79,6 +79,22 @@ export interface StartupItem {
   advice: StartupAdvice; reason: string
 }
 
+// 右键菜单里软件加的项目（Windows 自带的不列）。command 下次右键就生效；extension、app 按 CLSID 拿掉，要重启资源管理器
+export type ContextMenuKind = 'command' | 'extension' | 'app'
+export interface ContextMenuItem {
+  id: string                   // 改开关时原样传回
+  kind: ContextMenuKind
+  title: string                // 菜单上的字，或者扩展、应用的名字
+  program: string; path: string; exists: boolean
+  publisher: string | null
+  signature: StartupSignature
+  scopes: string[]             // 在哪里右键时出现：「文件」「文件夹空白处」这类
+  location: string             // 命令：「所有用户」「当前用户」；扩展和应用是空的
+  visible: boolean             // 现在在菜单里显示不显示
+  shiftOnly: boolean           // 只在按住 Shift 再右键时显示
+  note: string                 // 补充说明，没有是空的
+}
+
 // 小工具（第 11 节）
 export type ToolGroup = 'info' | 'action' | 'open'
 export type ToolOpens = 'program' | 'settings'

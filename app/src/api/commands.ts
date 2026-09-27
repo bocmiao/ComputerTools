@@ -2,6 +2,7 @@ import type {
   ApplyResult,
   CatalogSummary,
   CheckResult,
+  ContextMenuItem,
   FeatureState,
   JournalSession,
   Preview,
@@ -39,6 +40,8 @@ export type CommandMap = {
   tool_open: { args: { id: string }; result: null }
   startup_list: { args: NoArgs; result: StartupItem[] }
   startup_set: { args: { id: string; enabled: boolean }; result: ApplyResult }
+  context_menu_list: { args: NoArgs; result: ContextMenuItem[] }
+  context_menu_set: { args: { id: string; visible: boolean }; result: ApplyResult }
   rename_select_folder: { args: NoArgs; result: string | null }
   rename_preview: { args: { rules: RenameRules }; result: RenamePreview }
   rename_apply: { args: NoArgs; result: number }

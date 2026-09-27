@@ -337,6 +337,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `tool_open` | `id` | `null`（只能用于 `open` 小工具；打不开时返回错误字符串） |
 | `startup_list` | — | `StartupItem[]`（登录用户和所有用户的 Run 项、「启动」文件夹，开关状态和任务管理器一致） |
 | `startup_set` | `id`、`enabled` | `ApplyResult`（停用或恢复；只接受最近一次列表里的 ID，记进修改日志） |
+| `context_menu_list` | — | `ContextMenuItem[]`（右键菜单里第三方软件加的命令、外壳扩展和 Windows 11 新菜单里应用的项目，显示不显示由引擎自己读） |
+| `context_menu_set` | `id`、`visible` | `ApplyResult`（拿掉或恢复；只接受最近一次列表里的 ID，记进修改日志；外壳扩展和应用的项目 `reboot` 为 `explorer`） |
 | `rename_select_folder` | — | `string \| null`（系统对话框选定的目录；取消返回 null） |
 | `rename_preview` | `rules` | `RenamePreview`（最多 500 个直属普通文件的原名、新名、名字变不变；不处理的文件数） |
 | `rename_apply` | — | `number`（执行已预览、文件夹没有变化的改名，返回改了几个） |
@@ -354,6 +356,13 @@ checks: [disk.system-free-space, system.pending-reboot]
 - **修改日志**：每次开关记一条（功能 ID 是 `startup`），撤销时核对这个值有没有被别人（比如任务管理器）改过。以前的版本用删除 Run 值来停用（功能 ID `boot.startup-disable`），那些记录照样能撤销。
 - **建议**：杀毒软件、输入法、Windows 自带的组件、硬件驱动和电脑厂商的功能标「建议保留」，其他的「不需要一开机就用的话，可以停用」；不说「建议停用」（原则 7）。
 - 应用商店的应用有自己的开关（`ms-settings:startupapps`），任务计划不在这里管。
+
+右键菜单（`crates/medkit-core/src/context_menu.rs`）：
+
+- **列出**：脚本 `scripts/shell/context-menu-list.ps1`（只读）查 `Software\Classes` 下的 `*`、`AllFilesystemObjects`、`Directory`、`Folder`、`Directory\Background`、`DesktopBackground`、`Drive`，HKLM 和登录用户的都查：`shell\<名字>`（菜单命令）、`shellex\ContextMenuHandlers\<名字>`（外壳扩展，靠 CLSID 找到 DLL），再加上应用清单里的 `windows.fileExplorerContextMenus`（Windows 11 新菜单里应用加的项目）。找程序、读文件说明和签名的代码和开机启动项共用（shared block `program-info`）。菜单上的字是 `@文件,-编号`、`ms-resource:` 这类间接字符串的，引擎用 SHLoadIndirectString 解开（按资源读，不运行文件里的代码）。
+- **只列第三方的**：程序在 Windows 目录里、微软签名的命令和外壳扩展、系统包，以及「打开方式」「发送到」「以前的版本」、Defender 扫描这些写死的 CLSID 都不列；对不上程序的命令、类里没写 DLL 的扩展也不列（不知道是谁加的）。CLSID 都没登记的外壳扩展（卸载后留下的空壳）照样列出来，说明拿掉没有坏处。应用商店里微软的应用（终端等）算应用，列出来。
+- **开关**：菜单命令写空的 `ProgrammaticAccessOnly`（微软文档：菜单里不显示、程序照样能调用），写在它登记的那一侧（HKLM 或登录用户的 HKCU），下次右键生效；外壳扩展和应用的项目按 CLSID 写进 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked`（空字符串值，名字是 CLSID），同一个 CLSID 在几个范围里登记的合成一项，重启资源管理器以后生效。恢复时把能让它不显示的值都删掉（也包括别的工具写的 `LegacyDisable` 和 HKCU 下的 Blocked）。只写这几个位置（写在代码里），只拿掉、不删除登记。
+- **修改日志**：功能 ID 是 `context-menu`，标题用项目的名字（程序重启以后没有列表时，扩展用它登记的类名，命令用键名），状态说「显示 / 不显示（已拿掉）」。多个值的改动当成一个整体：中途失败，前面改过的按倒序退回（和数据文件里的功能共用一段代码）。
 
 TypeScript 类型如下（字段名是 camelCase，所有文本已经渲染成中文）：
 

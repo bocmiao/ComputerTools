@@ -28,6 +28,7 @@ import type {
   ApplyResult,
   CatalogSummary,
   CheckResult,
+  ContextMenuItem,
   FeatureState,
   FeatureStateKind,
   FeatureSummary,
@@ -1181,7 +1182,8 @@ interface EntryOptions {
 
 /** 和后端的规则一样：没撤销过、改成功了（或者状态不确定），而且功能本身能撤销 */
 function canUndo(e: JournalEntryView): boolean {
-  const reversible = e.feature === 'startup' || (FEATURES.get(e.feature)?.summary.reversible ?? false)
+  const reversible =
+    e.feature === 'startup' || e.feature === 'context-menu' || (FEATURES.get(e.feature)?.summary.reversible ?? false)
   return !e.undone && (e.ok || e.pending) && reversible
 }
 
@@ -1933,6 +1935,39 @@ const startupMock: StartupItem[] = [
 ]
 for (const item of startupMock) values.set(`startup:${item.id}`, item.enabled ? STARTUP_ON : STARTUP_OFF)
 
+// ── 右键菜单里软件加的项目（演示）──
+const MENU_SHOWN = '显示'
+const MENU_HIDDEN = '不显示（已拿掉）'
+const contextMenuMock: ContextMenuItem[] = [
+  {
+    id: 'menu-rar', kind: 'extension', title: 'WinRAR shell extension', program: 'rarext.dll',
+    path: 'C:\\Program Files\\WinRAR\\rarext.dll', exists: true, publisher: 'win.rar GmbH', signature: 'valid',
+    scopes: ['文件', '文件夹', '磁盘'], location: '', visible: true, shiftOnly: false,
+    note: '同一个软件在右键菜单里的几处会一起拿掉。',
+  },
+  {
+    id: 'menu-cloud', kind: 'extension', title: '上传到网盘', program: 'CloudShellExt.dll',
+    path: 'C:\\Program Files\\Cloud\\CloudShellExt.dll', exists: true, publisher: null, signature: 'unsigned',
+    scopes: ['文件', '文件夹'], location: '', visible: true, shiftOnly: false, note: '',
+  },
+  {
+    id: 'menu-git', kind: 'command', title: 'Open Git Bash here', program: 'git-bash.exe',
+    path: 'C:\\Program Files\\Git\\git-bash.exe', exists: true, publisher: 'Johannes Schindelin', signature: 'valid',
+    scopes: ['文件夹', '文件夹空白处'], location: '所有用户', visible: true, shiftOnly: false, note: '',
+  },
+  {
+    id: 'menu-code', kind: 'app', title: 'Visual Studio Code', program: 'code_explorer_command.dll',
+    path: 'C:\\Program Files\\Microsoft VS Code\\code_explorer_command.dll', exists: true, publisher: 'Microsoft Corporation',
+    signature: 'valid', scopes: ['文件', '文件夹'], location: '', visible: true, shiftOnly: false, note: '',
+  },
+  {
+    id: 'menu-old', kind: 'extension', title: 'OldCloudExt', program: '', path: '', exists: false, publisher: null,
+    signature: 'unknown', scopes: ['文件'], location: '', visible: true, shiftOnly: false,
+    note: '这个扩展已经没有登记了，多半是软件卸载后留下的，拿掉没有坏处。',
+  },
+]
+for (const item of contextMenuMock) values.set(`menu:${item.id}`, item.visible ? MENU_SHOWN : MENU_HIDDEN)
+
 const handlers: Handlers = {
   system_info: () => SYSTEM,
 
@@ -2110,6 +2145,37 @@ const handlers: Handlers = {
       : '已经停用：下次开机登录时，它不会再自动启动。软件本身还在，想用时照样能打开；想改回来，在这里或者任务管理器的「启动应用」里都行。'
     return result
   },
+  context_menu_list: () => contextMenuMock.map((item) => ({ ...item, visible: values.get(`menu:${item.id}`) !== MENU_HIDDEN })),
+
+  context_menu_set: ({ id, visible }) => {
+    const item = contextMenuMock.find((x) => x.id === id)
+    if (!item) throw '这一项不在刚才的列表里了，请刷新一下再试。'
+    const target = `menu:${item.id}`
+    const before = values.get(target) ?? MENU_SHOWN
+    const command = item.kind === 'command'
+    const result: ApplyResult = {
+      feature: 'context-menu', sessionId: ensureSession().id, entryIds: [], ok: true, verified: 'applied',
+      message: '本来就是这样，不用改。', reboot: 'none', notes: [], error: null,
+    }
+    if ((before !== MENU_HIDDEN) === visible) return result
+    const session = ensureSession()
+    const entry: JournalEntryView = {
+      id: uuid(), sessionId: session.id, time: iso(Date.now()), feature: 'context-menu',
+      featureTitle: `右键菜单：${item.title}`, target, before, after: visible ? MENU_SHOWN : MENU_HIDDEN,
+      ok: true, pending: false, undone: false, undoneAt: null, canUndo: true, error: null,
+    }
+    session.entries.push(entry)
+    values.set(target, entry.after)
+    result.entryIds = [entry.id]
+    result.reboot = command ? 'none' : 'explorer'
+    result.message = visible
+      ? command ? '已经恢复了，下次右键就能看到。' : '已经恢复了，重启资源管理器（或者注销再登录）以后就能看到。'
+      : command
+        ? '已经从右键菜单里拿掉了，下次右键就看不到了。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。'
+        : '已经拿掉了，重启资源管理器（或者注销再登录）以后生效。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。'
+    return result
+  },
+
   rename_select_folder: () => DEMO_FOLDER,
   rename_preview: ({ rules }) => {
     const wanted = rules.extensions

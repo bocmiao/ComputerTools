@@ -98,6 +98,13 @@ pub trait Platform: Send + Sync {
     /// 打开一个系统工具或「设置」里的一页，不等它关掉。
     /// 程序不存在（精简系统删掉了）时返回 [`PlatformError::NotFound`]，内容是缺的文件名。
     fn open(&self, request: &OpenRequest) -> PResult<()>;
+
+    /// 解开 `@文件,-编号`、`@{包全名?ms-resource://…}` 这类间接字符串（右键菜单项目的名字常这样写）。
+    /// 只读资源，不运行文件里的代码；解不开返回 `None`。
+    fn indirect_string(&self, source: &str) -> Option<String> {
+        let _ = source;
+        None
+    }
 }
 
 /// 注册表 EditionID → 版本类型。

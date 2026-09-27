@@ -54,6 +54,7 @@ CI 在 Windows Server 虚拟机上跑脚本和往返测试，能发现大部分�
 | `taskbar.align-left` | 是否不用重启资源管理器就立刻生效（现在保守地写了 `reboot: explorer`） | 执行后观察任务栏 |
 | `explorer.classic-context-menu` | 写到登录用户的 `HKU\<SID>\Software\Classes`（它链接到 `HKU\<SID>_Classes`）是否生效；新版本 Win11 是否还支持 | 执行后重启资源管理器，右键桌面 |
 | 开机启动项（`startup_list` / `startup_set`） | StartupApproved 值第一个字节的含义：现在按单数（03、07）= 停用、双数（02、06）= 启用来读；任务管理器停用时写的是不是 03 加 8 字节时间、启用时写 02 加 11 个 0；32 位程序的 Run 项（WOW6432Node）在任务管理器里停用后写在 `StartupApproved\Run32`；「启动」文件夹里的快捷方式在 `StartupApproved\StartupFolder` 下的值名是不是带 `.lnk` 的文件名 | 在任务管理器「启动应用」里停用、启用几项（含一个 32 位程序和一个启动文件夹里的快捷方式），对照注册表里的值和小药箱列表里的开关；再在小药箱里停用、恢复，回到任务管理器看是不是同步显示 |
+| 右键菜单管理（`context_menu_list` / `context_menu_set`） | 列表认不认得常见软件（WinRAR、7-Zip、Bandizip、360、火绒、WPS、百度网盘、阿里云盘、迅雷、QQ、Git、VS Code、Notepad++），名字对不对（`@文件,-编号` 和应用的 `ms-resource:` 能不能解开）；Windows 自带的一项都不能出现；读 20 多个软件的签名要多久（脚本 20 秒后不再查签名）。菜单命令写 `ProgrammaticAccessOnly` 以后是不是下次右键就不见了（有子菜单的命令整个不见）；外壳扩展和 Windows 11 新菜单里的项目写进 `Shell Extensions\Blocked` 以后，重启资源管理器是不是就不见了、恢复后是不是回来；拿掉 WinRAR 这类扩展时，右键拖动的菜单、属性页有没有跟着少（同一个 CLSID）；软件升级以后会不会把自己的项目重新登记回来 | 装上这些软件，在 Win10、Win11（新菜单和「显示更多选项」）里逐个拿掉、重启资源管理器、右键文件和文件夹看；再逐个恢复；最后在修改日志里撤销一次 |
 | 开机启动项的列表内容 | 常见软件（微信、QQ、网盘、Steam、OneDrive、Teams、各家杀毒软件、搜狗输入法、声卡触控板驱动）的说明、发布者、签名和「建议保留」对不对；rundll32、wscript 启动的项目是不是找到了它运行的那个文件；启动文件夹里的 .url、.bat；检查签名的耗时（有很大的 exe 时，脚本 30 秒后不再查签名） | 在装了常用软件的中文系统上打开「开机慢」，对照任务管理器「启动应用」的列表；在机械硬盘的老电脑上计时 |
 
 ## 小工具

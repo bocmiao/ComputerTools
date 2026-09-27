@@ -31,6 +31,9 @@ $signatureBudgetMs = 30000
 $maxItems = 200
 $runKey = 'Software\Microsoft\Windows\CurrentVersion\Run'
 $shellFolders = 'Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
+# ---- shared block program-info: identical in startup/list.ps1 and shell/context-menu-list.ps1 (medkit-data check compares them) ----
+# Which program a command line starts, and what that file says about itself.
+# Uses $UserHive (the logged-in user's hive, or HKCU:) and $signatureBudgetMs.
 $windowsDir = [Environment]::GetFolderPath('Windows').TrimEnd('\')
 # Paths are joined as strings: Join-Path needs the drive to exist.
 $system32 = $windowsDir + '\System32'
@@ -186,12 +189,14 @@ function Get-SignerName {
     return ''
 }
 
-function New-ItemInfo {
-    param([string]$Source, [string]$Name, [string]$Path, [bool]$Hosted)
+# What a program file says about itself: exists, description and company
+# (what Task Manager shows), signature (valid / unsigned / invalid / unknown /
+# skipped) and its signer, and system (the file is under the Windows folder and
+# is not run by a host program). Checking a signature reads the whole file, so
+# the checks stop after $signatureBudgetMs and the rest are reported as skipped.
+function Get-FileFacts {
+    param([string]$Path, [bool]$Hosted)
     $info = [ordered]@{
-        source      = $Source
-        name        = $Name
-        path        = $Path
         exists      = $false
         description = ''
         company     = ''
@@ -246,6 +251,21 @@ function New-ItemInfo {
     }
     catch {
         $info.signature = 'unknown'
+    }
+    return $info
+}
+# ---- end of shared block program-info ----
+
+function New-ItemInfo {
+    param([string]$Source, [string]$Name, [string]$Path, [bool]$Hosted)
+    $info = [ordered]@{
+        source = $Source
+        name   = $Name
+        path   = $Path
+    }
+    $facts = Get-FileFacts -Path $Path -Hosted $Hosted
+    foreach ($key in @($facts.Keys)) {
+        $info[$key] = $facts[$key]
     }
     return $info
 }

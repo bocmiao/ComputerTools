@@ -13,6 +13,7 @@ use serde_json::{Map, Value};
 
 use crate::builtin;
 use crate::catalog::Catalog;
+use crate::context_menu;
 use crate::error::{Error, Result};
 use crate::journal::{
     ApplyRecord, CommitRecord, Entry, Journal, RECORD_VERSION, Record, State, TargetRef, UndoReason, UndoRecord,
@@ -29,9 +30,9 @@ use crate::script::ScriptRunner;
 use crate::startup;
 use crate::tools;
 use crate::views::{
-    ApplyResult, CatalogSummary, CheckResult, FeatureState, FeatureStateKind, FeatureSummary, JournalEntryView,
-    JournalSession, Preview, PreviewChange, ProfileSummary, StartupItem, SymptomDetail, SymptomStep, SymptomSummary,
-    SystemInfo, ToolOpens, ToolResult, ToolSummary, UndoResult,
+    ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, ContextMenuKind, FeatureState, FeatureStateKind,
+    FeatureSummary, JournalEntryView, JournalSession, Preview, PreviewChange, ProfileSummary, StartupItem,
+    SymptomDetail, SymptomStep, SymptomSummary, SystemInfo, ToolOpens, ToolResult, ToolSummary, UndoResult,
 };
 
 const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -43,6 +44,8 @@ pub const RESTORE_POINT_SCRIPT: &str = "host/restore-point.ps1";
 const LEGACY_STARTUP_FEATURE: &str = "boot.startup-disable";
 /// 列启动项要查每个程序的签名，大文件慢；脚本自己有时间上限，这里再留些余量
 const STARTUP_LIST_TIMEOUT: Duration = Duration::from_secs(90);
+/// 列右键菜单要查程序的签名、读应用清单；脚本自己有时间上限，这里再留些余量
+const CONTEXT_MENU_LIST_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// 一个原语没改成功。
 struct StepError {
@@ -57,6 +60,13 @@ impl StepError {
     fn early(error: Error) -> Self {
         Self { entry: None, error, left_changes: false }
     }
+}
+
+/// 几个原语里有一个没改成功（见 `Engine::apply_actions`）。
+struct ActionsFailed {
+    error: Error,
+    /// 前面改过的都退回原样了
+    rolled_back: bool,
 }
 
 /// 原语的目标状态。
@@ -110,6 +120,8 @@ pub struct Engine {
     local_offset: Option<time::UtcOffset>,
     /// 最近一次列出的开机启动项：改开关时只认这里面有的
     startup_items: Mutex<Vec<startup::RawItem>>,
+    /// 最近一次列出的右键菜单项目：改开关时只认这里面有的
+    context_menu: Mutex<Vec<context_menu::Group>>,
 }
 
 impl Engine {
@@ -136,6 +148,7 @@ impl Engine {
             other_results: Mutex::new(Vec::new()),
             local_offset: time::UtcOffset::current_local_offset().ok(),
             startup_items: Mutex::new(Vec::new()),
+            context_menu: Mutex::new(Vec::new()),
         }
     }
 
@@ -755,16 +768,38 @@ impl Engine {
     }
 
     fn apply_primitives(&self, f: &Feature, notes: Vec<String>) -> Result<ApplyResult> {
+        let (entry_ids, failure) = self.apply_actions(&f.id, &f.actions);
+        if let Some(failed) = failure {
+            let message = if failed.rolled_back {
+                "没有改成功，已经把这次改过的部分退回原样。".to_owned()
+            } else {
+                "没有改成功，而且有部分改动没能自动退回，请在修改日志里手动恢复。".to_owned()
+            };
+            let mut r = self.result(f, false, entry_ids, message, notes);
+            r.error = Some(failed.error.to_string());
+            return Ok(r);
+        }
+        let mut r = self.result(f, true, entry_ids, String::new(), notes);
+        r.verified = self.detect_inner(f).map_or(FeatureStateKind::Unknown, |(s, _)| s);
+        r.message = match r.verified {
+            FeatureStateKind::Applied => "已经改好了。".to_owned(),
+            _ => "改完了，但复查时发现没有完全生效。".to_owned(),
+        };
+        Ok(r)
+    }
+
+    /// 依次执行几个原语，当成一个整体：已经是目标状态的不动（撤销时也就不会碰它）；中途有一个失败，
+    /// 前面改过的按倒序退回。返回写进修改日志的记录 ID，失败时还有原因和退没退干净。
+    fn apply_actions(&self, feature_id: &str, actions: &[Action]) -> (Vec<String>, Option<ActionsFailed>) {
         let mut done: Vec<(ApplyRecord, State)> = Vec::new();
         let mut entry_ids = Vec::new();
-        for (i, a) in f.actions.iter().enumerate() {
-            // 已经是目标状态的就不动，撤销时也就不会碰它
+        for (i, a) in actions.iter().enumerate() {
             if let (Ok(desired), Ok((_, state))) = (Desired::of(a), self.current(a))
                 && Self::matches(&desired, &state)
             {
                 continue;
             }
-            match self.apply_one(&f.id, i, a) {
+            match self.apply_one(feature_id, i, a) {
                 Ok((rec, after)) => {
                     entry_ids.push(rec.id.clone());
                     done.push((rec, after));
@@ -779,24 +814,11 @@ impl Engine {
                             rolled_back = false;
                         }
                     }
-                    let message = if rolled_back {
-                        "没有改成功，已经把这次改过的部分退回原样。".to_owned()
-                    } else {
-                        "没有改成功，而且有部分改动没能自动退回，请在修改日志里手动恢复。".to_owned()
-                    };
-                    let mut r = self.result(f, false, entry_ids, message, notes);
-                    r.error = Some(step.error.to_string());
-                    return Ok(r);
+                    return (entry_ids, Some(ActionsFailed { error: step.error, rolled_back }));
                 }
             }
         }
-        let mut r = self.result(f, true, entry_ids, String::new(), notes);
-        r.verified = self.detect_inner(f).map_or(FeatureStateKind::Unknown, |(s, _)| s);
-        r.message = match r.verified {
-            FeatureStateKind::Applied => "已经改好了。".to_owned(),
-            _ => "改完了，但复查时发现没有完全生效。".to_owned(),
-        };
-        Ok(r)
+        (entry_ids, None)
     }
 
     /// 执行一个原语：先写 apply（原值），再改，再写 commit（结果）。
@@ -1150,6 +1172,236 @@ impl Engine {
         }
     }
 
+    // ───────────── 右键菜单 ─────────────
+
+    /// 列出软件加进右键菜单的项目（Windows 自带的不列）。显示不显示由引擎自己读，和改的时候读写同一个位置。
+    pub fn context_menu_list(&self) -> Result<Vec<ContextMenuItem>> {
+        let mut args = Map::new();
+        args.insert("UserHive".into(), Value::String(self.user_hive()));
+        let v = self
+            .runner
+            .run(context_menu::LIST_SCRIPT, &args, CONTEXT_MENU_LIST_TIMEOUT)
+            .map_err(|e| Error::Invalid(format!("没能列出右键菜单：{e}")))?;
+        let raw = context_menu::parse_list(&v).map_err(Error::Invalid)?;
+        let groups = context_menu::group(raw);
+        let mut items = Vec::with_capacity(groups.len());
+        for g in &groups {
+            let visible = self.menu_visible(&g.target)?;
+            items.push(self.menu_view(g, visible));
+        }
+        items.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+        *self.context_menu.lock().unwrap() = groups;
+        Ok(items)
+    }
+
+    /// 从右键菜单里拿掉（`visible` 为 false）或者恢复一项，记进修改日志，能撤销。只认最近一次列出来的项目。
+    pub fn context_menu_set(&self, id: &str, visible: bool) -> Result<ApplyResult> {
+        let _guard = self.apply_lock.lock().unwrap();
+        let group = self
+            .context_menu
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|g| g.target.id() == id)
+            .cloned()
+            .ok_or_else(|| Error::Invalid("这一项不在刚才的列表里了，请刷新一下再试。".to_owned()))?;
+        let extension = matches!(group.target, context_menu::Target::Extension { .. });
+        let mut r = ApplyResult {
+            feature: context_menu::FEATURE_ID.to_owned(),
+            session_id: self.session.clone(),
+            entry_ids: Vec::new(),
+            ok: true,
+            verified: FeatureStateKind::Applied,
+            message: "本来就是这样，不用改。".to_owned(),
+            reboot: crate::model::Reboot::None,
+            notes: Vec::new(),
+            error: None,
+        };
+        if self.menu_visible(&group.target)? == visible {
+            return Ok(r);
+        }
+        // 拿掉：写一个值；恢复：把能让它不显示的值都删掉（也包括别的工具写的）
+        let actions: Vec<Action> = if visible {
+            Self::menu_values(&group.target)
+                .into_iter()
+                .map(|(key, name)| Self::menu_action(key, name, false))
+                .collect()
+        } else {
+            let (key, name) = Self::menu_values(&group.target).swap_remove(0);
+            vec![Self::menu_action(key, name, true)]
+        };
+        let (entry_ids, failure) = self.apply_actions(context_menu::FEATURE_ID, &actions);
+        r.entry_ids = entry_ids;
+        if let Some(failed) = failure {
+            r.ok = false;
+            r.verified = FeatureStateKind::Unknown;
+            r.message = if failed.rolled_back {
+                "没有改成功，已经退回原样。".to_owned()
+            } else {
+                "没有改成功，而且改动没能自动退回，请在修改日志里手动恢复。".to_owned()
+            };
+            r.error = Some(failed.error.to_string());
+            return Ok(r);
+        }
+        if self.menu_visible(&group.target)? != visible {
+            r.verified = FeatureStateKind::NotApplied;
+        }
+        if extension {
+            r.reboot = crate::model::Reboot::Explorer;
+        }
+        r.message = match (visible, extension) {
+            (false, false) => "已经从右键菜单里拿掉了，下次右键就看不到了。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。",
+            (false, true) => "已经拿掉了，重启资源管理器（或者注销再登录）以后生效。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。",
+            (true, false) => "已经恢复了，下次右键就能看到。",
+            (true, true) => "已经恢复了，重启资源管理器（或者注销再登录）以后就能看到。",
+        }
+        .to_owned();
+        Ok(r)
+    }
+
+    /// 能让这一项不显示的值：第一个是小药箱拿掉时写的，后面的是别的工具可能写的（恢复时一起删）。
+    fn menu_values(target: &context_menu::Target) -> Vec<(String, &str)> {
+        match target {
+            context_menu::Target::Verb { hive, scope, key } => {
+                let k = context_menu::verb_key(*hive, scope, key);
+                vec![(k.clone(), context_menu::HIDE_VALUE), (k, context_menu::LEGACY_HIDE_VALUE)]
+            }
+            context_menu::Target::Extension { clsid } => vec![
+                (context_menu::blocked_key(context_menu::Hive::Machine), clsid.as_str()),
+                (context_menu::blocked_key(context_menu::Hive::User), clsid.as_str()),
+            ],
+        }
+    }
+
+    /// 写一个空字符串值（拿掉），或者删掉这个值（恢复）。
+    fn menu_action(key: String, name: &str, hide: bool) -> Action {
+        Action::Registry(RegistryAction {
+            key,
+            name: name.to_owned(),
+            value_type: hide.then_some(RegType::String),
+            value: hide.then(|| Value::String(String::new())),
+            delete: !hide,
+        })
+    }
+
+    fn menu_visible(&self, target: &context_menu::Target) -> Result<bool> {
+        for (key, name) in Self::menu_values(target) {
+            let (_, state) = self.current(&Self::menu_action(key, name, false))?;
+            if matches!(state, State::Registry { value: Some(_), .. }) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// 名字：命令用菜单上的字；扩展用程序文件里写的说明；应用用应用名。`@…`、`ms-resource:` 这类间接字符串解开再用。
+    fn menu_title(&self, g: &context_menu::Group) -> String {
+        let first = &g.entries[0];
+        let resolve = |text: &str| -> Option<String> {
+            let text = text.trim();
+            let resolved = if text.starts_with('@') {
+                self.platform.indirect_string(text)?
+            } else if text.starts_with("ms-resource:") {
+                let source = context_menu::package_resource(text, &first.package, &first.package_name)?;
+                self.platform.indirect_string(&source)?
+            } else {
+                text.to_owned()
+            };
+            let clean = context_menu::strip_accelerator(&resolved);
+            (!clean.is_empty() && clean.chars().count() <= 80).then_some(clean)
+        };
+        let description = || (!first.description.trim().is_empty()).then(|| first.description.trim().to_owned());
+        let title = match first.kind {
+            context_menu::Kind::Verb => resolve(&first.text).or_else(description),
+            context_menu::Kind::Handler => description().or_else(|| resolve(&first.text)),
+            context_menu::Kind::Packaged => {
+                resolve(&first.text).or_else(|| (!first.package_name.is_empty()).then(|| first.package_name.clone()))
+            }
+        };
+        title.unwrap_or_else(|| first.key.clone())
+    }
+
+    fn menu_view(&self, g: &context_menu::Group, visible: bool) -> ContextMenuItem {
+        let first = &g.entries[0];
+        let kind = match (&g.target, first.kind) {
+            (context_menu::Target::Verb { .. }, _) => ContextMenuKind::Command,
+            (_, context_menu::Kind::Packaged) => ContextMenuKind::App,
+            _ => ContextMenuKind::Extension,
+        };
+        let publisher = [&first.signer, &first.company, &first.publisher]
+            .into_iter()
+            .map(|s| s.trim())
+            .find(|s| !s.is_empty())
+            .map(str::to_owned);
+        let location = match &g.target {
+            context_menu::Target::Verb { hive: context_menu::Hive::Machine, .. } => "所有用户",
+            context_menu::Target::Verb { .. } => "当前用户",
+            context_menu::Target::Extension { .. } => "",
+        };
+        let note = if g.entries.iter().any(|e| e.kind == context_menu::Kind::Handler && !e.class_found) {
+            "这个扩展已经没有登记了，多半是软件卸载后留下的，拿掉没有坏处。"
+        } else if !first.path.is_empty() && !first.exists {
+            "找不到它要用的程序，软件可能已经卸载了，拿掉没有坏处。"
+        } else if first.subcommands {
+            "这一项下面还有子菜单，会一起拿掉。"
+        } else if kind != ContextMenuKind::Command && g.entries.len() > 1 {
+            "同一个软件在右键菜单里的几处会一起拿掉。"
+        } else {
+            ""
+        };
+        ContextMenuItem {
+            id: g.target.id(),
+            kind,
+            title: self.menu_title(g),
+            program: first.path.rsplit(['\\', '/']).next().unwrap_or_default().to_owned(),
+            path: first.path.clone(),
+            exists: first.exists,
+            publisher,
+            signature: first.signature,
+            scopes: context_menu::scope_labels(&g.entries),
+            location: location.to_owned(),
+            visible,
+            shift_only: g.entries.iter().any(|e| e.extended),
+            note: note.to_owned(),
+        }
+    }
+
+    /// 修改日志里右键菜单的标题：最近一次列表里的名字；程序重启以后没有列表，外壳扩展用它登记的类名，
+    /// 命令用它的键名。
+    fn menu_journal_title(&self, key: &str, name: &str) -> String {
+        let clsid = name.to_ascii_uppercase();
+        let cached = self.context_menu.lock().unwrap().iter().find_map(|g| match &g.target {
+            context_menu::Target::Extension { clsid: c } if *c == clsid => Some(g.clone()),
+            context_menu::Target::Verb { hive, scope, key: k } => {
+                let full = context_menu::verb_key(*hive, scope, k);
+                full[5..].eq_ignore_ascii_case(key).then(|| g.clone())
+            }
+            _ => None,
+        });
+        if let Some(g) = cached {
+            return self.menu_title(&g);
+        }
+        if name.eq_ignore_ascii_case(context_menu::HIDE_VALUE)
+            || name.eq_ignore_ascii_case(context_menu::LEGACY_HIDE_VALUE)
+        {
+            return key.rsplit('\\').next().unwrap_or(key).to_owned();
+        }
+        let class = format!(r"SOFTWARE\Classes\CLSID\{clsid}");
+        match self.platform.reg_get(&RegRoot::LocalMachine, &class, "") {
+            Ok(Some(RegValue::String(text))) if !text.trim().is_empty() => text.trim().to_owned(),
+            _ => clsid,
+        }
+    }
+
+    /// 修改日志里右键菜单开关的状态，说人话。
+    fn menu_state_label(state: &State) -> String {
+        match state {
+            State::Registry { value: Some(_), .. } => "不显示（已拿掉）".to_owned(),
+            State::Registry { value: None, .. } => "显示".to_owned(),
+            other => Self::state_label(other),
+        }
+    }
+
     // ───────────── 撤销 ─────────────
 
     /// 把一条修改恢复成 before（不做漂移检查，不写日志）。
@@ -1427,9 +1679,23 @@ impl Engine {
             // 开机启动项的开关不是数据文件里的功能：标题用启动项的名字，状态说「自动启动 / 已停用」
             let startup_entry = e.apply.feature == startup::FEATURE_ID
                 && matches!(&e.apply.target, TargetRef::Registry { key, .. } if startup::is_approved_key(key));
-            let label = |s: &State| if startup_entry { Self::startup_state_label(s) } else { Self::state_label(s) };
+            // 右键菜单的开关也一样：标题用项目的名字，状态说「显示 / 不显示」
+            let menu_entry = e.apply.feature == context_menu::FEATURE_ID
+                && matches!(&e.apply.target, TargetRef::Registry { key, name, .. } if context_menu::is_menu_target(key, name));
+            let label = |s: &State| {
+                if startup_entry {
+                    Self::startup_state_label(s)
+                } else if menu_entry {
+                    Self::menu_state_label(s)
+                } else {
+                    Self::state_label(s)
+                }
+            };
             let feature_title = match &e.apply.target {
                 TargetRef::Registry { name, .. } if startup_entry => format!("开机启动项：{name}"),
+                TargetRef::Registry { key, name, .. } if menu_entry => {
+                    format!("右键菜单：{}", self.menu_journal_title(key, name))
+                }
                 _ if e.apply.feature == LEGACY_STARTUP_FEATURE => "停用开机启动项".to_owned(),
                 _ => self
                     .catalog

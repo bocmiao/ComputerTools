@@ -274,6 +274,47 @@ pub struct StartupItem {
     pub reason: String,
 }
 
+/// 右键菜单里的一项是哪一类（界面据此说明拿掉会怎样）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ContextMenuKind {
+    /// 菜单命令（`shell\<名字>`），下次右键就生效
+    Command,
+    /// 软件的外壳扩展（按 CLSID 拿掉），要重启资源管理器才生效
+    Extension,
+    /// Windows 11 新菜单里应用加的项目（也按 CLSID 拿掉）
+    App,
+}
+
+/// 右键菜单里软件加的一项。路径只在本机界面上显示，不进诊断报告。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextMenuItem {
+    /// 改开关时原样传回来
+    pub id: String,
+    pub kind: ContextMenuKind,
+    /// 菜单上的字（命令），或者扩展、应用的名字
+    pub title: String,
+    /// 程序的文件名
+    pub program: String,
+    /// 程序的完整路径（读不出来是空的）
+    pub path: String,
+    pub exists: bool,
+    /// 签名的发布者，没有签名时是文件里写的公司名，应用是清单里的发布者
+    pub publisher: Option<String>,
+    pub signature: StartupSignature,
+    /// 在哪里右键时出现：「文件」「文件夹空白处」这类
+    pub scopes: Vec<String>,
+    /// 命令：「所有用户」或「当前用户」；扩展和应用拿掉时对所有用户生效，是空的
+    pub location: String,
+    /// 现在在菜单里显示不显示
+    pub visible: bool,
+    /// 只在按住 Shift 再右键时显示
+    pub shift_only: bool,
+    /// 补充说明（找不到程序、有子菜单这类），没有是空的
+    pub note: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JournalEntryView {

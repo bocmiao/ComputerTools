@@ -21,6 +21,8 @@
     "allow-tool-open",
     "allow-startup-list",
     "allow-startup-set",
+    "allow-context-menu-list",
+    "allow-context-menu-set",
     "allow-rename-select-folder",
     "allow-rename-preview",
     "allow-rename-apply",

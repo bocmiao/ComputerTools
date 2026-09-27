@@ -634,6 +634,36 @@ impl Platform for WindowsPlatform {
             OpenRequest::Settings(page) => open_settings(page),
         }
     }
+
+    /// SHLoadIndirectString：`@文件,-编号` 按资源文件读（LoadLibraryEx 的资源模式，不运行里面的代码），
+    /// `@{包全名?ms-resource://…}` 从应用包的资源里读。
+    fn indirect_string(&self, source: &str) -> Option<String> {
+        use windows_sys::Win32::System::Com::{
+            COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
+        };
+        use windows_sys::Win32::UI::Shell::SHLoadIndirectString;
+
+        if !source.starts_with('@') {
+            return None;
+        }
+        let src = wide(source);
+        let mut buf = vec![0u16; 1024];
+        // 应用包的资源要用 COM；成功（含 S_FALSE）时要配对调用 CoUninitialize
+        // SAFETY: 参数都是合法值
+        let com = unsafe { CoInitializeEx(null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32) };
+        // SAFETY: src 以 NUL 结尾，buf 的长度如实传入，保留参数传空指针
+        let hr = unsafe { SHLoadIndirectString(src.as_ptr(), buf.as_mut_ptr(), buf.len() as u32, null()) };
+        if com >= 0 {
+            // SAFETY: 和上面成功的 CoInitializeEx 配对
+            unsafe { CoUninitialize() };
+        }
+        if hr < 0 {
+            return None;
+        }
+        let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        let text = String::from_utf16_lossy(&buf[..len]).trim().to_owned();
+        (!text.is_empty()).then_some(text)
+    }
 }
 
 // ───────────── 打开系统工具 ─────────────

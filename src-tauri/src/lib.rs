@@ -28,6 +28,8 @@ macro_rules! command_handler {
             $crate::commands::tool_open,
             $crate::commands::startup_list,
             $crate::commands::startup_set,
+            $crate::commands::context_menu_list,
+            $crate::commands::context_menu_set,
             $crate::commands::rename_select_folder,
             $crate::commands::rename_preview,
             $crate::commands::rename_apply,

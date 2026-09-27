@@ -560,6 +560,107 @@ fn startup_items_are_listed_disabled_and_restored() {
     assert_eq!(platform.reg_get(&root, APPROVED, &name).unwrap(), None, "撤销后开关要恢复成原来的「没有这个值」");
 }
 
+/// 右键菜单：在当前用户下临时登记一个命令和一个外壳扩展（程序指向这个测试程序本身，不会被加载），
+/// 列表脚本要在真的 Windows PowerShell 5.1 上认出它们（Windows 自带的一项都不能列）；拿掉、撤销都要写对位置。
+/// 结束时（包括断言失败时）删掉登记的键和 Blocked 里的值。
+#[test]
+#[ignore = "会临时在右键菜单里登记测试项目（结束时删掉）"]
+fn context_menu_entries_are_listed_hidden_and_restored() {
+    use medkit_core::views::ContextMenuKind;
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_SET_VALUE};
+
+    const BLOCKED: &str = r"Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked";
+    let id = new_id();
+    let verb = format!("MedkitTest-{id}");
+    let clsid = format!("{{{}}}", new_id().to_uppercase());
+    let verb_key = format!(r"Software\Classes\Directory\Background\shell\{verb}");
+    let handler_key = format!(r"Software\Classes\Directory\shellex\ContextMenuHandlers\{verb}");
+    let class_key = format!(r"Software\Classes\CLSID\{clsid}");
+    struct Cleanup(Vec<String>, String);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let hkcu = winreg::RegKey::predef(HKEY_CURRENT_USER);
+            for key in &self.0 {
+                let _ = hkcu.delete_subkey_all(key);
+            }
+            for root in [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER] {
+                if let Ok(k) = winreg::RegKey::predef(root).open_subkey_with_flags(BLOCKED, KEY_SET_VALUE) {
+                    let _ = k.delete_value(&self.1);
+                }
+            }
+        }
+    }
+    let _cleanup = Cleanup(vec![verb_key.clone(), handler_key.clone(), class_key.clone()], clsid.clone());
+    let exe = std::env::current_exe().unwrap().display().to_string();
+    let hkcu = winreg::RegKey::predef(HKEY_CURRENT_USER);
+    let (k, _) = hkcu.create_subkey(&verb_key).unwrap();
+    k.set_value("MUIVerb", &"小药箱测试命令").unwrap();
+    let (c, _) = hkcu.create_subkey(format!(r"{verb_key}\command")).unwrap();
+    c.set_value("", &format!("\"{exe}\" \"%V\"")).unwrap();
+    let (h, _) = hkcu.create_subkey(&handler_key).unwrap();
+    h.set_value("", &clsid).unwrap();
+    let (cls, _) = hkcu.create_subkey(&class_key).unwrap();
+    cls.set_value("", &"Medkit test extension").unwrap();
+    let (server, _) = hkcu.create_subkey(format!(r"{class_key}\InprocServer32")).unwrap();
+    server.set_value("", &exe).unwrap();
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    let started = std::time::Instant::now();
+    let items = engine.context_menu_list().unwrap();
+    eprintln!("列出 {} 项，用时 {} ms", items.len(), started.elapsed().as_millis());
+    for i in &items {
+        eprintln!(
+            "{:<10} {:<40} {} {:<24} {:?} {}",
+            format!("{:?}", i.kind),
+            i.title,
+            if i.visible { "显示" } else { "不显示" },
+            i.scopes.join("、"),
+            i.signature,
+            i.publisher.as_deref().unwrap_or("-")
+        );
+    }
+    let windir = std::env::var("SystemRoot").unwrap().to_lowercase();
+    for i in &items {
+        assert!(!i.path.to_lowercase().starts_with(&windir) || !i.exists, "Windows 自带的不应该列出来：{i:?}");
+    }
+    let command = items.iter().find(|i| i.title == "小药箱测试命令").expect("测试用的命令没有列出来");
+    assert_eq!(command.kind, ContextMenuKind::Command);
+    assert_eq!(
+        (command.location.as_str(), command.scopes.as_slice()),
+        ("当前用户", ["文件夹空白处".to_owned()].as_slice())
+    );
+    assert!(command.visible && command.exists, "{command:?}");
+    let extension =
+        items.iter().find(|i| i.kind == ContextMenuKind::Extension && i.path == exe).expect("测试用的扩展没有列出来");
+    assert_eq!(extension.title, "Medkit test extension");
+
+    let root =
+        platform.interactive_user().filter(|u| is_sid(&u.sid)).map_or(RegRoot::CurrentUser, |u| RegRoot::User(u.sid));
+    let r = engine.context_menu_set(&command.id, false).unwrap();
+    assert!(r.ok, "{r:?}");
+    assert_eq!(
+        platform.reg_get(&root, &verb_key, "ProgrammaticAccessOnly").unwrap(),
+        Some(RegValue::String(String::new()))
+    );
+    let r2 = engine.context_menu_set(&extension.id, false).unwrap();
+    assert!(r2.ok, "{r2:?}");
+    assert_eq!(
+        platform.reg_get(&RegRoot::LocalMachine, BLOCKED, &clsid).unwrap(),
+        Some(RegValue::String(String::new()))
+    );
+    let again = engine.context_menu_list().unwrap();
+    assert!(again.iter().any(|i| i.id == command.id && !i.visible), "拿掉以后要显示成不显示");
+    assert!(again.iter().any(|i| i.id == extension.id && !i.visible));
+
+    for id in r.entry_ids.iter().chain(&r2.entry_ids) {
+        let u = engine.journal_undo(id, false).unwrap();
+        assert!(u.ok, "{u:?}");
+    }
+    assert_eq!(platform.reg_get(&root, &verb_key, "ProgrammaticAccessOnly").unwrap(), None);
+    assert_eq!(platform.reg_get(&RegRoot::LocalMachine, BLOCKED, &clsid).unwrap(), None);
+}
+
 /// 键盘的辅助功能：临时打开粘滞键（只改这次登录，不写注册表），内置检测要读得出来；关掉以后也要读得出来。
 /// 结束时（包括断言失败时）恢复原来的设置。
 #[test]

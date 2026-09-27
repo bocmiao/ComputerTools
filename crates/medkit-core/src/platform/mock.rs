@@ -27,6 +27,8 @@ struct State {
     opened: Vec<OpenRequest>,
     /// 打开这些程序时模拟「这台电脑上没有」
     missing_programs: HashSet<String>,
+    /// 间接字符串（`@file,-id`）解出来的文字
+    indirect: HashMap<String, String>,
 }
 
 pub struct MockPlatform {
@@ -104,6 +106,11 @@ impl MockPlatform {
     /// 测试用：模拟精简系统删掉了某个程序（文件名，不区分大小写）。
     pub fn remove_program(&self, exe: &str) {
         self.state.lock().unwrap().missing_programs.insert(exe.to_ascii_lowercase());
+    }
+
+    /// 测试用：让 `indirect_string(source)` 返回 `text`。
+    pub fn set_indirect(&self, source: &str, text: &str) {
+        self.state.lock().unwrap().indirect.insert(source.to_owned(), text.to_owned());
     }
 
     /// 测试用：打开过的系统工具。
@@ -221,5 +228,9 @@ impl Platform for MockPlatform {
         }
         state.opened.push(*request);
         Ok(())
+    }
+
+    fn indirect_string(&self, source: &str) -> Option<String> {
+        self.state.lock().unwrap().indirect.get(source).cloned()
     }
 }

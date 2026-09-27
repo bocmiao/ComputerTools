@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use medkit_core::Engine;
 use medkit_core::views::{
-    ApplyResult, CatalogSummary, CheckResult, FeatureState, JournalSession, Preview, StartupItem, SymptomDetail,
-    SystemInfo, ToolResult, UndoResult,
+    ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, FeatureState, JournalSession, Preview, StartupItem,
+    SymptomDetail, SystemInfo, ToolResult, UndoResult,
 };
 use tauri::State;
 
@@ -106,6 +106,18 @@ pub async fn startup_list(state: State<'_, AppState>) -> CmdResult<Vec<StartupIt
 #[tauri::command]
 pub async fn startup_set(state: State<'_, AppState>, id: String, enabled: bool) -> CmdResult<ApplyResult> {
     with_engine(state, move |e| e.startup_set(&id, enabled)).await
+}
+
+/// 右键菜单里软件加的项目（Windows 自带的不列），显示不显示和改的时候读写同一个位置。
+#[tauri::command]
+pub async fn context_menu_list(state: State<'_, AppState>) -> CmdResult<Vec<ContextMenuItem>> {
+    with_engine(state, |e| e.context_menu_list()).await
+}
+
+/// 从右键菜单里拿掉（visible 为 false）或者恢复一项，记进修改日志。只接受最近一次列表里的 ID。
+#[tauri::command]
+pub async fn context_menu_set(state: State<'_, AppState>, id: String, visible: bool) -> CmdResult<ApplyResult> {
+    with_engine(state, move |e| e.context_menu_set(&id, visible)).await
 }
 
 /// 批量重命名：用系统的文件夹选择框选一个文件夹。界面拿不到、也传不了别的路径。
