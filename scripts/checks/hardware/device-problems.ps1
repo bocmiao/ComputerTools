@@ -19,6 +19,9 @@
 #             problems, 31, 39, 52, ...)
 # A display adapter on the inbox basic driver (service BasicDisplay, or named
 # "Microsoft Basic Display Adapter") is missing its driver although its code is 0.
+# Only devices of the Display class count: every PC also has a root-enumerated
+# System device "Microsoft Basic Display Driver" (ROOT\BASICDISPLAY) with the
+# same service, which is normal.
 #
 # Privacy: only this PC's own hardware is named. Paired Bluetooth devices and
 # their services, audio endpoints ("Headphones (Xiaoming's AirPods)"), portable
@@ -185,10 +188,13 @@ function Test-PersonalDevice {
 
 function Test-BasicDisplay {
     param($Device, [string]$Class, [string]$Name)
+    if ($Class -ne 'Display') {
+        return $false
+    }
     if ((Get-CleanText $Device.Service) -eq 'BasicDisplay') {
         return $true
     }
-    return (($Class -eq 'Display') -and ($Name -match $basicDisplayNamePattern))
+    return ($Name -match $basicDisplayNamePattern)
 }
 
 function Test-NetworkCard {
