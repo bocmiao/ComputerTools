@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:apps-volume（音量合成器；Windows 10 叫「应用音量和设备首选项」），由系统打开。
+id: settings.volume-mixer
+schema_version: 1
+group: open
+title: { zh-CN: 音量合成器 }
+description:
+  zh-CN: 打开「设置」里的音量合成器：每个软件的音量、静音和用哪个设备放声音都在这里。只有某个软件没声音时，先来这里看看。
+category: settings
+open: { settings: apps-volume }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

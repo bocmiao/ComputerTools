@@ -1,0 +1,42 @@
+# 一键处理（action）：启动或重启 Windows 的音频服务。脚本：scripts/tools/audio/restart-service.ps1
+# 不改启动类型：被设成禁用的不动，结论里指到修复「恢复 Windows 音频服务」。
+id: audio.restart-service
+schema_version: 1
+group: action
+title: { zh-CN: 重启音频服务 }
+description:
+  zh-CN: 电脑突然没声音、喇叭图标上有红叉时，重新启动 Windows 的音频服务。正在播放的声音会断一下。不改服务的启动类型。
+category: audio
+requires_admin: true
+timeout_sec: 60
+run:
+  script: tools/audio/restart-service.ps1
+confirm:
+  zh-CN: 正在播放的声音、正在进行的语音通话会断几秒钟。现在重启音频服务吗？
+results:
+  restarted:
+    status: ok
+    message: { zh-CN: 音频服务已经重启了。 }
+    next: { zh-CN: 放一段声音试试。还没声音的话，看看右下角喇叭图标里选的输出设备对不对。 }
+    links: ["symptom:no-sound"]
+  started:
+    status: ok
+    message: { zh-CN: 音频服务已经启动了。 }
+    next: { zh-CN: 放一段声音试试。 }
+    links: ["symptom:no-sound"]
+  disabled:
+    status: advice
+    message: { zh-CN: 音频服务被设成了「禁用」，小药箱没有启动它。 }
+    next: { zh-CN: 先点「恢复 Windows 音频服务」把它改回自动启动，再来重启。 }
+    links: ["feature:audio.enable-services"]
+  missing:
+    status: manual
+    message: { zh-CN: 这台电脑上找不到 Windows 的音频服务。 }
+    next: { zh-CN: 可能是用了精简过的系统，请懂哥帮忙看看。 }
+  failed:
+    status: manual
+    message: { zh-CN: 没能正常启动音频服务。 }
+    next: { zh-CN: 重启电脑试试；还不行的话，可能是声卡驱动的问题，请懂哥帮忙看看。 }
+    links: ["tool:open.services"]
+references:
+  - https://support.microsoft.com/en-us/windows/fix-sound-or-audio-problems-in-windows-73025246-b61c-40fb-671a-2535c7cd56c8

@@ -529,7 +529,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `control-panel` | `control.exe` |
 
 settings 页面：`windowsupdate`、`storagesense`、`storagepolicies`、`appsfeatures`、`defaultapps`、`network-status`、`printers`、
-`sound`、`powersleep`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`regionlanguage`。
+`sound`、`powersleep`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`regionlanguage`、`apps-volume`。
 
 - 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。
 - 精简系统上被删掉的工具，打开时如实说「这台电脑上没有这个工具」，不去别处找。

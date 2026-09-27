@@ -55,6 +55,7 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "easeofaccess-keyboard",
     "easeofaccess-mouse",
     "regionlanguage",
+    "apps-volume",
 ];
 
 pub fn program(name: &str) -> Option<&'static Program> {

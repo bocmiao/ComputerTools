@@ -1,0 +1,28 @@
+# 恢复 Windows 音频服务：把 Windows Audio（Audiosrv）和 Windows Audio Endpoint Builder（AudioEndpointBuilder）
+# 的启动类型改回 Windows 默认的「自动」。只改启动类型，不启动服务：改完用小工具「重启音频服务」让它马上运行，
+# 或者重启电脑。检测 audio.service 报 disabled 时给这个按钮。
+id: audio.enable-services
+schema_version: 1
+title: { zh-CN: 恢复 Windows 音频服务 }
+description:
+  zh-CN: 把 Windows 的两个音频服务改回默认的「自动启动」。它们被「优化」类软件设成禁用以后，电脑完全没声音。改完点「重启音频服务」让它马上运行，或者重启电脑。
+category: audio
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+actions:
+  - service: { name: AudioEndpointBuilder, start_type: auto }
+  - service: { name: Audiosrv, start_type: auto }
+windows_default:
+  - service: { name: AudioEndpointBuilder, start_type: auto }
+  - service: { name: Audiosrv, start_type: auto }
+break_actions:
+  - service: { name: Audiosrv, start_type: disabled }
+  - service: { name: AudioEndpointBuilder, start_type: disabled }
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/coreaudio/audio-endpoint-builder-service

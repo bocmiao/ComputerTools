@@ -1,0 +1,46 @@
+# Windows 的音频服务。脚本：scripts/checks/audio/service.ps1
+# Windows Audio（Audiosrv）和 Windows Audio Endpoint Builder（AudioEndpointBuilder）在 Windows 里都是自动启动的，
+# 缺了哪个都完全没声音。按这个顺序判断：missing（有一个没有）→ disabled（有一个被设成禁用，多半是「优化」软件干的，
+# 修复 audio.enable-services）→ stopped（有一个没在运行，小工具「重启音频服务」）→ ok。
+# 服务器版 Windows 上音频服务默认不开，CI 的虚拟机上会报 stopped 或 disabled，是正常的。
+# 事实：audiosrv、builder（Running、Stopped……）、audiosrv_start、builder_start（Automatic、Manual、Disabled）。
+id: audio.service
+schema_version: 1
+title: { zh-CN: 音频服务 }
+description:
+  zh-CN: 看看 Windows 的两个音频服务在不在运行、有没有被关掉。它们停了的话，电脑完全没声音。
+category: audio
+requires_admin: false
+probe:
+  script: checks/audio/service.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: Windows 的音频服务都在正常运行。
+  stopped:
+    status: advice
+    message:
+      zh-CN: Windows 的音频服务没在运行，所以电脑完全没声音，右下角的喇叭图标上可能有个红叉。
+    fixer: medkit
+    next:
+      zh-CN: 点「重启音频服务」让它重新运行；还不行的话重启电脑。
+    links: ["tool:audio.restart-service"]
+  disabled:
+    status: advice
+    message:
+      zh-CN: Windows 的音频服务被设成了「禁用」，多半是「优化」类软件干的，这样电脑完全没声音。
+    fixer: medkit
+    next:
+      zh-CN: 先点下面的「恢复 Windows 音频服务」把它改回自动启动，再点「重启音频服务」让它马上运行（或者重启电脑）。以后想改回去，在修改日志里撤销就行。
+    links: ["feature:audio.enable-services", "tool:audio.restart-service"]
+  missing:
+    status: manual
+    message:
+      zh-CN: 这台电脑上找不到 Windows 的音频服务，可能是用了精简过的系统。
+    fixer: helper
+    next:
+      zh-CN: 请懂哥帮忙看看，可能要修复或者重装系统。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/coreaudio/audio-endpoint-builder-service
+  - https://support.microsoft.com/en-us/windows/fix-sound-or-audio-problems-in-windows-73025246-b61c-40fb-671a-2535c7cd56c8
