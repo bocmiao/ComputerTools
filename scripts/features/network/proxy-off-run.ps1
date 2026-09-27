@@ -424,16 +424,16 @@ $savedBefore = $Before | ConvertFrom-Json
 if (($null -eq $savedBefore) -or
     ($savedBefore.proxy_enable -ne $before.proxy_enable) -or
     ([bool]$savedBefore.legacy_changed -ne $before.legacy_changed)) {
-    return [pscustomobject]@{ skipped = $true; reason = '代理设置在快照后发生变化，请重试' }
+    return [pscustomobject]@{ skipped = $true }
 }
 $savedConnections = @($savedBefore.connections.PSObject.Properties)
 if ($savedConnections.Count -ne $beforeConnections.Count) {
-    return [pscustomobject]@{ skipped = $true; reason = '代理连接在快照后发生变化，请重试' }
+    return [pscustomobject]@{ skipped = $true }
 }
 foreach ($entry in $savedConnections) {
     if ((-not $beforeConnections.Contains($entry.Name)) -or
         ([string]$entry.Value -ne [string]$beforeConnections[$entry.Name])) {
-        return [pscustomobject]@{ skipped = $true; reason = '代理连接在快照后发生变化，请重试' }
+        return [pscustomobject]@{ skipped = $true }
     }
 }
 
