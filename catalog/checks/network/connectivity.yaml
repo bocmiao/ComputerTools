@@ -1,0 +1,190 @@
+# 网络通不通：按链路顺序查，断在哪一环就停在哪一环，只给一个结论。脚本：scripts/checks/network/connectivity.ps1
+# 顺序（计划书 4.2「上不了网」）：网卡与飞行模式 → 网线 / WiFi → 有没有从路由器拿到地址（169.254 开头 = 没拿到）
+# → 路由器（默认网关）→ 外网。不用联网也能查；除了 ping 一下路由器、通过系统自己的 DNS 查两个网址，不发任何网络请求（不发 HTTP）。
+# 1. 先看 Windows 自己的结论：Get-NetConnectionProfile 的 IPv4Connectivity / IPv6Connectivity（网络连接状态指示器 NCSI
+#    的检测结果：Disconnected / NoTraffic / Subnet / LocalNetwork / Internet）。任何一个连接是 Internet 就是 ok，别的都不查。
+# 2. 网卡（Get-NetAdapter）：HardwareInterface 或 ConnectorPresent 为真的算实体网卡；蓝牙网络（NdisPhysicalMedium 10）不算。
+#    类型：wifi（NdisPhysicalMedium 9 / 1）、mobile（8，移动网络）、ethernet（14）、other。
+# 3. 一个实体网卡都没连上时，按顺序：
+#    no-driver：有网卡没装好驱动（Win32_PnPEntity 带问题代码；认网卡的规则和 hardware.device-problems 一样：接在 PCI / USB / SD
+#      上、名字里没有 Bluetooth / 蓝牙，属于 Net 类，或者兼容 ID 是 PCI 大类 02、USB CDC NCM / ECM / MBIM / RNDIS，或者名字里有
+#      Wi-Fi / WLAN / 802.11 / Ethernet / 网卡这类字样；45、47、53、22、29 和 Present 为 false 的不算；1、28「没装驱动」优先）；
+#    no-adapter：一个实体网卡都没有；
+#    airplane-mode：飞行模式开着、有没被禁用的无线网卡。依据是 HKLM\SYSTEM\CurrentControlSet\Control\RadioManagement\SystemRadioState
+#      这个键的默认值（DWORD，1 = 开，0 = 关），微软没有公开文档，来自社区经验和微软论坛版主的说明；也兼容 RadioManagement 下名为
+#      SystemRadioState 的值。只在什么都没连上时才用它：飞行模式下用户还可以单独打开 WiFi；
+#    adapter-disabled：有实体网卡被禁用了；
+#    not-connected-wifi（只有无线网卡）/ not-connected-cable（只有有线网卡）/ not-connected（都有）：网线没插好、WiFi 没连上或关着。
+# 4. 连上的网卡（加上带着真实网关的虚拟网卡，比如 Hyper-V 外部交换机）：有没有能用的 IPv4 地址（不算 169.254 开头的、冲突的）、
+#    是不是手动设置的（PrefixOrigin Manual）、默认网关（Get-NetRoute 0.0.0.0/0）。电脑自己拨号的「宽带连接」（PPPoE）和 Windows
+#    自带的 VPN 不是网卡，有地址、有默认路由的也算（adapter_kind 为 dial-up，「路由器」就是线路的另一头）。走得最远的那个作为结论的对象。
+# 5. 有网关时同时做两件事：ping 路由器（3 次、每次 700 毫秒；ping 不通再看邻居缓存里路由器是不是 Reachable——有的路由器不回 ping），
+#    和通过系统的 DNS 查两个国内能访问的网址（和 network.dns 共用 dns-probe 代码块，最多等几秒）。
+#    NCSI 在只有 DNS 坏了、或者它的测试走了失效代理时，也会说「没有 Internet」，所以不能只凭它就说是宽带的问题：
+#    internet-unconfirmed：能查到网址（路由器肯定是通的），但 NCSI 没确认能上网：可能要网页登录、代理残留、宽带欠费跳转……
+#      状态是 unknown，让后面的 DNS、代理检查接着查；
+#    ncsi-off：同上，但 NCSI 的主动检测被关掉或改过（NlaSvc\Parameters\Internet 的 EnableActiveProbing = 0、
+#      ActiveWebProbeHost 不是 www.msftconnecttest.com，或策略 NetworkConnectivityStatusIndicator\NoActiveProbe = 1）；
+#    no-address：没有能用的 IPv4 地址；no-gateway：有地址、没有网关；
+#    manual-address：地址是手动设置的，而且没有网关或者路由器没回应；
+#    gateway-unreachable：路由器 ping 不通、邻居缓存里也不可达；
+#    dns-suspect：路由器是通的，网址查不到，而 DNS 是手动设置的（或者一个也没有）：更像是 DNS 的问题，unknown，交给 network.dns；
+#    dns-untested：路由器是通的，但 DNS 根本没查成（精简系统上没有 Resolve-DnsName，或者电脑太慢、几秒内没启动起来）。
+#      只凭 NCSI 说「没有 Internet」不能怪宽带（它的测试可能走了失效的代理），unknown，让症状接着查 DNS 和代理；
+#    no-internet：路由器是通的，通过它也查不到网址：宽带或光猫的问题，给运营商电话。
+# 只有用户要动手的结论才是 advice / manual（原则 7）；没查清楚的是 unknown，症状里会接着查 DNS 和代理。
+# 事实只有布尔值、个数和枚举（不输出 IP、MAC 地址、WiFi 名字、网卡 GUID、电脑名：诊断报告会发给别人）；网卡型号（adapter）可以输出：
+#   ncsi_available、ipv4_connectivity、ipv6_connectivity（internet / local-network / subnet / no-traffic / disconnected / unknown / none）、
+#   adapter_count、wifi_count、ethernet_count、connected_count、disabled_count、airplane_mode、adapter、adapter_kind（wifi / ethernet /
+#   mobile / dial-up / other）、wifi_low_power、
+#   problem_device、problem_code、apipa、address_conflict、manual_address、has_gateway、gateway_ping、gateway_arp、gateway_reachable、
+#   manual_dns、dns（ok / failed / no-servers / unknown）、ncsi_probe_off。
+# 超时：断网时一两秒就查完；最慢的情况（路由器通、DNS 不回应）是 ping 和 DNS 同时等，脚本最多等 4.5 秒左右。
+id: network.connectivity
+schema_version: 1
+title: { zh-CN: 网络通不通 }
+description:
+  zh-CN: 按顺序查网卡、飞行模式、网线和 WiFi、路由器和宽带，看看网络断在哪一环。电脑没网也能查。
+category: network
+requires_admin: false
+timeout_sec: 20
+probe:
+  script: checks/network/connectivity.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 网络是通的：Windows 自己检测到这台电脑能连上互联网。
+  no-adapter:
+    status: manual
+    message:
+      zh-CN: 这台电脑上没有找到能用的网卡（有线的、无线的都没有），所以上不了网。
+    fixer: helper
+    next:
+      zh-CN: 点下面的按钮打开设备管理器，看看「网络适配器」下面有没有网卡、「其他设备」下面有没有带黄色感叹号的设备。刚重装完系统、网卡驱动还没装的，可以先用数据线连上安卓手机，在手机的「个人热点」设置里打开「USB 网络共享」，让电脑先上网，再打开「Windows 更新」检查更新，看看「可选更新」里有没有网卡驱动；也可以用手机或别的电脑到电脑品牌的官网按型号下载网卡驱动，用 U 盘或数据线拷过来装上。驱动只从品牌官网和 Windows 更新装，别用来路不明的「万能驱动」。设备管理器里怎么也找不到网卡的，可能是在 BIOS 里被关掉了或者坏了，请找懂哥或售后；台式机也可以买一个 USB 无线网卡插上用。
+    links: ["tool:open.device-manager", "tool:settings.windows-update", "tool:system.hardware-info"]
+  no-driver:
+    status: manual
+    message:
+      zh-CN: "电脑里有网卡，但它的驱动没有装好（设备管理器里的「{problem_device}」，错误代码 {problem_code}），所以用不了。刚重装完系统时最常见。"
+    fixer: helper
+    next:
+      zh-CN: 先重启一次电脑试试。还不行的话，网卡用不了，这台电脑就没法自己下载驱动：可以先用数据线连上安卓手机，在手机的「个人热点」设置里打开「USB 网络共享」，让电脑先上网，再打开「Windows 更新」检查更新，看看「可选更新」里有没有网卡驱动（Windows 11 在「高级选项」里，Windows 10 点「查看可选更新」）；也可以用手机或别的电脑到电脑品牌的官网按型号下载网卡驱动（无线网卡常写作 WLAN 或 Wi-Fi，有线网卡写作 LAN 或以太网），用 U 盘或数据线拷过来装上。驱动只从品牌官网和 Windows 更新装，别用来路不明的「万能驱动」。拿不准的话，请懂哥帮忙。
+    links: ["tool:open.device-manager", "tool:settings.windows-update", "tool:system.hardware-info"]
+  adapter-disabled:
+    status: advice
+    message:
+      zh-CN: "电脑现在没有连上网络，而且网卡「{adapter}」被禁用了（关掉了）。"
+    fixer: user
+    next:
+      zh-CN: 平时就用这个网卡上网的话，把它启用：Windows 11 打开「设置 → 网络和 Internet → 高级网络设置」，在这个网卡旁边点「启用」；Windows 10 打开「设置 → 网络和 Internet → 状态 → 更改适配器选项」，右键灰色的网卡，选「启用」。平时用的是别的网卡（比如 WiFi），这个网卡禁用着没关系，把平时用的那个连上就行：插好网线，或者点任务栏右下角的网络图标连上 WiFi。
+    links: ["tool:settings.network", "tool:open.device-manager"]
+  airplane-mode:
+    status: advice
+    message:
+      zh-CN: 电脑开着「飞行模式」，WiFi 这类无线网络都被关掉了，所以上不了网。
+    fixer: user
+    next:
+      zh-CN: 点任务栏右下角的网络图标（或者按 Win + A），点一下「飞行模式」把它关掉，再选你的 WiFi 连上。笔记本上一般也有开关飞行模式的快捷键（键帽上画着飞机或者信号，有的要和 Fn 一起按），可能是不小心按到了，再按一次就行。
+    links: ["tool:settings.network"]
+  not-connected-wifi:
+    status: advice
+    message:
+      zh-CN: WiFi 没有连上任何网络（也可能是 WiFi 被关掉了）。
+    fixer: user
+    next:
+      zh-CN: 点任务栏右下角的网络图标：WiFi 是关着的，点一下打开；然后在列表里选你家的 WiFi，输入密码连上。列表里一个 WiFi 都没有的话，看看笔记本上有没有 WiFi 开关或者快捷键（键帽上画着信号，有的要和 Fn 一起按）。别的 WiFi 都有、就是没有你家的，把路由器拔掉电源，等 30 秒再插上，等两三分钟再连。
+    links: ["tool:settings.network"]
+  not-connected-cable:
+    status: advice
+    message:
+      zh-CN: 网线没有连通：电脑的网口没有检测到网线（可能没插好，也可能是网线或者路由器那头出了问题）。
+    fixer: user
+    next:
+      zh-CN: 把网线两头（电脑这头，和路由器或墙上网口那头）拔下来重新插紧，插好后网口旁边的小灯一般会亮或者闪。还不行，换一根网线，或者换路由器上的另一个网口试试。路由器的灯都不亮的话，把它拔掉电源，等 30 秒再插上。
+    links: ["tool:settings.network"]
+  not-connected:
+    status: advice
+    message:
+      zh-CN: 电脑没有连上任何网络：网线没有连通，WiFi 也没有连上。
+    fixer: user
+    next:
+      zh-CN: 用 WiFi 的，点任务栏右下角的网络图标，打开 WiFi，选你家的 WiFi 输入密码连上；笔记本上可能还有 WiFi 开关或者快捷键（键帽上画着信号，有的要和 Fn 一起按）。用网线的，把网线两头拔下来重新插紧，还不行就换一根网线，或者换路由器上的另一个网口。路由器的灯都不亮的话，把它拔掉电源，等 30 秒再插上。
+    links: ["tool:settings.network"]
+  no-address:
+    status: advice
+    message:
+      zh-CN: "「{adapter}」已经连上了，但电脑没有从路由器那里拿到网络地址（IP 地址），所以还上不了网。多半是路由器或光猫出了问题。"
+    fixer: user
+    next:
+      zh-CN: 把路由器和光猫都拔掉电源，等 30 秒再插上，等两三分钟、指示灯稳定下来以后再试，很多时候这样就好了。用 WiFi 的，确认连的是自己家的 WiFi。还不行的话，用手机连同一个 WiFi 试试：手机也上不了网，问题在路由器，请懂哥看看路由器的设置。如果你家是在电脑上拨号上网的（要双击「宽带连接」、输入宽带账号和密码的那种），出现这个结果是正常的，先拨号就行；拨号报错的话请联系运营商：电信 10000、移动 10086、联通 10010。
+    links: ["tool:settings.network"]
+  no-gateway:
+    status: advice
+    message:
+      zh-CN: "「{adapter}」拿到了网络地址，但没有拿到路由器（网关）的地址，只能访问身边的设备，上不了外网。"
+    fixer: user
+    next:
+      zh-CN: 先把路由器和光猫拔掉电源，等 30 秒再插上，等指示灯稳定以后再试。如果连的是打印机、摄像头、投影仪这类设备自己发出的 WiFi，上不了网是正常的，换回家里的 WiFi 就行。还不行的话，请懂哥看看这台电脑的 IP 设置和路由器的设置。
+    links: ["tool:settings.network"]
+  manual-address:
+    status: advice
+    message:
+      zh-CN: "「{adapter}」的 IP 地址是手动设置的（不是自动获取），但用这个设置连不上路由器。多半是这个设置和现在的网络对不上，比如电脑是从单位拿回家的，或者以前有人为别的网络设置过。"
+    fixer: helper
+    next:
+      zh-CN: 单位的电脑、地址是网管设置的，请找网管。不是的话，可以改回自动获取：Windows 11 打开「设置 → 网络和 Internet」，点正在用的「WLAN」或「以太网」（WiFi 还要再点连着的那个网络的「属性」），在「IP 分配」旁边点「编辑」，选「自动(DHCP)」保存；Windows 10 在「更改适配器选项」里右键网卡，选「属性」，双击「Internet 协议版本 4 (TCP/IPv4)」，选「自动获得 IP 地址」。拿不准就请懂哥帮忙。
+    links: ["tool:settings.network"]
+  gateway-unreachable:
+    status: advice
+    message:
+      zh-CN: "「{adapter}」连上了，也拿到了网络地址，但路由器没有回应，电脑和路由器之间不通。"
+    fixer: user
+    next:
+      zh-CN: 把路由器和光猫都拔掉电源，等 30 秒再插上，等两三分钟、指示灯稳定下来以后再试。用 WiFi 的，离路由器近一点，或者断开 WiFi 再重新连一次；用网线的，把网线重新插紧或者换一根。家里的手机连同一个路由器也上不了网的话，多半是路由器坏了或者设置乱了，请懂哥看看。
+    links: ["tool:settings.network"]
+  no-internet:
+    status: advice
+    message:
+      zh-CN: 电脑和路由器之间是通的，但连不上外面的互联网，网址也查不到。多半是宽带或光猫出了问题，不是这台电脑的问题。
+    fixer: isp
+    next:
+      zh-CN: 先把光猫和路由器都拔掉电源，等 30 秒再插上，等两三分钟、指示灯稳定下来以后再试；光猫上的「LOS」或「光信号」灯亮红色或者闪红色，说明光纤线路断了。再用手机连同一个 WiFi 试试：手机也上不了网，就打运营商的客服电话，报上宽带账号或装机地址，请他们查一下线路、看看是不是欠费了：电信 10000、移动 10086、联通 10010。手机能上、只有这台电脑不行的话，请懂哥看看这台电脑。连的是酒店、学校、商场的 WiFi 的，可能要先在网页上登录：打开浏览器随便访问一个网站，一般会跳出登录页面。连的是手机热点的，看看那台手机自己能不能上网、流量是不是用完了。
+  internet-unconfirmed:
+    status: unknown
+    message:
+      zh-CN: 电脑和路由器之间是通的，也能查到网址，但 Windows 自己的联网检测没有确认能上网，所以还说不准。
+    next:
+      zh-CN: 常见的原因有三个：代理软件、加速器留下的代理设置（小药箱也会检查）；酒店、学校、商场的 WiFi 要先在网页上登录（打开浏览器随便访问一个网站，看看会不会跳出登录页面）；宽带欠费了，运营商会把网页转到缴费提醒的页面。网页都能正常打开的话，不用管这一项。
+  ncsi-off:
+    status: unknown
+    message:
+      zh-CN: 电脑和路由器之间是通的，也能查到网址。Windows 自带的联网检测被关掉或者改过了（常见于各种「优化」软件），所以它说的「没有网络」不一定准，右下角可能一直显示「无 Internet」。
+    next:
+      zh-CN: 网页能正常打开的话，网络本身没问题，只是这个显示不准；不过 Office、应用商店这类软件也会跟着以为没联网。想恢复的话，请懂哥把注册表 HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet 里的 EnableActiveProbing 改回 1、ActiveWebProbeHost 改回 www.msftconnecttest.com，组策略「关闭 Windows 网络连接状态指示器活动测试」改回「未配置」（单位的电脑请找网管）。网页打不开的话，看看小药箱对代理设置的检查结果；酒店、学校的 WiFi 也可能要先在网页上登录。
+  dns-untested:
+    status: unknown
+    message:
+      zh-CN: 电脑和路由器之间是通的，但 Windows 自己的联网检测说连不上互联网；这台电脑上没能查 DNS，所以说不准问题出在宽带，还是出在这台电脑上。
+    next:
+      zh-CN: 用手机连同一个 WiFi 试试：手机也上不了网，多半是宽带或光猫的问题，先把光猫和路由器拔掉电源，等 30 秒再插上，还不行就打运营商的客服电话（电信 10000、移动 10086、联通 10010）。手机能上、只有这台电脑不行的话，看看小药箱对 DNS 和代理设置的检查结果。
+  dns-suspect:
+    status: unknown
+    message:
+      zh-CN: 电脑和路由器之间是通的，但查不到网址。这台电脑的 DNS 服务器是手动设置的（或者一个也没有），它用不了的时候也会这样，所以不一定是宽带的问题。
+    next:
+      zh-CN: 接着看「查网站地址（DNS）」这一项的结果。也可以用手机连同一个 WiFi 试试：手机能上网的话，问题多半就在这台电脑的 DNS 设置上。
+references:
+  - https://learn.microsoft.com/en-us/windows-server/networking/ncsi/ncsi-overview
+  - https://learn.microsoft.com/en-us/windows-server/networking/ncsi/ncsi-frequently-asked-questions
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/internet-explorer-edge-open-connect-corporate-public-network
+  - https://learn.microsoft.com/en-us/powershell/module/netconnection/get-netconnectionprofile
+  - https://learn.microsoft.com/en-us/windows/win32/api/netlistmgr/ne-netlistmgr-nlm_connectivity
+  - https://learn.microsoft.com/en-us/previous-versions/windows/desktop/legacy/hh968170(v=vs.85)
+  - https://learn.microsoft.com/en-us/powershell/module/netadapter/get-netadapter
+  - https://learn.microsoft.com/en-us/powershell/module/nettcpip/get-netroute
+  - https://learn.microsoft.com/en-us/powershell/module/nettcpip/get-netneighbor
+  - https://learn.microsoft.com/en-us/dotnet/api/system.net.networkinformation.ping
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/device-manager-error-messages
+  - https://learn.microsoft.com/en-us/archive/msdn-technet-forums/ba2971e4-3306-4bb2-ace3-91e29feca934
+  - https://support.microsoft.com/en-us/windows/fix-wi-fi-connection-issues-in-windows-9424a1f7-6a3b-65a6-4d78-7f07eee84d2c
