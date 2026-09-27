@@ -62,7 +62,7 @@ mod os {
     use medkit_core::platform::Platform;
     use medkit_core::platform::windows::{WindowsPlatform, ensure_secure_dir, program_data};
     use medkit_core::script::{HostConfig, PowerShellHost, ScriptManifest, ScriptRunner};
-    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS, GetLastError};
+    use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
     use windows_sys::Win32::System::LibraryLoader::{LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, SetDefaultDllDirectories};
     use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
     use windows_sys::Win32::System::Threading::CreateMutexW;
@@ -124,11 +124,7 @@ mod os {
         let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
         // SAFETY: 紧接在 CreateMutexW 之后读取
         let err = unsafe { GetLastError() };
-        if handle.is_null() {
-            // 另一个账户里已经开着一个时，这里会因为权限打不开它
-            return err != ERROR_ACCESS_DENIED;
-        }
-        err != ERROR_ALREADY_EXISTS
+        !handle.is_null() && err != ERROR_ALREADY_EXISTS
     }
 
     pub fn preflight() -> Result<(), String> {

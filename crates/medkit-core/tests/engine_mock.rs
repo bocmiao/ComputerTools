@@ -594,6 +594,20 @@ fn script_feature_passes_before_to_the_undo_script() {
 }
 
 #[test]
+fn reversible_script_without_before_is_not_reported_as_success() {
+    let w = world();
+    w.runner.returns("features/disk/hib-detect.ps1", json!({ "state": "not-applied" }));
+    w.runner.returns("features/disk/hib-reduce.ps1", json!({ "after": { "type": "reduced" } }));
+
+    let result = w.engine.feature_apply("disk.hibernation-reduce").unwrap();
+    assert!(!result.ok);
+    assert!(result.error.as_deref().unwrap().contains("没有返回修改前"));
+    let entry = &w.engine.journal_list().unwrap()[0].entries[0];
+    assert!(!entry.pending && !entry.can_undo);
+    assert!(w.engine.journal_undo(&entry.id, false).is_err());
+}
+
+#[test]
 fn irreversible_feature_cannot_be_undone() {
     let w = world();
     w.runner.returns("features/test/one-way-detect.ps1", json!({ "state": "not-applied" }));

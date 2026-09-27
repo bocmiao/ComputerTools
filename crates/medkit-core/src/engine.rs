@@ -893,7 +893,13 @@ impl Engine {
         };
         self.journal.append(&Record::Apply(rec.clone()))?;
         let outcome = self.runner.run(&run.script, &self.script_args(f, hive.as_deref()), SCRIPT_FEATURE_TIMEOUT);
-        let (ok, after, error) = match &outcome {
+        let (ok, after, error, left_changes) = match &outcome {
+            Ok(v) if f.reversible() && v.get("before").is_none_or(Value::is_null) => (
+                false,
+                None,
+                Some("脚本没有返回修改前的设置，无法保证恢复原状".to_owned()),
+                true,
+            ),
             Ok(v) => (
                 true,
                 Some(State::Script {
@@ -903,8 +909,9 @@ impl Engine {
                     }),
                 }),
                 None,
+                false,
             ),
-            Err(e) => (false, None, Some(e.to_string())),
+            Err(e) => (false, None, Some(e.to_string()), false),
         };
         let committed = self.journal.append(&Record::Commit(CommitRecord {
             v: RECORD_VERSION,
@@ -913,7 +920,7 @@ impl Engine {
             ok,
             after,
             error: error.clone(),
-            left_changes: false,
+            left_changes,
         }));
         if let Err(e) = committed {
             // 改了但记不下来：马上用撤销脚本按原值退回，宁可不改也不能留下没有记录的改动
@@ -925,7 +932,7 @@ impl Engine {
         }
         if !ok {
             // 脚本自己应该在出错时退回改了一半的东西；但超时被结束时它来不及，只能如实告诉用户
-            let message = "没有改成功。脚本在执行中途出错，可能已经改了一部分，建议重新检测一下这一项。".to_owned();
+            let message = "没能确认修改完整成功，可能已经改了一部分，请重新检测这一项。".to_owned();
             let mut r = self.result(f, false, vec![rec.id], message, notes);
             r.error = error;
             return Ok(r);
@@ -1169,9 +1176,15 @@ impl Engine {
             if self.catalog.feature(feature).is_none_or(|f| !f.reversible()))
     }
 
-    /// 脚本类修改的原状态是执行脚本返回的，记在 commit 里；程序在执行中途退出、没写 commit 的，没法自动恢复。
+    /// 脚本类修改的原状态是执行脚本返回的，没写进 commit 的就没法自动恢复。
     fn script_state_lost(entry: &Entry) -> bool {
-        matches!(entry.apply.target, TargetRef::Script { .. }) && entry.commit.is_none()
+        matches!(entry.apply.target, TargetRef::Script { .. })
+            && entry.commit.as_ref().is_none_or(|c| {
+                !matches!(
+                    &c.after,
+                    Some(State::Script { data }) if data.get("before").is_some_and(|v| !v.is_null())
+                )
+            })
     }
 
     fn can_undo(&self, entry: &Entry) -> bool {
