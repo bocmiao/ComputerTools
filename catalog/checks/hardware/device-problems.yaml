@@ -1,0 +1,113 @@
+# 设备管理器里有问题的设备（带黄色感叹号的），以及没装显卡驱动。脚本：scripts/checks/hardware/device-problems.ps1
+# 数据来源：Win32_PnPEntity 的 ConfigManagerErrorCode（设备管理器里显示的「代码 N」）、PNPClass（设备类别，
+# 为空时按 ClassGuid 对应）、Present（false 表示设备已经拔掉，只是留着记录）。查询时只让 WMI 返回问题代码不是 0 和 45 的设备，
+# 外加所有显卡（没几个），插过很多 U 盘、设备很多的电脑上也不会慢。
+# 问题代码的分组（依据微软的「Device Manager error messages」）：
+#   不算问题：45（设备没接着，拔掉的 U 盘、耳机留下的记录）、47（用户点了「安全删除」还没拔，是自己的操作）、
+#            53（留给内核调试器，是有意设置的）；Present 为 false 的也不算。
+#   没装驱动：1（没有配置，也就是没装驱动）、28（驱动没装）。显卡用的是 Windows 自带的「Microsoft 基本显示适配器」
+#            （服务名 BasicDisplay，或者名字里有 Basic Display / 基本显示）也算没装显卡驱动，虽然它的代码是 0。
+#   被禁用：22（在 Windows 里禁用）、29（在 BIOS 里关掉）。
+#   等重启：14（要重启）、21（正在移除）、25、26（还在设置）、46（正在关机）、54（正在重置）、
+#          55（锁屏时被内核 DMA 保护挡住）、56（还在做类别配置）。
+#   出错：其余所有代码（常见的有 10 无法启动、43 报告了问题被停用、31、39、52 等）。
+# 隐私：只列电脑本身硬件的名字。配对过的蓝牙设备和它们的服务、音频输入输出（「耳机 (小明的 AirPods)」）、手机和相机等
+# 便携设备（包括 U 盘的卷标）、打印队列、网络上发现的设备（打印机、电视、NAS），名字常常是用户自己起的，只计数
+# （peripheral_count），不列名字。按类别认：AudioEndpoint、WPD、PrintQueue，以及 Bluetooth 里除了电脑自己的蓝牙适配器
+# （接在 USB、PCI、ACPI、SD 上）和系统蓝牙组件（BTH\MS_…）以外的；或者按枚举器认：BTHENUM、BTHLE、BTHLEDEVICE、BTHHFENUM、
+# UMB、WSDPRINT、WPDBUSENUMROOT、SWD\MMDEVAPI、SWD\WPDBUSENUM、SWD\PRINTENUM、SWD\DAF…。电脑自己的蓝牙适配器的名字来自驱动
+# （如「Intel(R) Wireless Bluetooth(R)」），照常列出，它坏了也照常「建议处理」。蓝牙、手机这类设备的问题不算「建议处理」
+# （计划书原则 7）：它们没驱动，几乎都是配对过的手机、耳机上 Windows 没有驱动的功能（「Bluetooth 外围设备」，代码 28；
+# Windows 自带支持哪些蓝牙功能见 references）。设备 ID、硬件 ID、序列号只在脚本里用来判断，一律不输出。
+# 网卡：PCI 大类 02（兼容 ID 为 PCI\CC_02xx）、USB 网卡（CDC NCM、ECM、MBIM、RNDIS）、类别 Net，或者名字里有 Wi-Fi、WLAN、
+# 802.11、Ethernet、网卡这类字样（USB 无线网卡常常只有名字）；而且要接在 PCI、USB、SD 上，VPN、加速器、虚拟机的虚拟网卡
+# （ROOT、SWD 枚举的）不算；名字里有 Bluetooth、蓝牙的不算。显卡：PCI 大类 03 或类别 Display，接在 PCI 或 ACPI 上。
+# 结果（按这个顺序判断，先满足哪个就是哪个）：
+#   missing-network-driver：网卡没驱动（特别写明：没网就没法在这台电脑上下载驱动）；missing-display-driver：显卡没驱动；
+#   device-error：有设备出错（排在「别的设备没驱动」前面：显卡报代码 43 比芯片组的小部件没驱动要紧）；
+#   missing-driver：别的设备没驱动；needs-restart：有设备等重启；
+#   disabled：只有被禁用的设备（状态 ok，不算问题）；peripheral：只有蓝牙、手机这类设备显示有问题（状态 ok）；ok：都正常。
+# 事实：missing_count（含网卡、显卡）、missing_network_count、missing_display_count、error_count、restart_count、
+#       disabled_count、peripheral_count、classes（涉及的设备类别，如「Display, Net, Unknown」，Unknown 就是「其他设备」）；
+#       对应的设备有的时候才有 missing_names、missing_network_names、missing_display_names、error_names、restart_names、
+#       disabled_names（每组最多 3 个不重复的名字，一个名字都读不到时写 Unknown device）和 error_codes（出错设备的代码，从小到大）。
+# 待真机验证：刚重装完的电脑上会出现哪些代码和名字；拔掉的设备是不是 Present 为 false；「Bluetooth 外围设备」的枚举器和代码；
+# 健康的电脑上有没有一直带问题代码的隐藏设备；设备很多的电脑上查询要多久，见 docs/real-machine-checklist.md。
+id: hardware.device-problems
+schema_version: 1
+title: { zh-CN: 设备和驱动 }
+description:
+  zh-CN: 看看设备管理器里有没有没装驱动、出了问题的设备。刚重装完系统时，网卡、显卡常常还没有驱动。
+category: hardware
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/hardware/device-problems.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 所有设备都工作正常，驱动都装好了。
+  missing-network-driver:
+    status: advice
+    message:
+      zh-CN: "网卡没装驱动（{missing_network_names}），现在用不了，电脑可能因此上不了网。刚重装完系统时很常见。"
+    fixer: helper
+    next:
+      zh-CN: "网卡没驱动时，这台电脑往往上不了网，也就没法自己下载驱动。可以用手机或另一台电脑，到电脑品牌的官网（组装机到主板品牌的官网）按型号下载网卡驱动（无线网卡常写作 WLAN 或 Wi-Fi，有线网卡写作 LAN 或以太网），再用 U 盘或数据线拷过来安装；型号可以看笔记本底部的标签，或者点下面的「电脑配置」。也可以先让电脑用别的办法连上网：插上网线（有线网卡能用的话），或者用数据线连上安卓手机、打开手机的 USB 网络共享（一般在「个人热点」设置里），然后打开「Windows 更新」检查更新，再看看「可选更新」里有没有网卡驱动（Windows 11 在「高级选项」里，Windows 10 点「查看可选更新」）。驱动只从品牌官网和 Windows 更新装，别用来路不明的「万能驱动」。拿不准的话，请懂哥帮忙。"
+    links: ["tool:system.hardware-info", "tool:open.device-manager", "tool:settings.windows-update"]
+  missing-display-driver:
+    status: advice
+    message:
+      zh-CN: "显卡驱动没装好（{missing_display_names}），画面可能不够清楚、不流畅，看视频、玩游戏会卡，有时还调不了分辨率。刚重装完系统时很常见。"
+    fixer: system
+    next:
+      zh-CN: 打开「Windows 更新」（点下面的按钮）检查更新，显卡驱动一般会自动装上；没有的话，再看看「可选更新」（Windows 11 在「高级选项」里，Windows 10 点「查看可选更新」）。也可以用电脑品牌自带的管家软件（比如联想电脑管家、华为电脑管家）更新驱动，或者到品牌官网按型号下载；组装机到显卡厂商（NVIDIA、AMD、Intel）的官网下载。装完重启一下电脑。特别老的电脑可能已经没有适合现在系统的显卡驱动，装不上也不影响上网、办公。
+    links: ["tool:settings.windows-update", "tool:system.hardware-info", "tool:open.device-manager"]
+  device-error:
+    status: advice
+    message:
+      zh-CN: "有 {error_count} 个设备出了问题，不能正常工作：{error_names}（设备管理器里显示代码 {error_codes}）。"
+    fixer: helper
+    next:
+      zh-CN: 先重启一次电脑。插在 USB 口上的设备（比如 U 盘、手机、「未知 USB 设备」），拔下来换个 USB 口、换根线再插。还不行的话，打开「Windows 更新」检查更新，看看「可选更新」里有没有它的驱动，或者到电脑品牌官网按型号重新下载驱动安装（出问题的是网卡、电脑上不了网的，用手机或另一台电脑下载，再拷过来）；名字里带 VPN、加速器、Virtual（虚拟）这类字样的，重新安装对应的软件。在设备管理器里，带黄色感叹号的就是这些设备（找不到的话，点「查看 → 显示隐藏的设备」）。一直不好的，可能是硬件坏了，请懂哥或售后看看。
+    links: ["tool:open.device-manager", "tool:settings.windows-update"]
+  missing-driver:
+    status: advice
+    message:
+      zh-CN: "有 {missing_count} 个设备没装驱动：{missing_names}。装上驱动才能正常工作，刚重装完系统时很常见。"
+    fixer: system
+    next:
+      zh-CN: 打开「Windows 更新」（点下面的按钮）检查更新，再看看「可选更新」里有没有驱动（Windows 11 在「高级选项」里，Windows 10 点「查看可选更新」），勾上安装，装完重启电脑。还缺的，用电脑品牌自带的管家软件（比如联想电脑管家、华为电脑管家）更新，或者到品牌官网按型号下载（组装机到主板品牌的官网）。名字里带 VPN、加速器、Virtual（虚拟）这类字样的，是某个软件装的，重新安装那个软件就好。实在找不到驱动、用起来又没什么影响的，可以不管。拿不准的话，请懂哥帮忙。
+    links: ["tool:settings.windows-update", "tool:system.hardware-info", "tool:open.device-manager"]
+  needs-restart:
+    status: advice
+    message:
+      zh-CN: "有 {restart_count} 个设备还没准备好，重启电脑后才能正常用：{restart_names}。刚装了驱动或更新时常见。"
+    fixer: user
+    next:
+      zh-CN: 先保存好手头的文件，重启一下电脑；插在外面的设备也可以拔下来重新插一次。重启以后还是这样，请懂哥看看。
+  disabled:
+    status: ok
+    message:
+      zh-CN: "有 {disabled_count} 个设备被禁用了：{disabled_names}。一般是有人有意关掉的，不影响别的设备。"
+    next:
+      zh-CN: 如果不是你关的、又想用它：点下面的按钮打开设备管理器，在它上面点右键，选「启用设备」。在设备管理器里启用不了的，可能是在 BIOS 里关掉的，请懂哥帮忙。
+    links: ["tool:open.device-manager"]
+  peripheral:
+    status: ok
+    message:
+      zh-CN: "蓝牙耳机、手机、网络打印机这类连接过的设备里，有 {peripheral_count} 项显示有问题，多半是这些设备上 Windows 用不上的功能，一般不影响使用；别的设备都工作正常。这类设备的名字常常是自己起的，所以这里不列出来。"
+    next:
+      zh-CN: 如果某个蓝牙耳机、音箱、手机或打印机确实连不上、用不了，可以在「设置」的「蓝牙和其他设备」里把它删掉，再重新配对或添加一次。
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/device-manager-error-messages
+  - https://support.microsoft.com/en-us/topic/error-codes-in-device-manager-in-windows-524e9e89-4dee-8883-0afa-6bca0456324e
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-pnpentity
+  - https://support.microsoft.com/en-us/windows/microsoft-basic-display-adapter-in-windows-fd1c777c-d4d5-f05a-edb1-0dc7031fd677
+  - https://support.microsoft.com/en-us/windows/automatically-get-recommended-and-updated-hardware-drivers-0549a8d9-4842-8acb-75fa-a6faadb62507
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/system-defined-device-setup-classes-available-to-vendors
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/system-defined-device-setup-classes-reserved-for-system-use
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/identifiers-for-pci-devices
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/supported-usb-classes
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/bluetooth/general-bluetooth-support-in-windows

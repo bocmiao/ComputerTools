@@ -22,6 +22,7 @@ checks:
   - security.secureboot-ca2023
   - security.tpm
   # 硬件
+  - hardware.device-problems
   - hardware.system-disk-type
   - hardware.memory-size
   - hardware.battery-health
