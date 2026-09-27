@@ -35,6 +35,9 @@ const COMMANDS: &[&str] = &[
     "lockers_pick_files",
     "lockers_pick_folder",
     "lockers_refresh",
+    "space_pick_folder",
+    "space_rescan",
+    "space_reveal",
 ];
 
 fn main() {

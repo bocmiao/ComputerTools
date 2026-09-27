@@ -730,6 +730,42 @@ pub fn open_folder(path: &Path) -> PResult<()> {
         .map_err(|code| PlatformError::Other(format!("资源管理器没有响应（错误代码 {code}），请自己打开这个文件夹")))
 }
 
+/// 在资源管理器里打开文件所在的文件夹，并选中这个文件（找大文件、重复文件时用）。只是显示，不打开文件本身，
+/// 由登录用户的资源管理器打开。
+pub fn reveal_file(path: &Path) -> PResult<()> {
+    use windows_sys::Win32::System::Com::{
+        COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
+    };
+    use windows_sys::Win32::UI::Shell::{ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems};
+
+    if !path.is_file() {
+        return Err(PlatformError::NotFound(path.display().to_string()));
+    }
+    let wide_path = wide(path.as_os_str());
+    // SAFETY: 参数都是合法值；成功（含 S_FALSE）时要配对调用 CoUninitialize
+    let com = unsafe { CoInitializeEx(null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32) };
+    // SAFETY: wide_path 以 NUL 结尾；返回的 ITEMIDLIST 用完要 ILFree
+    let pidl = unsafe { ILCreateFromPathW(wide_path.as_ptr()) };
+    let hr = if pidl.is_null() {
+        -1
+    } else {
+        // cidl 为 0：pidl 就是要选中的那一项，打开它所在的文件夹并选中它
+        // SAFETY: pidl 有效；不传子项
+        let hr = unsafe { SHOpenFolderAndSelectItems(pidl, 0, null(), 0) };
+        // SAFETY: pidl 来自 ILCreateFromPathW，只释放一次
+        unsafe { ILFree(pidl) };
+        hr
+    };
+    if com >= 0 {
+        // SAFETY: 和上面成功的 CoInitializeEx 配对
+        unsafe { CoUninitialize() };
+    }
+    if hr < 0 {
+        return Err(PlatformError::Other(format!("资源管理器没有响应（错误代码 {hr:#010x}），请自己打开这个文件夹")));
+    }
+    Ok(())
+}
+
 /// ShellExecuteExW 的 open；`class` 给了就按这个文件类型打开，不看目标本身是什么。失败时返回 GetLastError 的代码。
 fn shell_open(target: &OsStr, class: Option<&str>) -> Result<(), u32> {
     use windows_sys::Win32::Foundation::GetLastError;

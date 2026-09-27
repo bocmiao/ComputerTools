@@ -8,6 +8,7 @@ pub mod commands;
 pub mod images;
 pub mod rename;
 pub mod setup;
+pub mod space;
 
 /// 注册命令处理器。`run()` 和集成测试都用它，保证测的和真跑的是同一套。
 #[macro_export]
@@ -45,6 +46,9 @@ macro_rules! command_handler {
             $crate::commands::lockers_pick_files,
             $crate::commands::lockers_pick_folder,
             $crate::commands::lockers_refresh,
+            $crate::commands::space_pick_folder,
+            $crate::commands::space_rescan,
+            $crate::commands::space_reveal,
         ]
     };
 }

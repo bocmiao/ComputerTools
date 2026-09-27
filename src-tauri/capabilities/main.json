@@ -35,6 +35,9 @@
     "allow-awake-set",
     "allow-lockers-pick-files",
     "allow-lockers-pick-folder",
-    "allow-lockers-refresh"
+    "allow-lockers-refresh",
+    "allow-space-pick-folder",
+    "allow-space-rescan",
+    "allow-space-reveal"
   ]
 }

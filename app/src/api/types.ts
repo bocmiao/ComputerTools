@@ -98,6 +98,39 @@ export interface ContextMenuItem {
 /** 别让电脑自己睡着：只在小药箱开着时有效 */
 export interface AwakeStatus { on: boolean; display: boolean }
 
+// 找大文件和重复文件（路径都是相对选的文件夹的）
+export interface SpaceFile {
+  /** 「在资源管理器中显示」时传回去 */
+  id: number
+  name: string
+  /** 所在的文件夹，相对选的文件夹；就在选的文件夹里时是空的 */
+  folder: string
+  size: number
+  /** 修改时间（毫秒） */
+  modified: number | null
+  /** Windows、程序自己的文件，别手动删 */
+  protected: boolean
+}
+export interface DuplicateGroup { size: number; count: number; files: SpaceFile[] }
+export interface SpaceReport {
+  folder: string
+  files: number
+  totalBytes: number
+  /** 没有权限打开的子文件夹 */
+  skipped: number
+  /** 没算的「仅在线」网盘文件 */
+  onlineOnly: number
+  /** 文件太多或者时间到了，没数完 */
+  truncated: boolean
+  largest: SpaceFile[]
+  duplicates: DuplicateGroup[]
+  duplicateGroups: number
+  /** 每组只留一个能腾出多少字节 */
+  wastedBytes: number
+  /** 可能重复的都比较完了 */
+  comparedAll: boolean
+}
+
 // 文件删不掉：是谁占着（只有文件名，查文件夹时是相对这个文件夹的路径，没有完整路径）
 export type FileUserKind = 'window' | 'console' | 'explorer' | 'other' | 'service' | 'critical'
 export interface FileLockUser {

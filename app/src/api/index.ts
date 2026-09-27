@@ -12,6 +12,7 @@ import type {
   Preview,
   RenamePreview,
   RenameRules,
+  SpaceReport,
   StartupItem,
   SymptomDetail,
   SystemInfo,
@@ -210,4 +211,19 @@ export function lockersPickFolder(): Promise<FileLockReport | null> {
 /** 关掉程序以后，再查一次上次选的文件或文件夹；还没选过返回 null */
 export function lockersRefresh(): Promise<FileLockReport | null> {
   return call('lockers_refresh', {})
+}
+
+/** 找大文件和重复文件：用系统的选择框选文件夹，数一遍（只读）；取消返回 null */
+export function spacePickFolder(): Promise<SpaceReport | null> {
+  return call('space_pick_folder', {})
+}
+
+/** 把上次选的文件夹再数一遍；还没选过返回 null */
+export function spaceRescan(): Promise<SpaceReport | null> {
+  return call('space_rescan', {})
+}
+
+/** 在资源管理器里显示结果里的这个文件（选中它，不打开） */
+export function spaceReveal(id: number): Promise<null> {
+  return call('space_reveal', { id })
 }

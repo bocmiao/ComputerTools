@@ -14,6 +14,7 @@ use crate::awake::AwakeStatus;
 use crate::images;
 use crate::rename::{self, RenamePreview, RenameRules};
 use crate::setup::AppState;
+use crate::space::{self, SpaceReport};
 
 type CmdResult<T> = Result<T, String>;
 
@@ -300,5 +301,65 @@ pub async fn lockers_refresh(state: State<'_, AppState>) -> CmdResult<Option<Fil
     match target {
         Some(target) => lockers_check(state, target).await,
         None => Ok(None),
+    }
+}
+
+/// 找大文件和重复文件：数一遍这个文件夹，记下结果里列出的文件（「在资源管理器中显示」按编号找）。
+async fn space_run(state: State<'_, AppState>, root: std::path::PathBuf) -> CmdResult<SpaceReport> {
+    let slot = state.space.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let (report, shown) = space::scan(&root);
+        let mut s = slot.lock().map_err(|_| "状态异常。")?;
+        s.root = Some(root);
+        s.shown = shown;
+        Ok(report)
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// 找大文件和重复文件：用系统的选择框选一个文件夹，数一遍。只读，不删不改。没选返回 null。
+#[tauri::command]
+pub async fn space_pick_folder(state: State<'_, AppState>) -> CmdResult<Option<SpaceReport>> {
+    #[cfg(windows)]
+    let folder = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new().set_title("选择要找大文件、重复文件的文件夹").pick_folder()
+    })
+    .await
+    .map_err(|e| format!("打开文件夹选择器失败：{e}"))?;
+    #[cfg(not(windows))]
+    let folder: Option<std::path::PathBuf> = None;
+    match folder {
+        Some(folder) => space_run(state, folder).await.map(Some),
+        None => Ok(None),
+    }
+}
+
+/// 删掉一些文件以后，把上次选的文件夹再数一遍。还没选过返回 null。
+#[tauri::command]
+pub async fn space_rescan(state: State<'_, AppState>) -> CmdResult<Option<SpaceReport>> {
+    let root = state.space.lock().map_err(|_| "状态异常。")?.root.clone();
+    match root {
+        Some(root) => space_run(state, root).await.map(Some),
+        None => Ok(None),
+    }
+}
+
+/// 在资源管理器里打开这个文件所在的文件夹并选中它（只是显示，不打开文件）。只接受最近一次结果里的编号。
+#[tauri::command]
+pub async fn space_reveal(state: State<'_, AppState>, id: usize) -> CmdResult<()> {
+    let path = state.space.lock().map_err(|_| "状态异常。")?.shown.get(id).cloned();
+    let path = path.ok_or("这个文件不在刚才的结果里，请重新查一遍。")?;
+    #[cfg(windows)]
+    {
+        tauri::async_runtime::spawn_blocking(move || medkit_core::platform::windows::reveal_file(&path))
+            .await
+            .map_err(|e| format!("内部错误：{e}"))?
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Err("只有在 Windows 上才能打开资源管理器。".into())
     }
 }

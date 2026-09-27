@@ -327,3 +327,48 @@ fn locker_commands_pass_the_permission_check() {
     assert_eq!(v["checked"], json!(1));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 「找大文件和重复文件」的命令也要登记进权限清单；「显示」只接受结果里的编号。
+#[test]
+fn space_commands_pass_the_permission_check() {
+    use tauri::Manager;
+
+    let win = app();
+    // mock 运行时里没有选择框：返回 null；还没选过，「再查一遍」也返回 null
+    assert!(ok(&win, "space_pick_folder", json!({})).is_null());
+    assert!(ok(&win, "space_rescan", json!({})).is_null());
+    let e = invoke(&win, "space_reveal", json!({ "id": 0 })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("不在刚才的结果里")), "{e}");
+
+    // 选好以后（这里直接改状态，真程序里只能由系统的选择框来选）
+    let dir = std::env::temp_dir().join(format!("medkit-space-ipc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("子文件夹")).unwrap();
+    std::fs::write(dir.join("子文件夹").join("大文件.bin"), vec![1u8; 2048]).unwrap();
+    win.state::<medkit_lib::setup::AppState>().space.lock().unwrap().root = Some(dir.clone());
+    let v = ok(&win, "space_rescan", json!({}));
+    has_keys(
+        &v,
+        &[
+            "folder",
+            "files",
+            "totalBytes",
+            "skipped",
+            "onlineOnly",
+            "truncated",
+            "largest",
+            "duplicates",
+            "duplicateGroups",
+            "wastedBytes",
+            "comparedAll",
+        ],
+    );
+    assert_eq!(v["files"], json!(1));
+    has_keys(&v["largest"][0], &["id", "name", "folder", "size", "modified", "protected"]);
+    assert_eq!(v["largest"][0]["name"], json!("大文件.bin"));
+    assert_eq!(v["largest"][0]["folder"], json!("子文件夹"));
+    // 编号在结果里：不是「不在结果里」（Linux 上没有资源管理器）
+    let e = invoke(&win, "space_reveal", json!({ "id": 0 })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| !m.contains("不在刚才的结果里")), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

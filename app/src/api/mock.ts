@@ -34,6 +34,7 @@ import type {
   FeatureSummary,
   FileLockReport,
   FileLockUser,
+  SpaceReport,
   JournalEntryView,
   JournalSession,
   Preview,
@@ -2259,6 +2260,53 @@ const handlers: Handlers = {
     demoLockClosed = true
     return demoLockReport()
   },
+  space_pick_folder: () => {
+    demoSpace = true
+    return demoSpaceReport()
+  },
+  space_rescan: () => (demoSpace ? demoSpaceReport() : null),
+  space_reveal: ({ id }) => {
+    if (!demoSpace || id < 0 || id >= DEMO_SPACE_IDS) throw '这个文件不在刚才的结果里，请重新查一遍。'
+    return null
+  },
+}
+
+// ── 找大文件和重复文件（演示）──
+let demoSpace = false
+const DEMO_SPACE_IDS = 8
+const GB = 1024 * 1024 * 1024
+const MB = 1024 * 1024
+
+function demoSpaceReport(): SpaceReport {
+  const day = (d: string) => new Date(`${d}T10:00:00`).getTime()
+  const f = (id: number, name: string, folder: string, size: number, modified: string, isProtected = false) => ({
+    id, name, folder, size, modified: day(modified), protected: isProtected,
+  })
+  const iso = f(0, 'Win11_24H2_Chinese_Simplified_x64.iso', 'Users\\演示\\Downloads', 5.4 * GB, '2025-03-02')
+  const dump = f(1, 'MEMORY.DMP', 'Windows', 3.1 * GB, '2026-08-19', true)
+  const video = f(2, '课程录屏.mp4', 'Users\\演示\\Videos', 1.3 * GB, '2026-05-11')
+  const videoCopy = f(3, '课程录屏.mp4', 'Users\\演示\\Desktop\\备份', 1.3 * GB, '2026-05-11')
+  const installer = f(4, 'WeChatSetup.exe', 'Users\\演示\\Downloads', 260 * MB, '2026-07-30')
+  const photoSize = 4.8 * MB
+  const photo = [5, 6, 7].map((id, i) =>
+    f(id, i ? `IMG_2041 (${i}).JPG` : 'IMG_2041.JPG', i === 2 ? 'Users\\演示\\Pictures\\导入' : 'Users\\演示\\Pictures', photoSize, '2026-06-01'),
+  )
+  return {
+    folder: 'C:\\（演示）',
+    files: 128_406,
+    totalBytes: 86.4 * GB,
+    skipped: 3,
+    onlineOnly: 214,
+    truncated: false,
+    largest: [iso, dump, video, videoCopy, installer],
+    duplicates: [
+      { size: video.size, count: 2, files: [video, videoCopy] },
+      { size: photoSize, count: 3, files: photo },
+    ],
+    duplicateGroups: 2,
+    wastedBytes: video.size + 2 * photoSize,
+    comparedAll: true,
+  }
 }
 
 // ── 文件删不掉：是谁占着（演示）──

@@ -317,7 +317,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 
 ## 9. 界面与后端的接口（Tauri 命令）
 
-前端只能调用下面这些命令。系统诊断与修复命令只接受 ID，不接受命令字符串或路径。批量重命名、图片批量处理的目录，「文件删不掉」要查的文件，由后端的系统选择器取得，前端只能传改名规则（查找替换、序号、前后缀、扩展名）或者文件名和图片内容，拿不到、也传不了路径。每个命令都要登记在 `src-tauri/build.rs` 的 `COMMANDS` 和 `capabilities/main.json` 里，否则界面调不动（接线测试会查）。
+前端只能调用下面这些命令。系统诊断与修复命令只接受 ID，不接受命令字符串或路径。批量重命名、图片批量处理、找大文件的目录，「文件删不掉」要查的文件，由后端的系统选择器取得，前端只能传改名规则（查找替换、序号、前后缀、扩展名）或者文件名和图片内容，拿不到、也传不了路径。每个命令都要登记在 `src-tauri/build.rs` 的 `COMMANDS` 和 `capabilities/main.json` 里，否则界面调不动（接线测试会查）。
 
 | 命令 | 参数 | 返回 |
 |---|---|---|
@@ -352,6 +352,9 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `lockers_pick_files` | — | `FileLockReport \| null`（系统的选择框选文件，可以多选；查哪些程序在用它们，取消时 `null`） |
 | `lockers_pick_folder` | — | `FileLockReport \| null`（选文件夹，查在用里面文件的程序） |
 | `lockers_refresh` | — | `FileLockReport \| null`（再查一次上次选的；还没选过时 `null`） |
+| `space_pick_folder` | — | `SpaceReport \| null`（系统的选择框选文件夹，找最大的文件和内容完全一样的文件；只读） |
+| `space_rescan` | — | `SpaceReport \| null`（把上次选的文件夹再数一遍） |
+| `space_reveal` | `id` | `null`（在资源管理器里打开所在文件夹并选中结果里的这个文件；只接受最近一次结果里的编号） |
 
 图片批量处理（`app/src/components/BatchImageTool.vue`、`src-tauri/src/images.rs`）：解码、缩放、裁剪、编码都在界面里用 WebView2 自带的解码器和画布做（不加新的依赖，能打开 JPG、PNG、WebP、GIF、BMP、ICO、AVIF，打不开 HEIC 和 TIFF；只能存成 JPG、PNG、WebP）；后端只负责把结果存进用户选的文件夹。原图从不改动。重新编码不带原图的拍摄信息；「压完反而更大时存原图」的那几张原样复制。
 
@@ -376,6 +379,13 @@ checks: [disk.system-free-space, system.pending-reboot]
 - **范围**：选了几个文件时一个一个查（最多 100 个），说得出哪个程序在用哪个文件；选了文件夹时把里面的文件（最多 5000 个，不跟着符号链接和目录联接走到外面）一起查一次，有人在用、文件又不超过 100 个时再一个一个查出是哪几个。
 - **说法**：按重启管理器报的类型（有窗口的程序、命令行、资源管理器、后台程序、系统服务、关键进程）说怎么让它放手（`app/src/utils/fileLocks.ts`）；资源管理器在用时直接给「重启资源管理器」。查不出来的情况（文件夹本身被占着，比如命令行窗口停在里面——重启管理器只收文件；没有权限）在没查到时一并说明。
 - **隐私**：要查的文件只能在后端的系统选择框里选，界面传不了路径；结果里只有文件名（文件夹里的用相对路径）和程序的文件名，没有完整路径（里面常有用户名），也不进诊断报告。
+
+找大文件和重复文件（`src-tauri/src/space.rs`、`app/src/components/SpaceFinder.vue`）：
+
+- **只读**：不删、不改、不移动文件。要删的话，点「显示」（SHOpenFolderAndSelectItems：打开所在的文件夹并选中它，不打开文件），用户自己在资源管理器里删，删掉的先进回收站。
+- **数**：不跟着符号链接、目录联接走；「仅在线」的网盘文件（属性 Offline、RecallOnOpen、RecallOnDataAccess）不占本机空间，读它还会从网上下载，不算。最多数 60 秒、50 万个文件；列出最大的 50 个。
+- **重复**：只比 1 MB 以上的；大小一样 → 开头 64 KB 一样 → 全部内容逐字节比较，完全一样才算（不靠哈希猜，也不用加依赖）。大的先比，最多比 60 秒。Windows 文件夹、Program Files、ProgramData 里的和带「系统」属性的文件标成「系统或程序的文件，别手动删」，不参与找重复（系统文件夹里大量硬链接，看着一样，删了也腾不出地方）。
+- **路径**：文件夹只能在后端的系统选择框里选；界面拿到的是相对这个文件夹的路径，「显示」只传结果里的编号。结果不进诊断报告。
 
 TypeScript 类型如下（字段名是 camelCase，所有文本已经渲染成中文）：
 
