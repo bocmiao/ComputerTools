@@ -231,6 +231,14 @@ fn update_lock() -> MutexGuard<'static, ()> {
     UPDATE_SERVICES.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// 往返测试（里面有 network.hosts-cleanup）和 hosts_cleanup_removes_only_flagged_lines 都改 hosts 文件：错开，
+/// 免得一个测试加的记录被另一个的修复删掉
+static HOSTS_FILE: Mutex<()> = Mutex::new(());
+
+fn hosts_lock() -> MutexGuard<'static, ()> {
+    HOSTS_FILE.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[test]
 fn every_check_runs_cleanly_on_windows_powershell() {
     let _update = update_lock();
@@ -322,18 +330,15 @@ fn restore(p: &WindowsPlatform, saved: &[Saved]) {
     }
 }
 
-/// 这些修复有专门的测试（往返测试的通用做法在 CI 机器上不适用），通用的往返测试跳过它们。
-/// network.hosts-cleanup：CI 机器上的 hosts 文件可能会被别的程序改回去，见 hosts_cleanup_removes_only_flagged_lines。
-const SEPARATE_TESTS: &[&str] = &["network.hosts-cleanup"];
-
 #[test]
 #[ignore = "会临时改动本机设置（结束时恢复）；需要管理员权限"]
 fn every_feature_breaks_fixes_and_undoes() {
+    let _hosts = hosts_lock();
     let dir = tempfile::tempdir().unwrap();
     let (engine, bundle, platform) = real_engine(dir.path());
     let mut failures = Vec::new();
     for f in &bundle.catalog.features {
-        if BREAK_IN_TESTS.contains(&f.id.as_str()) || SEPARATE_TESTS.contains(&f.id.as_str()) {
+        if BREAK_IN_TESTS.contains(&f.id.as_str()) {
             eprintln!("跳过 {}：另有专门的测试", f.id);
             continue;
         }
@@ -835,13 +840,13 @@ fn file_lockers_find_the_process_holding_a_file() {
     assert!(after.users.iter().all(|u| u.pid != pid), "进程结束以后不该再查到它：{after:?}");
 }
 
-/// 删掉 hosts 里有问题的记录：真的往 hosts 文件末尾加一行屏蔽常用网站的记录，执行修复，核对只删了这一行、
-/// 文件其余部分一个字节都没变；撤销以后这一行回来。结束时（包括断言失败时）把 hosts 恢复原样。
-/// CI 机器上的 hosts 文件可能被别的程序（安全软件、管理 hosts 的代理程序）改回去：加上的那一行几秒内
-/// 没了，就只报告看到的情况，不算失败（修复本身的逻辑在 scripts 的模拟测试里覆盖）。
+/// 删掉 hosts 里有问题的记录：真的往 hosts 文件末尾加一行屏蔽常用网站的记录，检测要认出来；执行修复，
+/// 核对只删了这一行、文件其余部分一个字节都没变；撤销以后这一行回来。结束时（包括断言失败时）把 hosts
+/// 连同只读属性恢复原样。（往返测试只看检测结果，这里还逐字节核对文件。）
 #[test]
 #[ignore = "会临时改动 hosts 文件（结束时恢复）；需要管理员权限"]
 fn hosts_cleanup_removes_only_flagged_lines() {
+    let _hosts = hosts_lock();
     let hosts = PathBuf::from(std::env::var("SystemRoot").unwrap()).join(r"System32\drivers\etc\hosts");
     let original = std::fs::read(&hosts).unwrap_or_default();
     // 只读的 hosts 先去掉只读，结束时连同只读一起恢复
@@ -872,20 +877,6 @@ fn hosts_cleanup_removes_only_flagged_lines() {
     }
     broken.extend_from_slice(line);
     std::fs::write(&hosts, &broken).unwrap();
-    // 看看有没有别的程序把它改回去
-    for i in 0..20 {
-        std::thread::sleep(Duration::from_millis(500));
-        let now = std::fs::read(&hosts).unwrap_or_default();
-        if now != broken {
-            eprintln!(
-                "::notice::这台 CI 机器上 hosts 文件改完 {} 毫秒以后被别的程序改掉了（现在 {} 字节），测不了修复：\n{}",
-                (i + 1) * 500,
-                now.len(),
-                String::from_utf8_lossy(&now)
-            );
-            return;
-        }
-    }
 
     let dir = tempfile::tempdir().unwrap();
     let (engine, _bundle, _platform) = real_engine(dir.path());

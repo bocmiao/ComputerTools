@@ -238,15 +238,17 @@ $file = Read-HostsText $location.Path
 $entries = Get-HostsEntries @($file.Text.Split([char]10))
 $flagged = @($entries.Flagged)
 
+# The result is unrolled on return: call it inside @() (one PSCustomObject has no
+# .Count in Windows PowerShell 5.1).
 function Select-Flagged {
     param([string]$Group, [string]$Kind)
     return @($flagged | Where-Object { ($_.Group -eq $Group) -and (($Kind.Length -eq 0) -or ($_.Kind -eq $Kind)) })
 }
 
-$security = Select-Flagged 'security' ''
+$security = @(Select-Flagged 'security' '')
 $redirects = @($flagged | Where-Object { ($_.Group -ne 'security') -and ($_.Kind -eq 'redirects') })
-$microsoft = Select-Flagged 'microsoft' 'blocks'
-$common = Select-Flagged 'common' 'blocks'
+$microsoft = @(Select-Flagged 'microsoft' 'blocks')
+$common = @(Select-Flagged 'common' 'blocks')
 
 $result = 'default'
 $behind = @()
