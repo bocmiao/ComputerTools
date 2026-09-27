@@ -1,0 +1,126 @@
+# 查看 BitLocker 恢复密钥（info）。脚本：scripts/tools/security/bitlocker-keys.ps1
+# 计划书 4.6 第 1 步「重装前备份」的第一项：让用户在出事之前看到并抄下 48 位恢复密钥。
+# 只读：不添加、不删除、不备份密钥，不改任何设置，不写文件，不联网。
+# 数据来源：root\cimv2\Security\MicrosoftVolumeEncryption 的 Win32_EncryptableVolume（不解析 manage-bde 的中文或英文输出，
+# 也不用家庭版上可能没有的 Get-BitLockerVolume）。和体检的 security.bitlocker-status 口径一致：
+#   只看固定磁盘（VolumeType 2 的 U 盘、移动硬盘跳过）；
+#   保护状态（GetProtectionStatus）和加密状态（GetConversionStatus）都是 0 的分区不算，其余都算开了 BitLocker；
+#   方法调用失败时用实例的 ProtectionStatus、ConversionStatus 属性；
+#   保护关着、一个密钥保护器都没有（GetKeyProtectors 类型 0 返回空或 FVE_E_NOT_ACTIVATED）= 设备加密「等待激活」，
+#   还没有恢复密钥，也不需要。
+# 和体检不同：没有盘符的分区也列出来（表名「没有盘符的分区」）。
+# 每个开了 BitLocker 的分区一张表：系统盘（VolumeType 0）排第一，其余按盘符，表名接上盘符。行：
+#   保护状态：等待激活 > 锁着（GetLockStatus 为 1；调用失败时看保护状态是不是 2）> 正在加密 / 加密暂停 / 正在解密 /
+#            解密暂停（ConversionStatus 2–5）> 开着（1）/ 暂停保护（0）> 没查出来；
+#   加密进度 / 解密进度：加密或解密没做完时显示，来自 GetConversionStatus 的 EncryptionPercentage（解密进度是 100 减它）；
+#   每个数字密码保护器（GetKeyProtectors 类型 3）一组：
+#     密钥 ID：保护器 ID 的前 8 位。恢复界面上会显示它，用来对上是哪一把；不是机密，「复制全部」会带上；
+#     恢复密钥：GetKeyProtectorNumericalPassword 返回的 48 位数字，secret（默认遮住，不进「复制全部」和诊断报告）。
+#              分区锁着（FVE_E_LOCKED_VOLUME）时读不出来，写「解锁以后才能看到」；格式不对或调用失败写「没能读出来」；
+#     备份：BitLocker 管理日志（Microsoft-Windows-BitLocker/BitLocker Management）里有这个保护器的 845 事件时写「备份过」。
+#          依据：微软的 Intune BitLocker 排错文档里，845 是正常运行时的事件，内容是「卷 C: 的 BitLocker 恢复信息已成功备份到……」，
+#          带保护器 GUID（846 是备份到 Microsoft Entra ID 失败）。只按事件 ID 和事件数据里的 GUID 对，不读事件文字。
+#          微软没有说备份到微软账户时会不会记这个事件，日志也会被覆盖，所以没有记录时什么都不写，不说「没有备份」。
+#   没有数字密码保护器（比如只有 TPM）：恢复密钥写「没有恢复密钥」，结果 no-recovery-key，请懂哥加一个（小药箱不替用户加）。
+# 隐私：恢复密钥只出现在 secret 行里，不进事实和报错信息；脚本不把密钥交给任何命令（开了模块日志的电脑会记下命令参数）。
+# 结果：none、unsupported、waiting、found 是 ok；no-recovery-key、locked 是 advice；partial（有的密钥没读出来）是 unknown。
+#   unsupported：WMI 命名空间或类不存在、WMI 说不支持（服务器版没装 BitLocker 功能、精简过的系统），不报错；
+#   其他读不出分区列表的错误照常报错（界面显示「没能读出来」）。
+# 事实（都是数字）：volume_count（开了 BitLocker 的分区，不含等待激活的）、waiting_count、key_count（显示出来的密钥）、
+#   missing_count、locked_count、unreadable_count、backed_up_count。
+# 待真机验证：等待激活时 GetKeyProtectors 的返回、锁着的分区、845 事件、只有 TPM 时怎么加恢复密钥等，
+# 见 docs/real-machine-checklist.md。
+id: security.bitlocker-keys
+schema_version: 1
+group: info
+title: { zh-CN: BitLocker 恢复密钥 }
+description:
+  zh-CN: 看看硬盘有没有开 BitLocker 加密，开了的话把 48 位恢复密钥显示出来。重装系统、换主板、刷 BIOS 之前先抄下来：到时候开机要是要求输入恢复密钥，没有它就打不开硬盘。
+category: security
+requires_admin: true
+timeout_sec: 30
+run:
+  script: tools/security/bitlocker-keys.ps1
+results:
+  found:
+    status: ok
+    message:
+      zh-CN: "找到了 {key_count} 把恢复密钥（{volume_count} 个分区开了 BitLocker，每个分区一张表）。密钥先遮住了，点「显示」才能看到；「复制全部」不会带上密钥。"
+    next:
+      zh-CN: 请把每一把恢复密钥连同它上面一行的「密钥 ID」抄在纸上，或者存到 U 盘里，和电脑分开放好。以后开机要求输入恢复密钥时，屏幕上会显示密钥 ID，找到对得上的那一把输进去就行。恢复密钥就是硬盘的备用钥匙：不要截图发到群里，也不要发给陌生人，自称客服、技术员的人来要也别给。用微软账户登录的电脑，恢复密钥一般也备份在微软账户里，用手机打开 https://aka.ms/myrecoverykey 登录就能看到，可以对一对密钥 ID 是不是一样。
+  no-recovery-key:
+    status: advice
+    message:
+      zh-CN: "有 {missing_count} 个开了 BitLocker 的分区没有恢复密钥（表格里写着「没有恢复密钥」）。平时用着没问题，可一旦重装系统、换主板、刷 BIOS 以后开机要求输入恢复密钥，就没有密钥可输，这个分区里的文件可能再也拿不回来。"
+    next:
+      zh-CN: "请懂哥帮忙给这些分区加一个恢复密钥：专业版可以在开始菜单搜索「管理 BitLocker」来加，也可以用管理员命令 manage-bde -protectors -add C: -rp（C: 换成对应的盘符）。小药箱只查看，不会替你改 BitLocker 的设置。加好以后回到这里点「重新查看」，把新的恢复密钥和表格里已经有的恢复密钥，连同「密钥 ID」一起抄在纸上或存到 U 盘，和电脑分开放；不要截图发到群里，也不要发给陌生人。单位或学校的电脑，请先问单位的 IT 部门。"
+  locked:
+    status: advice
+    message:
+      zh-CN: "有 {locked_count} 个开了 BitLocker 的分区现在锁着（还没有解锁），看不到它的恢复密钥。"
+    next:
+      zh-CN: 在「此电脑」里双击这个分区，输入它的密码解锁，再回到这里点「重新查看」。忘了密码的话，只能用恢复密钥解锁：用微软账户登录过的电脑，用手机打开 https://aka.ms/myrecoverykey 登录，按表格里的「密钥 ID」找对得上的那一把；单位或学校的电脑请找单位的 IT 部门。表格里能看到的恢复密钥，请连同「密钥 ID」抄在纸上或存到 U 盘，和电脑分开放；不要截图发到群里，也不要发给陌生人。
+  partial:
+    status: unknown
+    message:
+      zh-CN: "有 {unreadable_count} 个开了 BitLocker 的分区的恢复密钥没能读出来（表格里写着「没能读出来」），读出来了 {key_count} 把。读出来的密钥先遮住了，点「显示」才能看到；「复制全部」不会带上密钥。"
+    next:
+      zh-CN: 过一会儿再点「重新查看」试试，还是读不出来的话，请懂哥帮忙看看。用微软账户登录的电脑，恢复密钥一般也备份在微软账户里，用手机打开 https://aka.ms/myrecoverykey 登录就能看到。读出来的恢复密钥请连同「密钥 ID」抄在纸上或存到 U 盘，和电脑分开放；不要截图发到群里，也不要发给陌生人。
+  waiting:
+    status: ok
+    message:
+      zh-CN: 硬盘已经加密，但还没有启用保护（系统里显示为「等待激活」）。现在还没有恢复密钥，重装系统时也不需要。
+    next:
+      zh-CN: 以后用微软账户登录这台电脑时，系统会自动启用保护，并把恢复密钥存到你的微软账户里。到时候再来这里看一次，把恢复密钥抄在纸上或存到 U 盘，和电脑分开放。
+  none:
+    status: ok
+    message:
+      zh-CN: 这台电脑没有开 BitLocker，不需要恢复密钥。
+    next:
+      zh-CN: U 盘、移动硬盘不在这里查。以后要是开了 BitLocker 或「设备加密」，记得回到这里看一次，把恢复密钥抄下来。
+  unsupported:
+    status: ok
+    message:
+      zh-CN: 这个系统里没有 BitLocker 组件（服务器版 Windows 没装 BitLocker 功能，或者系统被精简过），查不了恢复密钥。没有这个组件，硬盘一般也不会被 BitLocker 加密。
+    next:
+      zh-CN: 如果这台电脑开机时要求输入过恢复密钥，或者你确定开过 BitLocker，请懂哥帮忙看看。
+labels:
+  sections:
+    os_volume: { zh-CN: 系统盘 }
+    data_volume: { zh-CN: 数据盘 }
+    no_letter: { zh-CN: 没有盘符的分区 }
+  rows:
+    status: { zh-CN: 保护状态 }
+    encrypt_progress: { zh-CN: 加密进度 }
+    decrypt_progress: { zh-CN: 解密进度 }
+    key_id: { zh-CN: 密钥 ID }
+    recovery_key: { zh-CN: 恢复密钥 }
+    backup: { zh-CN: 备份 }
+  values:
+    # "on" 加了引号：按 YAML 1.1 解析的工具会把不带引号的 on 当成布尔值。
+    "on": { zh-CN: 开着 }
+    suspended: { zh-CN: 暂停保护（一般重启以后会自动恢复） }
+    locked: { zh-CN: 锁着（还没有解锁） }
+    encrypting: { zh-CN: 正在加密 }
+    encryption-paused: { zh-CN: 加密暂停了（还没加密完） }
+    decrypting: { zh-CN: 正在解密（正在关闭 BitLocker） }
+    decryption-paused: { zh-CN: 解密暂停了（还没解密完） }
+    waiting: { zh-CN: 等待激活（已经加密，还没有启用保护） }
+    unknown: { zh-CN: 没查出来 }
+    locked-key: { zh-CN: 分区锁着，解锁以后才能看到 }
+    unreadable: { zh-CN: 没能读出来 }
+    no-key: { zh-CN: 没有恢复密钥 }
+    not-needed: { zh-CN: 还没有，现在也不需要 }
+    backed-up: { zh-CN: 备份过（系统日志里有备份成功的记录） }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/secprov/win32-encryptablevolume
+  - https://learn.microsoft.com/en-us/windows/win32/secprov/getprotectionstatus-win32-encryptablevolume
+  - https://learn.microsoft.com/en-us/windows/win32/secprov/getconversionstatus-win32-encryptablevolume
+  - https://learn.microsoft.com/en-us/windows/win32/secprov/getlockstatus-win32-encryptablevolume
+  - https://learn.microsoft.com/en-us/windows/win32/secprov/getkeyprotectors-win32-encryptablevolume
+  - https://learn.microsoft.com/en-us/windows/win32/secprov/getkeyprotectornumericalpassword-win32-encryptablevolume
+  - https://learn.microsoft.com/en-us/windows/security/operating-system-security/data-protection/bitlocker/preboot-recovery-screen
+  - https://support.microsoft.com/en-us/windows/find-your-bitlocker-recovery-key-6b71ad27-0b89-ea08-f143-056f5ab347d6
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/windows-security/enforcing-bitlocker-policies-by-using-intune-known-issues
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/manage-bde-protectors
+  - https://support.microsoft.com/en-us/windows/device-encryption-in-windows-cf7e2b6f-3e70-4882-9532-18633605b7df

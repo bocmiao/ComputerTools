@@ -271,6 +271,8 @@ async function copyAll(): Promise<void> {
 
 .secret-value {
   font-size: var(--text-base);
+  /* BitLocker 恢复密钥有 55 个字符，窄屏上要能折行 */
+  overflow-wrap: anywhere;
 }
 
 .secret-mask {
