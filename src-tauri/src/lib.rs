@@ -2,6 +2,7 @@
 //!
 //! 诊断和修复命令只接受 ID；批量重命名、图片批量处理的目录由原生选择器取得（见 docs/architecture.md 第 9 节）。
 
+pub mod awake;
 pub mod commands;
 pub mod images;
 pub mod rename;
@@ -38,6 +39,8 @@ macro_rules! command_handler {
             $crate::commands::image_save,
             $crate::commands::image_open_folder,
             $crate::commands::screen_fullscreen,
+            $crate::commands::awake_get,
+            $crate::commands::awake_set,
         ]
     };
 }

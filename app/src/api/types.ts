@@ -95,6 +95,9 @@ export interface ContextMenuItem {
   note: string                 // 补充说明，没有是空的
 }
 
+/** 别让电脑自己睡着：只在小药箱开着时有效 */
+export interface AwakeStatus { on: boolean; display: boolean }
+
 // 小工具（第 11 节）
 export type ToolGroup = 'info' | 'action' | 'open'
 export type ToolOpens = 'program' | 'settings'

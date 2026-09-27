@@ -9,6 +9,7 @@ use medkit_core::views::{
 };
 use tauri::State;
 
+use crate::awake::AwakeStatus;
 use crate::images;
 use crate::rename::{self, RenamePreview, RenameRules};
 use crate::setup::AppState;
@@ -237,4 +238,16 @@ pub async fn image_open_folder(state: State<'_, AppState>) -> CmdResult<()> {
 #[tauri::command]
 pub async fn screen_fullscreen<R: tauri::Runtime>(window: tauri::WebviewWindow<R>, on: bool) -> CmdResult<()> {
     window.set_fullscreen(on).map_err(|e| format!("窗口没能{}全屏：{e}", if on { "进入" } else { "退出" }))
+}
+
+/// 别让电脑自己睡着：现在开没开。
+#[tauri::command]
+pub async fn awake_get(state: State<'_, AppState>) -> CmdResult<AwakeStatus> {
+    Ok(state.awake.lock().map_err(|_| "状态异常。")?.status())
+}
+
+/// 别让电脑自己睡着：打开（display 为 true 时屏幕也亮着）或者关掉。只在小药箱开着时有效，不改电源设置。
+#[tauri::command]
+pub async fn awake_set(state: State<'_, AppState>, on: bool, display: bool) -> CmdResult<AwakeStatus> {
+    state.awake.lock().map_err(|_| "状态异常。")?.set(on, display)
 }

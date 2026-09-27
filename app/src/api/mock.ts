@@ -2232,11 +2232,19 @@ const handlers: Handlers = {
     return candidate
   },
   screen_fullscreen: () => null,
+  awake_get: () => ({ ...demoAwake }),
+  awake_set: ({ on, display }) => {
+    demoAwake = { on, display: on && display }
+    return { ...demoAwake }
+  },
   image_open_folder: () => {
     if (!demoImageFolder) throw '还没有选择保存的文件夹。'
     return null
   },
 }
+
+// ── 别让电脑自己睡着（演示）──
+let demoAwake = { on: false, display: false }
 
 // ── 图片批量处理的演示（浏览器里真的处理图片，但不保存）──
 const DEMO_IMAGE_FOLDER = '演示文件夹（浏览器里不会真的保存）'

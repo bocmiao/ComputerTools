@@ -2,6 +2,7 @@ import { invoke, type InvokeArgs } from '@tauri-apps/api/core'
 import type { CommandArgs, CommandName, CommandResult } from './commands'
 import type {
   ApplyResult,
+  AwakeStatus,
   CatalogSummary,
   CheckResult,
   ContextMenuItem,
@@ -183,4 +184,14 @@ export function imageOpenFolder(): Promise<null> {
 /** 屏幕坏点测试：小药箱窗口进入、退出全屏 */
 export function screenFullscreen(on: boolean): Promise<null> {
   return call('screen_fullscreen', { on })
+}
+
+/** 别让电脑自己睡着：现在开没开 */
+export function awakeGet(): Promise<AwakeStatus> {
+  return call('awake_get', {})
+}
+
+/** 别让电脑自己睡着：打开（display 为 true 时屏幕也亮着）或者关掉 */
+export function awakeSet(on: boolean, display: boolean): Promise<AwakeStatus> {
+  return call('awake_set', { on, display })
 }

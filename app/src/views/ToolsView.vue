@@ -7,6 +7,7 @@ import BusySpinner from '../components/BusySpinner.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LocalUtilities from '../components/LocalUtilities.vue'
 import DeviceTests from '../components/DeviceTests.vue'
+import KeepAwake from '../components/KeepAwake.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import TagPill from '../components/TagPill.vue'
 import ToolInfoResult from '../components/ToolInfoResult.vue'
@@ -229,6 +230,7 @@ function onApplied(r: ApplyResult): void {
 
     <LocalUtilities />
     <DeviceTests />
+    <KeepAwake />
 
     <!-- 看信息 -->
     <section v-if="infoTools.length" class="group" aria-labelledby="tools-info-title">

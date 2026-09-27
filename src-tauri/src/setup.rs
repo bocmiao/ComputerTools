@@ -22,6 +22,7 @@ pub struct AppState {
     pub engine: Result<Arc<Engine>, String>,
     pub rename: Arc<Mutex<crate::rename::RenameState>>,
     pub images: Arc<Mutex<crate::images::ImageState>>,
+    pub awake: Arc<Mutex<crate::awake::AwakeState>>,
 }
 
 pub fn init() -> AppState {
@@ -29,6 +30,7 @@ pub fn init() -> AppState {
         engine: build_engine().map(Arc::new),
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
+        awake: Arc::new(Mutex::new(Default::default())),
     }
 }
 
@@ -234,5 +236,6 @@ pub fn test_state() -> AppState {
         engine: build_engine().map(Arc::new),
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
+        awake: Arc::new(Mutex::new(Default::default())),
     }
 }

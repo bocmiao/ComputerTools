@@ -30,6 +30,8 @@ const COMMANDS: &[&str] = &[
     "image_save",
     "image_open_folder",
     "screen_fullscreen",
+    "awake_get",
+    "awake_set",
 ];
 
 fn main() {

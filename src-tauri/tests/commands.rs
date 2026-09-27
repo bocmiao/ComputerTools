@@ -224,6 +224,17 @@ fn screen_fullscreen_passes_the_permission_check() {
 }
 
 #[test]
+fn awake_commands_pass_the_permission_check() {
+    let win = app();
+    assert_eq!(ok(&win, "awake_get", json!({})), json!({ "on": false, "display": false }));
+    assert_eq!(ok(&win, "awake_set", json!({ "on": true, "display": true })), json!({ "on": true, "display": true }));
+    assert_eq!(
+        ok(&win, "awake_set", json!({ "on": false, "display": false })),
+        json!({ "on": false, "display": false })
+    );
+}
+
+#[test]
 fn context_menu_commands_pass_the_permission_check() {
     let win = app();
     assert!(ok(&win, "context_menu_list", json!({})).is_array());

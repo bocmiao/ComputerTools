@@ -1,5 +1,6 @@
 import type {
   ApplyResult,
+  AwakeStatus,
   CatalogSummary,
   CheckResult,
   ContextMenuItem,
@@ -50,6 +51,8 @@ export type CommandMap = {
   image_save: { args: { name: string; modified: number; bytes: Uint8Array }; result: string }
   image_open_folder: { args: NoArgs; result: null }
   screen_fullscreen: { args: { on: boolean }; result: null }
+  awake_get: { args: NoArgs; result: AwakeStatus }
+  awake_set: { args: { on: boolean; display: boolean }; result: AwakeStatus }
 }
 
 export type CommandName = keyof CommandMap
