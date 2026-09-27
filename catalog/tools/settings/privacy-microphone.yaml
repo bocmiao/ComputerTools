@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:privacy-microphone（隐私和安全性 → 麦克风），由系统打开。
+id: settings.privacy-microphone
+schema_version: 1
+group: open
+title: { zh-CN: 麦克风的权限 }
+description:
+  zh-CN: 打开「设置」里的麦克风权限页：最上面是整台电脑的总开关，下面有「允许应用访问麦克风」和「允许桌面应用访问麦克风」（腾讯会议、微信、钉钉这些要靠它）。开会时别人听不见你说话，先来这里看看。
+category: settings
+open: { settings: privacy-microphone }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

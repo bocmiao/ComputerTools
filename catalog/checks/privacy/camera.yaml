@@ -1,0 +1,58 @@
+# 相机的隐私开关。脚本：scripts/checks/privacy/camera.ps1（和另一个隐私检测共用 shared block consent-store）。
+# 读「设置 → 隐私和安全性 → 相机」里的几个开关（CapabilityAccessManager\ConsentStore，字符串值 Value，
+# Allow / Deny，没有就是允许），按「挡住的范围」从大到小判断：
+#   policy-deny：组策略 HKLM\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy 强制禁止（值 2），一般是单位统一设置的
+#   system-off：整台电脑的总开关（HKLM）关了，所有账户、所有软件都用不了
+#   desktop-off：登录用户的「允许桌面应用访问相机」关了（ConsentStore\…\NonPackaged）：腾讯会议、微信视频、钉钉、QQ 这些从网上下载安装的软件多半用不了摄像头
+#   apps-off：登录用户的「允许应用访问相机」关了：只影响从应用商店装的应用
+# 只读这几个开关，不读每个软件的使用记录。只检测、不改：隐私开关由用户自己在「设置」里打开。
+# 「设置」里这一页叫「相机」（摄像头），ConsentStore 里的名字是 webcam，组策略是 LetAppsAccessCamera。
+id: privacy.camera
+schema_version: 1
+title: { zh-CN: 摄像头的权限 }
+description:
+  zh-CN: 看看 Windows 的隐私开关是不是挡住了摄像头。视频会议里别人看不见你、软件说找不到摄像头时，先查这个。
+category: privacy
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/privacy/camera.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 相机的权限都开着：这台电脑允许使用相机，桌面应用和应用商店的应用也都允许。
+  policy-deny:
+    status: manual
+    message:
+      zh-CN: 这台电脑的管理策略禁止应用使用相机，一般是单位或学校统一设置的。
+    fixer: helper
+    next:
+      zh-CN: 单位、学校的电脑请找管理员。自己的电脑出现这个，可能是用了「优化」「隐私保护」类的软件，请懂哥帮忙看看。
+  system-off:
+    status: advice
+    message:
+      zh-CN: 「相机访问权限」的总开关关着：这台电脑上所有软件都用不了相机。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「设置」里的相机页，把最上面的总开关打开。
+    links: ["tool:settings.privacy-camera"]
+  desktop-off:
+    status: advice
+    message:
+      zh-CN: 「允许桌面应用访问相机」关着：腾讯会议、微信视频、钉钉、QQ 这些从网上下载安装的软件多半用不了摄像头。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「设置」里的相机页，往下找到「允许桌面应用访问相机」，把它打开。改完把开会、聊天的软件关掉重开。
+    links: ["tool:settings.privacy-camera"]
+  apps-off:
+    status: advice
+    message:
+      zh-CN: 「允许应用访问相机」关着：从应用商店装的应用（比如 Windows 自带的「相机」）用不了摄像头；腾讯会议、微信这些下载安装的软件不受这个开关影响。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「设置」里的相机页，把「允许应用访问相机」打开。
+    links: ["tool:settings.privacy-camera"]
+references:
+  - https://support.microsoft.com/en-us/windows/windows-camera-microphone-and-privacy-a83257bc-e990-d54a-d212-b5e41beba857
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-privacy

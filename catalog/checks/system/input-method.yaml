@@ -1,0 +1,60 @@
+# 输入法不见了、打不出中文的几个常见原因。脚本：scripts/checks/system/input-method.ps1
+# （读计划任务的代码和修复、小工具共用 shared block ctf-task，查 ctfmon 的代码和小工具共用 ctf-process）。
+# 按这个顺序判断：
+#   task-disabled：计划任务 \Microsoft\Windows\TextServicesFramework\MsCtfMonitor 被禁用了。登录时靠它启动
+#                  输入法的后台程序 ctfmon.exe，一些「优化」软件会把它关掉，之后输入法栏和中文输入就没了。
+#                  修复：system.enable-ctf-monitor（能撤销）。
+#   task-missing：这个计划任务没了，ctfmon 也没在运行。
+#   not-running：ctfmon.exe 没在这次登录里运行（小药箱和登录用户在同一个会话里）。小工具「重启输入法」。
+#   no-chinese：登录用户的语言列表里没有中文（Control Panel\International\User Profile 的 Languages）。
+#               读不到这个列表时不算。只看有没有中文这门语言，不猜装了哪个输入法（搜狗、微信输入法这类也挂在中文下面）。
+# 事实：task_state（Ready / Running / Disabled / missing）、running、chinese。
+id: system.input-method
+schema_version: 1
+title: { zh-CN: 输入法 }
+description:
+  zh-CN: 看看输入法的后台程序在不在运行、有没有被「优化」软件关掉，以及有没有装中文。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/input-method.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 输入法的后台程序在运行，也装了中文，看起来没问题。
+  task-disabled:
+    status: advice
+    message:
+      zh-CN: 登录时启动输入法的计划任务（MsCtfMonitor）被关掉了，多半是「优化」类软件干的。这样重启以后输入法栏就不见了，打不出中文，开始菜单的搜索框也可能打不了字。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮把它恢复成 Windows 原来的样子，改完输入法马上就能回来；以后想改回去，在修改日志里撤销就行。
+    links: ["feature:system.enable-ctf-monitor"]
+  task-missing:
+    status: manual
+    message:
+      zh-CN: 登录时启动输入法的计划任务（MsCtfMonitor）不见了，输入法的后台程序也没在运行。
+    fixer: helper
+    next:
+      zh-CN: 先按 Win + R，输入 ctfmon 回车，输入法一般就能回来；每次开机都要这样的话，请懂哥帮忙把这个计划任务找回来。
+  not-running:
+    status: advice
+    message:
+      zh-CN: 输入法的后台程序（ctfmon）没在运行，所以切换不出中文输入法。
+    fixer: medkit
+    next:
+      zh-CN: 点「重启输入法」让它重新运行；还不行就注销再登录，或者重启电脑。
+    links: ["tool:system.restart-ime"]
+  no-chinese:
+    status: advice
+    message:
+      zh-CN: 你的语言列表里没有中文，所以没有中文输入法可以切换。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「语言和区域」，点「添加语言」，选「中文(中华人民共和国)」，装好以后就有微软拼音了；用搜狗、微信输入法这类的，重新安装它们也会加上中文。
+    links: ["tool:settings.language"]
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/tsf/text-services-framework
+  - https://www.winhelponline.com/blog/keyboard-not-working-edge-cortana-start-menu-lock-screen/

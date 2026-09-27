@@ -54,6 +54,7 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "dateandtime",
     "easeofaccess-keyboard",
     "easeofaccess-mouse",
+    "regionlanguage",
 ];
 
 pub fn program(name: &str) -> Option<&'static Program> {

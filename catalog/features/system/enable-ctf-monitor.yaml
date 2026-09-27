@@ -1,0 +1,37 @@
+# 恢复输入法的开机启动（脚本类功能）。脚本在 scripts/features/system/ 下，读计划任务的代码和检测
+# system.input-method、小工具 system.restart-ime 共用（shared block ctf-task）。
+# 计划任务 \Microsoft\Windows\TextServicesFramework\MsCtfMonitor 在 Windows 里默认是启用的，登录时靠它
+# 启动输入法的后台程序 ctfmon.exe；一些「优化」软件会把它禁用，之后输入法栏和中文输入就没了，
+# 开始菜单搜索、应用商店应用里也可能打不了字。
+#   ctf-monitor-detect.ps1  启用（Ready / Running）→ applied，禁用 → not-applied，没有这个任务 → unknown
+#   ctf-monitor-run.ps1     -Prepare：before = { state }；执行：状态变了或者任务没了就跳过；Enable-ScheduledTask，
+#                           读回来还是禁用就报错（引擎会用撤销脚本退回）；再运行一次这个任务（尽力而为），
+#                           输入法马上回来，不用注销。
+#   ctf-monitor-undo.ps1    原来是禁用的就再禁用（正在运行的 ctfmon 不动）。
+#   ctf-monitor-break.ps1   只在测试中使用：禁用这个任务。
+id: system.enable-ctf-monitor
+schema_version: 1
+title: { zh-CN: 恢复输入法的开机启动 }
+description:
+  zh-CN: 重新启用 Windows 登录时启动输入法的计划任务（MsCtfMonitor），并马上让输入法回来。它是 Windows 默认开着的，被「优化」类软件关掉以后，输入法栏会不见、打不出中文。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/system/ctf-monitor-detect.ps1
+prepare:
+  script: features/system/ctf-monitor-run.ps1
+run:
+  script: features/system/ctf-monitor-run.ps1
+undo:
+  script: features/system/ctf-monitor-undo.ps1
+break:
+  script: features/system/ctf-monitor-break.ps1
+references:
+  - https://www.winhelponline.com/blog/keyboard-not-working-edge-cortana-start-menu-lock-screen/
+  - https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/enable-scheduledtask

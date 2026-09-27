@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:regionlanguage（时间和语言 → 语言和区域），由系统打开。
+id: settings.language
+schema_version: 1
+group: open
+title: { zh-CN: 语言和输入法 }
+description:
+  zh-CN: 打开「设置」里的语言和区域：在这里添加中文、管理输入法（微软拼音、五笔），或者删掉用不上的输入法。
+category: settings
+open: { settings: regionlanguage }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

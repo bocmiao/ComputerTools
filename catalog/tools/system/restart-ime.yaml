@@ -1,0 +1,36 @@
+# 一键处理（action）：重启输入法的后台程序 ctfmon.exe。脚本：scripts/tools/system/restart-ime.ps1
+# 先结束这次登录里的 ctfmon.exe，再运行计划任务 MsCtfMonitor（和登录时一样，以登录用户的身份启动，
+# 不会以管理员身份运行），最多等 5 秒看它回来。计划任务被禁用或者没了时什么都不结束。
+id: system.restart-ime
+schema_version: 1
+group: action
+title: { zh-CN: 重启输入法 }
+description:
+  zh-CN: 输入法栏不见了、切换不出中文、候选框卡住不动时，重新启动输入法的后台程序（ctfmon）。正在输入的内容不受影响，输入法会闪一下再回来。
+category: system
+requires_admin: true
+timeout_sec: 30
+run:
+  script: tools/system/restart-ime.ps1
+confirm:
+  zh-CN: 输入法会先关掉再重新打开，大概几秒钟。现在重启输入法吗？
+results:
+  started:
+    status: ok
+    message: { zh-CN: 输入法已经重新启动了。 }
+    next: { zh-CN: 点一下要打字的地方，按 Win + 空格或者 Ctrl + Shift 切换到中文输入法试试。还不行的话，注销再登录，或者重启电脑。 }
+  not-started:
+    status: advice
+    message: { zh-CN: 已经让 Windows 重新启动输入法，但 5 秒内还没看到它回来。 }
+    next: { zh-CN: 等一会儿再试；还是不行就注销再登录，或者重启电脑。 }
+  disabled:
+    status: advice
+    message: { zh-CN: 登录时启动输入法的计划任务被关掉了，小药箱没有重启输入法。 }
+    next: { zh-CN: 先点「恢复输入法的开机启动」把它恢复成 Windows 原来的样子。 }
+    links: ["feature:system.enable-ctf-monitor"]
+  missing:
+    status: manual
+    message: { zh-CN: 登录时启动输入法的计划任务不见了，小药箱没法重启输入法。 }
+    next: { zh-CN: 按 Win + R，输入 ctfmon 回车试试；每次开机都要这样的话，请懂哥帮忙。 }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/tsf/text-services-framework

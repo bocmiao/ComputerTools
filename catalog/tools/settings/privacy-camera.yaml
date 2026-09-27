@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:privacy-webcam（隐私和安全性 → 相机），由系统打开。
+id: settings.privacy-camera
+schema_version: 1
+group: open
+title: { zh-CN: 摄像头的权限 }
+description:
+  zh-CN: 打开「设置」里的相机（摄像头）权限页：最上面是整台电脑的总开关，下面有「允许应用访问相机」和「允许桌面应用访问相机」（腾讯会议、微信视频要靠它）。视频时别人看不见你，先来这里看看。
+category: settings
+open: { settings: privacy-webcam }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
