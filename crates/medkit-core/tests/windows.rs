@@ -322,6 +322,10 @@ fn restore(p: &WindowsPlatform, saved: &[Saved]) {
     }
 }
 
+/// 这些修复有专门的测试（往返测试的通用做法在 CI 机器上不适用），通用的往返测试跳过它们。
+/// network.hosts-cleanup：CI 机器上的 hosts 文件可能会被别的程序改回去，见 hosts_cleanup_removes_only_flagged_lines。
+const SEPARATE_TESTS: &[&str] = &["network.hosts-cleanup"];
+
 #[test]
 #[ignore = "会临时改动本机设置（结束时恢复）；需要管理员权限"]
 fn every_feature_breaks_fixes_and_undoes() {
@@ -329,7 +333,7 @@ fn every_feature_breaks_fixes_and_undoes() {
     let (engine, bundle, platform) = real_engine(dir.path());
     let mut failures = Vec::new();
     for f in &bundle.catalog.features {
-        if BREAK_IN_TESTS.contains(&f.id.as_str()) {
+        if BREAK_IN_TESTS.contains(&f.id.as_str()) || SEPARATE_TESTS.contains(&f.id.as_str()) {
             eprintln!("跳过 {}：另有专门的测试", f.id);
             continue;
         }
@@ -829,4 +833,76 @@ fn file_lockers_find_the_process_holding_a_file() {
     let _ = child.0.wait();
     let after = lockers::find(&platform, &LockTarget::Files(vec![held])).unwrap();
     assert!(after.users.iter().all(|u| u.pid != pid), "进程结束以后不该再查到它：{after:?}");
+}
+
+/// 删掉 hosts 里有问题的记录：真的往 hosts 文件末尾加一行屏蔽常用网站的记录，执行修复，核对只删了这一行、
+/// 文件其余部分一个字节都没变；撤销以后这一行回来。结束时（包括断言失败时）把 hosts 恢复原样。
+/// CI 机器上的 hosts 文件可能被别的程序（安全软件、管理 hosts 的代理程序）改回去：加上的那一行几秒内
+/// 没了，就只报告看到的情况，不算失败（修复本身的逻辑在 scripts 的模拟测试里覆盖）。
+#[test]
+#[ignore = "会临时改动 hosts 文件（结束时恢复）；需要管理员权限"]
+fn hosts_cleanup_removes_only_flagged_lines() {
+    let hosts = PathBuf::from(std::env::var("SystemRoot").unwrap()).join(r"System32\drivers\etc\hosts");
+    let original = std::fs::read(&hosts).unwrap_or_default();
+    // 只读的 hosts 先去掉只读，结束时连同只读一起恢复
+    let permissions = std::fs::metadata(&hosts).map(|m| m.permissions()).ok();
+    struct Restore(PathBuf, Vec<u8>, Option<std::fs::Permissions>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let _ = std::fs::write(&self.0, &self.1);
+            if let Some(p) = &self.2 {
+                let _ = std::fs::set_permissions(&self.0, p.clone());
+            }
+        }
+    }
+    let _restore = Restore(hosts.clone(), original.clone(), permissions.clone());
+    if let Some(p) = permissions.filter(|p| p.readonly()) {
+        let mut writable = p;
+        // Windows 上这只是去掉「只读」属性（这个测试只在 Windows 上跑）
+        #[allow(clippy::permissions_set_readonly_false)]
+        writable.set_readonly(false);
+        std::fs::set_permissions(&hosts, writable).unwrap();
+    }
+    eprintln!("CI 机器上的 hosts 文件（{} 字节）：\n{}", original.len(), String::from_utf8_lossy(&original));
+
+    let line = b"0.0.0.0 medkit-separate-test.baidu.com\r\n";
+    let mut broken = original.clone();
+    if !broken.is_empty() && !broken.ends_with(b"\n") {
+        broken.extend_from_slice(b"\r\n");
+    }
+    broken.extend_from_slice(line);
+    std::fs::write(&hosts, &broken).unwrap();
+    // 看看有没有别的程序把它改回去
+    for i in 0..20 {
+        std::thread::sleep(Duration::from_millis(500));
+        let now = std::fs::read(&hosts).unwrap_or_default();
+        if now != broken {
+            eprintln!(
+                "::notice::这台 CI 机器上 hosts 文件改完 {} 毫秒以后被别的程序改掉了（现在 {} 字节），测不了修复：\n{}",
+                (i + 1) * 500,
+                now.len(),
+                String::from_utf8_lossy(&now)
+            );
+            return;
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+    let before = engine.run_check("network.hosts").unwrap();
+    eprintln!("加上以后：{}", before.message);
+    assert_eq!(before.result_code.as_deref(), Some("blocks-common"), "{before:?}");
+    let r = engine.feature_apply("network.hosts-cleanup").unwrap();
+    assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
+    let cleaned = std::fs::read(&hosts).unwrap();
+    let mut expected = original.clone();
+    if !expected.is_empty() && !expected.ends_with(b"\n") {
+        expected.extend_from_slice(b"\r\n");
+    }
+    assert_eq!(cleaned, expected, "只删那一行，别的一个字节都不变");
+    for id in r.entry_ids.iter().rev() {
+        let u = engine.journal_undo(id, false).unwrap();
+        assert!(u.ok, "{u:?}");
+    }
+    assert_eq!(std::fs::read(&hosts).unwrap(), broken, "撤销以后那一行回到原来的位置");
 }
