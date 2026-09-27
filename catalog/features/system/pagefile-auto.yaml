@@ -1,0 +1,43 @@
+# 虚拟内存改回由 Windows 自动管理。HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management 的
+# PagingFiles（多字符串）写成一行 ?:\pagefile.sys：和「自动管理所有驱动器的分页文件大小」打勾是同一个设置，也是系统默认
+# （微软日本技术支持博客「ページング ファイルの設定を変更する方法」；WMI 的 AutomaticManagedPagefile 为真时也是写这个值）。
+# 重启以后生效。系统管理的分页文件按用量自己长，最多三倍内存或 4 GB（取大的），但不超过所在盘的八分之一（微软
+# 「Introduction to the page file」），所以 C 盘快满的电脑也不会被它占满。
+# 只从检测 system.pagefile 的 off（一个分页文件都没有）进来：verify 用它，自己定的大小、放在别的盘上的都算「已经是这样」，不去改。
+# break_actions（测试用）：写成空的多字符串，就是每个盘都选「无分页文件」。
+id: system.pagefile-auto
+schema_version: 1
+title: { zh-CN: 虚拟内存改回由 Windows 自动管理 }
+description:
+  zh-CN: 把被关掉的虚拟内存（分页文件）打开，改回由 Windows 自动管理（系统默认）。C 盘上会用掉几 GB，Windows 按内存大小和用量自己调，最多不超过 C 盘的八分之一。重启电脑以后生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+verify: system.pagefile
+actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management
+      name: PagingFiles
+      type: multi-string
+      value: ['?:\pagefile.sys']
+windows_default:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management
+      name: PagingFiles
+      type: multi-string
+      value: ['?:\pagefile.sys']
+break_actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management
+      name: PagingFiles
+      type: multi-string
+      value: []
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/introduction-to-the-page-file
+  - https://jpwinsup.github.io/blog/2023/02/08/Performance/Hang_BSOD/HowToChangePagingFileSetting/

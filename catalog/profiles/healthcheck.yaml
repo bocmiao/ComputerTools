@@ -29,5 +29,6 @@ checks:
   - hardware.device-problems
   - hardware.system-disk-type
   - hardware.memory-size
+  - system.pagefile
   - hardware.battery-health
   - hardware.cpu-features

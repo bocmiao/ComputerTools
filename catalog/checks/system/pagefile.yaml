@@ -1,0 +1,50 @@
+# 虚拟内存（分页文件）有没有被关掉。脚本：scripts/checks/system/pagefile.ps1
+# 读 HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management 的 PagingFiles（多字符串，一行一个分页文件）：
+#   ?:\pagefile.sys           由 Windows 自动管理所有驱动器的分页文件（系统默认）
+#   c:\pagefile.sys 0 0       这个盘上由系统管理大小
+#   c:\pagefile.sys 2048 4096 自己定的大小（MB）
+# 一行都没有就是每个盘都选了「无分页文件」：很多「优化」教程、软件会让人这么做。这时能用的内存只有物理内存那么多，
+# 用满了程序就会卡死、闪退（「内存不足」），蓝屏了也记不下原因（微软「Introduction to the page file」）。
+# 读的是下次开机要用的设置（改了要重启才生效）。
+# 结果：auto、custom（自己定的，系统盘上有）、other-drive（只放在了别的盘上：内存够用，只是蓝屏记不下原因）、off、missing（没有这个值，不判断）。
+# 只有 off 带修复（system.pagefile-auto，改回自动管理）；自己定的大小、放在别的盘上多半是有意的，不去改。
+id: system.pagefile
+schema_version: 1
+title: { zh-CN: 虚拟内存 }
+description:
+  zh-CN: 看看虚拟内存（分页文件）是不是被关掉了。关掉以后，开大型游戏、PS、剪辑软件时容易提示「内存不足」、闪退，蓝屏了也记不下原因。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/pagefile.ps1
+results:
+  auto:
+    status: ok
+    message:
+      zh-CN: 虚拟内存（分页文件）由 Windows 自动管理（系统默认），没问题。
+  custom:
+    status: ok
+    message:
+      zh-CN: "虚拟内存（分页文件）是手动设置的：{files}。系统盘上有，没问题。"
+  other-drive:
+    status: ok
+    message:
+      zh-CN: "虚拟内存（分页文件）只放在了别的盘上（{files}），系统盘上没有：平时用没问题，只是蓝屏时 Windows 记不下原因。"
+    next:
+      zh-CN: 想让蓝屏时能记下原因：在开始菜单里搜索「查看高级系统设置」打开它，点「高级」→ 性能下面的「设置」→「高级」→ 虚拟内存下面的「更改」，在 C 盘上也选「系统管理的大小」，确定以后重启电脑。
+  off:
+    status: advice
+    message:
+      zh-CN: 虚拟内存（分页文件）被关掉了。平时可能看不出来，但开大型游戏、PS、剪辑软件时，内存一用满就会提示「内存不足」、卡死或者闪退，蓝屏了也记不下原因。很多「优化」教程和软件会让人关掉它，其实关掉并不会让电脑变快。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回由 Windows 自动管理（系统默认，C 盘上会用掉几 GB，Windows 按内存大小和用量自己调，最多不超过 C 盘的八分之一），重启电脑以后生效，能撤销。
+    links: ["feature:system.pagefile-auto"]
+  missing:
+    status: unknown
+    message:
+      zh-CN: 没读到虚拟内存的设置。
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/introduction-to-the-page-file
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/how-to-determine-the-appropriate-page-file-size-for-64-bit-versions-of-windows
+  - https://jpwinsup.github.io/blog/2023/02/08/Performance/Hang_BSOD/HowToChangePagingFileSetting/
