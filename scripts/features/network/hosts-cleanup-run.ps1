@@ -133,7 +133,20 @@ function Read-HostsText {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         return [pscustomobject]@{ Exists = $false; Text = ''; Encoding = 'latin1'; Bom = '' }
     }
-    $bytes = [IO.File]::ReadAllBytes($Path)
+    # Another program (an antivirus, the DNS client) can have the file open
+    # for a moment: tried again for about a second before giving up.
+    $bytes = $null
+    for ($attempt = 1; $null -eq $bytes; $attempt++) {
+        try {
+            $bytes = [IO.File]::ReadAllBytes($Path)
+        }
+        catch {
+            if (($attempt -ge 10) -or -not (Test-HostsBusy $_.Exception)) {
+                throw
+            }
+            Start-Sleep -Milliseconds 100
+        }
+    }
     $encoding = 'latin1'
     if (($bytes.Length -ge 2) -and ($bytes[0] -eq 0xFF) -and ($bytes[1] -eq 0xFE)) {
         $encoding = 'utf16le'
@@ -164,13 +177,39 @@ function Get-HostsEncoding {
     }
 }
 
+# Whether an error is the file being open in another program: a sharing or
+# lock violation (Windows errors 32 and 33).
+function Test-HostsBusy {
+    param($Exception)
+    $code = $Exception.GetBaseException().HResult
+    return (($code -eq -2147024864) -or ($code -eq -2147024863))
+}
+
+# Writes the bytes, tried again for about a second while another program has
+# the file open (the DNS client reads it right after every change).
+function Write-HostsBytes {
+    param([string]$Path, [byte[]]$Bytes)
+    for ($attempt = 1; ; $attempt++) {
+        try {
+            [IO.File]::WriteAllBytes($Path, $Bytes)
+            return
+        }
+        catch {
+            if (($attempt -ge 10) -or -not (Test-HostsBusy $_.Exception)) {
+                throw
+            }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+}
+
 # Writes the byte order mark and the text back with the same encoding. A
 # read-only file is made writable for the write and read-only again after.
 function Write-HostsText {
     param([string]$Path, [string]$Text, [string]$Encoding, [string]$Bom)
     $bytes = (Get-HostsEncoding $Encoding).GetBytes($Bom + $Text)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        [IO.File]::WriteAllBytes($Path, $bytes)
+        Write-HostsBytes $Path $bytes
         return
     }
     $item = Get-Item -LiteralPath $Path -Force
@@ -180,7 +219,7 @@ function Write-HostsText {
         $item.Attributes = [IO.FileAttributes]([int]$attributes -band (-bnot [int][IO.FileAttributes]::ReadOnly))
     }
     try {
-        [IO.File]::WriteAllBytes($Path, $bytes)
+        Write-HostsBytes $Path $bytes
     }
     finally {
         if ($readOnly) {
