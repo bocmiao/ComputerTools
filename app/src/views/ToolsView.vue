@@ -5,6 +5,7 @@ import type { ApplyResult, ToolResult, ToolSummary } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import LocalUtilities from '../components/LocalUtilities.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import TagPill from '../components/TagPill.vue'
 import ToolInfoResult from '../components/ToolInfoResult.vue'
@@ -218,12 +219,14 @@ function onApplied(r: ApplyResult): void {
 <template>
   <div class="page">
     <header class="page-header">
-      <h1 class="page-title" tabindex="-1">小工具</h1>
-      <p class="page-lead">查看电脑配置和 WiFi 密码，一键处理常见的小毛病，打开系统自带的工具。这些都不会改你的设置。</p>
+      <h1 class="page-title" tabindex="-1">工具箱</h1>
+      <p class="page-lead">处理文件和文字，查看电脑配置，一键解决小毛病，也能打开 Windows 自带工具。</p>
     </header>
 
     <p v-if="!catalog" class="loading-line" role="status"><BusySpinner size="small" />正在读取小工具列表…</p>
     <p v-else-if="tools.length === 0" class="card muted">这个版本的小药箱还没有小工具。</p>
+
+    <LocalUtilities />
 
     <!-- 看信息 -->
     <section v-if="infoTools.length" class="group" aria-labelledby="tools-info-title">

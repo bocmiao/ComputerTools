@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
     "build": "vue-tsc --noEmit && vite build",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "test:utils": "node --experimental-strip-types --test tests/*.mjs"
   },
   "dependencies": {
+    "@noble/hashes": "2.4.0",
     "@tauri-apps/api": "2.11.1",
     "vue": "3.5.43"
   },
