@@ -28,6 +28,10 @@ const SCRIPTS: &[(&str, &str)] = &[
     ("t/two.ps1", "[CmdletBinding()]\r\nparam()\r\n@{ n = 1 }\r\n@{ n = 2 }\r\n"),
     ("t/nothing.ps1", "[CmdletBinding()]\r\nparam()\r\n$null = 1\r\n"),
     ("t/exit.ps1", "[CmdletBinding()]\r\nparam()\r\n[Environment]::Exit(3)\r\n"),
+    (
+        "t/modules.ps1",
+        "[CmdletBinding()]\r\nparam()\r\n@{ path = $env:PSModulePath; own = (Join-Path $PSHOME 'Modules') }\r\n",
+    ),
 ];
 
 fn program() -> Option<PathBuf> {
@@ -98,6 +102,14 @@ fn protocol_round_trip() {
     // 多个输出时取最后一个；没有输出时是 null
     assert_eq!(h.run("t/two.ps1", &Map::new(), T).unwrap(), json!({ "n": 2 }));
     assert_eq!(h.run("t/nothing.ps1", &Map::new(), T).unwrap(), Value::Null);
+}
+
+/// 从 PowerShell 7 里启动时，继承来的模块路径排在前面的是 7 的模块，5.1 加载不了（签名检查就会失败）。
+#[test]
+fn modules_load_only_from_powershells_own_folder() {
+    let Some((_dir, h)) = host() else { return };
+    let v = h.run("t/modules.ps1", &Map::new(), T).unwrap();
+    assert_eq!(v["path"], v["own"], "{v}");
 }
 
 #[test]

@@ -526,21 +526,8 @@ fn startup_items_are_listed_disabled_and_restored() {
     assert_eq!(item.source, Source::UserRun);
     assert!(item.exists && item.program.eq_ignore_ascii_case("notepad.exe"), "{item:?}");
     assert!(item.enabled);
-    if item.signature != StartupSignature::Valid {
-        // 记事本是微软签名的：查不出来就是脚本的问题。把系统自己的结论一起打出来，方便对照
-        let direct = Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-Command",
-                &format!(
-                    "$s = Get-AuthenticodeSignature -LiteralPath '{windir}\\System32\\notepad.exe'; \
-                     \"$($s.Status) | $($s.SignatureType) | $($s.StatusMessage) | $($s.SignerCertificate.Subject)\""
-                ),
-            ])
-            .output()
-            .map(|o| format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)));
-        panic!("记事本的签名应该是有效的，列表里是 {:?}；直接查：{direct:?}", item.signature);
-    }
+    // 记事本是微软签名的。CI 从 PowerShell 7 里跑测试，模块路径没清理的话这里是 Unknown
+    assert_eq!(item.signature, StartupSignature::Valid, "{item:?}");
     assert!(item.publisher.as_deref().is_some_and(|p| p.contains("Microsoft")), "{item:?}");
 
     let r = engine.startup_set(&item.id, false).unwrap();

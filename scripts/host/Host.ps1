@@ -27,6 +27,13 @@ param()
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
+# Modules load only from this PowerShell's own folder: the scripts use built-in
+# commands only. The module path inherited from the parent process can list
+# other folders first, such as PowerShell 7's (its modules do not load in 5.1)
+# or folders that other programs can write to, which an elevated tool should
+# not load code from.
+$env:PSModulePath = Join-Path $PSHOME 'Modules'
+
 $utf8 = New-Object System.Text.UTF8Encoding $false
 [Console]::InputEncoding = $utf8
 [Console]::OutputEncoding = $utf8
