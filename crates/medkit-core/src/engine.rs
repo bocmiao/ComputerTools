@@ -280,7 +280,8 @@ impl Engine {
             }
             self.runner.run(script, &args, Duration::from_secs(check.timeout_sec.into())).map_err(|e| e.to_string())
         } else if let Some(name) = &check.probe.builtin {
-            builtin::run(name, &self.platform.os_info())
+            let now = time::OffsetDateTime::now_utc().to_offset(self.local_offset.unwrap_or(time::UtcOffset::UTC));
+            builtin::run(name, &builtin::Env { os: &self.platform.os_info(), now })
         } else {
             Err("没有检测方式".to_owned())
         };

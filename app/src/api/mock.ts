@@ -1731,6 +1731,14 @@ const TOOL_LIST: MockTool[] = [
     'ms-settings:printers',
   ),
   openTool('settings.sound', '声音', '选择从哪个喇叭或耳机出声、用哪个麦克风，调整音量。', 'settings', 'settings', 'ms-settings:sound'),
+  openTool(
+    'settings.date-time',
+    '日期和时间',
+    '打开「自动设置时间」、马上同步一次，或者改时区。电脑时间不对时，网页会报证书错误。',
+    'settings',
+    'settings',
+    'ms-settings:dateandtime',
+  ),
 ]
 
 const TOOLS = new Map(TOOL_LIST.map((t) => [t.summary.id, t]))

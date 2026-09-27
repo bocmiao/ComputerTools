@@ -1,0 +1,11 @@
+# 打开「设置」里的一页（open）：ms-settings:dateandtime，由系统打开。
+id: settings.date-time
+schema_version: 1
+group: open
+title: { zh-CN: 日期和时间 }
+description:
+  zh-CN: 打开「设置」里的日期和时间：打开「自动设置时间」、马上同步一次，或者改时区。电脑时间不对时，网页会报证书错误。
+category: settings
+open: { settings: dateandtime }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

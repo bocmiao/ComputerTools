@@ -1,0 +1,31 @@
+# 系统时间是不是明显错了。内置检测（Rust 实现，见 crates/medkit-core/src/builtin.rs），没有脚本。
+# 事实：today（电脑上的日期）、build_date（这个版本的构建日期），都是 YYYY-MM-DD。
+# 结果：ok / behind（电脑上的日期比构建日期早一天以上：时区不同差一天不算）。
+# 主板上的纽扣电池没电时，每次断电关机后时间会回到出厂时的日子（常见 2000 年、2009 年或主板出厂的日期），
+# 所有 https 网站都会报证书错误，是「上不了网」的常见原因之一（计划书 4.2）。
+# 时间快了查不出来：不联网没有参照，脚本又不能发网络请求。所以正常时只说「看起来是对的」。
+id: system.clock
+schema_version: 1
+title: { zh-CN: 系统时间对不对 }
+description:
+  zh-CN: 看看电脑上的日期是不是跳回了过去。时间不对时，几乎所有网站都会报证书错误。
+category: system
+requires_admin: false
+probe:
+  builtin: clock
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 电脑上的日期是 {today}，看起来是对的。
+  behind:
+    status: advice
+    message:
+      zh-CN: 电脑上的日期是 {today}，比小药箱这个版本的发布日期（{build_date}）还早，时间肯定不对。时间不对时，几乎所有网页都会报「证书错误」或「您的时钟慢了」，很多软件也会登录不了、更新失败；体检里和日期有关的结论（比如系统支持期）也可能不准。
+    fixer: user
+    next:
+      zh-CN: 打开「日期和时间」，打开「自动设置时间」，再点「立即同步」（要连着网；网页打不开不影响同步时间）。同步不了的话，关掉「自动设置时间」，点「更改」手动改对。如果每次关机再开机，时间又变回去了，多半是主板上的纽扣电池没电了：台式机可以自己换一颗（常见型号 CR2032），笔记本请找售后或懂哥。
+    links: ["tool:settings.date-time"]
+references:
+  - https://support.microsoft.com/en-us/windows/how-to-set-your-time-and-time-zone-dfaa7122-479f-5b98-2a7b-fa0b6e01b261
+  - https://support.google.com/chrome/answer/6098869

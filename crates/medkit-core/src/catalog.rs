@@ -17,7 +17,7 @@ use crate::registry::{RegValue, SpecRoot, split_key};
 use crate::yaml;
 
 pub const SCHEMA_VERSION: u32 = 1;
-pub const BUILTIN_PROBES: &[&str] = &["cpu-features"];
+pub const BUILTIN_PROBES: &[&str] = &["cpu-features", "clock"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]

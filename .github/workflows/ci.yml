@@ -165,7 +165,10 @@ jobs:
         run: cargo clippy -p medkit -- -D warnings
 
       - name: 构建安装包
-        run: pnpm tauri build
+        # 构建日期用提交时间：系统时间检测（system.clock）把它当作「今天至少是这一天」，同一次提交构建出来的程序也一样
+        run: |
+          $env:SOURCE_DATE_EPOCH = git log -1 --format=%ct
+          pnpm tauri build
 
       - name: 整理产物
         shell: pwsh

@@ -49,6 +49,7 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "windowsdefender",
     "privacy-microphone",
     "privacy-webcam",
+    "dateandtime",
 ];
 
 pub fn program(name: &str) -> Option<&'static Program> {
