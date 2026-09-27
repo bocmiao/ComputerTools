@@ -1,0 +1,46 @@
+# 装了哪些程序（info）。脚本：scripts/tools/system/installed-programs.ps1
+# 读「设置 → 应用 → 安装的应用」「程序和功能」用的同一处（HKLM 和它的 32 位视图、登录用户的注册表里的
+# Uninstall 键），分三张表：
+#   最近装的：最近 30 天装的，新的在前，最多 15 个——自己不记得装过的，多半是装别的软件时捆绑装上的；
+#   卸载程序不见了：卸载命令指向的程序文件已经不在了，在「设置」里点卸载会报错，最多 15 个
+#             （MSI 安装包、带 %变量% 的命令不查：前者查不了缓存的安装包，后者会按管理员账户展开）；
+#   占地方最多的：按程序自己登记的大小，最多 10 个。
+# 和「设置」一样不列系统组件（SystemComponent=1）和更新；同名同版本登记了两次的只列一次。只读。
+# 隐私：不显示安装位置、卸载命令、注册表键名，只有程序的名字、发布者、版本、安装日期和大小。
+# 应用商店装的应用不在这里（「设置 → 应用」里有）。
+id: system.installed-programs
+schema_version: 1
+group: info
+title: { zh-CN: 装了哪些程序 }
+description:
+  zh-CN: 看看最近装了哪些程序（不记得装过的，多半是装别的软件时捆绑装上的）、哪些程序的卸载程序不见了（在「设置」里卸载会报错）、哪些最占地方。只看不改。
+category: system
+requires_admin: false
+timeout_sec: 60
+user_hive: true
+run:
+  script: tools/system/installed-programs.ps1
+results:
+  listed:
+    status: ok
+    message:
+      zh-CN: "这台电脑上装了 {count} 个桌面程序：最近 {days} 天装了 {recent_count} 个，卸载程序不见了的有 {broken_count} 个。"
+    next:
+      zh-CN: 不认识、也不是自己装的程序，多半是装别的软件时顺带装上的：到「设置 → 应用 → 安装的应用」里卸载，按「安装日期」排序最好找。拿不准是什么的先别卸，搜一下名字或者问问懂哥（显卡、声卡驱动和运行库也会出现在这里）。应用商店里装的应用不在这个列表里，在同一个设置页面里能看到。
+    links: ["tool:settings.apps"]
+labels:
+  sections:
+    recent: { zh-CN: 最近装的 }
+    broken: { zh-CN: 卸载程序不见了 }
+    biggest: { zh-CN: 占地方最多的 }
+  rows:
+    publisher: { zh-CN: 发布者 }
+    version: { zh-CN: 版本 }
+    installed: { zh-CN: 安装日期 }
+    size: { zh-CN: 大小 }
+    advice: { zh-CN: 怎么办 }
+  values:
+    reinstall: { zh-CN: 在「设置」里卸载会报错。先从官网重新下载、安装同一个程序（会把卸载程序装回来），再卸载；还不行就用它官网提供的卸载清理工具。 }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/msi/uninstall-registry-key
+  - https://learn.microsoft.com/en-us/windows/win32/msi/configuring-add-remove-programs-with-windows-installer
