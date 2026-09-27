@@ -1,6 +1,9 @@
 # Windows 恢复环境（WinRE）是否启用。脚本：scripts/checks/system/winre-status.ps1
-# 读 %windir%\System32\Recovery\ReAgent.xml 里的 <InstallState state="…"/>：1 = 已启用，0 = 未启用。
-# 不解析 reagentc /info 的文字输出（中英文系统措辞不同）。
+# 读 %windir%\System32\Recovery\ReAgent.xml 里的 <InstallState state="…"/>：1 = 已启用，0 = 未启用
+# （和修复 system.enable-winre 共用 shared block winre-state）。不解析 reagentc /info 的文字输出（中英文系统措辞不同）。
+# 结果：enabled；disabled（映像文件 Winre.wim 还在 System32\Recovery 里，给「开启 Windows 恢复环境」）；
+# no-image（没开，映像文件也不在了，精简版系统常见：要用同一版本的安装盘找回来，小药箱不下载系统文件）。
+# 事实：install_state（1 / 0）、winre_location（开着时恢复环境所在的位置）。
 # 待真机验证：
 #   - 微软没有公开 ReAgent.xml 的格式。InstallState 的含义来自社区工具（OSDeploy 的 Get-ReAgentXml、
 #     Intune 修复脚本等），需要在 reagentc /disable、/enable 前后各看一次文件，确认和 reagentc /info 一致。
@@ -24,9 +27,17 @@ results:
     status: advice
     message:
       zh-CN: Windows 恢复环境（WinRE）没有开启，系统出问题时「重置此电脑」和开机自动修复都用不了。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮，用 Windows 自带的 reagentc 重新开启：不删除文件，也不改硬盘分区，以后想关还能在修改日志里撤销。开不了的话，多半是恢复分区太小或者被删掉了，请懂哥看看。
+    links: ["feature:system.enable-winre"]
+  no-image:
+    status: manual
+    message:
+      zh-CN: Windows 恢复环境（WinRE）没有开启，而且它的映像文件（Winre.wim）也不在这台电脑上了（精简版系统常见），系统出问题时「重置此电脑」和开机自动修复都用不了。
     fixer: helper
     next:
-      zh-CN: 请懂哥用管理员身份打开命令提示符，运行 reagentc /enable 重新开启。如果提示失败，多半是恢复分区太小或者被删掉了，需要懂哥修复恢复分区。
+      zh-CN: 请懂哥从同一版本、同一语言的 Windows 安装镜像里取出 Windows\System32\Recovery\Winre.wim（在 install.wim 或 install.esd 里），放到 C:\Windows\System32\Recovery，再用管理员身份运行 reagentc /setreimage /path C:\Windows\System32\Recovery 和 reagentc /enable。小药箱不下载系统文件。
 references:
   - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/reagentc-command-line-options
   - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/windows-recovery-environment--windows-re--technical-reference

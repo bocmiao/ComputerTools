@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { runCheck, runProfile } from '../api'
-import type { CheckResult } from '../api/types'
+import type { CheckResult, FeatureSummary } from '../api/types'
+import BulkApplyDialog from '../components/BulkApplyDialog.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import CheckResultCard from '../components/CheckResultCard.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import AppIcon from '../components/AppIcon.vue'
 import { statusOrder, type ShownStatus } from '../labels'
-import { catalog, health } from '../state'
-import { errorText } from '../utils/format'
+import { catalog, findFeature, health } from '../state'
+import { errorText, parseLink } from '../utils/format'
 
-// 体检：只读，不改任何东西。不打分，不说「发现 N 个问题」；没问题就说一切正常。
+// 体检：查的时候只读，不改任何东西。不打分，不说「发现 N 个问题」；没问题就说一切正常。
+// 查完以后，需要留意的项目里小药箱能直接修的，集中列在「能直接修的」里：默认都勾上，确认后一项一项地修，
+// 每一项都记进修改日志、能撤销；修完重新查一遍这几项。想一项一项看的，照样点每张卡片上的「预览修复」。
 // 「没查出来」不等于有问题（例如硬盘接在 RAID 控制器上，读不到健康信息）：单独放一组，
 // 没有要处理的项目时照样说一切正常，只是补一句有几项没查出来。
 // 体检以后在别的页面改过或撤销过设置，结果就可能过期了：提示一下，给「重新体检」。
@@ -49,6 +52,59 @@ const unknown = computed(() => shown.value.filter((r) => r.status === 'unknown')
 const normal = computed(() => shown.value.filter((r) => r.status === 'ok'))
 /** 没有要处理的项目（没查出来的不算） */
 const allOk = computed(() => results.value !== null && attention.value.length === 0)
+
+/**
+ * 能直接修的：需要留意的结果里链到的修复，去掉重复。只收这台电脑能用、安全、能撤销、推荐做的
+ * （和「只应用推荐项」一样，计划书 6.2）；有代价的（比如缩小休眠文件）照样在卡片上点「预览修复」，看清楚再改。
+ * checkIds：修完要重新查的检测
+ */
+interface FixItem {
+  feature: FeatureSummary
+  checkIds: string[]
+  checkTitles: string[]
+}
+function isBulkSafe(f: FeatureSummary): boolean {
+  return f.applicable && f.risk === 'safe' && f.reversible && f.recommend === 'recommended'
+}
+const fixable = computed<FixItem[]>(() => {
+  const byId = new Map<string, FixItem>()
+  for (const r of attention.value) {
+    for (const link of r.links) {
+      const l = parseLink(link)
+      if (!l || l.kind !== 'feature') continue
+      const feature = findFeature(l.id)
+      if (!feature || !isBulkSafe(feature)) continue
+      const item = byId.get(l.id) ?? { feature, checkIds: [], checkTitles: [] }
+      if (!item.checkIds.includes(r.id)) {
+        item.checkIds.push(r.id)
+        item.checkTitles.push(r.title)
+      }
+      byId.set(l.id, item)
+    }
+  }
+  return [...byId.values()]
+})
+/** 勾上的修复（ID）。体检结果一变就重新全部勾上 */
+const chosen = ref<string[]>([])
+watch(fixable, (list) => {
+  chosen.value = list.map((i) => i.feature.id)
+})
+const chosenFeatures = computed(() => fixable.value.filter((i) => chosen.value.includes(i.feature.id)).map((i) => i.feature))
+const bulkOpen = ref(false)
+
+/** 修完以后重新查这几项；没改动东西就不查 */
+async function onBulkFinished(changed: boolean): Promise<void> {
+  if (!changed || !results.value) return
+  const ids = [...new Set(fixable.value.filter((i) => chosen.value.includes(i.feature.id)).flatMap((i) => i.checkIds))]
+  for (const id of ids) {
+    try {
+      const fresh = await runCheck(id)
+      if (results.value) results.value = results.value.map((r) => (r.id === id ? fresh : r))
+    } catch {
+      // 复查失败就保留原来的结果，不打扰用户
+    }
+  }
+}
 
 function stopTimer(): void {
   if (timer !== undefined) clearInterval(timer)
@@ -107,7 +163,7 @@ onBeforeUnmount(stopTimer)
   <div class="page">
     <header class="page-header">
       <h1 class="page-title" tabindex="-1">体检</h1>
-      <p class="page-lead">只看不改，大约半分钟。没坏的别修，看不懂的就跳过。</p>
+      <p class="page-lead">查的时候只看不改，大约半分钟。查完能直接修的会列出来，修不修由你决定；没坏的别修，看不懂的就跳过。</p>
     </header>
 
     <section class="hero card" aria-live="polite">
@@ -179,6 +235,29 @@ onBeforeUnmount(stopTimer)
     </div>
 
     <template v-if="results && !running">
+      <section v-if="fixable.length" class="card fix-card" aria-labelledby="health-fix-title">
+        <h2 id="health-fix-title" class="fix-title"><AppIcon name="tools" :size="20" />能直接修的（{{ fixable.length }} 项）</h2>
+        <p class="muted small">
+          下面这几项小药箱能帮你改好，都是安全、能撤销的改动。勾上想修的，点「修复选中的项目」，会一项一项地改；每一项都记进「修改日志」，随时可以恢复原状。有代价的修复不在这里，要在下面的卡片上点「预览修复」，看清楚再改。
+        </p>
+        <ul class="fix-list">
+          <li v-for="item in fixable" :key="item.feature.id">
+            <label class="fix-item">
+              <input v-model="chosen" type="checkbox" :value="item.feature.id" />
+              <span>
+                <span class="fix-name">{{ item.feature.title }}</span>
+                <span class="muted small">（{{ item.checkTitles.join('、') }}）</span>
+              </span>
+            </label>
+          </li>
+        </ul>
+        <div>
+          <button type="button" class="btn btn-primary" :disabled="!chosenFeatures.length" @click="bulkOpen = true">
+            修复选中的项目（{{ chosenFeatures.length }} 项）
+          </button>
+        </div>
+      </section>
+
       <section v-if="attention.length" class="group" aria-label="需要留意的项目">
         <CheckResultCard
           v-for="r in attention"
@@ -211,6 +290,16 @@ onBeforeUnmount(stopTimer)
     </template>
 
     <PreviewDialog v-if="previewId" :feature-id="previewId" @close="previewId = null" @applied="onApplied" />
+    <BulkApplyDialog
+      v-if="bulkOpen"
+      :features="chosenFeatures"
+      title="修复体检发现的问题"
+      intro="下面这 {n} 项确认后会一项一项地修："
+      done-title="选中的问题都修好了"
+      verb="修复"
+      @close="bulkOpen = false"
+      @finished="onBulkFinished"
+    />
   </div>
 </template>
 
@@ -278,6 +367,38 @@ onBeforeUnmount(stopTimer)
   margin-top: 8px;
   font-size: var(--text-base);
   color: var(--color-text-muted);
+}
+
+.fix-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 22px;
+  border-left: 4px solid var(--tone-advice-text);
+}
+
+.fix-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-large);
+}
+
+.fix-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+}
+
+.fix-item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.fix-name {
+  font-weight: 600;
 }
 
 .stale {

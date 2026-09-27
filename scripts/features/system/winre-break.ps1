@@ -1,9 +1,6 @@
-# Check: system.winre-status
-# Is the Windows Recovery Environment (WinRE) enabled? (See the shared block.)
-# Read-only. Result codes: enabled / disabled (the image is there: the fix
-# system.enable-winre can turn it back on) / no-image (disabled, and Winre.wim
-# is gone: it has to come back from Windows installation media).
-# Facts: install_state (1 / 0), winre_location (when enabled).
+# Feature: system.enable-winre -- break (tests only)
+# Turns WinRE off (reagentc /disable) when it is on, so that the fix can be
+# tried. Nothing is deleted: reagentc keeps the image in the Recovery folder.
 
 [CmdletBinding()]
 param()
@@ -84,22 +81,10 @@ function Invoke-Reagentc {
 }
 # ---- end of shared block winre-state ----
 
-$state = Get-WinreState
-$result = 'enabled'
-if (-not $state.Enabled) {
-    $result = 'disabled'
-    if (-not $state.ImagePresent) {
-        $result = 'no-image'
+if ((Get-WinreState).Enabled) {
+    $exitCode = Invoke-Reagentc @('/disable')
+    if ($exitCode -ne 0) {
+        throw ('reagentc /disable failed (exit code {0})' -f $exitCode)
     }
 }
-$facts = [ordered]@{
-    install_state = $(if ($state.Enabled) { '1' } else { '0' })
-}
-if ($state.Location.Length -gt 0) {
-    $facts['winre_location'] = $state.Location
-}
-
-[pscustomobject]@{
-    result = $result
-    facts  = $facts
-}
+[pscustomobject]@{ result = 'ok' }

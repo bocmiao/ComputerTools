@@ -1,12 +1,19 @@
-# Check: system.winre-status
-# Is the Windows Recovery Environment (WinRE) enabled? (See the shared block.)
-# Read-only. Result codes: enabled / disabled (the image is there: the fix
-# system.enable-winre can turn it back on) / no-image (disabled, and Winre.wim
-# is gone: it has to come back from Windows installation media).
-# Facts: install_state (1 / 0), winre_location (when enabled).
+# Feature: system.enable-winre -- run (and prepare)
+# Turns WinRE back on with "reagentc /enable" (Windows' own tool: it moves
+# Winre.wim to the recovery partition and points the boot configuration at it;
+# Microsoft's own steps use it too). No files are deleted.
+# -Prepare: returns before = { enabled }.
+# Run: -Before is that JSON. Returns skipped (nothing changed) when the state
+#   changed since, WinRE is already on, or Winre.wim is gone (checked again
+#   here: the engine goes ahead when the verify check could not run).
+#   Otherwise runs reagentc /enable and reads ReAgent.xml back: it must say
+#   enabled, or the script throws (the engine then runs the undo script).
 
 [CmdletBinding()]
-param()
+param(
+    [bool]$Prepare = $false,
+    [string]$Before = ''
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -85,21 +92,18 @@ function Invoke-Reagentc {
 # ---- end of shared block winre-state ----
 
 $state = Get-WinreState
-$result = 'enabled'
-if (-not $state.Enabled) {
-    $result = 'disabled'
-    if (-not $state.ImagePresent) {
-        $result = 'no-image'
-    }
+if ($Prepare) {
+    return [pscustomobject]@{ before = [ordered]@{ enabled = $state.Enabled } }
 }
-$facts = [ordered]@{
-    install_state = $(if ($state.Enabled) { '1' } else { '0' })
+$recorded = ConvertFrom-Json -InputObject $Before
+if (([bool]$recorded.enabled -ne $state.Enabled) -or $state.Enabled -or (-not $state.ImagePresent)) {
+    return [pscustomobject]@{ skipped = $true }
 }
-if ($state.Location.Length -gt 0) {
-    $facts['winre_location'] = $state.Location
+$exitCode = Invoke-Reagentc @('/enable')
+if ($exitCode -ne 0) {
+    throw ('reagentc /enable failed (exit code {0})' -f $exitCode)
 }
-
-[pscustomobject]@{
-    result = $result
-    facts  = $facts
+if (-not (Get-WinreState).Enabled) {
+    throw 'reagentc /enable reported success, but ReAgent.xml still says disabled'
 }
+[pscustomobject]@{ after = [ordered]@{ enabled = $true } }

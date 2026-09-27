@@ -8,7 +8,7 @@ CI 在 Windows Server 虚拟机上跑脚本和往返测试，能发现大部分�
 
 | 检测 | 要确认什么 | 怎么验证 |
 | --- | --- | --- |
-| `system.winre-status` | `ReAgent.xml` 里 `InstallState` 的含义（1 = 开，0 = 关）来自社区工具，微软没有公开这个格式；文件不存在时现在显示「没查出来」 | 分别在 `reagentc /disable` 和 `reagentc /enable` 之后运行检测，对照 `reagentc /info` |
+| `system.winre-status`、`system.winre-image` | `ReAgent.xml` 里 `InstallState` 的含义（1 = 开，0 = 关）来自社区工具，微软没有公开这个格式；文件不存在时现在显示「没查出来」；关着的时候映像文件是不是都在 `C:\Windows\System32\Recovery\Winre.wim`（隐藏文件；不在就报 no-image，不给修复） | 分别在 `reagentc /disable` 和 `reagentc /enable` 之后运行检测，对照 `reagentc /info` 和 `dir /a C:\Windows\System32\Recovery` |
 | `system.managed-device` | 排除内部注册项的名单来自社区工具 | 在家庭中文版、只登录了微软账户、只在 Office 里添加了工作账户的电脑上，都应判为「个人电脑」 |
 | `security.secureboot-ca2023` | 传统 BIOS 电脑上 `Confirm-SecureBootUEFI` 抛出的具体异常 | 在一台传统 BIOS 启动的电脑上运行 |
 | `hardware.system-disk-type` | Intel RST / VMD 的 RAID 模式下报的 BusType、MediaType、型号名是什么：现在 RAID 总线下，除非 MediaType 报的是 SSD，或者型号名里看得出 SSD / NVMe，一律判 unsure（界面显示「没查出来」）；eMMC 小本报的总线类型 | 在开了 VMD / RAID On 的新笔记本和 eMMC 小本上运行，对照任务管理器「性能」页的磁盘类型；如果 RAID 下能可靠拿到 SSD，就把 unsure 收窄 |
@@ -48,6 +48,7 @@ CI 在 Windows Server 虚拟机上跑脚本和往返测试，能发现大部分�
 | `disk.reduce-hiberfile` | `powercfg /hibernate /type reduced` 之后 hiberfil.sys 是不是马上变小（检测按注册表的 `HiberFileType` 判断，文件大小只用来显示）；「休眠」从电源菜单里消失，睡眠、快速启动照常；撤销（`/type full`，原来没有 `HiberFileType` 的再删掉它）之后，休眠文件是不是回到完整版、「休眠」能不能用，重启后是否保持；先 `powercfg /h off` 再撤销，是不是不会重新打开休眠 | 在开着休眠的台式机上执行，对照 `dir /a C:\` 和 `powercfg /a`；在修改日志里撤销，重启后再看；再做一遍，撤销前先运行 `powercfg /h off` |
 | `update.enable-services` | 被「关更新」的软件禁用的服务，用 sc.exe 能不能改回来（Windows Update、BITS、更新编排器、加密服务、模块安装程序；传递优化和更新医生是受保护的服务，修复不碰）；有的软件（Windows Update Blocker 的「保护服务设置」）会改服务注册表键的权限，那样也改不回来（修复会报错、自动撤销已经改了的）；改完以后不用重启，在「Windows 更新」里点「检查更新」能不能用；Windows 更新医生会不会过一阵又把它们改掉；撤销以后服务是不是回到「禁用」 | 用 Windows Update Blocker 之类的软件关掉更新后执行修复，马上检查更新；等一天再运行 `update.blocked`；最后在修改日志里撤销 |
 | 小工具「重置更新组件」 | 家用电脑上更新编排器（UsoSvc）、传递优化（DoSvc，受保护的服务）能不能被管理员停下（停不了就跳过；Windows Update、BITS 停不了就什么都不改）；停下以后 Windows Update 会不会马上被别的服务又拉起来，导致改名失败（in-use，已经改了的会改回去）；改名以后点「检查更新」，是不是马上重建 DataStore、Download、正常下载；「更新历史记录」是不是变成空的；有更新等重启时，Windows 模块安装程序是不是真的会变成「自动」（工具靠它和两个注册表键拒绝重置）；0x80070002、0x80073712 这类「文件坏了」的错误重置以后能不能装上 | 在更新报 0x80070002 的电脑上运行，再检查更新；运行前后对照「更新历史记录」和 `C:\Windows\SoftwareDistribution` 下的文件夹；装一个要重启的更新、先不重启，运行一次，应为 restart-first |
+| `system.enable-winre` | `reagentc /enable` 的退出代码是不是成功为 0、失败不为 0（微软没有写明，脚本读回 `ReAgent.xml` 再确认）；有恢复分区、恢复分区太小、没有恢复分区（映像放在 C 盘）三种电脑上各是什么结果；开了 BitLocker 的电脑上能不能开；撤销（`reagentc /disable`）以后映像文件是不是回到 `System32\Recovery`、能再开 | 在三种分区布局的电脑上先 `reagentc /disable`，再执行修复，对照 `reagentc /info`；在「设置 → 系统 → 恢复 → 高级启动」重启一次，看能不能进恢复环境；最后在修改日志里撤销 |
 | `system.enable-ctf-monitor`、小工具「重启输入法」 | 启用 `MsCtfMonitor` 后马上运行一次，输入法是不是不用注销就回来了；「重启输入法」结束 ctfmon 再运行这个任务，ctfmon 是不是以登录用户的身份（不是管理员）回来、5 秒内回来；标准账户登录、输入管理员密码运行小药箱时，结束和启动的是不是登录用户那一个会话里的 ctfmon | 禁用任务、结束 ctfmon 后执行修复，看输入法栏；在任务管理器「详细信息」里看 ctfmon 的用户名；换标准账户登录再做一遍 |
 | `start.disable-web-search` | 微软文档列出的适用版本是专业版、企业版、教育版，社区测试说家庭版直接写注册表也有效；只重启资源管理器够不够；描述里写的两个副作用（「搜索权限」页显示「某些设置由你的组织管理」、「搜索要点」开关变灰）是否属实，撤销后是否消失 | 在家庭中文版上执行，注销再登录后在开始菜单搜索，打开「设置 → 隐私和安全性 → 搜索权限」看；再在修改日志里撤销 |
 | `taskbar.align-left` | 是否不用重启资源管理器就立刻生效（现在保守地写了 `reboot: explorer`） | 执行后观察任务栏 |

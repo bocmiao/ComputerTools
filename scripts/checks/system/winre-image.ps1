@@ -1,9 +1,8 @@
-# Check: system.winre-status
-# Is the Windows Recovery Environment (WinRE) enabled? (See the shared block.)
-# Read-only. Result codes: enabled / disabled (the image is there: the fix
-# system.enable-winre can turn it back on) / no-image (disabled, and Winre.wim
-# is gone: it has to come back from Windows installation media).
-# Facts: install_state (1 / 0), winre_location (when enabled).
+# Check: system.winre-image
+# Can WinRE be turned on here? The verify check of the fix system.enable-winre:
+# the same reading as system.winre-status (see the shared block), but "the
+# image is gone" is "not applicable" here, so the fix is not offered then.
+# Read-only. Result codes: enabled / disabled / no-image.
 
 [CmdletBinding()]
 param()
@@ -92,14 +91,4 @@ if (-not $state.Enabled) {
         $result = 'no-image'
     }
 }
-$facts = [ordered]@{
-    install_state = $(if ($state.Enabled) { '1' } else { '0' })
-}
-if ($state.Location.Length -gt 0) {
-    $facts['winre_location'] = $state.Location
-}
-
-[pscustomobject]@{
-    result = $result
-    facts  = $facts
-}
+[pscustomobject]@{ result = $result; facts = [ordered]@{} }

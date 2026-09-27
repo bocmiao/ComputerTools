@@ -1,0 +1,42 @@
+# 开启 Windows 恢复环境（脚本类功能；计划书 4.1 体检的「WinRE 状态」，第八节「重置此电脑」的前提）。
+# 脚本在 scripts/features/system/ 下，读 WinRE 状态的代码和检测 system.winre-status、system.winre-image 共用
+# （shared block winre-state）：读 %windir%\System32\Recovery\ReAgent.xml 里的 InstallState（1 开、0 关），
+# 不解析 reagentc /info 的文字（中英文系统措辞不同）。
+# 用 Windows 自带的 reagentc /enable（微软 KB5028997 调整恢复分区的步骤就是 /disable → 调分区 → /enable）：
+# reagentc 把 System32\Recovery 里的映像文件 Winre.wim 放到恢复环境该在的位置，并在启动配置里登记。
+# 不删除文件，不改分区。
+# 能不能执行、改好没有都看 system.winre-image（verify）：映像文件不在了是 na，引擎不让执行，理由就是检测的结论。
+# 检测没跑成（出错、超时）时引擎照常让执行，所以执行脚本自己再核对一遍映像文件在不在。
+#   winre-detect.ps1  撤销前核对：开着 → applied，关着 → not-applied
+#   winre-run.ps1     -Prepare：before = { enabled }；执行：状态变了、已经开着、映像文件不在了就跳过（什么都不改）；
+#                     否则 reagentc /enable，退出代码不是 0、或者读回来还是关着就报错（引擎会用撤销脚本退回）
+#   winre-undo.ps1    原来是关着的、现在开着：reagentc /disable（映像文件放回 System32\Recovery，以后还能再开）
+#   winre-break.ps1   只在测试中使用：reagentc /disable
+# 待真机验证：见 docs/real-machine-checklist.md。
+id: system.enable-winre
+schema_version: 1
+title: { zh-CN: 开启 Windows 恢复环境 }
+description:
+  zh-CN: 用 Windows 自带的 reagentc 重新开启恢复环境（WinRE）。系统坏了以后，「重置此电脑」、开机自动修复和「高级启动」都要靠它。调整硬盘分区、或者 2024 年那个老是装不上的恢复环境更新（KB5034441）报错时，常有人把它关掉，之后忘了打开。不删除文件，也不改硬盘分区。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/system/winre-detect.ps1
+prepare:
+  script: features/system/winre-run.ps1
+run:
+  script: features/system/winre-run.ps1
+undo:
+  script: features/system/winre-undo.ps1
+break:
+  script: features/system/winre-break.ps1
+verify: system.winre-image
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/reagentc-command-line-options
+  - https://support.microsoft.com/en-us/topic/kb5028997-instructions-to-manually-resize-your-partition-to-install-the-winre-update-400faa27-9343-461c-ada9-24c8229763bf

@@ -1,0 +1,29 @@
+# 能不能开启 Windows 恢复环境（WinRE）：修复 system.enable-winre 的复查检测（verify），不放进体检和症状。
+# 脚本：scripts/checks/system/winre-image.ps1，读法和 system.winre-status 一样（shared block winre-state）。
+# 和 system.winre-status 只差一点：恢复环境的映像文件（Winre.wim）不在了的时候，这里是 na——引擎不让执行修复，
+# 预览里拿这里的结论当原因；体检看的是 system.winre-status，那里是 manual（要用安装盘把映像文件找回来）。
+id: system.winre-image
+schema_version: 1
+title: { zh-CN: 能不能开启 Windows 恢复环境 }
+description:
+  zh-CN: 看看 Windows 恢复环境（WinRE）是不是开着；没开的话，它的映像文件还在不在，能不能直接开启。
+category: system
+requires_admin: true
+probe:
+  script: checks/system/winre-image.ps1
+results:
+  enabled:
+    status: ok
+    message:
+      zh-CN: Windows 恢复环境已经开着。
+  disabled:
+    status: advice
+    message:
+      zh-CN: Windows 恢复环境没有开启，它的映像文件还在，可以直接开启。
+  no-image:
+    status: na
+    message:
+      zh-CN: 恢复环境的映像文件（Winre.wim）不在这台电脑上了（精简版系统常见），小药箱开不了，要先用同一版本的 Windows 安装盘把它找回来。
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/reagentc-command-line-options
+  - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/windows-recovery-environment--windows-re--technical-reference

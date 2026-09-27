@@ -11,10 +11,28 @@ import ExplorerRestart from './ExplorerRestart.vue'
 import ModalDialog from './ModalDialog.vue'
 import StatusLamp, { type LampState } from './StatusLamp.vue'
 
-// 「只应用推荐项」：一个一个预览太繁琐，这里列出汇总，确认后依次执行。
+// 一次改好几项：一个一个预览太繁琐，这里列出汇总，确认后依次执行。「常用设置」的「只应用推荐项」、
+// 体检的「修复选中的问题」都用它，标题和几句说明由调用的地方给。
 // 每一项按四种结果显示（已经改好 / 改了但没确认生效 / 不用改 / 没改成）；一项没改成不影响后面的项。
 
-const props = defineProps<{ features: FeatureSummary[] }>()
+const props = withDefaults(
+  defineProps<{
+    features: FeatureSummary[]
+    title?: string
+    /** 确认前的第一句话，{n} 换成项数 */
+    intro?: string
+    /** 全部成功时的标题 */
+    doneTitle?: string
+    /** 按钮和进度里的动词：「应用」「修复」 */
+    verb?: string
+  }>(),
+  {
+    title: '只应用推荐项',
+    intro: '下面这 {n} 项推荐设置还没有设置好，确认后会一项一项地应用：',
+    doneTitle: '推荐的设置都应用好了',
+    verb: '应用',
+  },
+)
 /** finished 的参数：这次有没有真的改过东西（改过的话，体检结果可能已经过期） */
 const emit = defineEmits<{ close: []; finished: [changed: boolean] }>()
 
@@ -47,7 +65,7 @@ const summaryTone = computed<ApplyOutcome>(() =>
 
 const summaryTitle = computed(() => {
   const c = counts.value
-  if (!c.failed && !c.unverified) return '推荐的设置都应用好了'
+  if (!c.failed && !c.unverified) return props.doneTitle
   const parts: string[] = []
   if (c.done + c.unchanged) parts.push(`${c.done + c.unchanged} 项已经好了`)
   if (c.unverified) parts.push(`${c.unverified} 项改了但还没确认生效`)
@@ -75,8 +93,8 @@ const lampState: Record<ItemStatus, LampState> = {
 }
 
 function lampLabel(i: Item): string {
-  if (i.status === 'waiting') return '等待应用'
-  if (i.status === 'running') return '正在应用'
+  if (i.status === 'waiting') return `等待${props.verb}`
+  if (i.status === 'running') return `正在${props.verb}`
   return applyOutcomeTitle[i.status]
 }
 
@@ -105,12 +123,12 @@ function close(): void {
 </script>
 
 <template>
-  <ModalDialog title="只应用推荐项" :busy="phase === 'applying'" wide @close="close">
+  <ModalDialog :title="title" :busy="phase === 'applying'" wide @close="close">
     <template v-if="phase === 'confirm'">
-      <p>下面这 {{ items.length }} 项推荐设置还没有设置好，确认后会一项一项地应用：</p>
+      <p>{{ intro.replace('{n}', String(items.length)) }}</p>
     </template>
     <p v-else-if="phase === 'applying'" class="loading-line" role="status">
-      <BusySpinner size="small" />正在应用第 {{ currentIndex + 1 }} 项（共 {{ items.length }} 项）…
+      <BusySpinner size="small" />正在{{ verb }}第 {{ currentIndex + 1 }} 项（共 {{ items.length }} 项）…
     </p>
     <div v-else class="result" :class="`result-${summaryTone}`" role="status">
       <p class="result-title">{{ summaryTitle }}</p>
@@ -160,7 +178,7 @@ function close(): void {
       <template v-if="phase !== 'done'">
         <button type="button" class="btn btn-secondary" :disabled="phase === 'applying'" @click="close">取消</button>
         <button type="button" class="btn btn-primary" :disabled="phase === 'applying'" @click="start">
-          确认应用 {{ items.length }} 项
+          确认{{ verb }} {{ items.length }} 项
         </button>
       </template>
       <button v-else type="button" class="btn btn-primary" v-autofocus @click="close">完成</button>
