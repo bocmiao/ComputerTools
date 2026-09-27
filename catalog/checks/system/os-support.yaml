@@ -14,6 +14,7 @@
 #     LTSB 2015 2025-10-14、LTSB 2016 2026-10-13、LTSC 2019 2029-01-09、
 #     LTSC 2021 2027-01-12（IoT 2032-01-13）、LTSC 2024 2029-10-09（IoT 2034-10-10）
 # 结果：supported（Win11 在支持期内）/ ending-soon（Win11，但 60 天内就到期：现在就装最新的功能更新）/
+#       newer（Win11，比表里的版本都新：刚发布、表里还没有的版本，或者预览版，还在支持期内）/
 #       ltsc（长期服务版且没过期）/ ltsc-ending-soon（长期服务版，60 天内到期）/
 #       win10（Win10 22H2 家庭版、专业版一族，ESU 还没结束，可以登记）/
 #       expired（22H2 之前的 Win10 家庭版、专业版一族：先更新到 22H2 再登记 ESU）/
@@ -21,8 +22,10 @@
 #       expired-no-esu（过期而且没有免费 ESU：Win10 企业版、教育版、IoT 版，过期的长期服务版，ESU 结束以后的 Win10）。
 # 「家庭版、专业版一族」指 EditionID 不以 Enterprise、Education、IoTEnterprise、ServerRdsh 开头的版本
 # （含家庭中文版 CoreCountrySpecific、专业教育版、专业工作站版），和微软 ESU 页面列的可登记版本一致。
-# 表里没有的 build（比如 2026 年 10 月才正式发布的 26H2，build 26300）脚本会报错，显示「没查出来」，
-# 不去猜。每次微软发布新版本都要更新这张表。Windows Server 也报错（不在本检测范围内）。
+# 比表里最新的主线版本（25H2，build 26200，脚本里的 $win11Newest）还新、表里又没有的 build（比如 2026 年 10 月
+# 才正式发布的 26H2，build 26300），算 newer：新版本至少支持两年，只是具体日期还不知道。比它旧、表里又没有的 build
+# 脚本会报错，显示「没查出来」，不去猜。每次微软发布新版本都要更新这张表和 $win11Newest。
+# Windows Server 也报错（不在本检测范围内）。
 # 已经登记了 ESU 的 Win10 也返回 win10：微软没有公开能让脚本读的登记状态（社区工具用的是
 # HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\ConsumerESU 的 ESUEligibility，格式没有官方说明），
 # 所以文案不说「你没登记」，只说「还没登记的话……」，登记状态以「Windows 更新」页面为准。
@@ -44,6 +47,10 @@ results:
     status: ok
     message:
       zh-CN: "你的系统是 {os} {version}，微软会提供安全更新到 {end_date}。"
+  newer:
+    status: ok
+    message:
+      zh-CN: "你的系统是 {os} {version}（版本号 {build}），比小药箱认识的版本都新，还在微软的支持期内。具体支持到哪天，以微软公布的为准。"
   ending-soon:
     status: advice
     message:

@@ -7,6 +7,8 @@
 #   supported       Windows 11 within its servicing period
 #   ending-soon     Windows 11, but support ends within 60 days
 #                   ($endingSoonDays): install the latest feature update now
+#   newer           Windows 11 newer than every release in the table (a new
+#                   release before the table knows its dates, or a preview)
 #   ltsc            long-term servicing edition within its servicing period
 #   ltsc-ending-soon  long-term servicing edition ending within 60 days
 #   win10           Windows 10 22H2, Home/Pro family: can enroll in consumer ESU
@@ -48,6 +50,11 @@ $win11 = @{
     26200 = @('25H2', '2027-10-12', '2028-10-10')
     28000 = @('26H1', '2028-03-14', '2029-03-13')
 }
+# Newest main-line release above (26H1 is a separate line that only ships on new
+# Arm PCs). An unknown build above it is newer than the table (26H2, build 26300,
+# until its row is added) or a preview, and is still supported. Bump this with
+# every new row; unknown builds below it still throw.
+$win11Newest = 26200
 
 # Long-term servicing: build = version, Enterprise LTSB/LTSC end, IoT Enterprise LTSB/LTSC end.
 $ltscTable = @{
@@ -159,6 +166,9 @@ if ($isLtsc) {
     else {
         $result = 'ltsc'
     }
+}
+elseif (($build -gt $win11Newest) -and (-not $win11.ContainsKey($build))) {
+    $result = 'newer'
 }
 elseif ($build -ge 22000) {
     if (-not $win11.ContainsKey($build)) {
