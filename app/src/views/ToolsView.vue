@@ -7,6 +7,7 @@ import BusySpinner from '../components/BusySpinner.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LocalUtilities from '../components/LocalUtilities.vue'
 import DeviceTests from '../components/DeviceTests.vue'
+import DiskSpeedTest from '../components/DiskSpeedTest.vue'
 import KeepAwake from '../components/KeepAwake.vue'
 import ShutdownTimer from '../components/ShutdownTimer.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
@@ -231,6 +232,7 @@ function onApplied(r: ApplyResult): void {
 
     <LocalUtilities />
     <DeviceTests />
+    <DiskSpeedTest />
     <KeepAwake />
     <ShutdownTimer />
 

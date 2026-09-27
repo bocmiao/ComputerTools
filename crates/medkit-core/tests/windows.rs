@@ -923,6 +923,28 @@ fn shutdown_can_be_scheduled_and_cancelled() {
     assert!(shutdown::abort().unwrap());
 }
 
+/// 硬盘测速：列出的盘里有系统盘（固定的、有剩余空间）；在临时文件夹里用不经过缓存的方式真测一次（小一点、快一点），
+/// 速度都大于 0，测完临时文件不留。
+#[test]
+fn disk_speed_lists_drives_and_measures_without_leftovers() {
+    use medkit_core::disk_speed::{self, Limits};
+    use medkit_core::platform::windows::drives;
+    let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+    let list = drives();
+    eprintln!("{list:#?}");
+    let c = list.iter().find(|d| system.starts_with(d.letter)).expect("系统盘在列表里");
+    assert!(!c.removable && c.total > 0 && c.free > 0 && !c.file_system.is_empty(), "{c:?}");
+
+    let dir = tempfile::tempdir().unwrap();
+    let limits =
+        Limits { write: Duration::from_secs(2), read: Duration::from_secs(2), random: Duration::from_millis(500) };
+    let r = disk_speed::run(dir.path(), 64 * 1024 * 1024, limits).unwrap();
+    eprintln!("{r:?}");
+    assert!(r.seq_write > 0.0 && r.seq_read > 0.0 && r.random_iops > 0.0, "{r:?}");
+    assert!(r.tested_bytes >= 8 * 1024 * 1024);
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0, "关掉就删了");
+}
+
 /// 「U 盘里的文件不见了」要用的文件属性：设上隐藏、系统（病毒就是这么藏的），读回来一样；去掉以后文件夹只剩
 /// 「文件夹」属性、只传 NORMAL 的文件读回来是 NORMAL；链接自己带「重解析点」属性（不跟着走）。在临时文件夹里做，不碰别的。
 #[test]

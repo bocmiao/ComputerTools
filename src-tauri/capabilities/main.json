@@ -38,6 +38,8 @@
     "allow-hidden-rescan",
     "allow-hidden-restore",
     "allow-hidden-undo",
+    "allow-disk-speed-drives",
+    "allow-disk-speed-run",
     "allow-screen-fullscreen",
     "allow-awake-get",
     "allow-awake-set",

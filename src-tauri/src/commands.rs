@@ -11,6 +11,7 @@ use medkit_core::views::{
 use tauri::State;
 
 use crate::awake::AwakeStatus;
+use crate::disk_speed::DriveView;
 use crate::hidden::{self, HiddenReport, HiddenRestore, HiddenUndo};
 use crate::images;
 use crate::pdf;
@@ -403,6 +404,30 @@ pub async fn hidden_undo(state: State<'_, AppState>) -> CmdResult<HiddenUndo> {
             None => None,
         };
         Ok(HiddenUndo { result, report })
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// 硬盘测速：本机的硬盘分区和 U 盘（光驱、网络驱动器不列），剩余空间不到 2 GB 的不能测。
+#[tauri::command]
+pub async fn disk_speed_drives() -> CmdResult<Vec<DriveView>> {
+    tauri::async_runtime::spawn_blocking(crate::disk_speed::drives).await.map_err(|e| format!("内部错误：{e}"))
+}
+
+/// 硬盘测速：在这个盘的根目录写一个关掉就删的临时文件，测顺序写、顺序读、4 KB 随机读，一共大约 20 秒。
+/// 只收现在列出来、能测的盘符；同一时间只测一个。
+#[tauri::command]
+pub async fn disk_speed_run(
+    state: State<'_, AppState>,
+    letter: String,
+) -> CmdResult<medkit_core::disk_speed::SpeedResult> {
+    let lock = state.disk_speed.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _busy = lock.try_lock().map_err(|_| "正在测另一个盘，等它测完再测。")?;
+        let letter = crate::disk_speed::check_letter(&letter, &crate::disk_speed::drives())?;
+        let root = std::path::PathBuf::from(format!("{letter}:\\"));
+        medkit_core::disk_speed::run(&root, medkit_core::disk_speed::TEST_BYTES, Default::default())
     })
     .await
     .map_err(|e| format!("内部错误：{e}"))?

@@ -372,6 +372,23 @@ fn hidden_file_commands_pass_the_permission_check() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 硬盘测速的命令也要登记进权限清单；只收现在列出来的盘符。
+#[test]
+fn disk_speed_commands_pass_the_permission_check() {
+    let win = app();
+    let drives = ok(&win, "disk_speed_drives", json!({}));
+    assert!(drives.is_array(), "{drives}");
+    #[cfg(not(windows))]
+    assert_eq!(drives, json!([]), "别的系统上没有盘可测");
+    let e = invoke(&win, "disk_speed_run", json!({ "letter": "C:\\Windows" })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("盘符不对")), "{e}");
+    #[cfg(not(windows))]
+    {
+        let e = invoke(&win, "disk_speed_run", json!({ "letter": "C" })).unwrap_err();
+        assert!(e.as_str().is_some_and(|m| m.contains("不在了")), "{e}");
+    }
+}
+
 /// 「文件删不掉：是谁占着」的命令也要登记进权限清单；结果只有文件名、没有完整路径。
 #[test]
 fn locker_commands_pass_the_permission_check() {

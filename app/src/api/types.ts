@@ -147,6 +147,31 @@ export interface SpaceReport {
   comparedAll: boolean
 }
 
+// 硬盘测速
+export interface DriveView {
+  /** 盘符，比如「C」 */
+  letter: string
+  label: string
+  fileSystem: string
+  removable: boolean
+  /** Windows 装在这个盘上 */
+  system: boolean
+  total: number
+  free: number
+  /** 剩余空间够不够测（至少 2 GB） */
+  canTest: boolean
+}
+export type SpeedVerdict = 'nvme' | 'sata-ssd' | 'ssd-slow' | 'hdd' | 'slow'
+export interface SpeedResult {
+  /** MB/s（1 MB = 1048576 字节） */
+  seqWrite: number
+  seqRead: number
+  randomRead: number
+  randomIops: number
+  testedBytes: number
+  verdict: SpeedVerdict
+}
+
 // U 盘里的文件不见了（只有名字，编号用来勾选）
 export interface HiddenItem {
   id: number

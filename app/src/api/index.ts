@@ -6,6 +6,7 @@ import type {
   CatalogSummary,
   CheckResult,
   ContextMenuItem,
+  DriveView,
   FeatureState,
   FileLockReport,
   HiddenReport,
@@ -19,6 +20,7 @@ import type {
   ShutdownCancel,
   ShutdownStatus,
   SpaceReport,
+  SpeedResult,
   StartupItem,
   SymptomDetail,
   SystemInfo,
@@ -233,6 +235,16 @@ export function hiddenRestore(ids: number[]): Promise<HiddenRestore> {
 /** U 盘里的文件不见了：撤销上一次「显示出来」（重新藏起来） */
 export function hiddenUndo(): Promise<HiddenUndo> {
   return call('hidden_undo', {})
+}
+
+/** 硬盘测速：本机的硬盘分区和 U 盘（光驱、网络驱动器不列） */
+export function diskSpeedDrives(): Promise<DriveView[]> {
+  return call('disk_speed_drives', {})
+}
+
+/** 硬盘测速：测这个盘（写一个关掉就删的临时文件，大约 20 秒） */
+export function diskSpeedRun(letter: string): Promise<SpeedResult> {
+  return call('disk_speed_run', { letter })
 }
 
 /** 屏幕坏点测试：小药箱窗口进入、退出全屏 */

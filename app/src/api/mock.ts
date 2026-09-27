@@ -29,6 +29,7 @@ import type {
   CatalogSummary,
   CheckResult,
   ContextMenuItem,
+  DriveView,
   FeatureState,
   FeatureStateKind,
   FeatureSummary,
@@ -40,6 +41,7 @@ import type {
   NewMenuItem,
   Preview,
   SpaceReport,
+  SpeedResult,
   StartupItem,
   Status,
   SymptomDetail,
@@ -2368,6 +2370,16 @@ const handlers: Handlers = {
     if (!demoSpace || id < 0 || id >= DEMO_SPACE_IDS) throw '这个文件不在刚才的结果里，请重新查一遍。'
     return null
   },
+  disk_speed_drives: () => DEMO_DRIVES,
+  // 演示：每个盘给一组典型的速度（不真的测）
+  disk_speed_run: ({ letter }) => {
+    const drive = DEMO_DRIVES.find((d) => d.letter === letter.toUpperCase())
+    if (!drive) throw '这个盘现在不在了，请刷新一下列表。'
+    if (!drive.canTest) throw '这个盘剩余空间不到 2 GB，测速要写一个临时文件，先腾出点地方再测。'
+    const result = DEMO_SPEEDS[drive.letter]
+    if (!result) throw '演示里没有这个盘的数据。'
+    return result
+  },
   // 和后端一样：程序和脚本文件照样藏着，改过的能撤销（演示里只记着，不碰真实文件）
   hidden_pick_folder: () => {
     demoHiddenPicked = true
@@ -2396,6 +2408,20 @@ const handlers: Handlers = {
     demoHiddenChanged = 0
     return { result: { restored, failed: 0 }, report: demoHiddenPicked ? demoHiddenReport() : null }
   },
+}
+
+// ── 硬盘测速（演示）──
+const DISK_GB = 1024 ** 3
+const DEMO_DRIVES: DriveView[] = [
+  { letter: 'C', label: '', fileSystem: 'NTFS', removable: false, system: true, total: 476 * DISK_GB, free: 118 * DISK_GB, canTest: true },
+  { letter: 'D', label: '资料', fileSystem: 'NTFS', removable: false, system: false, total: 931 * DISK_GB, free: 402 * DISK_GB, canTest: true },
+  { letter: 'F', label: 'KINGSTON', fileSystem: 'FAT32', removable: true, system: false, total: 29 * DISK_GB, free: 12 * DISK_GB, canTest: true },
+  { letter: 'G', label: '', fileSystem: 'exFAT', removable: true, system: false, total: 8 * DISK_GB, free: 1.2 * DISK_GB, canTest: false },
+]
+const DEMO_SPEEDS: Record<string, SpeedResult> = {
+  C: { seqWrite: 2803.4, seqRead: 3151.9, randomRead: 58.7, randomIops: 15027, testedBytes: 1024 * 1024 * 1024, verdict: 'nvme' },
+  D: { seqWrite: 142.6, seqRead: 156.3, randomRead: 0.8, randomIops: 205, testedBytes: 1024 * 1024 * 1024, verdict: 'hdd' },
+  F: { seqWrite: 9.4, seqRead: 27.8, randomRead: 2.6, randomIops: 666, testedBytes: 96 * 1024 * 1024, verdict: 'slow' },
 }
 
 // ── U 盘里的文件不见了（演示：一个中了病毒的 U 盘）──
@@ -2506,8 +2532,9 @@ let demoFiles = ['IMG_0001.JPG', 'IMG_0002.JPG', '海边.png', '说明.txt']
 let demoPlan: { source: string; target: string; changed: boolean }[] = []
 let demoLast: { source: string; target: string; changed: boolean }[] = []
 
-/** 个别小工具要多等一会儿（读电脑配置、重启资源管理器），好看清「正在…」的样子 */
+/** 个别小工具要多等一会儿（读电脑配置、重启资源管理器、硬盘测速），好看清「正在…」的样子 */
 function extraDelay(cmd: CommandName, args: unknown): number {
+  if (cmd === 'disk_speed_run') return 3000
   if (cmd !== 'tool_run' || typeof args !== 'object' || args === null || !('id' in args)) return 0
   const id = args.id
   return typeof id === 'string' ? (TOOLS.get(id)?.slowMs ?? 0) : 0

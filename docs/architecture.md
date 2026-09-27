@@ -354,6 +354,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `hidden_rescan` | — | `HiddenReport \| null`（把上次选的再查一遍；没选过返回 null） |
 | `hidden_restore` | `ids`（结果里的编号） | `HiddenRestore`（去掉这些文件、文件夹连同里面一切的隐藏、系统属性，原来带着的也去掉只读；程序和脚本文件照样藏着；原属性都记下来，返回改了多少和重新查的结果） |
 | `hidden_undo` | — | `HiddenUndo`（把上一次「显示出来」改过的属性都改回去） |
+| `disk_speed_drives` | — | `DriveView[]`（本机固定的和可移动的盘：盘符、卷标、文件系统、大小、剩余空间，剩余不到 2 GB 的 `canTest` 为 false） |
+| `disk_speed_run` | `letter` | `SpeedResult`（在这个盘的根目录写一个关掉就删的临时文件，不经过系统缓存，测顺序写、顺序读、4 KB 随机读，最多写 1 GB、每步限时；只收现在列出来、能测的盘符，同一时间只测一个） |
 | `screen_fullscreen` | `on` | `null`（屏幕坏点测试：窗口进入、退出全屏） |
 | `awake_get` | — | `AwakeStatus`（`{ on, display }`：「别让电脑自己睡着」开没开） |
 | `awake_set` | `on`、`display` | `AwakeStatus`（SetThreadExecutionState，只在小药箱开着时有效，不改电源设置） |

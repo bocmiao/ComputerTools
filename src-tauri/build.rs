@@ -37,6 +37,8 @@ const COMMANDS: &[&str] = &[
     "hidden_rescan",
     "hidden_restore",
     "hidden_undo",
+    "disk_speed_drives",
+    "disk_speed_run",
     "screen_fullscreen",
     "awake_get",
     "awake_set",

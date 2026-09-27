@@ -4,6 +4,7 @@ import type {
   CatalogSummary,
   CheckResult,
   ContextMenuItem,
+  DriveView,
   FeatureState,
   FileLockReport,
   HiddenReport,
@@ -17,6 +18,7 @@ import type {
   ShutdownCancel,
   ShutdownStatus,
   SpaceReport,
+  SpeedResult,
   StartupItem,
   SymptomDetail,
   SystemInfo,
@@ -66,6 +68,8 @@ export type CommandMap = {
   hidden_rescan: { args: NoArgs; result: HiddenReport | null }
   hidden_restore: { args: { ids: number[] }; result: HiddenRestore }
   hidden_undo: { args: NoArgs; result: HiddenUndo }
+  disk_speed_drives: { args: NoArgs; result: DriveView[] }
+  disk_speed_run: { args: { letter: string }; result: SpeedResult }
   screen_fullscreen: { args: { on: boolean }; result: null }
   awake_get: { args: NoArgs; result: AwakeStatus }
   awake_set: { args: { on: boolean; display: boolean }; result: AwakeStatus }

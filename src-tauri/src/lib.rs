@@ -5,6 +5,7 @@
 
 pub mod awake;
 pub mod commands;
+pub mod disk_speed;
 pub mod hidden;
 pub mod images;
 pub mod pdf;
@@ -51,6 +52,8 @@ macro_rules! command_handler {
             $crate::commands::hidden_rescan,
             $crate::commands::hidden_restore,
             $crate::commands::hidden_undo,
+            $crate::commands::disk_speed_drives,
+            $crate::commands::disk_speed_run,
             $crate::commands::screen_fullscreen,
             $crate::commands::awake_get,
             $crate::commands::awake_set,

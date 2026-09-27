@@ -766,6 +766,88 @@ pub fn reveal_file(path: &Path) -> PResult<()> {
     Ok(())
 }
 
+/// 本机的一个盘（硬盘分区或者 U 盘）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Drive {
+    /// 盘符，比如 'C'
+    pub letter: char,
+    /// U 盘、读卡器这类可移动的盘
+    pub removable: bool,
+    /// 卷标（「本地磁盘」这类名字是资源管理器自己起的，卷标常常是空的）
+    pub label: String,
+    /// NTFS、exFAT、FAT32……
+    pub file_system: String,
+    pub total: u64,
+    /// 这个进程能用的剩余空间
+    pub free: u64,
+}
+
+/// 本机的硬盘分区和 U 盘（固定的、可移动的有盘的；光驱、网络驱动器、没插卡的读卡器不列）。「硬盘测速」用它。
+/// 查的时候关掉「驱动器中没有磁盘」这类系统对话框（SEM_FAILCRITICALERRORS），空的读卡器只是不列出来。
+pub fn drives() -> Vec<Drive> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetDiskFreeSpaceExW, GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,
+    };
+    use windows_sys::Win32::System::Diagnostics::Debug::{SEM_FAILCRITICALERRORS, SetThreadErrorMode};
+    const DRIVE_REMOVABLE: u32 = 2;
+    const DRIVE_FIXED: u32 = 3;
+
+    let mut old_mode = 0;
+    // SAFETY: 只改这个线程的错误模式，结束时改回去
+    let changed = unsafe { SetThreadErrorMode(SEM_FAILCRITICALERRORS, &mut old_mode) } != 0;
+    // SAFETY: 没有参数
+    let mask = unsafe { GetLogicalDrives() };
+    let mut out = Vec::new();
+    for (i, letter) in ('A'..='Z').enumerate() {
+        if mask & (1 << i) == 0 {
+            continue;
+        }
+        let root = wide(format!("{letter}:\\"));
+        // SAFETY: root 以 NUL 结尾
+        let kind = unsafe { GetDriveTypeW(root.as_ptr()) };
+        if kind != DRIVE_FIXED && kind != DRIVE_REMOVABLE {
+            continue;
+        }
+        let (mut free, mut total, mut total_free) = (0u64, 0u64, 0u64);
+        // SAFETY: root 以 NUL 结尾，三个输出都是有效的 u64
+        if unsafe { GetDiskFreeSpaceExW(root.as_ptr(), &mut free, &mut total, &mut total_free) } == 0 {
+            continue;
+        }
+        let mut label = [0u16; 261];
+        let mut fs = [0u16; 261];
+        // SAFETY: 缓冲区长度和给的一样；不要的输出传空指针
+        let ok = unsafe {
+            GetVolumeInformationW(
+                root.as_ptr(),
+                label.as_mut_ptr(),
+                label.len() as u32,
+                null_mut(),
+                null_mut(),
+                null_mut(),
+                fs.as_mut_ptr(),
+                fs.len() as u32,
+            )
+        } != 0;
+        let text = |buf: &[u16]| {
+            let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+            String::from_utf16_lossy(&buf[..end]).trim().to_owned()
+        };
+        out.push(Drive {
+            letter,
+            removable: kind == DRIVE_REMOVABLE,
+            label: if ok { text(&label) } else { String::new() },
+            file_system: if ok { text(&fs) } else { String::new() },
+            total,
+            free,
+        });
+    }
+    if changed {
+        // SAFETY: 改回原来的错误模式
+        unsafe { SetThreadErrorMode(old_mode, null_mut()) };
+    }
+    out
+}
+
 /// 文件或文件夹的属性（GetFileAttributesW：只读 0x1、隐藏 0x2、系统 0x4、文件夹 0x10……）；读不到返回 None。
 /// 不跟着符号链接走：链接自己的属性里有 0x400（重解析点）。「U 盘里的文件不见了」用它找被藏起来的文件。
 pub fn file_attributes(path: &Path) -> Option<u32> {
