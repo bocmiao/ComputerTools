@@ -516,35 +516,16 @@ const FEATURE_LIST: MockFeature[] = [
   ),
   defineFeature(
     {
-      id: 'disk.storage-sense-on',
-      title: '开启存储感知',
-      description: '让 Windows 定期自动清理临时文件，C 盘不容易再满。回收站和「下载」文件夹不会被自动清理。',
-      category: 'disk',
-      recommend: 'recommended',
-    },
-    {
-      changes: [
-        {
-          target: `${HKCU_CV}\\StorageSense\\Parameters\\StoragePolicy\\01`,
-          initial: 'DWORD 0',
-          planned: 'DWORD 1',
-        },
-      ],
-      notes: ['以后可以在「设置 → 系统 → 存储」里随时关掉。'],
-    },
-  ),
-  defineFeature(
-    {
-      id: 'disk.hibernation-reduce',
+      id: 'disk.reduce-hiberfile',
       title: '缩小休眠文件',
-      description: '把休眠文件缩小一半左右，能腾出好几 GB。快速启动照样能用，只是开始菜单里不再有「休眠」。',
+      description:
+        '把 C 盘根目录下的休眠文件（hiberfil.sys）换成只给快速启动用的精简版，能腾出大约内存两成那么大的空间（16 GB 内存大约 3 GB），马上生效，不用重启。代价是不能再用「休眠」，「混合睡眠」也会失效（睡眠时突然停电，没保存的东西就没了）；关机、睡眠和快速启动照常。有电池的电脑（笔记本、平板）要靠完整的休眠文件在电量快用完时保存正在做的事，小药箱在这些电脑上不做这一项。',
       category: 'disk',
       risk: 'caution',
-      level: 'medium',
     },
     {
       changes: [{ target: T.hiberFile, initial: HIBER_FULL, planned: HIBER_REDUCED }],
-      notes: ['「睡眠」不受影响，合上笔记本盖子照常睡眠。'],
+      notes: [],
       restorePointFails: true,
     },
   ),
@@ -646,18 +627,25 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
-  'disk.hibernation-file': {
+  'disk.hiberfile': {
     title: '休眠文件',
     evaluate: () => {
       if (DEMO_ALL_OK || valueOf(T.hiberFile) === HIBER_REDUCED) {
-        return { status: 'ok', message: '休眠文件已经是缩小的版本（6.4 GB），不用再动。', facts: { hiberfil_gb: 6.4, type: 'reduced' } }
+        return {
+          status: 'ok',
+          resultCode: 'reduced',
+          message: '休眠文件已经是只给快速启动用的精简版，占 6.4 GB，不能再小了。',
+          facts: { size_gb: 6.4, memory_gb: 31.9, save_gb: 0, percent: 0 },
+        }
       }
       return {
         status: 'advice',
         resultCode: 'full',
-        message: '休眠文件占了 12.7 GB。缩小以后能腾出大约 6 GB，快速启动照样能用。',
+        message: '休眠文件占 12.7 GB。换成只给快速启动用的精简版，大约能腾出 6.3 GB。',
         fixer: 'medkit',
-        facts: { hiberfil_gb: 12.7, memory_gb: 16, type: 'full' },
+        next: '换成精简版以后不能再用「休眠」，「混合睡眠」也会失效（睡眠时突然停电，没保存的东西就没了）；关机、睡眠和快速启动照常。平时不用「休眠」的，可以点下面的按钮缩小；以后想恢复，在修改日志里撤销就行。',
+        links: ['feature:disk.reduce-hiberfile'],
+        facts: { size_gb: 12.7, memory_gb: 31.9, save_gb: 6.3, percent: 0 },
       }
     },
   },
@@ -1108,8 +1096,8 @@ const SYMPTOMS: MockSymptom[] = [
       '3. 桌面上别放大文件。在「此电脑」里右键「桌面」→「属性」→「位置」，可以把整个桌面搬到 D 盘。',
     ].join('\n'),
     steps: [
-      { check: 'disk.system-free-space', fixes: ['disk.cleanup-temp', 'disk.storage-sense-on'] },
-      { check: 'disk.hibernation-file', fixes: ['disk.hibernation-reduce'] },
+      { check: 'disk.system-free-space', fixes: ['disk.cleanup-temp'] },
+      { check: 'disk.hiberfile', fixes: ['disk.reduce-hiberfile'] },
       { check: 'disk.wechat-files', fixes: [] },
       { check: 'disk.windows-old', fixes: [] },
     ],
@@ -1799,6 +1787,14 @@ const TOOL_LIST: MockTool[] = [
     'ms-settings:windowsupdate',
   ),
   openTool('settings.storage', '存储', '看看 C 盘被什么占满了，开启存储感知自动清理。', 'settings', 'settings', 'ms-settings:storagesense'),
+  openTool(
+    'settings.storage-sense',
+    '存储感知',
+    '打开「设置」里的存储感知：打开以后，系统会定期自动清理用不上的临时文件，C 盘不容易再满。注意「回收站」那一项：默认会删掉放了 30 天以上的文件，回收站里还有想要的东西，就选「从不」；「下载」文件夹那一项保持「从不」。',
+    'settings',
+    'settings',
+    'ms-settings:storagepolicies',
+  ),
   openTool(
     'settings.apps',
     '已安装的应用',

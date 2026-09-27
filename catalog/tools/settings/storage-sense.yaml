@@ -1,0 +1,16 @@
+# 打开「设置」里的一页（open）：ms-settings:storagepolicies（「存储感知」的设置页），由系统打开。
+# 小药箱不替用户打开存储感知：它默认会把在回收站里放了 30 天以上的文件删掉（微软 Storage CSP），
+# 回收站里是用户自己的文件，要让用户在系统自己的页面上看清楚再选。另外，存储感知的设置存在注册表的
+# 什么地方，微软没有公开，网上的说法（StoragePolicy、StorageSensorV2）也对不上，小药箱不去改它。
+id: settings.storage-sense
+schema_version: 1
+group: open
+title: { zh-CN: 存储感知 }
+description:
+  zh-CN: 打开「设置」里的存储感知：打开以后，系统会定期自动清理用不上的临时文件，C 盘不容易再满。注意「回收站」那一项：默认会删掉放了 30 天以上的文件，回收站里还有想要的东西，就选「从不」；「下载」文件夹那一项保持「从不」。
+category: settings
+open: { settings: storagepolicies }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/windows/manage-drive-space-with-storage-sense-654f6ada-7bfc-45e5-966b-e24aded96ad5
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-storage

@@ -37,6 +37,7 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
 pub const SETTINGS_PAGES: &[&str] = &[
     "windowsupdate",
     "storagesense",
+    "storagepolicies",
     "appsfeatures",
     "startupapps",
     "defaultapps",

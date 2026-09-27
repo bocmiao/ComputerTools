@@ -142,42 +142,60 @@ references:
 | `break` | 只在测试时使用，制造出需要修复的状态 | 任意 |
 
 ```powershell
-# scripts/features/power/hibernation-off.ps1
+# scripts/features/disk/reduce-hiberfile-run.ps1 (excerpt). Get-HiberState is shared with the
+# disk.hiberfile check (a shared block); Invoke-Powercfg runs the absolute path of powercfg.exe.
 [CmdletBinding()]
 param([bool]$Prepare = $false, [string]$Before = '')
 $ErrorActionPreference = 'Stop'
 
-$key = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power'
-$enabled = (Get-ItemProperty -LiteralPath $key -Name HibernateEnabled -ErrorAction SilentlyContinue).HibernateEnabled
-$snapshot = @{ hibernate_enabled = ($enabled -eq 1) }
-if ($Prepare) { return [pscustomobject]@{ before = $snapshot } }
-if ([string]::IsNullOrWhiteSpace($Before)) { throw 'Missing snapshot' }
-$saved = $Before | ConvertFrom-Json
-if ([bool]$saved.hibernate_enabled -ne $snapshot.hibernate_enabled) {
-    return [pscustomobject]@{ skipped = $true; reason = '状态已变化，请重试' }
+$snapshot = ConvertTo-HiberSnapshot (Get-HiberState)   # { kind, enabled, type, percent }
+if ($Prepare) {
+    return [pscustomobject]@{ before = $snapshot }
 }
-$null = powercfg.exe /hibernate off
-if ($LASTEXITCODE -ne 0) { throw "powercfg exited with $LASTEXITCODE" }
-[pscustomobject]@{ after = @{ hibernate_enabled = $false } }
+$recorded = ConvertFrom-Json -InputObject $Before
+foreach ($name in @('kind', 'enabled', 'type', 'percent')) {
+    if ([string]$recorded.$name -ne [string]$snapshot[$name]) {
+        return [pscustomobject]@{ skipped = $true }     # changed since prepare: change nothing
+    }
+}
+$exitCode = Invoke-Powercfg @('/hibernate', '/type', 'reduced')
+if ($exitCode -ne 0) {
+    throw ('powercfg /hibernate /type reduced failed (exit code {0})' -f $exitCode)
+}
+if ((Get-HiberState).Kind -ne 'reduced') {
+    throw 'powercfg reported success, but the hibernation file is still not the reduced one'
+}
+[pscustomobject]@{ after = (ConvertTo-HiberSnapshot (Get-HiberState)) }
 ```
 
 ```powershell
-# scripts/features/power/hibernation-restore.ps1
+# scripts/features/disk/reduce-hiberfile-undo.ps1 (excerpt)
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$Before)
+param([string]$Before = '')
 $ErrorActionPreference = 'Stop'
 
-$state = $Before | ConvertFrom-Json
-if ($state.hibernate_enabled) {
-    $null = powercfg.exe /hibernate on
-    if ($LASTEXITCODE -ne 0) { throw "powercfg exited with $LASTEXITCODE" }
+$recorded = ConvertFrom-Json -InputObject $Before
+if ((Get-HiberState).Kind -ne 'off') {
+    $exitCode = Invoke-Powercfg @('/hibernate', '/type', 'full')
+    if ($exitCode -ne 0) {
+        throw ('powercfg /hibernate /type full failed (exit code {0})' -f $exitCode)
+    }
 }
-[pscustomobject]@{ restored = [bool]$state.hibernate_enabled }
+# HiberFileType goes back to its recorded value (removed when it was missing)
+if ($null -eq $recorded.type) {
+    Remove-ItemProperty -LiteralPath $powerKey -Name 'HiberFileType' -ErrorAction SilentlyContinue
+}
+else {
+    Set-ItemProperty -LiteralPath $powerKey -Name 'HiberFileType' -Value ([int]$recorded.type) -Type DWord
+}
+[pscustomobject]@{ result = 'ok' }
 ```
 
 - 失败时 `throw`，不要吞掉错误。引擎会把错误写进修改日志，界面会告诉用户「没有改成功」。
 - **改到一半出错，要先把已经改了的退回去再 `throw`**（用 `try` / `catch`）。引擎也会用执行前快照尝试恢复；脚本自己退回可以减少中间状态持续的时间。参考 `scripts/features/network/proxy-off-run.ps1`。
-- 原生命令要检查 `$LASTEXITCODE`。
+- 原生命令要检查 `$LASTEXITCODE`。用绝对路径（`$env:SystemRoot + '\System32\powercfg.exe'`），不靠 PATH 去找；它输出的是本地化的文字，不去读，只看退出码，再读回注册表确认改好了。Windows PowerShell 5.1 在 `$ErrorActionPreference = 'Stop'` 时会把原生命令写到标准错误的内容当成错误，调用时在函数里临时改成 `Continue`（见 `Invoke-Powercfg`）。
+- 返回 `skipped` 时不带说明文字（脚本里只能有 ASCII），界面用引擎自己的说明。
+- 这台电脑用不了、或者不该改（没有休眠文件、是笔记本）：写 `verify`，让那个检测在这些情况下给 na，引擎就不给执行，并把检测的结论当成原因显示（见 [architecture.md](architecture.md) 4.3）。
 
 ## 3. 挂到症状上：`catalog/symptoms/<名字>.yaml`
 
@@ -192,11 +210,11 @@ keywords: [ C盘红了, C盘满了, 空间不足, 磁盘已满 ]
 causes:
   - { zh-CN: 下载文件夹和桌面上堆了大文件 }
   - { zh-CN: 微信、QQ 的聊天文件默认存在 C 盘 }
-maturity: one-click
+maturity: semi
 steps:
   - check: disk.system-free-space
-    stop_on: [ ok ]
-    fixes: [ power.hibernation-off ]
+  - check: disk.hiberfile
+    fixes: [ disk.reduce-hiberfile ]
 ```
 
 - `keywords` 写用户会怎么说，搜索主要靠它。多问问身边不懂电脑的人。

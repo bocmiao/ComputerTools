@@ -180,13 +180,14 @@ references:
 ### 4.2 脚本类
 
 ```yaml
-id: disk.hibernation-reduce
+id: disk.reduce-hiberfile
 # …（其余字段同上，不写 actions）
-detect: { script: features/disk/hibernation-detect.ps1 }   # 返回 { state, facts }
-prepare: { script: features/disk/hibernation-reduce.ps1 }  # -Prepare $true，只返回 { before }
-run:    { script: features/disk/hibernation-reduce.ps1 }   # 接收 -Before，返回 { after, facts }
-undo:   { script: features/disk/hibernation-restore.ps1 }  # 接收 -Before '<JSON>'
-break:  { script: features/disk/hibernation-break.ps1 }    # 只在测试中使用
+detect:  { script: features/disk/reduce-hiberfile-detect.ps1 }  # 返回 { state }（撤销前核对修改还在不在）
+prepare: { script: features/disk/reduce-hiberfile-run.ps1 }     # -Prepare $true，只返回 { before }
+run:     { script: features/disk/reduce-hiberfile-run.ps1 }     # 接收 -Before，返回 { after }；状态变了返回 { skipped: true }
+undo:    { script: features/disk/reduce-hiberfile-undo.ps1 }    # 接收 -Before '<JSON>'
+break:   { script: features/disk/reduce-hiberfile-break.ps1 }   # 只在测试中使用
+verify:  disk.hiberfile                                         # 能不能执行、改好没有，看这个检测
 ```
 
 - 检测脚本的 `state` 取值：`applied` / `not-applied` / `partial` / `unknown`。
@@ -195,7 +196,10 @@ break:  { script: features/disk/hibernation-break.ps1 }    # 只在测试中使�
 
 ### 4.3 可选字段
 
-- `verify: <check-id>`：修完以后，改用某个检测来复查。不写时，原语类按目标值比对，脚本类跑 `detect`。
+- `verify: <check-id>`：用某个检测判断这一项的状态（执行前、修完复查都用它）。不写时，原语类按目标值比对，脚本类跑 `detect`。
+  检测的结论 ok 表示已经改好，advice、manual 表示还没改，unknown 表示没查出来；na 表示这台电脑用不了这一项
+  （例如没有休眠文件、是笔记本）：预览里写明原因、不给执行，执行也会被拒绝，原因就是检测的结论。
+  版本不对（`applies_to`）不用跑脚本就知道；「这台电脑有没有要改的东西、该不该改」要检测了才知道，就用这个办法。
 
 ## 5. 脚本约定
 
@@ -523,7 +527,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `event-viewer` | `mmc.exe eventvwr.msc` |
 | `control-panel` | `control.exe` |
 
-settings 页面：`windowsupdate`、`storagesense`、`appsfeatures`、`defaultapps`、`network-status`、`printers`、
+settings 页面：`windowsupdate`、`storagesense`、`storagepolicies`、`appsfeatures`、`defaultapps`、`network-status`、`printers`、
 `sound`、`powersleep`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`。
 
 - 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。

@@ -48,6 +48,22 @@ results:
 references: [ "https://example.com/hive" ]
 "#,
     r#"
+id: disk.hib-state
+schema_version: 1
+title: { zh-CN: 休眠文件 }
+category: disk
+probe: { script: checks/disk/hib-state.ps1 }
+results:
+  off: { status: na, message: { zh-CN: 这台电脑没有休眠文件。 } }
+  full:
+    status: advice
+    message: { zh-CN: 休眠文件是完整版。 }
+    fixer: medkit
+    links: [ "feature:test.verified" ]
+  reduced: { status: ok, message: { zh-CN: 已经是精简版。 } }
+references: [ "https://example.com/hib-state" ]
+"#,
+    r#"
 id: system.admin-only
 schema_version: 1
 title: { zh-CN: 需要管理员的检测 }
@@ -201,6 +217,23 @@ run: { script: features/disk/hib-reduce.ps1 }
 undo: { script: features/disk/hib-restore.ps1 }
 break: { script: features/disk/hib-break.ps1 }
 references: [ "https://example.com/hib" ]
+"#,
+    r#"
+id: test.verified
+schema_version: 1
+title: { zh-CN: 看检测结论的修改 }
+description: { zh-CN: 测试用。 }
+category: disk
+risk: safe
+level: light
+recommend: optional
+target: machine
+detect: { script: features/test/verified-detect.ps1 }
+prepare: { script: features/test/verified-run.ps1 }
+run: { script: features/test/verified-run.ps1 }
+undo: { script: features/test/verified-undo.ps1 }
+verify: disk.hib-state
+references: [ "https://example.com/verified" ]
 "#,
     r#"
 id: test.one-way
@@ -629,6 +662,55 @@ fn features_for_other_builds_are_refused() {
     let preview = w.engine.feature_preview("test.future-only").unwrap();
     assert!(preview.notes.iter().any(|n| n.starts_with("不能执行")), "{:?}", preview.notes);
     assert!(matches!(w.engine.feature_apply("test.future-only"), Err(medkit_core::Error::NotApplicable(_))));
+}
+
+/// 复查用的检测说这台电脑不适用（na，例如没有休眠文件、是笔记本）：预览里说明原因、不给执行，
+/// 执行也被拒绝；只跑了检测，功能自己的脚本一个都没跑，也没写修改日志。
+#[test]
+fn verify_check_saying_na_makes_the_feature_not_applicable() {
+    let w = world();
+    w.runner.returns("checks/disk/hib-state.ps1", json!({ "result": "off" }));
+    let why = "这台电脑没有休眠文件。";
+
+    let preview = w.engine.feature_preview("test.verified").unwrap();
+    assert!(!preview.feature.applicable);
+    assert_eq!(preview.feature.not_applicable_reason.as_deref(), Some(why));
+    assert_eq!(preview.notes, vec![format!("不能执行：{why}")]);
+    assert_eq!(preview.changes[0].current, "不适用");
+
+    assert!(matches!(w.engine.feature_apply("test.verified"), Err(medkit_core::Error::NotApplicable(r)) if r == why));
+    let d = w.engine.feature_detect("test.verified").unwrap();
+    assert_eq!(d.state, FeatureStateKind::Unknown);
+    assert!(d.error.as_deref().is_some_and(|e| e.contains(why)), "{d:?}");
+
+    assert!(w.runner.calls().iter().all(|(s, _)| s == "checks/disk/hib-state.ps1"), "{:?}", w.runner.calls());
+    assert!(w.engine.journal_list().unwrap().is_empty());
+}
+
+/// 检测给 advice 时照常执行，改完用同一个检测复查。
+#[test]
+fn verify_check_judges_a_script_feature_before_and_after() {
+    let w = world();
+    let reduced = Arc::new(Mutex::new(false));
+    let r = reduced.clone();
+    w.runner.on("checks/disk/hib-state.ps1", move |_| {
+        Ok(json!({ "result": if *r.lock().unwrap() { "reduced" } else { "full" } }))
+    });
+    let r = reduced.clone();
+    w.runner.on("features/test/verified-run.ps1", move |args| {
+        if args.get("Prepare") == Some(&Value::Bool(true)) {
+            return Ok(json!({ "before": { "kind": "full" } }));
+        }
+        *r.lock().unwrap() = true;
+        Ok(json!({ "after": { "kind": "reduced" } }))
+    });
+
+    let preview = w.engine.feature_preview("test.verified").unwrap();
+    assert!(preview.feature.applicable && preview.notes.is_empty(), "{preview:?}");
+    assert_eq!(preview.changes[0].current, "还没改");
+    let res = w.engine.feature_apply("test.verified").unwrap();
+    assert!(res.ok && res.verified == FeatureStateKind::Applied, "{res:?}");
+    assert_eq!(w.engine.feature_detect("test.verified").unwrap().state, FeatureStateKind::Applied);
 }
 
 #[test]

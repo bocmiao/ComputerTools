@@ -587,7 +587,9 @@ impl Engine {
             let check = self.catalog.check(check_id).ok_or_else(|| Error::not_found("检测", check_id))?;
             let r = self.run_check_inner(check);
             let state = match r.status {
-                Status::Ok | Status::Na => FeatureStateKind::Applied,
+                // 检测说这件事和这台电脑无关（例如没有休眠文件、是笔记本）：这个功能在这里不能用，理由就是检测的结论
+                Status::Na => return Err(Error::NotApplicable(r.message)),
+                Status::Ok => FeatureStateKind::Applied,
                 Status::Advice | Status::Manual => FeatureStateKind::NotApplied,
                 Status::Unknown => FeatureStateKind::Unknown,
             };
@@ -628,9 +630,20 @@ impl Engine {
 
     pub fn feature_preview(&self, id: &str) -> Result<Preview> {
         let f = self.feature(id)?;
+        let mut summary = self.feature_summary(f);
         let mut notes = Vec::new();
-        if let Some(reason) = self.applicability(f) {
+        if let Some(reason) = &summary.not_applicable_reason {
             notes.push(format!("不能执行：{reason}"));
+        }
+        // 脚本类功能用检测说明现在的状态；写了 verify 的，那个检测还决定这台电脑能不能用（na 时不能用，
+        // 版本对，但没有要改的东西，或者不该改）：和版本不对一样，不给执行
+        let detected = (!f.is_primitive() || f.verify.is_some()).then(|| self.detect_inner(f));
+        if let Some(Err(Error::NotApplicable(reason))) = &detected
+            && summary.applicable
+        {
+            notes.push(format!("不能执行：{reason}"));
+            summary.applicable = false;
+            summary.not_applicable_reason = Some(reason.clone());
         }
         let changes = if f.is_primitive() {
             f.actions
@@ -646,11 +659,12 @@ impl Engine {
                 })
                 .collect::<Result<Vec<_>>>()?
         } else {
-            // 脚本类功能没有逐个位置可列，用它自己的检测说明现在的状态；要改什么见功能说明
-            let current = match self.detect_inner(f) {
-                Ok((FeatureStateKind::Applied, _)) => "已经是这样了",
-                Ok((FeatureStateKind::NotApplied, _)) => "还没改",
-                Ok((FeatureStateKind::Partial, _)) => "改了一部分",
+            // 脚本类功能没有逐个位置可列；要改什么见功能说明
+            let current = match detected {
+                Some(Ok((FeatureStateKind::Applied, _))) => "已经是这样了",
+                Some(Ok((FeatureStateKind::NotApplied, _))) => "还没改",
+                Some(Ok((FeatureStateKind::Partial, _))) => "改了一部分",
+                Some(Err(Error::NotApplicable(_))) => "不适用",
                 _ => "没查出来",
             };
             vec![PreviewChange {
@@ -678,12 +692,7 @@ impl Engine {
             let why = f.irreversible_reason.as_ref().map(|t| t.get(&self.lang).to_owned()).unwrap_or_default();
             notes.push(format!("这一项改了就不能撤销：{why}"));
         }
-        Ok(Preview {
-            feature: self.feature_summary(f),
-            changes,
-            will_create_restore_point: f.risk >= Risk::Caution,
-            notes,
-        })
+        Ok(Preview { feature: summary, changes, will_create_restore_point: f.risk >= Risk::Caution, notes })
     }
 
     // ───────────── 功能：执行 ─────────────
@@ -694,12 +703,17 @@ impl Engine {
             return Err(Error::NotApplicable(reason));
         }
         let _guard = self.apply_lock.lock().unwrap();
-        // 本来就是好的：不建还原点，也不写修改日志
-        if let Ok((FeatureStateKind::Applied, _)) = self.detect_inner(f) {
-            let mut r = self.result(f, true, Vec::new(), "这一项本来就是好的，不用改。".to_owned(), Vec::new());
-            r.verified = FeatureStateKind::Applied;
-            r.reboot = crate::model::Reboot::None;
-            return Ok(r);
+        match self.detect_inner(f) {
+            // 本来就是好的：不建还原点，也不写修改日志
+            Ok((FeatureStateKind::Applied, _)) => {
+                let mut r = self.result(f, true, Vec::new(), "这一项本来就是好的，不用改。".to_owned(), Vec::new());
+                r.verified = FeatureStateKind::Applied;
+                r.reboot = crate::model::Reboot::None;
+                return Ok(r);
+            }
+            // 复查用的检测说这台电脑用不了（预览里已经说明、不给执行）
+            Err(Error::NotApplicable(reason)) => return Err(Error::NotApplicable(reason)),
+            _ => {}
         }
         let mut notes = Vec::new();
         if f.risk >= Risk::Caution {

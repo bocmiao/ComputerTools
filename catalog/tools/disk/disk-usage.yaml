@@ -64,7 +64,8 @@ results:
     message:
       zh-CN: "{drive} 盘一共 {total_gb} GB，还剩 {free_gb} GB。下面列出的几大块里，占得最多的是休眠文件，有 {top_gb} GB。"
     next:
-      zh-CN: 休眠文件是给「休眠」和「快速启动」用的，一般有内存的四成左右那么大。小药箱以后会加上一键「缩小休眠文件」；现在想缩小的话，右键「开始」按钮，打开「终端（管理员）」（Windows 10 叫「Windows PowerShell（管理员）」），输入 powercfg /h /type reduced 回车。缩小以后不能再「休眠」，「睡眠」和快速启动照常；想改回来就输入 powercfg /h /type full。拿不准的话请懂哥帮忙。
+      zh-CN: 休眠文件是给「休眠」和「快速启动」用的，一般有内存的四成左右那么大。台式机可以点「缩小休眠文件」，换成只给快速启动用的精简版（大约是内存的两成）：不能再用「休眠」，睡眠和快速启动照常，以后想恢复，在修改日志里撤销就行。笔记本、平板要靠它在电量快用完时保存正在做的事，不建议缩小，小药箱在这些电脑上也不做。
+    links: ["feature:disk.reduce-hiberfile"]
   top-windows-old:
     status: ok
     message:
@@ -154,7 +155,7 @@ labels:
     advice-recycle-bin:
       zh-CN: 先打开回收站看看有没有还要的，确认都不要了再清空。清空以后就找不回来了。
     advice-hibernation:
-      zh-CN: 给「休眠」和「快速启动」用的。小药箱以后会加一键「缩小休眠文件」；现在想缩小，可以请懂哥在管理员终端里运行 powercfg /h /type reduced（缩小以后不能再「休眠」，快速启动照常）。
+      zh-CN: 给「休眠」和「快速启动」用的。台式机可以用「缩小休眠文件」换成精简版（不能再用「休眠」，快速启动照常）；笔记本、平板不建议缩小。
     advice-windows-old:
       zh-CN: 升级或重装系统时留下的旧系统。先打开 Windows.old 里的 Users 文件夹，看看有没有自己的文件，要的先拷出来；再用「磁盘清理」→「清理系统文件」勾选「以前的 Windows 安装」删掉。删了就找不回来了。
     advice-chat:
