@@ -131,26 +131,34 @@ references:
 
 ### 2.2 脚本类：原语做不到的事
 
-需要调用系统命令、改文件、或者要先判断再决定怎么改的，写四个脚本：
+需要调用系统命令、改文件、或者要先判断再决定怎么改的，写检测、执行、撤销和测试脚本。可撤销的执行脚本还必须支持执行前快照：
 
 | 字段 | 作用 | 返回 |
 | --- | --- | --- |
 | `detect` | 现在是不是已经修好了 | `{ state: applied / not-applied / partial / unknown, facts }` |
-| `run` | 执行修复。**改之前先记下原状态** | `{ before, after, facts }` |
-| `undo` | 撤销。参数 `-Before` 是 `run` 当初返回的 `before`（JSON 字符串） | 任意 |
+| `prepare` | **只读取**原状态，执行前由引擎存入修改日志；可以和 `run` 指向同一脚本，以 `-Prepare $true` 区分 | `{ before }`（不能为空） |
+| `run` | 接收引擎传入的 `-Before`（JSON 字符串），核对状态没变后执行修复 | `{ after, facts }` |
+| `undo` | 撤销。参数 `-Before` 是执行前存入日志的状态 | 任意 |
 | `break` | 只在测试时使用，制造出需要修复的状态 | 任意 |
 
 ```powershell
 # scripts/features/power/hibernation-off.ps1
 [CmdletBinding()]
-param()
+param([bool]$Prepare = $false, [string]$Before = '')
 $ErrorActionPreference = 'Stop'
 
 $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power'
 $enabled = (Get-ItemProperty -LiteralPath $key -Name HibernateEnabled -ErrorAction SilentlyContinue).HibernateEnabled
+$snapshot = @{ hibernate_enabled = ($enabled -eq 1) }
+if ($Prepare) { return [pscustomobject]@{ before = $snapshot } }
+if ([string]::IsNullOrWhiteSpace($Before)) { throw 'Missing snapshot' }
+$saved = $Before | ConvertFrom-Json
+if ([bool]$saved.hibernate_enabled -ne $snapshot.hibernate_enabled) {
+    return [pscustomobject]@{ skipped = $true; reason = '状态已变化，请重试' }
+}
 $null = powercfg.exe /hibernate off
 if ($LASTEXITCODE -ne 0) { throw "powercfg exited with $LASTEXITCODE" }
-[pscustomobject]@{ before = @{ hibernate_enabled = ($enabled -eq 1) }; after = @{ hibernate_enabled = $false } }
+[pscustomobject]@{ after = @{ hibernate_enabled = $false } }
 ```
 
 ```powershell
@@ -168,7 +176,7 @@ if ($state.hibernate_enabled) {
 ```
 
 - 失败时 `throw`，不要吞掉错误。引擎会把错误写进修改日志，界面会告诉用户「没有改成功」。
-- **改到一半出错，要先把已经改了的退回去再 `throw`**（用 `try` / `catch`）。脚本出错时引擎拿不到 `before`，没法替你恢复。参考 `scripts/features/network/proxy-off-run.ps1`。
+- **改到一半出错，要先把已经改了的退回去再 `throw`**（用 `try` / `catch`）。引擎也会用执行前快照尝试恢复；脚本自己退回可以减少中间状态持续的时间。参考 `scripts/features/network/proxy-off-run.ps1`。
 - 原生命令要检查 `$LASTEXITCODE`。
 
 ## 3. 挂到症状上：`catalog/symptoms/<名字>.yaml`

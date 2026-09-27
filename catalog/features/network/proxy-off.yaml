@@ -40,6 +40,8 @@ reboot: none
 target: current-user
 detect:
   script: features/network/proxy-off-detect.ps1
+prepare:
+  script: features/network/proxy-off-run.ps1
 run:
   script: features/network/proxy-off-run.ps1
 undo:

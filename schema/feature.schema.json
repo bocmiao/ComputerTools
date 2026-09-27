@@ -73,6 +73,18 @@
     "level": {
       "$ref": "#/$defs/Level"
     },
+    "prepare": {
+      "description": "可撤销脚本执行前读取原状态；结果必须包含非空的 before。",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScriptRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "reboot": {
       "$ref": "#/$defs/Reboot",
       "default": "none"

@@ -25,7 +25,9 @@
 
 [CmdletBinding()]
 param(
-    [string]$UserHive = 'HKCU:'
+    [string]$UserHive = 'HKCU:',
+    [bool]$Prepare = $false,
+    [string]$Before = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -409,6 +411,30 @@ $before = [ordered]@{
     proxy_enable   = $oldEnable
     legacy_changed = $changeLegacy
     connections    = $beforeConnections
+}
+
+if ($Prepare) {
+    # Engine saves this snapshot to disk before calling the script again to write.
+    return [pscustomobject]@{ before = $before }
+}
+if ([string]::IsNullOrWhiteSpace($Before)) {
+    throw 'The saved pre-change state is required'
+}
+$savedBefore = $Before | ConvertFrom-Json
+if (($null -eq $savedBefore) -or
+    ($savedBefore.proxy_enable -ne $before.proxy_enable) -or
+    ([bool]$savedBefore.legacy_changed -ne $before.legacy_changed)) {
+    return [pscustomobject]@{ skipped = $true; reason = '代理设置在快照后发生变化，请重试' }
+}
+$savedConnections = @($savedBefore.connections.PSObject.Properties)
+if ($savedConnections.Count -ne $beforeConnections.Count) {
+    return [pscustomobject]@{ skipped = $true; reason = '代理连接在快照后发生变化，请重试' }
+}
+foreach ($entry in $savedConnections) {
+    if ((-not $beforeConnections.Contains($entry.Name)) -or
+        ([string]$entry.Value -ne [string]$beforeConnections[$entry.Name])) {
+        return [pscustomobject]@{ skipped = $true; reason = '代理连接在快照后发生变化，请重试' }
+    }
 }
 
 # 2. Change. If anything fails half-way, put back what was already changed

@@ -196,6 +196,7 @@ level: medium
 recommend: optional
 target: current-user
 detect: { script: features/disk/hib-detect.ps1 }
+prepare: { script: features/disk/hib-prepare.ps1 }
 run: { script: features/disk/hib-reduce.ps1 }
 undo: { script: features/disk/hib-restore.ps1 }
 break: { script: features/disk/hib-break.ps1 }
@@ -259,7 +260,7 @@ fn fixture_scripts(data: &CatalogData) -> BTreeSet<String> {
         s.extend(c.probe.script.clone());
     }
     for f in &data.features {
-        for r in [&f.detect, &f.run, &f.break_script].into_iter().flatten() {
+        for r in [&f.detect, &f.prepare, &f.run, &f.break_script].into_iter().flatten() {
             s.insert(r.script.clone());
         }
         if let medkit_core::model::Undo::Script(r) = &f.undo {
@@ -282,6 +283,7 @@ fn world_with(platform: MockPlatform) -> World {
     let journal_path = dir.path().join("journal").join("journal.jsonl");
     let platform = Arc::new(platform);
     let runner = Arc::new(MockRunner::new());
+    runner.returns("features/disk/hib-prepare.ps1", json!({ "before": { "type": "full" } }));
     let engine = engine_on(&journal_path, platform.clone(), runner.clone());
     World { engine, platform, runner, journal_path, _dir: dir }
 }
@@ -597,13 +599,11 @@ fn script_feature_passes_before_to_the_undo_script() {
 fn reversible_script_without_before_is_not_reported_as_success() {
     let w = world();
     w.runner.returns("features/disk/hib-detect.ps1", json!({ "state": "not-applied" }));
-    w.runner.returns("features/disk/hib-reduce.ps1", json!({ "after": { "type": "reduced" } }));
+    w.runner.returns("features/disk/hib-prepare.ps1", json!({ "after": { "type": "reduced" } }));
 
-    let result = w.engine.feature_apply("disk.hibernation-reduce").unwrap();
-    assert!(!result.ok);
-    assert!(result.error.as_deref().unwrap().contains("没有返回修改前"));
-    let entry = &w.engine.journal_list().unwrap()[0].entries[0];
-    assert!(!entry.pending && !entry.can_undo);
+    assert!(w.engine.feature_apply("disk.hibernation-reduce").is_err());
+    assert!(w.engine.journal_list().unwrap().is_empty());
+    assert!(!w.runner.calls().iter().any(|(s, _)| s.ends_with("hib-reduce.ps1")));
     assert!(w.engine.journal_undo(&entry.id, false).is_err());
 }
 
@@ -895,6 +895,46 @@ fn script_entries_without_a_recorded_state_cannot_be_undone() {
     assert_eq!(e.target, "小药箱脚本改的设置");
     assert!(w.engine.journal_undo(&rec.id, false).is_err());
     assert!(w.runner.calls().is_empty(), "不应该去跑撤销脚本");
+}
+
+#[test]
+fn interrupted_script_can_restore_its_prepared_state() {
+    let w = world();
+    let rec = ApplyRecord {
+        v: RECORD_VERSION,
+        id: new_id(),
+        session: "interrupted".into(),
+        time: now_rfc3339(),
+        feature: "disk.hibernation-reduce".into(),
+        action: 0,
+        target: TargetRef::Script { feature: "disk.hibernation-reduce".into(), hive: None },
+        before: State::Script { data: json!({ "type": "full" }) },
+    };
+    Journal::open(&w.journal_path).unwrap().append(&Record::Apply(rec.clone())).unwrap();
+    let entry = &w.engine.journal_list().unwrap()[0].entries[0];
+    assert!(entry.pending && entry.can_undo && entry.before.contains("已经记下"), "{entry:?}");
+    w.runner.on("features/disk/hib-restore.ps1", |args| {
+        let before: Value = serde_json::from_str(args["Before"].as_str().unwrap()).unwrap();
+        assert_eq!(before, json!({ "type": "full" }));
+        Ok(json!({}))
+    });
+    assert!(w.engine.journal_undo(&rec.id, false).unwrap().ok);
+}
+
+#[test]
+fn script_skips_when_state_changes_after_snapshot() {
+    let w = world();
+    w.runner.returns("features/disk/hib-detect.ps1", json!({ "state": "not-applied" }));
+    w.runner.on("features/disk/hib-reduce.ps1", |args| {
+        let before: Value = serde_json::from_str(args["Before"].as_str().unwrap()).unwrap();
+        assert_eq!(before, json!({ "type": "full" }));
+        Ok(json!({ "skipped": true, "reason": "状态已变化" }))
+    });
+    let result = w.engine.feature_apply("disk.hibernation-reduce").unwrap();
+    assert!(!result.ok && result.message.contains("没有修改"), "{result:?}");
+    let entry = &w.engine.journal_list().unwrap()[0].entries[0];
+    assert!(!entry.pending && !entry.can_undo, "{entry:?}");
+    assert!(!w.runner.calls().iter().any(|(script, _)| script.ends_with("hib-restore.ps1")));
 }
 
 /// 目录里直接标出这台电脑不能用的功能，界面据此禁用，不用等点了执行才报错。

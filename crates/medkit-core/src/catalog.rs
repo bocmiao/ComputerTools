@@ -488,6 +488,9 @@ impl Validator<'_> {
 
         match (f.actions.is_empty(), &f.run) {
             (false, None) => {
+                if f.prepare.is_some() {
+                    self.err(&file, "原语类功能不要写 prepare".into());
+                }
                 if !matches!(f.undo, Undo::Keyword(UndoKeyword::Auto)) {
                     self.err(&file, "原语类功能的 undo 必须是 auto".into());
                 }
@@ -504,6 +507,12 @@ impl Validator<'_> {
             (true, Some(run)) => {
                 let run = run.script.clone();
                 self.script_ref(&file, &run, "run");
+                match (&f.prepare, f.reversible()) {
+                    (Some(p), true) => self.script_ref(&file, &p.script, "prepare"),
+                    (None, true) => self.err(&file, "可撤销的脚本类功能必须写 prepare".into()),
+                    (Some(_), false) => self.err(&file, "不能撤销的脚本类功能不要写 prepare".into()),
+                    (None, false) => {}
+                }
                 match &f.detect {
                     Some(d) => {
                         let d = d.script.clone();

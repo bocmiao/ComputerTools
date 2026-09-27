@@ -183,13 +183,14 @@ references:
 id: disk.hibernation-reduce
 # …（其余字段同上，不写 actions）
 detect: { script: features/disk/hibernation-detect.ps1 }   # 返回 { state, facts }
-run:    { script: features/disk/hibernation-reduce.ps1 }   # 返回 { before, after, facts }
+prepare: { script: features/disk/hibernation-reduce.ps1 }  # -Prepare $true，只返回 { before }
+run:    { script: features/disk/hibernation-reduce.ps1 }   # 接收 -Before，返回 { after, facts }
 undo:   { script: features/disk/hibernation-restore.ps1 }  # 接收 -Before '<JSON>'
 break:  { script: features/disk/hibernation-break.ps1 }    # 只在测试中使用
 ```
 
 - 检测脚本的 `state` 取值：`applied` / `not-applied` / `partial` / `unknown`。
-- 执行脚本必须在改动之前记下原状态，放进 `before` 返回。引擎把它存进修改日志；撤销时，再原样传给撤销脚本的 `-Before` 参数。
+- 可撤销脚本必须先用 `prepare` 读取原状态。引擎先把 `before` 写进修改日志，再把它以 `-Before` 传给执行脚本。执行脚本应在写入前核对快照仍然有效；撤销时，引擎把同一快照传给撤销脚本。
 - 不可撤销的功能写 `undo: none`，同时必须写 `irreversible_reason`。
 
 ### 4.3 可选字段
@@ -283,7 +284,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 
   - `target` 的三种形式：`registry {root,key,name}`、`service {name}`、`script {feature,hive}`。`root` 是 `HKLM`、`HKCU` 或 `HKU\<SID>`；`hive` 是执行时传给脚本的 `-UserHive`，撤销时原样传回，不按撤销那一刻的登录用户重新解析。
   - `before` / `after` 对应的三种形式：`registry {value,created_keys}`（`value` 为 `null` 表示值不存在）、`service {start_type}`、`script {data}`。
-  - 脚本类功能的 `apply.before` 是占位的 `null`，真正的原状态在 `commit.after.script.data.before` 里（执行脚本返回的 `before`）。
+  - 可撤销脚本类功能的 `apply.before` 是执行前快照；旧版记录仍可能把它留空、把原状态写在 `commit.after.script.data.before`，读取时兼容旧记录。
   - 如果改完以后写不进 `commit`（比如磁盘满了），立即把这一项退回原样。宁可不改，也不留下没有记录的改动。
   - 如果程序在两步之间崩溃，日志里只有 `apply`。界面上显示为「状态不确定」，仍然可以按 `before` 恢复（跳过核对）。
 - 撤销时写一条 `undo` 记录：
@@ -295,7 +296,7 @@ checks: [disk.system-free-space, system.pending-reboot]
   `reason` 是 `user`（用户点了恢复）或 `rollback`（同一功能里后面的步骤失败，自动退回）。
 - **不信返回值，读回来核对**：退回和撤销做完以后，都把目标位置读出来和原值比，一致才算成功；不一致的如实报告，条目保持「可以恢复」。
 - **改的是另一个账户、而那个账户没有登录时**，撤销直接拒绝并说明原因：那时写到 `HKU\<SID>` 什么都改不到。
-- 脚本类修改在执行中途程序退出、没写 `commit` 的，原状态没记下来，`canUndo` 为 `false`。
+- 可撤销脚本在执行中途退出、没写 `commit` 的，仍可用 `apply.before` 恢复；旧版没有快照的记录不能自动恢复。
 - **一个功能里的多个原语是一个整体**：中途有一个失败，前面已经改过的会按倒序自动退回；失败的那一步本身也会按原值退回（它可能改了一半，比如键建好了、值没写进去）。
 - **已经是目标状态的原语不动**，也不写日志。整个功能本来就是好的，就直接返回「不用改」，也不建还原点。
 - **为了写值而新建的键**记在 `created_keys` 里；撤销时，这些键如果已经空了，就从深到浅删掉；里面后来有了别的内容的，保留。删键只是收尾，失败了不影响值已经恢复。

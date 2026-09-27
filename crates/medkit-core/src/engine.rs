@@ -880,6 +880,19 @@ impl Engine {
         let run = f.run.as_ref().ok_or_else(|| Error::Catalog(format!("{} 没有 run", f.id)))?;
         // 记下这次改的是哪个用户的注册表，撤销时原样传回
         let hive = (f.target == Target::CurrentUser).then(|| self.user_hive());
+        let before = if f.reversible() {
+            let prepare = f.prepare.as_ref().ok_or_else(|| Error::Catalog(format!("{} 没有 prepare", f.id)))?;
+            let mut args = self.script_args(f, hive.as_deref());
+            args.insert("Prepare".into(), Value::Bool(true));
+            let snapshot = self.runner.run(&prepare.script, &args, SCRIPT_FEATURE_TIMEOUT)?;
+            snapshot
+                .get("before")
+                .filter(|v| !v.is_null())
+                .cloned()
+                .ok_or_else(|| Error::Invalid("执行前快照没有返回原状态，已取消修改".to_owned()))?
+        } else {
+            Value::Null
+        };
         let rec = ApplyRecord {
             v: RECORD_VERSION,
             id: new_id(),
@@ -888,27 +901,38 @@ impl Engine {
             feature: f.id.clone(),
             action: 0,
             target: TargetRef::Script { feature: f.id.clone(), hive: hive.clone() },
-            // 脚本在执行时才知道原状态；先记一个占位，commit 里带上真正的 before
-            before: State::Script { data: Value::Null },
+            before: State::Script { data: before.clone() },
         };
         self.journal.append(&Record::Apply(rec.clone()))?;
-        let outcome = self.runner.run(&run.script, &self.script_args(f, hive.as_deref()), SCRIPT_FEATURE_TIMEOUT);
+        let mut args = self.script_args(f, hive.as_deref());
+        if f.reversible() {
+            args.insert("Before".into(), Value::String(before.to_string()));
+        }
+        let outcome = self.runner.run(&run.script, &args, SCRIPT_FEATURE_TIMEOUT);
+        let rollback = if outcome.is_err() && f.reversible() {
+            Some(self.run_undo_script(f, hive.as_deref(), &before))
+        } else {
+            None
+        };
         let (ok, after, error, left_changes) = match &outcome {
-            Ok(v) if f.reversible() && v.get("before").is_none_or(Value::is_null) => {
-                (false, None, Some("脚本没有返回修改前的设置，无法保证恢复原状".to_owned()), true)
-            }
+            Ok(v) if v.get("skipped").and_then(Value::as_bool) == Some(true) => (
+                false,
+                None,
+                Some(v.get("reason").and_then(Value::as_str).unwrap_or("执行前的状态已变化，请重试").to_owned()),
+                false,
+            ),
             Ok(v) => (
                 true,
                 Some(State::Script {
                     data: serde_json::json!({
-                        "before": v.get("before").cloned().unwrap_or(Value::Null),
+                        "before": before,
                         "after": v.get("after").cloned().unwrap_or(Value::Null),
                     }),
                 }),
                 None,
                 false,
             ),
-            Err(e) => (false, None, Some(e.to_string()), false),
+            Err(e) => (false, None, Some(e.to_string()), rollback.as_ref().is_some_and(|r| r.is_err())),
         };
         let committed = self.journal.append(&Record::Commit(CommitRecord {
             v: RECORD_VERSION,
@@ -921,15 +945,20 @@ impl Engine {
         }));
         if let Err(e) = committed {
             // 改了但记不下来：马上用撤销脚本按原值退回，宁可不改也不能留下没有记录的改动
-            if let Ok(v) = &outcome {
-                let before = v.get("before").cloned().unwrap_or(Value::Null);
+            if f.reversible() && rollback.is_none() {
                 let _ = self.run_undo_script(f, hive.as_deref(), &before);
             }
             return Err(e);
         }
         if !ok {
-            // 脚本自己应该在出错时退回改了一半的东西；但超时被结束时它来不及，只能如实告诉用户
-            let message = "没能确认修改完整成功，可能已经改了一部分，请重新检测这一项。".to_owned();
+            let message = if left_changes {
+                "修改失败，自动恢复也失败了；可以在修改日志里重试恢复。"
+            } else if outcome.as_ref().ok().is_some_and(|v| v.get("skipped").and_then(Value::as_bool) == Some(true)) {
+                "执行前的状态已变化，没有修改；请重新检测后再试。"
+            } else {
+                "修改失败，已尝试恢复原状；请重新检测这一项。"
+            }
+            .to_owned();
             let mut r = self.result(f, false, vec![rec.id], message, notes);
             r.error = error;
             return Ok(r);
@@ -1076,18 +1105,21 @@ impl Engine {
 
     fn undo_script(&self, feature: &str, hive: Option<&str>, rec: &ApplyRecord) -> Result<()> {
         let f = self.feature(feature)?;
-        let before = self
-            .journal
-            .entries()?
-            .into_iter()
-            .find(|e| e.apply.id == rec.id)
-            .and_then(|e| e.commit)
-            .and_then(|c| c.after)
-            .and_then(|s| match s {
-                State::Script { data } => data.get("before").cloned(),
-                _ => None,
-            })
-            .unwrap_or(Value::Null);
+        let before = match &rec.before {
+            State::Script { data } if !data.is_null() => data.clone(),
+            _ => self
+                .journal
+                .entries()?
+                .into_iter()
+                .find(|e| e.apply.id == rec.id)
+                .and_then(|e| e.commit)
+                .and_then(|c| c.after)
+                .and_then(|s| match s {
+                    State::Script { data } => data.get("before").cloned(),
+                    _ => None,
+                })
+                .unwrap_or(Value::Null),
+        };
         if before.is_null() {
             return Err(Error::Invalid("这一项执行时没来得及记下原来的状态，没法自动恢复".to_owned()));
         }
@@ -1173,9 +1205,10 @@ impl Engine {
             if self.catalog.feature(feature).is_none_or(|f| !f.reversible()))
     }
 
-    /// 脚本类修改的原状态是执行脚本返回的，没写进 commit 的就没法自动恢复。
+    /// 新记录从 apply.before 恢复；旧记录仍可从 commit.after 读取原状态。
     fn script_state_lost(entry: &Entry) -> bool {
         matches!(entry.apply.target, TargetRef::Script { .. })
+            && !matches!(&entry.apply.before, State::Script { data } if !data.is_null())
             && entry.commit.as_ref().is_none_or(|c| {
                 !matches!(
                     &c.after,
@@ -1252,9 +1285,11 @@ impl Engine {
                 ),
             };
             // 脚本类修改的原状态是脚本自己的数据（例如一段十六进制），给用户看没有意义，说清楚记没记下就行
+            let saved_before = matches!(&e.apply.before, State::Script { data } if !data.is_null());
             let (before, after) = match (&e.apply.target, &e.commit) {
                 (TargetRef::Script { .. }, Some(c)) => {
-                    let recorded = matches!(&c.after, Some(State::Script { data })
+                    let recorded = saved_before
+                        || matches!(&c.after, Some(State::Script { data })
                         if data.get("before").is_some_and(|b| !b.is_null()));
                     let before = if recorded {
                         "原来的设置（已经记下，可以恢复）"
@@ -1264,7 +1299,15 @@ impl Engine {
                     let after = if c.ok { "已按这一项修改" } else { "（没改成）" };
                     (before.to_owned(), after.to_owned())
                 }
-                (TargetRef::Script { .. }, None) => ("（程序中途退出，没记下原来的设置）".to_owned(), after),
+                (TargetRef::Script { .. }, None) => (
+                    if saved_before {
+                        "原来的设置（已经记下，可以恢复）"
+                    } else {
+                        "（程序中途退出，没记下原来的设置）"
+                    }
+                    .to_owned(),
+                    after,
+                ),
                 _ => (Self::state_label(&e.apply.before), after),
             };
             let view = JournalEntryView {

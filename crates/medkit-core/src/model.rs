@@ -241,6 +241,9 @@ pub struct Feature {
     pub break_actions: Vec<Action>,
     #[serde(default)]
     pub detect: Option<ScriptRef>,
+    /// 可撤销脚本执行前读取原状态；结果必须包含非空的 before。
+    #[serde(default)]
+    pub prepare: Option<ScriptRef>,
     /// 执行脚本（和 `actions` 二选一）
     #[serde(default)]
     pub run: Option<ScriptRef>,
