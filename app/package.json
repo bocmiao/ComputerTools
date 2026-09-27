@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vue-tsc --noEmit && pnpm test:utils && vite build",
     "typecheck": "vue-tsc --noEmit",
     "test:utils": "node --experimental-strip-types --test tests/*.mjs"
   },
