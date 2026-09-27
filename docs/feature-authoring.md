@@ -142,13 +142,15 @@ references:
 | `break` | 只在测试时使用，制造出需要修复的状态 | 任意 |
 
 ```powershell
-# scripts/features/disk/reduce-hiberfile-run.ps1 (excerpt). Get-HiberState is shared with the
-# disk.hiberfile check (a shared block); Invoke-Powercfg runs the absolute path of powercfg.exe.
+# scripts/features/disk/reduce-hiberfile-run.ps1 (excerpt). Get-HiberState and Get-HiberBlock are
+# shared with the disk.hiberfile check (a shared block); Invoke-Powercfg runs the absolute path
+# of powercfg.exe.
 [CmdletBinding()]
 param([bool]$Prepare = $false, [string]$Before = '')
 $ErrorActionPreference = 'Stop'
 
-$snapshot = ConvertTo-HiberSnapshot (Get-HiberState)   # { kind, enabled, type, percent }
+$state = Get-HiberState
+$snapshot = ConvertTo-HiberSnapshot $state             # { kind, enabled, type, percent }
 if ($Prepare) {
     return [pscustomobject]@{ before = $snapshot }
 }
@@ -157,6 +159,11 @@ foreach ($name in @('kind', 'enabled', 'type', 'percent')) {
     if ([string]$recorded.$name -ne [string]$snapshot[$name]) {
         return [pscustomobject]@{ skipped = $true }     # changed since prepare: change nothing
     }
+}
+# The same rules as the check (battery or laptop, less than 1 GB to gain), checked again:
+# the engine lets the run go ahead when the check itself could not run.
+if (($snapshot.kind -ne 'full') -or ((Get-HiberBlock $state).Length -gt 0)) {
+    return [pscustomobject]@{ skipped = $true }
 }
 $exitCode = Invoke-Powercfg @('/hibernate', '/type', 'reduced')
 if ($exitCode -ne 0) {
@@ -195,7 +202,7 @@ else {
 - **改到一半出错，要先把已经改了的退回去再 `throw`**（用 `try` / `catch`）。引擎也会用执行前快照尝试恢复；脚本自己退回可以减少中间状态持续的时间。参考 `scripts/features/network/proxy-off-run.ps1`。
 - 原生命令要检查 `$LASTEXITCODE`。用绝对路径（`$env:SystemRoot + '\System32\powercfg.exe'`），不靠 PATH 去找；它输出的是本地化的文字，不去读，只看退出码，再读回注册表确认改好了。Windows PowerShell 5.1 在 `$ErrorActionPreference = 'Stop'` 时会把原生命令写到标准错误的内容当成错误，调用时在函数里临时改成 `Continue`（见 `Invoke-Powercfg`）。
 - 返回 `skipped` 时不带说明文字（脚本里只能有 ASCII），界面用引擎自己的说明。
-- 这台电脑用不了、或者不该改（没有休眠文件、是笔记本）：写 `verify`，让那个检测在这些情况下给 na，引擎就不给执行，并把检测的结论当成原因显示（见 [architecture.md](architecture.md) 4.3）。
+- 这台电脑用不了、或者不该改（没有休眠文件、是笔记本）：写 `verify`，让那个检测在这些情况下给 na，引擎就不给执行，并把检测的结论当成原因显示（见 [architecture.md](architecture.md) 4.3）。检测出错、超时（结论是「没查出来」）时引擎照常让执行，所以执行脚本要按同样的规则再核对一遍：规则写在共用代码块里，检测和执行脚本用同一份。
 
 ## 3. 挂到症状上：`catalog/symptoms/<名字>.yaml`
 
