@@ -1,0 +1,10 @@
+id: open.services
+schema_version: 1
+group: open
+title: { zh-CN: 服务管理 }
+description:
+  zh-CN: 打开 Windows 的“服务”列表，查看 Print Spooler 等服务的状态和启动类型。
+category: system
+open: { program: services }
+references:
+  - https://support.microsoft.com/en-us/windows/hardware/printer/fix-print-spooler-service-not-running-errors-in-windows

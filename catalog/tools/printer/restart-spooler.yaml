@@ -1,0 +1,39 @@
+id: printer.restart-spooler
+schema_version: 1
+group: action
+title: { zh-CN: 重启打印服务 }
+description:
+  zh-CN: 打印任务卡住或打印机突然无响应时，重启 Print Spooler；服务已停止则尝试启动。不改启动类型，不清空打印队列。
+category: printer
+requires_admin: true
+timeout_sec: 45
+run:
+  script: tools/printer/restart-spooler.ps1
+confirm:
+  zh-CN: 正在打印的任务会暂时中断，之后可能需要重新提交。现在重启打印服务吗？
+results:
+  restarted:
+    status: ok
+    message: { zh-CN: 打印服务已重启。 }
+    next: { zh-CN: 再试一次打印；若任务仍卡住，请检查打印队列和打印机连接。 }
+    links: ["symptom:printer-share"]
+  started:
+    status: ok
+    message: { zh-CN: 打印服务已启动。 }
+    next: { zh-CN: 再试一次打印。 }
+    links: ["symptom:printer-share"]
+  disabled:
+    status: manual
+    message: { zh-CN: 打印服务被设置为禁用，小药箱没有更改它。 }
+    next: { zh-CN: 若需要打印，请先查清禁用原因，再请懂哥到服务设置中恢复。 }
+    links: ["tool:open.services"]
+  missing:
+    status: na
+    message: { zh-CN: 这台系统上没有找到打印服务。 }
+  failed:
+    status: manual
+    message: { zh-CN: 没能正常启动打印服务；它可能被驱动、权限或系统故障阻止。 }
+    next: { zh-CN: 打开“服务”查看 Print Spooler 的状态与错误信息，必要时更新打印机驱动。 }
+    links: ["tool:open.services"]
+references:
+  - https://support.microsoft.com/en-us/windows/hardware/printer/fix-print-spooler-service-not-running-errors-in-windows

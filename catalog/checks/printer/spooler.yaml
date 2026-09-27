@@ -1,0 +1,31 @@
+id: printer.spooler
+schema_version: 1
+title: { zh-CN: 打印服务 }
+description:
+  zh-CN: 检查这台电脑的 Print Spooler 服务能否处理打印任务。
+category: printer
+requires_admin: false
+probe:
+  script: checks/printer/spooler.ps1
+results:
+  running:
+    status: ok
+    message: { zh-CN: 打印服务正在运行。若打印任务卡住，可以尝试重启打印服务。 }
+    links: ["tool:printer.restart-spooler"]
+  stopped:
+    status: advice
+    message: { zh-CN: 打印服务已停止，这台电脑暂时不能正常打印。 }
+    fixer: medkit
+    next: { zh-CN: 先尝试启动打印服务；仍然失败的话再检查驱动和打印队列。 }
+    links: ["tool:printer.restart-spooler"]
+  disabled:
+    status: manual
+    message: { zh-CN: 打印服务被设置为禁用，小药箱不会擅自更改服务的启动类型。 }
+    fixer: helper
+    next: { zh-CN: 若这台电脑需要打印，请懂哥先确认是谁禁用的，再到服务设置中恢复。 }
+    links: ["tool:open.services"]
+  missing:
+    status: na
+    message: { zh-CN: 这台系统上没有找到打印服务。 }
+references:
+  - https://support.microsoft.com/en-us/windows/hardware/printer/fix-print-spooler-service-not-running-errors-in-windows

@@ -137,6 +137,7 @@ const T = {
   discovery: '网络发现（专用网络）',
   sharing: '文件和打印机共享（专用网络）',
   rpcAuth: 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Print\\RpcAuthnLevelPrivacyEnabled',
+  rpcPipe: 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Printers\\RPC\\RpcUseNamedPipeProtocol',
   tempDir: '临时文件夹（%TEMP%）',
   updateCache: 'Windows 更新下载缓存',
   hiberFile: '休眠文件大小',
@@ -551,22 +552,34 @@ const FEATURE_LIST: MockFeature[] = [
   // ── 修复：打印机 ──
   defineFeature(
     {
-      id: 'printer.rpc-auth-compat',
-      title: '打印机共享 0x0000011b 兼容设置',
-      description: '在共享打印机的主机上关掉一项打印安全加固，让别的电脑能重新连上共享打印机。',
+      id: 'printer.rpc-privacy-compat',
+      title: '旧共享打印机 0x0000011b 兼容设置',
+      description: '只在共享打印机的主机上作为最后手段使用；会降低打印 RPC 通信的安全保护。',
       category: 'printer',
       risk: 'danger',
-      level: 'medium',
+      level: 'heavy',
+      recommend: 'not-recommended',
       reboot: 'reboot',
     },
     {
       changes: [{ target: T.rpcAuth, initial: ABSENT, planned: 'DWORD 0' }],
       notes: [
         '这会关闭微软为修补打印漏洞加上的保护，局域网里的其他电脑更容易借打印服务发起攻击。',
-        '微软已经表示会逐步取消这个兼容开关，部分新版本的系统上可能无效。',
         '更好的办法：如果打印机本身有网口或 Wi-Fi，让每台电脑直接按 IP 地址添加它，就不需要这项设置。',
       ],
-      verifyAs: 'unknown',
+    },
+  ),
+  defineFeature(
+    {
+      id: 'printer.rpc-named-pipes',
+      title: '共享打印机改用命名管道连接',
+      description: '只在这台电脑是连接方、Windows 11 22H2 后连接旧主机报 0x00000709 时尝试。',
+      category: 'printer', risk: 'caution', level: 'medium', reboot: 'reboot',
+    },
+    {
+      changes: [{ target: T.rpcPipe, initial: ABSENT, planned: 'DWORD 1' }],
+      notes: ['微软优先建议检查 RPC/TCP 通信和防火墙；命名管道仅用于兼容旧主机。'],
+      minBuild: 22621,
     },
   ),
 ]
@@ -779,7 +792,8 @@ const CHECKS: Record<string, MockCheck> = {
     title: '打印服务',
     evaluate: () => ({
       status: 'ok',
-      message: '打印服务（Print Spooler）正在运行。',
+      message: '打印服务正在运行。若打印任务卡住，可以尝试重启打印服务。',
+      links: ['tool:printer.restart-spooler'],
       facts: { service: 'Spooler', state: 'running', start_type: 'auto' },
     }),
   },
@@ -798,21 +812,27 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
-  'printer.rpc-auth': {
-    title: '0x0000011b 兼容设置',
+  'printer.rpc-privacy': {
+    title: '共享主机的打印通信保护',
     evaluate: () => {
       if (valueOf(T.rpcAuth) === 'DWORD 0') {
-        return { status: 'ok', message: '已经写入 0x0000011b 兼容设置，重启电脑后生效。', facts: { rpc_privacy: false } }
+        return { status: 'manual', message: '这台共享主机已关闭打印 RPC 数据包级隐私保护；继续报 0x0000011b，原因不在这个开关。', facts: { shared_printers: 1 } }
       }
       return {
         status: 'advice',
-        resultCode: 'strict',
-        message: '这台电脑共享了打印机，但 Windows 更新加强了打印安全，别的电脑连接时会报 0x0000011b。',
+        resultCode: 'secure',
+        message: '这台电脑共享了打印机，传入打印通信保护保持开启。若连接方确实报 0x0000011b，可考虑临时兼容设置。',
         fixer: 'medkit',
         next: '如果打印机有网口或 Wi-Fi，更推荐让每台电脑直接按 IP 地址添加打印机。',
-        facts: { shared_printers: 1, rpc_privacy: true },
+        facts: { shared_printers: 1 },
       }
     },
+  },
+  'printer.rpc-named-pipes': {
+    title: '共享打印机连接方式',
+    evaluate: () => valueOf(T.rpcPipe) === 'DWORD 1'
+      ? { status: 'ok', message: '这台电脑已启用命名管道兼容方式。' }
+      : { status: 'advice', message: '这台电脑仍使用默认打印 RPC 连接方式。连接旧主机报 0x00000709 时，可尝试兼容方式。', fixer: 'medkit' },
   },
 
   // ── 体检里的其他项目 ──
@@ -1096,10 +1116,10 @@ const SYMPTOMS: MockSymptom[] = [
   },
   {
     id: 'printer-share',
-    title: '打印机共享连不上',
-    summary: '连共享打印机时报 0x0000011b、0x00000709，或者找不到共享的打印机。',
-    keywords: ['打印机', '打印', '共享打印机', '打印机连不上', '找不到打印机', '打印不了', '0x0000011b', '11b', '0x00000709', '709'],
-    maturity: 'guide',
+    title: '打印机连不上或不打印',
+    summary: '打印任务卡住、打印机无响应，或者共享打印机连不上。',
+    keywords: ['打印机', '打印', '共享打印机', '打印机连不上', '打印不了'],
+    maturity: 'semi',
     causes: [
       'Windows 更新加强了打印安全，老的共享方式被拦住了（0x0000011b）',
       'Win11 22H2 以后，连接旧系统共享的打印机会报 709',
@@ -1121,10 +1141,28 @@ const SYMPTOMS: MockSymptom[] = [
       '',
       '最省心的办法：如果打印机本身有网口或 Wi-Fi，直接按 IP 地址添加它（「添加设备 → 手动添加 → 使用 IP 地址或主机名添加打印机」），就不用再折腾共享了。',
     ].join('\n'),
+    steps: [{ check: 'printer.spooler', fixes: [] }],
+  },
+  {
+    id: 'printer-709', title: '连接共享打印机报 0x00000709',
+    summary: '这台电脑连接另一台电脑共享的打印机时显示 0x00000709。',
+    keywords: ['打印机709', '0x00000709', '709打印机'], maturity: 'semi',
+    causes: ['共享主机或防火墙挡住 RPC 通信', '旧主机与新版 Windows 的连接方式不兼容'],
+    guide: '请在连接别人的打印机的电脑上检查。先更新两边系统和驱动；打印机能联网时，优先直接按 IP 添加。',
     steps: [
-      { check: 'printer.spooler', fixes: [] },
-      { check: 'printer.network-discovery', fixes: ['network.discovery-on'] },
-      { check: 'printer.rpc-auth', fixes: ['printer.rpc-auth-compat'] },
+      { check: 'printer.spooler', stopOn: ['advice', 'manual'], fixes: [] },
+      { check: 'printer.rpc-named-pipes', fixes: ['printer.rpc-named-pipes'] },
+    ],
+  },
+  {
+    id: 'printer-11b', title: '共享打印机报 0x0000011b',
+    summary: '别的电脑连接这台电脑共享的打印机时报 0x0000011b。',
+    keywords: ['打印机11b', '0x0000011b', '11b打印机'], maturity: 'semi',
+    causes: ['两边的打印 RPC 保护要求不一致', '系统更新、驱动或共享权限有问题'],
+    guide: '请在共享打印机的主机上检查。先更新两边系统和驱动，优先让每台电脑直接按打印机 IP 添加。兼容设置会降低安全性。',
+    steps: [
+      { check: 'printer.spooler', stopOn: ['advice', 'manual'], fixes: [] },
+      { check: 'printer.rpc-privacy', stopOn: ['manual'], fixes: ['printer.rpc-privacy-compat'] },
     ],
   },
 ]
@@ -1643,6 +1681,15 @@ const TOOL_LIST: MockTool[] = [
       slowMs: 1500,
     },
   ),
+  defineTool(
+    {
+      id: 'printer.restart-spooler', title: '重启打印服务',
+      description: '打印任务卡住时重启 Print Spooler，不改启动类型、不清空队列。',
+      category: 'printer', group: 'action',
+      confirm: '正在打印的任务会暂时中断，之后可能需要重新提交。现在重启打印服务吗？',
+    },
+    { run: () => ({ status: 'ok', resultCode: 'restarted', message: '打印服务已重启。', links: ['symptom:printer-share'] }), requiresAdmin: true },
+  ),
 
   // ── 打开系统工具 ──
   openTool(
@@ -1754,6 +1801,7 @@ const TOOL_LIST: MockTool[] = [
     'settings',
     'ms-settings:printers',
   ),
+  openTool('open.services', '服务管理', '查看 Print Spooler 等服务的状态。', 'system', 'program', 'services.msc'),
   openTool('settings.sound', '声音', '选择从哪个喇叭或耳机出声、用哪个麦克风，调整音量。', 'settings', 'settings', 'ms-settings:sound'),
   openTool(
     'settings.date-time',

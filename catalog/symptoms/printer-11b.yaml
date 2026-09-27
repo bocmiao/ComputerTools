@@ -1,0 +1,21 @@
+id: printer-11b
+schema_version: 1
+title: { zh-CN: 共享打印机报 0x0000011b }
+summary:
+  zh-CN: 别的电脑连接这台电脑共享的打印机时报 0x0000011b。
+keywords: [打印机11b, 0x0000011b, 11b打印机, 打印机共享失败]
+causes:
+  - { zh-CN: 共享主机和连接方的打印 RPC 保护要求不一致 }
+  - { zh-CN: 系统更新、驱动或共享权限有问题 }
+maturity: semi
+steps:
+  - check: printer.spooler
+    stop_on: [advice, manual]
+  - check: printer.rpc-privacy
+    stop_on: [manual]
+    fixes: [printer.rpc-privacy-compat]
+guide:
+  zh-CN: |
+    这一步只在“用 USB 连着打印机、再把它共享出去的主机”上做；连接方电脑不要改主机的安全设置。
+    先更新两台电脑和打印机驱动。打印机能联网的话，让每台电脑直接按打印机 IP 添加，更安全也更稳定。
+    兼容设置会降低打印通信保护，只作为最后手段；用完后到修改日志恢复。

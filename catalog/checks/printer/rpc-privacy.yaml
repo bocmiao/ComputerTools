@@ -1,0 +1,34 @@
+id: printer.rpc-privacy
+schema_version: 1
+title: { zh-CN: 共享主机的打印通信保护 }
+description:
+  zh-CN: 确认这台电脑是否共享打印机，并检查 0x0000011b 相关的传入 RPC 保护设置。
+category: printer
+requires_admin: false
+probe:
+  script: checks/printer/rpc-privacy.ps1
+results:
+  secure:
+    status: advice
+    message: { zh-CN: 这台电脑共享了打印机，传入打印通信保护保持开启。若连接方确实报 0x0000011b，可在确认主机与连接方都已更新后，考虑临时兼容设置。 }
+    fixer: medkit
+    next: { zh-CN: 优先直接用打印机的 IP 地址连接；兼容设置会降低打印通信安全性，必须看清预览再决定。 }
+    links: ["feature:printer.rpc-privacy-compat"]
+  relaxed:
+    status: manual
+    message: { zh-CN: 这台共享主机已关闭打印 RPC 数据包级隐私保护；继续报 0x0000011b，原因不在这个开关。 }
+    fixer: helper
+    next: { zh-CN: 请检查更新、驱动、共享权限和网络连接；不用兼容设置后，在修改日志里恢复或请懂哥改回安全默认值。 }
+  not-host:
+    status: manual
+    message: { zh-CN: 这台电脑没有发现已共享的打印机。0x0000011b 的兼容设置应在共享打印机的主机上检查。 }
+    fixer: user
+    next: { zh-CN: 到用 USB 接打印机并把它共享出去的那台电脑上打开小药箱。 }
+  unknown:
+    status: unknown
+    message: { zh-CN: 没能确认这台电脑是否正在共享打印机，暂时不能建议改动保护设置。 }
+    next: { zh-CN: 先在“打印机和扫描仪”里确认共享状态，或者请懂哥检查。 }
+    links: ["tool:settings.printers"]
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/printing/windows-11-rpc-connection-updates-for-print
+  - https://support.microsoft.com/en-us/servicing/os/windows-server/2020/12/managing-deployment-of-printer-rpc-binding-changes-for-cve-2021-1678-kb4599464

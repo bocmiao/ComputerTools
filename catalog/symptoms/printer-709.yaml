@@ -1,0 +1,21 @@
+id: printer-709
+schema_version: 1
+title: { zh-CN: 连接共享打印机报 0x00000709 }
+summary:
+  zh-CN: 这台电脑连接另一台电脑共享的打印机时，显示 0x00000709。
+keywords: [打印机709, 0x00000709, 709打印机, 共享打印机连接失败]
+causes:
+  - { zh-CN: 共享主机没开机，或者防火墙挡住打印 RPC 通信 }
+  - { zh-CN: Windows 11 22H2 之后默认使用的 RPC 连接方式与旧主机不兼容 }
+  - { zh-CN: 打印机驱动不匹配 }
+maturity: semi
+steps:
+  - check: printer.spooler
+    stop_on: [advice, manual]
+  - check: printer.rpc-named-pipes
+    fixes: [printer.rpc-named-pipes]
+guide:
+  zh-CN: |
+    请在“连接别人共享打印机的电脑”上检查。先确认主机开机、打印机有电，两台电脑都更新了系统和驱动。
+    微软优先建议检查 RPC/TCP 通信和防火墙；命名管道只是旧设备的兼容办法，不保证一定能修好。
+    打印机有网口或 Wi-Fi 时，优先直接按打印机 IP 地址添加。

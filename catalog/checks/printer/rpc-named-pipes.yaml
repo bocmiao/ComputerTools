@@ -1,0 +1,21 @@
+id: printer.rpc-named-pipes
+schema_version: 1
+title: { zh-CN: 共享打印机连接方式 }
+description:
+  zh-CN: 查看这台连接方电脑是否已启用打印 RPC 命名管道兼容方式。
+category: printer
+requires_admin: false
+probe:
+  script: checks/printer/rpc-named-pipes.ps1
+results:
+  enabled:
+    status: ok
+    message: { zh-CN: 这台电脑已启用命名管道兼容方式；若仍报 0x00000709，问题可能在主机、防火墙或驱动。 }
+  default:
+    status: advice
+    message: { zh-CN: 这台电脑仍使用默认的打印 RPC 连接方式。连接旧共享主机报 0x00000709 时，可尝试兼容方式。 }
+    fixer: medkit
+    next: { zh-CN: 优先检查两台电脑的更新、主机是否在线、防火墙是否允许打印通信；只有这台电脑是连接方时才改。 }
+    links: ["feature:printer.rpc-named-pipes"]
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/printing/windows-11-rpc-connection-updates-for-print

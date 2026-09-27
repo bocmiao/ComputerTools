@@ -1,0 +1,30 @@
+# This lowers RPC packet privacy on the machine sharing the printer.
+# It is a last resort after updating both devices and preferring direct-IP printing.
+id: printer.rpc-privacy-compat
+schema_version: 1
+title: { zh-CN: 旧共享打印机 0x0000011b 兼容设置 }
+description:
+  zh-CN: 只在这台电脑是“共享打印机的主机”、连接方报 0x0000011b、更新两边系统和驱动后仍无法连接时考虑。它会关闭传入打印 RPC 的数据包级隐私保护，降低打印通信安全性。优先让每台电脑直接按打印机 IP 添加，或换支持新版通信的设备。改完要重启；以后可在修改日志中恢复原设置。
+category: printer
+risk: danger
+level: heavy
+recommend: not-recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\Print
+      name: RpcAuthnLevelPrivacyEnabled
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\Print
+      name: RpcAuthnLevelPrivacyEnabled
+      delete: true
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/printing/windows-11-rpc-connection-updates-for-print
+  - https://support.microsoft.com/en-us/servicing/os/windows-server/2020/12/managing-deployment-of-printer-rpc-binding-changes-for-cve-2021-1678-kb4599464

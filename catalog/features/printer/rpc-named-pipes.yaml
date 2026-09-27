@@ -1,0 +1,33 @@
+# On the Windows 11 22H2+ client only. Microsoft prefers fixing RPC/TCP
+# connectivity first; named pipes is an optional compatibility workaround.
+id: printer.rpc-named-pipes
+schema_version: 1
+title: { zh-CN: 共享打印机改用命名管道连接 }
+description:
+  zh-CN: 只在这台电脑是“连接别人共享打印机的电脑”、而且 Windows 11 22H2 以后连接旧主机出现 0x00000709 时尝试。微软优先建议检查两台电脑之间的 RPC/TCP 通信和防火墙；改用命名管道只是兼容办法，可能仍需主机配合。改完重启后再重新添加打印机。
+category: printer
+risk: caution
+level: medium
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+applies_to:
+  min_build: 22621
+  max_build: null
+  editions: [home, pro, enterprise, education]
+actions:
+  - registry:
+      key: HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\RPC
+      name: RpcUseNamedPipeProtocol
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\RPC
+      name: RpcUseNamedPipeProtocol
+      delete: true
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/printing/windows-11-rpc-connection-updates-for-print
