@@ -922,3 +922,21 @@ fn shutdown_can_be_scheduled_and_cancelled() {
     assert_eq!(shutdown::schedule(10 * 3600, true, message).unwrap(), ShutdownRequest::Scheduled);
     assert!(shutdown::abort().unwrap());
 }
+
+/// 为「找回 Windows 照片查看器」「管理新建菜单」收集这台机器上的实际情况（照片查看器的 ProgID、系统自带的图片
+/// 文件类型写了什么、PhotoViewer.dll 里的文字，每一个「新建」菜单项和资源管理器的缓存），打印出来。只读。
+#[test]
+#[ignore = "只读，打印这台机器上照片查看器和「新建」菜单的注册表内容"]
+fn photo_viewer_and_new_menu_facts() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("facts.ps1");
+    std::fs::write(&script, include_str!("facts/photo-viewer-and-new-menu.ps1")).unwrap();
+    let out = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(&script)
+        .output()
+        .unwrap();
+    eprintln!("{}", String::from_utf8_lossy(&out.stdout));
+    eprintln!("{}", String::from_utf8_lossy(&out.stderr));
+    assert!(out.status.success(), "脚本出错：{:?}", out.status);
+}
