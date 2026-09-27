@@ -3,7 +3,7 @@ schema_version: 1
 title: { zh-CN: 共享打印机报 0x0000011b }
 summary:
   zh-CN: 别的电脑连接这台电脑共享的打印机时报 0x0000011b。
-keywords: [打印机11b, 0x0000011b, 11b打印机, 打印机共享失败]
+keywords: [打印机11b, "0x0000011b", 11b打印机, 打印机共享失败]
 causes:
   - { zh-CN: 共享主机和连接方的打印 RPC 保护要求不一致 }
   - { zh-CN: 系统更新、驱动或共享权限有问题 }
