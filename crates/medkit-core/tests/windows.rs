@@ -765,3 +765,68 @@ fn update_services_are_restored_and_undone() {
         assert_eq!(platform.service_get(name).unwrap(), Some(StartType::Disabled), "撤销以后 {name} 应该回到「禁用」");
     }
 }
+
+/// 文件删不掉：是谁占着。另开一个 powershell.exe 独占打开一个文件（不许别人读、写、删），重启管理器要查出
+/// 正是这个进程、正是这个文件；查文件夹也要查到；进程结束以后再查，就没有它了。
+#[test]
+fn file_lockers_find_the_process_holding_a_file() {
+    use medkit_core::lockers::{self, LockTarget};
+
+    struct Kill(std::process::Child);
+    impl Drop for Kill {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let held = dir.path().join("占着的文件.txt");
+    std::fs::write(&held, b"medkit").unwrap();
+    std::fs::write(dir.path().join("没人用的.txt"), b"x").unwrap();
+    // 路径放在环境变量里传，不拼进命令行
+    let mut child = Kill(
+        Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$f = [System.IO.File]::Open($env:MEDKIT_HELD, 'Open', 'Read', 'None'); Start-Sleep -Seconds 120",
+            ])
+            .env("MEDKIT_HELD", &held)
+            .spawn()
+            .unwrap(),
+    );
+    let pid = child.0.id();
+    let platform = WindowsPlatform::new();
+
+    // 等它打开文件（PowerShell 启动要一两秒）
+    let mut report = None;
+    for _ in 0..60 {
+        let r = lockers::find(&platform, &LockTarget::Files(vec![held.clone()])).unwrap();
+        if r.users.iter().any(|u| u.pid == pid) {
+            report = Some(r);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    let report = report.expect("15 秒内应该查到占着文件的 powershell.exe");
+    eprintln!("查文件：{report:?}");
+    let user = report.users.iter().find(|u| u.pid == pid).unwrap();
+    assert_eq!(user.files, ["占着的文件.txt"]);
+    assert!(user.program.as_deref().is_some_and(|p| p.eq_ignore_ascii_case("powershell.exe")), "{user:?}");
+    assert!(!user.is_self && !user.other_session, "{user:?}");
+    assert_eq!(report.checked, 1);
+    assert!(report.missing.is_empty() && report.failed.is_empty());
+
+    let folder = lockers::find(&platform, &LockTarget::Folder(dir.path().to_path_buf())).unwrap();
+    eprintln!("查文件夹：{folder:?}");
+    assert_eq!(folder.checked, 2);
+    let user = folder.users.iter().find(|u| u.pid == pid).expect("查文件夹也应该查到");
+    assert_eq!(user.files, ["占着的文件.txt"]);
+
+    let _ = child.0.kill();
+    let _ = child.0.wait();
+    let after = lockers::find(&platform, &LockTarget::Files(vec![held])).unwrap();
+    assert!(after.users.iter().all(|u| u.pid != pid), "进程结束以后不该再查到它：{after:?}");
+}

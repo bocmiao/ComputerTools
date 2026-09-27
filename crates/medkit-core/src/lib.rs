@@ -8,6 +8,7 @@
 //! - [`script`]：PowerShell 宿主
 //! - [`tools`]：小工具能打开的程序名单、info 小工具的表格渲染
 //! - [`startup`]：开机启动项的开关（和任务管理器同一个）
+//! - [`lockers`]：文件删不掉时，看是哪些程序在用它（只读）
 
 pub mod builtin;
 pub mod bundle;
@@ -17,6 +18,7 @@ pub mod engine;
 pub mod error;
 pub mod journal;
 pub mod lint;
+pub mod lockers;
 pub mod model;
 pub mod platform;
 pub mod registry;

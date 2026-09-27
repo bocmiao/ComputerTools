@@ -7,6 +7,7 @@ import type {
   CheckResult,
   ContextMenuItem,
   FeatureState,
+  FileLockReport,
   JournalSession,
   Preview,
   RenamePreview,
@@ -194,4 +195,19 @@ export function awakeGet(): Promise<AwakeStatus> {
 /** 别让电脑自己睡着：打开（display 为 true 时屏幕也亮着）或者关掉 */
 export function awakeSet(on: boolean, display: boolean): Promise<AwakeStatus> {
   return call('awake_set', { on, display })
+}
+
+/** 文件删不掉：用系统的选择框选文件（可以多选），查哪些程序在用它们；取消返回 null */
+export function lockersPickFiles(): Promise<FileLockReport | null> {
+  return call('lockers_pick_files', {})
+}
+
+/** 文件夹删不掉：用系统的选择框选文件夹，查哪些程序在用里面的文件；取消返回 null */
+export function lockersPickFolder(): Promise<FileLockReport | null> {
+  return call('lockers_pick_folder', {})
+}
+
+/** 关掉程序以后，再查一次上次选的文件或文件夹；还没选过返回 null */
+export function lockersRefresh(): Promise<FileLockReport | null> {
+  return call('lockers_refresh', {})
 }

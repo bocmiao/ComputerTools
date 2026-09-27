@@ -355,3 +355,53 @@ pub struct UndoResult {
     /// 恢复以后要做什么才能看到效果（重启资源管理器、注销……）；没恢复成功时是 none
     pub reboot: Reboot,
 }
+
+/// 「文件删不掉：是谁占着」查的是选中的几个文件，还是一个文件夹。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FileLockMode {
+    Files,
+    Folder,
+}
+
+/// 「文件删不掉：是谁占着」的结果。只有文件名（查文件夹时是相对这个文件夹的路径），没有完整路径。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockReport {
+    pub mode: FileLockMode,
+    /// 选中的文件的名字，或者文件夹的名字
+    pub targets: Vec<String>,
+    /// 实际查了几个文件
+    pub checked: usize,
+    /// 选好以后又不见了的文件（多半已经删掉或者改了名）
+    pub missing: Vec<String>,
+    /// 没能查的文件
+    pub failed: Vec<String>,
+    /// 选的文件太多，或者文件夹里的文件太多，只查了前面一部分
+    pub truncated: bool,
+    /// 文件夹里打不开的子文件夹（没有权限），里面的文件没查
+    pub unreadable: usize,
+    pub users: Vec<FileLockUser>,
+}
+
+/// 一个在用这些文件的程序。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockUser {
+    pub pid: u32,
+    /// 显示的名字：程序的说明、服务的显示名，没有就用程序的文件名
+    pub name: String,
+    /// 程序的文件名（不带路径）
+    pub program: Option<String>,
+    pub kind: crate::platform::FileUserKind,
+    /// 服务名（系统服务才有）
+    pub service: Option<String>,
+    /// 它在用的文件；查文件夹、里面的文件又很多时说不出是哪几个，为空
+    pub files: Vec<String>,
+    /// 还有几个文件没列出来
+    pub more_files: usize,
+    /// 就是小药箱自己
+    pub is_self: bool,
+    /// 在另一个用户的登录会话里
+    pub other_session: bool,
+}

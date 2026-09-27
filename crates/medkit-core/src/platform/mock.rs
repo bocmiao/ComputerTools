@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
-use super::{KeyboardAids, OpenRequest, OsInfo, PResult, Platform, PlatformError, UserIdentity};
+use super::{FileUser, KeyboardAids, OpenRequest, OsInfo, PResult, Platform, PlatformError, UserIdentity};
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue, key_ancestors};
 
@@ -29,6 +29,10 @@ struct State {
     missing_programs: HashSet<String>,
     /// 间接字符串（`@file,-id`）解出来的文字
     indirect: HashMap<String, String>,
+    /// 在用这些文件的进程（路径统一转小写）
+    file_users: Vec<(String, FileUser)>,
+    /// 查这些文件时模拟失败
+    fail_file_users: HashSet<String>,
 }
 
 pub struct MockPlatform {
@@ -111,6 +115,16 @@ impl MockPlatform {
     /// 测试用：让 `indirect_string(source)` 返回 `text`。
     pub fn set_indirect(&self, source: &str, text: &str) {
         self.state.lock().unwrap().indirect.insert(source.to_owned(), text.to_owned());
+    }
+
+    /// 测试用：让 `user` 在用 `path` 这个文件。
+    pub fn use_file(&self, path: &std::path::Path, user: FileUser) {
+        self.state.lock().unwrap().file_users.push((norm(&path.to_string_lossy()), user));
+    }
+
+    /// 测试用：查 `path` 这个文件时失败。
+    pub fn fail_file_users(&self, path: &std::path::Path) {
+        self.state.lock().unwrap().fail_file_users.insert(norm(&path.to_string_lossy()));
     }
 
     /// 测试用：打开过的系统工具。
@@ -232,5 +246,20 @@ impl Platform for MockPlatform {
 
     fn indirect_string(&self, source: &str) -> Option<String> {
         self.state.lock().unwrap().indirect.get(source).cloned()
+    }
+
+    fn file_users(&self, files: &[std::path::PathBuf]) -> PResult<Vec<FileUser>> {
+        let state = self.state.lock().unwrap();
+        let wanted: Vec<String> = files.iter().map(|p| norm(&p.to_string_lossy())).collect();
+        if let Some(bad) = wanted.iter().find(|p| state.fail_file_users.contains(*p)) {
+            return Err(PlatformError::Other(format!("登记文件失败（模拟）：{bad}")));
+        }
+        let mut users: Vec<FileUser> = Vec::new();
+        for (path, user) in &state.file_users {
+            if wanted.contains(path) && !users.iter().any(|u| u.pid == user.pid && u.started == user.started) {
+                users.push(user.clone());
+            }
+        }
+        Ok(users)
     }
 }

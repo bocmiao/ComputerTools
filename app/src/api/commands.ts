@@ -5,6 +5,7 @@ import type {
   CheckResult,
   ContextMenuItem,
   FeatureState,
+  FileLockReport,
   JournalSession,
   Preview,
   RenamePreview,
@@ -53,6 +54,9 @@ export type CommandMap = {
   screen_fullscreen: { args: { on: boolean }; result: null }
   awake_get: { args: NoArgs; result: AwakeStatus }
   awake_set: { args: { on: boolean; display: boolean }; result: AwakeStatus }
+  lockers_pick_files: { args: NoArgs; result: FileLockReport | null }
+  lockers_pick_folder: { args: NoArgs; result: FileLockReport | null }
+  lockers_refresh: { args: NoArgs; result: FileLockReport | null }
 }
 
 export type CommandName = keyof CommandMap

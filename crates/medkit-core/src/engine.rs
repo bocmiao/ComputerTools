@@ -31,8 +31,9 @@ use crate::startup;
 use crate::tools;
 use crate::views::{
     ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, ContextMenuKind, FeatureState, FeatureStateKind,
-    FeatureSummary, JournalEntryView, JournalSession, Preview, PreviewChange, ProfileSummary, StartupItem,
-    SymptomDetail, SymptomStep, SymptomSummary, SystemInfo, ToolOpens, ToolResult, ToolSummary, UndoResult,
+    FeatureSummary, FileLockReport, JournalEntryView, JournalSession, Preview, PreviewChange, ProfileSummary,
+    StartupItem, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo, ToolOpens, ToolResult, ToolSummary,
+    UndoResult,
 };
 
 const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -1170,6 +1171,14 @@ impl Engine {
             State::Registry { .. } => "开机自动启动".to_owned(),
             other => Self::state_label(other),
         }
+    }
+
+    // ───────────── 文件删不掉：是谁占着 ─────────────
+
+    /// 哪些程序在用这些文件（或者这个文件夹里的文件）。只读：不关程序，不动文件，不记修改日志。
+    pub fn file_lockers(&self, target: &crate::lockers::LockTarget) -> Result<FileLockReport> {
+        crate::lockers::find(self.platform.as_ref(), target)
+            .map_err(|e| Error::Invalid(format!("没能查出是哪些程序在用：{e}")))
     }
 
     // ───────────── 右键菜单 ─────────────

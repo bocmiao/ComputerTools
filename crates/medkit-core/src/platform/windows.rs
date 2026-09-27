@@ -664,6 +664,10 @@ impl Platform for WindowsPlatform {
         let text = String::from_utf16_lossy(&buf[..len]).trim().to_owned();
         (!text.is_empty()).then_some(text)
     }
+
+    fn file_users(&self, files: &[PathBuf]) -> PResult<Vec<super::FileUser>> {
+        super::restart_manager::file_users(files)
+    }
 }
 
 // ───────────── 打开系统工具 ─────────────

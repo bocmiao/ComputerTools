@@ -3,9 +3,10 @@
 use std::sync::Arc;
 
 use medkit_core::Engine;
+use medkit_core::lockers::LockTarget;
 use medkit_core::views::{
-    ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, FeatureState, JournalSession, Preview, StartupItem,
-    SymptomDetail, SystemInfo, ToolResult, UndoResult,
+    ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, FeatureState, FileLockReport, JournalSession, Preview,
+    StartupItem, SymptomDetail, SystemInfo, ToolResult, UndoResult,
 };
 use tauri::State;
 
@@ -250,4 +251,54 @@ pub async fn awake_get(state: State<'_, AppState>) -> CmdResult<AwakeStatus> {
 #[tauri::command]
 pub async fn awake_set(state: State<'_, AppState>, on: bool, display: bool) -> CmdResult<AwakeStatus> {
     state.awake.lock().map_err(|_| "状态异常。")?.set(on, display)
+}
+
+/// 「文件删不掉：是谁占着」：记下要查的文件或文件夹，查一次。
+async fn lockers_check(state: State<'_, AppState>, target: LockTarget) -> CmdResult<Option<FileLockReport>> {
+    *state.lockers.lock().map_err(|_| "状态异常。")? = Some(target.clone());
+    with_engine(state, move |e| e.file_lockers(&target)).await.map(Some)
+}
+
+/// 文件删不掉：用系统的选择框选文件（可以多选），查哪些程序在用它们。界面拿不到、也传不了别的路径。
+/// 没选（点了取消）返回 null。
+#[tauri::command]
+pub async fn lockers_pick_files(state: State<'_, AppState>) -> CmdResult<Option<FileLockReport>> {
+    #[cfg(windows)]
+    let files = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new().set_title("选择删不掉的文件（可以选好几个）").pick_files()
+    })
+    .await
+    .map_err(|e| format!("打开文件选择器失败：{e}"))?;
+    #[cfg(not(windows))]
+    let files: Option<Vec<std::path::PathBuf>> = None;
+    match files {
+        Some(files) if !files.is_empty() => lockers_check(state, LockTarget::Files(files)).await,
+        _ => Ok(None),
+    }
+}
+
+/// 文件夹删不掉：用系统的选择框选文件夹，查哪些程序在用里面的文件。没选返回 null。
+#[tauri::command]
+pub async fn lockers_pick_folder(state: State<'_, AppState>) -> CmdResult<Option<FileLockReport>> {
+    #[cfg(windows)]
+    let folder =
+        tauri::async_runtime::spawn_blocking(|| rfd::FileDialog::new().set_title("选择删不掉的文件夹").pick_folder())
+            .await
+            .map_err(|e| format!("打开文件夹选择器失败：{e}"))?;
+    #[cfg(not(windows))]
+    let folder: Option<std::path::PathBuf> = None;
+    match folder {
+        Some(folder) => lockers_check(state, LockTarget::Folder(folder)).await,
+        None => Ok(None),
+    }
+}
+
+/// 关掉程序以后再查一次上次选的文件或文件夹。还没选过返回 null。
+#[tauri::command]
+pub async fn lockers_refresh(state: State<'_, AppState>) -> CmdResult<Option<FileLockReport>> {
+    let target = state.lockers.lock().map_err(|_| "状态异常。")?.clone();
+    match target {
+        Some(target) => lockers_check(state, target).await,
+        None => Ok(None),
+    }
 }

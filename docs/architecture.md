@@ -317,7 +317,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 
 ## 9. 界面与后端的接口（Tauri 命令）
 
-前端只能调用下面这些命令。系统诊断与修复命令只接受 ID，不接受命令字符串或路径。批量重命名、图片批量处理的目录由后端的系统文件夹选择器取得，前端只能传改名规则（查找替换、序号、前后缀、扩展名）或者文件名和图片内容，拿不到、也传不了路径。每个命令都要登记在 `src-tauri/build.rs` 的 `COMMANDS` 和 `capabilities/main.json` 里，否则界面调不动（接线测试会查）。
+前端只能调用下面这些命令。系统诊断与修复命令只接受 ID，不接受命令字符串或路径。批量重命名、图片批量处理的目录，「文件删不掉」要查的文件，由后端的系统选择器取得，前端只能传改名规则（查找替换、序号、前后缀、扩展名）或者文件名和图片内容，拿不到、也传不了路径。每个命令都要登记在 `src-tauri/build.rs` 的 `COMMANDS` 和 `capabilities/main.json` 里，否则界面调不动（接线测试会查）。
 
 | 命令 | 参数 | 返回 |
 |---|---|---|
@@ -349,6 +349,9 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `screen_fullscreen` | `on` | `null`（屏幕坏点测试：窗口进入、退出全屏） |
 | `awake_get` | — | `AwakeStatus`（`{ on, display }`：「别让电脑自己睡着」开没开） |
 | `awake_set` | `on`、`display` | `AwakeStatus`（SetThreadExecutionState，只在小药箱开着时有效，不改电源设置） |
+| `lockers_pick_files` | — | `FileLockReport \| null`（系统的选择框选文件，可以多选；查哪些程序在用它们，取消时 `null`） |
+| `lockers_pick_folder` | — | `FileLockReport \| null`（选文件夹，查在用里面文件的程序） |
+| `lockers_refresh` | — | `FileLockReport \| null`（再查一次上次选的；还没选过时 `null`） |
 
 图片批量处理（`app/src/components/BatchImageTool.vue`、`src-tauri/src/images.rs`）：解码、缩放、裁剪、编码都在界面里用 WebView2 自带的解码器和画布做（不加新的依赖，能打开 JPG、PNG、WebP、GIF、BMP、ICO、AVIF，打不开 HEIC 和 TIFF；只能存成 JPG、PNG、WebP）；后端只负责把结果存进用户选的文件夹。原图从不改动。重新编码不带原图的拍摄信息；「压完反而更大时存原图」的那几张原样复制。
 
@@ -366,6 +369,13 @@ checks: [disk.system-free-space, system.pending-reboot]
 - **只列第三方的**：程序在 Windows 目录里、微软签名的命令和外壳扩展、系统包，以及「打开方式」「发送到」「以前的版本」、Defender 扫描这些写死的 CLSID 都不列；对不上程序的命令、类里没写 DLL 的扩展也不列（不知道是谁加的）。CLSID 都没登记的外壳扩展（卸载后留下的空壳）照样列出来，说明拿掉没有坏处。应用商店里微软的应用（终端等）算应用，列出来。
 - **开关**：菜单命令写空的 `ProgrammaticAccessOnly`（微软文档：菜单里不显示、程序照样能调用），写在它登记的那一侧（HKLM 或登录用户的 HKCU），下次右键生效；外壳扩展和应用的项目按 CLSID 写进 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked`（空字符串值，名字是 CLSID），同一个 CLSID 在几个范围里登记的合成一项，重启资源管理器以后生效。恢复时把能让它不显示的值都删掉（也包括别的工具写的 `LegacyDisable` 和 HKCU 下的 Blocked）。只写这几个位置（写在代码里），只拿掉、不删除登记。
 - **修改日志**：功能 ID 是 `context-menu`，标题用项目的名字（程序重启以后没有列表时，扩展用它登记的类名，命令用键名），状态说「显示 / 不显示（已拿掉）」。多个值的改动当成一个整体：中途失败，前面改过的按倒序退回（和数据文件里的功能共用一段代码）。
+
+文件删不掉：是谁占着（`crates/medkit-core/src/lockers.rs`、`crates/medkit-core/src/platform/restart_manager.rs`）：
+
+- **查**：用 Windows 的重启管理器（Restart Manager，安装程序替换文件之前就用它找在用这些文件的程序）：把文件登记进一个会话，`RmGetList` 列出打开着这些文件、或者把它们当作程序模块加载了的进程。只查，不调用 `RmShutdown`：不关程序、不动文件，也不记修改日志。进程号和启动时间都对上才算同一个进程（进程已经退出、进程号被别人用上的不列）。
+- **范围**：选了几个文件时一个一个查（最多 100 个），说得出哪个程序在用哪个文件；选了文件夹时把里面的文件（最多 5000 个，不跟着符号链接和目录联接走到外面）一起查一次，有人在用、文件又不超过 100 个时再一个一个查出是哪几个。
+- **说法**：按重启管理器报的类型（有窗口的程序、命令行、资源管理器、后台程序、系统服务、关键进程）说怎么让它放手（`app/src/utils/fileLocks.ts`）；资源管理器在用时直接给「重启资源管理器」。查不出来的情况（文件夹本身被占着，比如命令行窗口停在里面——重启管理器只收文件；没有权限）在没查到时一并说明。
+- **隐私**：要查的文件只能在后端的系统选择框里选，界面传不了路径；结果里只有文件名（文件夹里的用相对路径）和程序的文件名，没有完整路径（里面常有用户名），也不进诊断报告。
 
 TypeScript 类型如下（字段名是 camelCase，所有文本已经渲染成中文）：
 

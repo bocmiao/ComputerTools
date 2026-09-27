@@ -10,6 +10,8 @@ use crate::registry::{RegRoot, RegValue};
 
 pub mod mock;
 #[cfg(windows)]
+mod restart_manager;
+#[cfg(windows)]
 pub mod windows;
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -36,6 +38,41 @@ pub struct KeyboardAids {
     pub sticky_keys: bool,
     /// 鼠标键：小键盘用来移动鼠标指针，按了不出数字（左 Alt + 左 Shift + Num Lock 会打开）
     pub mouse_keys: bool,
+}
+
+/// 在用文件的是什么样的程序（重启管理器报的类型），决定界面上怎么说。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FileUserKind {
+    /// 有窗口的程序
+    Window,
+    /// 命令行程序
+    Console,
+    /// 资源管理器
+    Explorer,
+    /// 没有窗口的后台程序，或者看不出是什么
+    Other,
+    /// 系统服务
+    Service,
+    /// Windows 的关键进程，关不掉
+    Critical,
+}
+
+/// 一个正在用某些文件的进程（打开着它们，或者把它们当作程序模块加载了）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileUser {
+    pub pid: u32,
+    /// 进程的启动时间（FILETIME），和进程号一起认出同一个进程
+    pub started: u64,
+    /// 重启管理器给的名字：程序的说明，服务的显示名
+    pub app_name: String,
+    /// 程序的文件名，不带路径（路径里可能有用户名）；读不到时为 `None`
+    pub program: Option<String>,
+    /// 服务名（系统服务才有）
+    pub service: Option<String>,
+    pub kind: FileUserKind,
+    /// 在另一个用户的登录会话里（快速切换用户以后，另一个人开着的程序）
+    pub other_session: bool,
 }
 
 /// 要打开的系统工具，已经按 [`crate::tools`] 的名单解析过（数据里只能写名单里的名字）。
@@ -104,6 +141,13 @@ pub trait Platform: Send + Sync {
     fn indirect_string(&self, source: &str) -> Option<String> {
         let _ = source;
         None
+    }
+
+    /// 哪些进程在用这些文件（任何一个都算）。用重启管理器查，只读，不关任何程序。
+    /// 已经退出的进程不列。
+    fn file_users(&self, files: &[std::path::PathBuf]) -> PResult<Vec<FileUser>> {
+        let _ = files;
+        Err(PlatformError::Unsupported("查文件被哪些程序占着".into()))
     }
 }
 

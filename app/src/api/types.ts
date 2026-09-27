@@ -98,6 +98,41 @@ export interface ContextMenuItem {
 /** 别让电脑自己睡着：只在小药箱开着时有效 */
 export interface AwakeStatus { on: boolean; display: boolean }
 
+// 文件删不掉：是谁占着（只有文件名，查文件夹时是相对这个文件夹的路径，没有完整路径）
+export type FileUserKind = 'window' | 'console' | 'explorer' | 'other' | 'service' | 'critical'
+export interface FileLockUser {
+  pid: number
+  /** 程序的说明、服务的显示名，没有就是程序的文件名 */
+  name: string
+  /** 程序的文件名（不带路径） */
+  program: string | null
+  kind: FileUserKind
+  /** 服务名（系统服务才有） */
+  service: string | null
+  /** 它在用的文件；查文件夹、里面的文件又很多时说不出是哪几个，是空的 */
+  files: string[]
+  moreFiles: number
+  /** 就是小药箱自己 */
+  isSelf: boolean
+  /** 在另一个用户的登录会话里 */
+  otherSession: boolean
+}
+export interface FileLockReport {
+  mode: 'files' | 'folder'
+  /** 选中的文件的名字，或者文件夹的名字 */
+  targets: string[]
+  checked: number
+  /** 选好以后又不见了的文件 */
+  missing: string[]
+  /** 没能查的文件 */
+  failed: string[]
+  /** 文件太多，只查了前面一部分 */
+  truncated: boolean
+  /** 没有权限打开的子文件夹个数 */
+  unreadable: number
+  users: FileLockUser[]
+}
+
 // 小工具（第 11 节）
 export type ToolGroup = 'info' | 'action' | 'open'
 export type ToolOpens = 'program' | 'settings'

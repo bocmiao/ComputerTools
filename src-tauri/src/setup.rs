@@ -23,6 +23,8 @@ pub struct AppState {
     pub rename: Arc<Mutex<crate::rename::RenameState>>,
     pub images: Arc<Mutex<crate::images::ImageState>>,
     pub awake: Arc<Mutex<crate::awake::AwakeState>>,
+    /// 「文件删不掉：是谁占着」最近一次选的文件或文件夹（「再查一次」用）
+    pub lockers: Arc<Mutex<Option<medkit_core::lockers::LockTarget>>>,
 }
 
 pub fn init() -> AppState {
@@ -31,6 +33,7 @@ pub fn init() -> AppState {
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
         awake: Arc::new(Mutex::new(Default::default())),
+        lockers: Arc::new(Mutex::new(None)),
     }
 }
 
@@ -237,5 +240,6 @@ pub fn test_state() -> AppState {
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
         awake: Arc::new(Mutex::new(Default::default())),
+        lockers: Arc::new(Mutex::new(None)),
     }
 }

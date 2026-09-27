@@ -32,6 +32,9 @@ const COMMANDS: &[&str] = &[
     "screen_fullscreen",
     "awake_get",
     "awake_set",
+    "lockers_pick_files",
+    "lockers_pick_folder",
+    "lockers_refresh",
 ];
 
 fn main() {

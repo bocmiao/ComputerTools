@@ -5,6 +5,7 @@ import { applyTextAction, textStats, type TextAction } from '../utils/textTools'
 import ImagePrivacyTool from './ImagePrivacyTool.vue'
 import BatchRenameTool from './BatchRenameTool.vue'
 import BatchImageTool from './BatchImageTool.vue'
+import FileLockers from './FileLockers.vue'
 
 const selectedFile = ref<File | null>(null)
 const digests = ref<FileDigests | null>(null)
@@ -151,7 +152,7 @@ async function copy(value: string): Promise<void> {
   <section class="group" aria-labelledby="local-tools-title">
     <div class="group-head">
       <h2 id="local-tools-title" class="section-title">文件与文本工具</h2>
-      <p class="muted small">文件和文字只在这台电脑里处理，不上传。批量重命名会在确认后修改所选文件的名称；图片批量处理只新建文件，原图不动。</p>
+      <p class="muted small">文件和文字只在这台电脑里处理，不上传。批量重命名会在确认后修改所选文件的名称；图片批量处理只新建文件，原图不动；「文件删不掉」只查不改。</p>
     </div>
     <div class="local-list">
       <article class="card local-card">
@@ -244,6 +245,7 @@ async function copy(value: string): Promise<void> {
       <BatchImageTool />
       <ImagePrivacyTool />
       <BatchRenameTool />
+      <FileLockers />
     </div>
     <p v-if="copyNotice" class="muted small" role="status">{{ copyNotice }}</p>
   </section>

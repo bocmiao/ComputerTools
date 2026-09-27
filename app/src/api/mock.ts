@@ -32,6 +32,8 @@ import type {
   FeatureState,
   FeatureStateKind,
   FeatureSummary,
+  FileLockReport,
+  FileLockUser,
   JournalEntryView,
   JournalSession,
   Preview,
@@ -2241,6 +2243,54 @@ const handlers: Handlers = {
     if (!demoImageFolder) throw '还没有选择保存的文件夹。'
     return null
   },
+  lockers_pick_files: () => {
+    demoLockTarget = 'files'
+    demoLockClosed = false
+    return demoLockReport()
+  },
+  lockers_pick_folder: () => {
+    demoLockTarget = 'folder'
+    demoLockClosed = false
+    return demoLockReport()
+  },
+  // 演示「关掉程序以后再查一次」：第二次查的时候，只剩下关不掉的系统服务
+  lockers_refresh: () => {
+    if (!demoLockTarget) return null
+    demoLockClosed = true
+    return demoLockReport()
+  },
+}
+
+// ── 文件删不掉：是谁占着（演示）──
+let demoLockTarget: 'files' | 'folder' | null = null
+let demoLockClosed = false
+
+function demoLockReport(): FileLockReport {
+  const folder = demoLockTarget === 'folder'
+  const users: FileLockUser[] = [
+    {
+      pid: 4812, name: 'Microsoft Word', program: 'WINWORD.EXE', kind: 'window', service: null,
+      files: [folder ? '合同\\合同（终稿）.docx' : '合同（终稿）.docx'], moreFiles: 0, isSelf: false, otherSession: false,
+    },
+    {
+      pid: 7036, name: 'Windows 资源管理器', program: 'explorer.exe', kind: 'explorer', service: null,
+      files: [folder ? '照片\\IMG_2041.JPG' : 'IMG_2041.JPG'], moreFiles: 0, isSelf: false, otherSession: false,
+    },
+    {
+      pid: 3120, name: 'Microsoft Defender Antivirus Service', program: 'MsMpEng.exe', kind: 'service', service: 'WinDefend',
+      files: [folder ? '下载\\setup.exe' : 'setup.exe'], moreFiles: 0, isSelf: false, otherSession: false,
+    },
+  ]
+  return {
+    mode: folder ? 'folder' : 'files',
+    targets: folder ? ['旧项目'] : ['合同（终稿）.docx', 'IMG_2041.JPG', 'setup.exe'],
+    checked: folder ? 42 : 3,
+    missing: [],
+    failed: [],
+    truncated: false,
+    unreadable: 0,
+    users: demoLockClosed ? users.filter((u) => u.kind === 'service') : users,
+  }
 }
 
 // ── 别让电脑自己睡着（演示）──

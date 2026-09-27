@@ -1,6 +1,7 @@
 //! 电脑小药箱的桌面外壳。拆成 lib + bin 两部分，是为了让 tests/ 里的集成测试能调用命令。
 //!
-//! 诊断和修复命令只接受 ID；批量重命名、图片批量处理的目录由原生选择器取得（见 docs/architecture.md 第 9 节）。
+//! 诊断和修复命令只接受 ID；批量重命名、图片批量处理的目录，「文件删不掉」要查的文件由原生选择器取得
+//! （见 docs/architecture.md 第 9 节）。
 
 pub mod awake;
 pub mod commands;
@@ -41,6 +42,9 @@ macro_rules! command_handler {
             $crate::commands::screen_fullscreen,
             $crate::commands::awake_get,
             $crate::commands::awake_set,
+            $crate::commands::lockers_pick_files,
+            $crate::commands::lockers_pick_folder,
+            $crate::commands::lockers_refresh,
         ]
     };
 }

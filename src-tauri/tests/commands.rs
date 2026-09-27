@@ -294,3 +294,36 @@ fn image_commands_pass_the_permission_check_and_save_raw_bodies() {
     assert!(e.as_str().is_some_and(|m| m.contains("不是 JPG")), "{e}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 「文件删不掉：是谁占着」的命令也要登记进权限清单；结果只有文件名、没有完整路径。
+#[test]
+fn locker_commands_pass_the_permission_check() {
+    use medkit_core::lockers::LockTarget;
+    use tauri::Manager;
+
+    let win = app();
+    // mock 运行时里没有选择框：返回 null；还没选过，「再查一次」也返回 null
+    assert!(ok(&win, "lockers_pick_files", json!({})).is_null());
+    assert!(ok(&win, "lockers_pick_folder", json!({})).is_null());
+    assert!(ok(&win, "lockers_refresh", json!({})).is_null());
+
+    // 选好以后（这里直接改状态，真程序里只能由系统的选择框来选）
+    let dir = std::env::temp_dir().join(format!("medkit-lockers-ipc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("删不掉.txt");
+    std::fs::write(&file, b"x").unwrap();
+    *win.state::<medkit_lib::setup::AppState>().lockers.lock().unwrap() = Some(LockTarget::Files(vec![file]));
+    let v = ok(&win, "lockers_refresh", json!({}));
+    has_keys(&v, &["mode", "targets", "checked", "missing", "failed", "truncated", "unreadable", "users"]);
+    assert_eq!(v["mode"], json!("files"));
+    assert_eq!(v["targets"], json!(["删不掉.txt"]));
+    assert_eq!(v["checked"], json!(1));
+    assert!(!v.to_string().contains(&dir.display().to_string()), "不该带完整路径：{v}");
+
+    *win.state::<medkit_lib::setup::AppState>().lockers.lock().unwrap() = Some(LockTarget::Folder(dir.clone()));
+    let v = ok(&win, "lockers_refresh", json!({}));
+    assert_eq!(v["mode"], json!("folder"));
+    assert_eq!(v["checked"], json!(1));
+    let _ = std::fs::remove_dir_all(&dir);
+}
