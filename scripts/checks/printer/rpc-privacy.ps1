@@ -16,9 +16,10 @@ if ($printers.Count -eq 0) {
 
 $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\Print'
 $value = $null
+# No key or no value means Windows' default.
 try { $value = (Get-ItemProperty -LiteralPath $key -Name 'RpcAuthnLevelPrivacyEnabled' -ErrorAction Stop).RpcAuthnLevelPrivacyEnabled }
-catch [System.Management.Automation.ItemNotFoundException] { }
-catch [System.Management.Automation.PSArgumentException] { }
+catch [System.Management.Automation.ItemNotFoundException] { $value = $null }
+catch [System.Management.Automation.PSArgumentException] { $value = $null }
 
 $code = if ($null -ne $value -and [int]$value -eq 0) { 'relaxed' } else { 'secure' }
 [pscustomobject]@{ result = $code; facts = [ordered]@{ shared_printers = $printers.Count } }

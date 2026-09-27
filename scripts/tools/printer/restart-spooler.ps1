@@ -30,7 +30,9 @@ catch {
             Start-Service -Name 'Spooler' -ErrorAction Stop
         }
     }
-    catch { }
+    catch {
+        Write-Verbose ('The print spooler could not be started again: {0}' -f $_.Exception.Message)
+    }
     $code = 'failed'
 }
 [pscustomobject]@{ result = $code; facts = [ordered]@{} }
