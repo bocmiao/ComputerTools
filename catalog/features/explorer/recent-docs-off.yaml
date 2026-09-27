@@ -1,0 +1,34 @@
+# 不记录最近打开的文件。HKCU\…\Explorer\Advanced 的 Start_TrackDocs（DWORD）：0 = 不记录、不显示；1 或者没有这个值 = 记录
+# （系统默认）。对应 Win11「设置 → 个性化 → 开始 → 在『开始』、文件资源管理器和跳转列表中显示推荐的文件、最近的文件」、
+# Win10「设置 → 个性化 → 开始 → 在『开始』屏幕或任务栏的跳转列表中以及文件资源管理器的『快速访问』中显示最近打开的项」。
+# 开始菜单的推荐、任务栏图标右键的跳转列表、资源管理器的「最近使用的文件」用的是同一份记录，一关三处都没有了
+# （比 explorer.hide-recent-files 只藏资源管理器「主页」里的那一处更彻底）。
+# 和 ads.start-recommendations-off（推荐的提示和应用）不是一回事。直接改注册表要重启资源管理器才生效。
+id: explorer.recent-docs-off
+schema_version: 1
+title: { zh-CN: 不记录最近打开的文件 }
+description:
+  zh-CN: 开始菜单的「推荐」、任务栏图标右键弹出的列表、资源管理器里，都不再显示最近打开过的文件，Windows 也不再记下来；家里几个人共用一台电脑时，别人看不到你最近打开了什么。不删文件本身。改完重启资源管理器生效；撤销以后重新开始记。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: Start_TrackDocs
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: Start_TrackDocs
+      delete: true
+undo: auto
+references:
+  - https://www.elevenforum.com/t/enable-or-disable-recommended-files-in-start-recent-files-in-file-explorer-and-items-in-jump-lists-in-windows-11.1161/
+  - https://www.ninjaone.com/blog/enable-or-disable-recent-items-in-start-menu-windows-11/
