@@ -1,0 +1,53 @@
+# U 盘弹不出：是谁占着（info）。脚本：scripts/tools/hardware/usb-eject-blockers.ps1
+# 点「安全删除硬件」却提示「设备正在使用中」时，Windows 会在系统日志里记一条 Kernel-PnP 225 事件，
+# 写明是哪个程序（进程）挡住了。这里读最近 7 天的，新的在前，最多列 5 次。只读。
+# 隐私：设备 ID 里有序列号、程序的完整路径里可能有用户名，都不显示，只显示设备的名字和程序的文件名。
+# 常见的几种：Windows 安全中心（MsMpEng.exe）在扫描 U 盘、资源管理器开着 U 盘里的文件夹或者在预览文件、
+# Windows 搜索在给 U 盘建索引、System（进程 4，系统本身在读写）、svchost（系统服务，列出是哪些服务）。
+# 待真机验证：225 事件的数据在各个版本上是不是都有程序路径和进程 ID（脚本不按字段名认，按内容认），
+# 设备名是 U 盘的名字还是「USB 大容量存储设备」，见 docs/real-machine-checklist.md。
+id: hardware.usb-eject-blockers
+schema_version: 1
+group: info
+title: { zh-CN: U 盘弹不出：是谁占着 }
+description:
+  zh-CN: 点「安全删除硬件」却提示「设备正在使用中」时，看看是哪个程序占着 U 盘、移动硬盘，关掉它再弹出。先弹出一次失败，再来这里看。
+category: hardware
+requires_admin: false
+timeout_sec: 30
+run:
+  script: tools/hardware/usb-eject-blockers.ps1
+results:
+  none:
+    status: ok
+    message:
+      zh-CN: 最近 {days} 天没有 U 盘、移动硬盘弹出失败的记录。
+    next:
+      zh-CN: 先点一次「安全删除硬件」（或者在「此电脑」里右键 U 盘 → 弹出），提示「正在使用中」以后再回到这里点「重新查看」。
+  found:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天有 {count} 次弹出被程序挡住了，下面是最近几次是谁挡的。"
+    next:
+      zh-CN: 按每一次下面「怎么办」的说法关掉那个程序，再弹出一次。还是不行的话，关机以后再拔（关机时系统会把数据写完），不要在读写的时候直接拔，容易丢文件。
+labels:
+  sections:
+    event: { zh-CN: 弹出失败 }
+  rows:
+    device: { zh-CN: 设备 }
+    program: { zh-CN: 占着它的程序 }
+    what: { zh-CN: 这是什么 }
+    running: { zh-CN: 现在还在运行 }
+    advice: { zh-CN: 怎么办 }
+  values:
+    "yes": { zh-CN: 是 }
+    "no": { zh-CN: 否（已经关了，可以再弹出试试） }
+    defender: { zh-CN: Windows 安全中心在扫描 U 盘里的文件，等它扫完（一般几十秒到几分钟）再弹出。 }
+    explorer: { zh-CN: 资源管理器还开着 U 盘里的文件夹，或者在预览里面的文件：把那些窗口关掉再弹出。 }
+    search: { zh-CN: Windows 搜索在给 U 盘建索引，等一两分钟再弹出。 }
+    system: { zh-CN: 系统本身在往 U 盘里写数据（刚复制完文件常见），等一会儿再弹出；局域网里有人通过共享在用它也会这样。 }
+    service: { zh-CN: 是系统服务在用（「这是什么」里是服务的名字），等一两分钟再弹出；一直这样的话，关机以后再拔。 }
+    other: { zh-CN: 把这个程序里打开的 U 盘上的文件先保存、关掉，或者直接退出这个程序，再弹出。 }
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent
+  - https://learn.microsoft.com/en-us/powershell/module/pnpdevice/get-pnpdevice
