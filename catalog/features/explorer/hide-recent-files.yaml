@@ -1,0 +1,31 @@
+# 资源管理器的「主页 / 快速访问」里不显示最近用过的文件。
+# HKCU\…\Explorer 的 ShowRecent（注意在 Explorer 下，不在 Advanced 下）：0 = 不显示；1 或者没有这个值 = 显示（系统默认）。
+# 对应「文件夹选项 → 常规 → 隐私 → 显示最近使用的文件」。只是不显示，不会清掉历史记录；新开的窗口生效。
+id: explorer.hide-recent-files
+schema_version: 1
+title: { zh-CN: 「主页」里不显示最近用过的文件 }
+description:
+  zh-CN: 资源管理器的「主页（快速访问）」里不再列出最近打开过的文件，别人用你的电脑时看不到你最近在看什么。只是不显示，不清历史记录，常用文件夹照常显示；新开的窗口生效。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: none
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer
+      name: ShowRecent
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer
+      name: ShowRecent
+      delete: true
+undo: auto
+references:
+  - https://raw.githubusercontent.com/Chuyu-Team/Dism-Multi-language/master/Data.xml
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

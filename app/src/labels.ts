@@ -152,6 +152,8 @@ export const settingsCategories = [
   { id: 'desktop', title: '桌面' },
   { id: 'taskbar', title: '任务栏' },
   { id: 'start', title: '开始菜单' },
+  { id: 'ads', title: '推荐和广告' },
+  { id: 'input', title: '键盘和鼠标' },
   { id: 'power', title: '电源' },
 ] as const
 

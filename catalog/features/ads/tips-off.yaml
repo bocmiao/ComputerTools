@@ -1,0 +1,65 @@
+# 不再弹「提示和建议」、更新后的「欢迎体验」和「完成设备设置」。HKCU 下这几个值，0 = 关（系统默认是开，或者没有）：
+#   ContentDeliveryManager 的 SubscribedContent-338389Enabled、SoftLandingEnabled（「使用 Windows 时获取提示和建议」）、
+#   SubscribedContent-310093Enabled（更新后的「欢迎体验」）；
+#   UserProfileEngagement 的 ScoobeSystemSettingEnabled（「建议完成设备设置的方式」）。
+# 对应「设置 → 系统 → 通知 → 其他设置」里的三个勾选框。对应策略 DisableSoftLanding 只对企业版、教育版有效，这里不用策略。
+id: ads.tips-off
+schema_version: 1
+title: { zh-CN: 不再弹「提示和建议」和「完成设备设置」 }
+description:
+  zh-CN: 不再时不时弹出使用提示、推荐试用的功能，更新以后也不再弹「欢迎体验」和「让我们完成设备设置」的全屏页面。对应「设置 → 系统 → 通知」最下面的几个勾选框。
+category: ads
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: none
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-338389Enabled
+      type: dword
+      value: 0
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SoftLandingEnabled
+      type: dword
+      value: 0
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-310093Enabled
+      type: dword
+      value: 0
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement
+      name: ScoobeSystemSettingEnabled
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-338389Enabled
+      type: dword
+      value: 1
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SoftLandingEnabled
+      type: dword
+      value: 1
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-310093Enabled
+      type: dword
+      value: 1
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement
+      name: ScoobeSystemSettingEnabled
+      delete: true
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience
+  - https://github.com/Raphire/Win11Debloat
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json
+  - https://www.elevenforum.com/t/enable-or-disable-lets-finish-setting-up-your-device-in-windows-11.5205/

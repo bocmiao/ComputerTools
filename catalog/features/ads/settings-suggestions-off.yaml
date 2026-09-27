@@ -1,0 +1,52 @@
+# 「设置」里不显示推荐的内容。HKCU\…\ContentDeliveryManager 的 SubscribedContent-338393Enabled、-353694Enabled、
+# -353696Enabled：0 = 关，1 或者没有 = 开（系统默认）。对应「设置 → 隐私和安全性 → 常规 → 在设置应用中向我显示建议的内容」。
+id: ads.settings-suggestions-off
+schema_version: 1
+title: { zh-CN: 「设置」里不显示推荐的内容 }
+description:
+  zh-CN: 打开「设置」时，页面边上不再显示推荐的功能、订阅和应用。设置本身照常能用。
+category: ads
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: none
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-338393Enabled
+      type: dword
+      value: 0
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-353694Enabled
+      type: dword
+      value: 0
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-353696Enabled
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-338393Enabled
+      type: dword
+      value: 1
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-353694Enabled
+      type: dword
+      value: 1
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-353696Enabled
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience
+  - https://github.com/Raphire/Win11Debloat
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

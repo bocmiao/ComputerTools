@@ -1,0 +1,37 @@
+# Win11 开始菜单的「推荐」里不显示提示、推荐的应用。HKCU\…\Explorer\Advanced 的 Start_IrisRecommendations：
+# 0 = 不显示，1 或者没有 = 显示（系统默认）。对应「设置 → 个性化 → 开始 → 显示有关提示、快捷方式、新应用等的推荐」。
+# 最近打开的文件照常显示（那是 Start_TrackDocs，这里不动）。
+id: ads.start-recommendations-off
+schema_version: 1
+title: { zh-CN: 开始菜单不显示推荐的提示和应用（Win11） }
+description:
+  zh-CN: Windows 11 开始菜单下半部分的「推荐」里，不再夹带使用提示、推荐安装的应用这类内容；你最近打开的文件照常显示。
+category: ads
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: explorer
+target: current-user
+applies_to:
+  min_build: 22000
+  max_build: null
+  editions: []
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: Start_IrisRecommendations
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: Start_IrisRecommendations
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-start
+  - https://github.com/Raphire/Win11Debloat
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

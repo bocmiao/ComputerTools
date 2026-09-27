@@ -1,0 +1,32 @@
+# 资源管理器里不显示 OneDrive 这类同步软件的推广提示。
+# HKCU\…\Explorer\Advanced 的 ShowSyncProviderNotifications：0 = 不显示，1 = 显示（系统默认；全新系统可能没有这个值）。
+# 对应「文件夹选项 → 查看 → 显示同步提供程序通知」这个勾选框。
+id: explorer.hide-sync-ads
+schema_version: 1
+title: { zh-CN: 资源管理器里不显示同步软件的推广 }
+description:
+  zh-CN: 资源管理器顶上不再弹出 OneDrive 这类同步软件的推广提示（「试试 OneDrive」「备份你的文件」之类）。对应「文件夹选项」里的「显示同步提供程序通知」；OneDrive 本身照常能用。
+category: explorer
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: ShowSyncProviderNotifications
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: ShowSyncProviderNotifications
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://github.com/Raphire/Win11Debloat
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

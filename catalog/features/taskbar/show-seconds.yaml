@@ -1,0 +1,31 @@
+# 任务栏的时钟显示秒。HKCU\…\Explorer\Advanced 的 ShowSecondsInSystemClock：1 = 显示；0 或者没有 = 不显示（系统默认）。
+# Win10 一直支持；Win11 从 22H2 的 2023 年 4 月更新（22621.1537）起支持，设置里在「时间和语言 → 日期和时间」。
+# Win11 21H2（22000）不认这个值，那个版本早已停止支持。
+id: taskbar.show-seconds
+schema_version: 1
+title: { zh-CN: 任务栏的时钟显示秒 }
+description:
+  zh-CN: 任务栏右下角的时间显示到秒（比如 14:05:37），抢票、对时间的时候方便。微软说会多用一点电，笔记本在意续航的话可以不开。
+category: taskbar
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: ShowSecondsInSystemClock
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: ShowSecondsInSystemClock
+      delete: true
+undo: auto
+references:
+  - https://blogs.windows.com/windows-insider/2023/03/31/announcing-windows-11-insider-preview-build-22621-1537-and-22624-1537/
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

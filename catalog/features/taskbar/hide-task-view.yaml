@@ -1,0 +1,31 @@
+# 任务栏上不显示「任务视图」按钮。HKCU\…\Explorer\Advanced 的 ShowTaskViewButton：0 = 不显示，1 = 显示（系统默认）。
+# 对应「设置 → 个性化 → 任务栏 → 任务栏项 → 任务视图」。按 Win + Tab 照样能用。
+id: taskbar.hide-task-view
+schema_version: 1
+title: { zh-CN: 任务栏不显示「任务视图」按钮 }
+description:
+  zh-CN: 任务栏上不再显示「任务视图」（多桌面）按钮，任务栏更清爽。要用时按 Win + Tab 照样能打开。纯属个人喜好。
+category: taskbar
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: ShowTaskViewButton
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: ShowTaskViewButton
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/customize-the-taskbar-in-windows-0657a50f-0cc7-dbfd-ae6b-05020b195b07
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

@@ -1,0 +1,32 @@
+# 任务栏上的搜索框改成一个放大镜图标。HKCU\…\Search 的 SearchboxTaskbarMode：
+# 0 = 隐藏，1 = 只显示图标，2 = 搜索框（系统默认），Win11 还有 3 = 图标和文字。
+# 对应「设置 → 个性化 → 任务栏 → 任务栏项 → 搜索」。策略 ConfigureSearchOnTaskbarMode 的编号不一样，这里不用策略。
+id: taskbar.search-icon
+schema_version: 1
+title: { zh-CN: 任务栏的搜索框改成图标 }
+description:
+  zh-CN: 任务栏上长长的搜索框改成一个放大镜图标，给打开的软件多留点地方；点图标或者按 Win + S 照样能搜索。纯属个人喜好。
+category: taskbar
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Search
+      name: SearchboxTaskbarMode
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Search
+      name: SearchboxTaskbarMode
+      type: dword
+      value: 2
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/customize-the-taskbar-in-windows-0657a50f-0cc7-dbfd-ae6b-05020b195b07
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-search

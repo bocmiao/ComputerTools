@@ -1,0 +1,53 @@
+# 关闭「提高指针精确度」（鼠标加速）。HKCU\Control Panel\Mouse 的三个字符串值：
+#   MouseSpeed / MouseThreshold1 / MouseThreshold2：系统默认 "1" / "6" / "10"，关掉是 "0" / "0" / "0"。
+# 对应「控制面板 → 鼠标 → 指针选项 → 提高指针精确度」。直接改注册表要注销再登录才生效
+# （控制面板用 SystemParametersInfo 马上生效；小药箱以管理员身份运行，调它改不到登录用户，所以不调）。
+id: input.disable-mouse-acceleration
+schema_version: 1
+title: { zh-CN: 关闭鼠标加速（提高指针精确度） }
+description:
+  zh-CN: 关掉以后，鼠标移动的距离只和手移动的距离有关，和快慢无关，玩游戏、做设计时更好控制。习惯了加速的人会觉得鼠标变慢了，可以在「鼠标」设置里把指针速度调快一点。改完注销再登录生效。
+category: input
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: logoff
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Control Panel\Mouse
+      name: MouseSpeed
+      type: string
+      value: "0"
+  - registry:
+      key: HKCU\Control Panel\Mouse
+      name: MouseThreshold1
+      type: string
+      value: "0"
+  - registry:
+      key: HKCU\Control Panel\Mouse
+      name: MouseThreshold2
+      type: string
+      value: "0"
+windows_default:
+  - registry:
+      key: HKCU\Control Panel\Mouse
+      name: MouseSpeed
+      type: string
+      value: "1"
+  - registry:
+      key: HKCU\Control Panel\Mouse
+      name: MouseThreshold1
+      type: string
+      value: "6"
+  - registry:
+      key: HKCU\Control Panel\Mouse
+      name: MouseThreshold2
+      type: string
+      value: "10"
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfow
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

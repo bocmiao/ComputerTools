@@ -1,0 +1,32 @@
+# 任务栏按钮不合并、显示窗口标题。HKCU\…\Explorer\Advanced 的 TaskbarGlomLevel：
+# 0 = 总是合并（系统默认），1 = 任务栏占满时合并，2 = 从不合并。
+# Win10 一直支持；Win11 从 22H2 的 2023 年秋季更新（Moment 4）起支持，设置里是「合并任务栏按钮并隐藏标签」。
+id: taskbar.never-combine
+schema_version: 1
+title: { zh-CN: 任务栏按钮不合并，显示窗口标题 }
+description:
+  zh-CN: 同一个软件开了好几个窗口时，任务栏上分开显示，每个按钮带上窗口标题，一眼就能找到要切换的那个，和 Windows 7 的习惯一样。窗口多了按钮会变窄。纯属个人喜好。
+category: taskbar
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: TaskbarGlomLevel
+      type: dword
+      value: 2
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: TaskbarGlomLevel
+      type: dword
+      value: 0
+undo: auto
+references:
+  - https://blogs.windows.com/windows-insider/2023/06/14/announcing-windows-11-insider-preview-build-23481/
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

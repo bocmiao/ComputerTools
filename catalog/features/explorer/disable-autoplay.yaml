@@ -1,0 +1,33 @@
+# 插上 U 盘、光盘、手机时不自动弹出「自动播放」。
+# HKCU\…\Explorer\AutoplayHandlers 的 DisableAutoplay：1 = 关，0 = 开（系统默认）。
+# 对应「设置 → 蓝牙和其他设备 → 自动播放 → 在所有媒体和设备上使用自动播放」。
+# 更强的 NoDriveTypeAutoRun 是策略，微软说应用程序不应该改它，这里不用。
+id: explorer.disable-autoplay
+schema_version: 1
+title: { zh-CN: 插 U 盘时不自动弹出「自动播放」 }
+description:
+  zh-CN: 插上 U 盘、光盘、手机或相机时，不再自动弹出「选择要对此驱动器执行的操作」，想打开时自己在资源管理器里点。也能少一点「插上就中招」的机会。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: none
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers
+      name: DisableAutoplay
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers
+      name: DisableAutoplay
+      type: dword
+      value: 0
+undo: auto
+references:
+  - https://raw.githubusercontent.com/Chuyu-Team/Dism-Multi-language/master/Data.xml
+  - https://learn.microsoft.com/en-us/windows/win32/shell/autoplay-reg

@@ -1,0 +1,44 @@
+# 锁屏界面不显示「趣味知识、提示、技巧」。HKCU\…\ContentDeliveryManager 下两个值，0 = 关，1 或者没有 = 开（系统默认）：
+#   RotatingLockScreenOverlayEnabled、SubscribedContent-338387Enabled（社区整理的对应关系，Win11Debloat、winutil 都用）。
+# 对应「设置 → 个性化 → 锁屏界面 → 在锁屏界面上获取趣味知识、提示、技巧等」。
+# Windows 聚焦的相关策略只对企业版、教育版有效，这里不用策略。
+id: ads.lockscreen-tips-off
+schema_version: 1
+title: { zh-CN: 锁屏不显示「趣味知识、提示」 }
+description:
+  zh-CN: 锁屏画面上不再叠加「你知道吗」「了解此图片」这类提示和推广文字，锁屏图片本身不变。
+category: ads
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: logoff
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: RotatingLockScreenOverlayEnabled
+      type: dword
+      value: 0
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-338387Enabled
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: RotatingLockScreenOverlayEnabled
+      type: dword
+      value: 1
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SubscribedContent-338387Enabled
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience
+  - https://github.com/Raphire/Win11Debloat
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

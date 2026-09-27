@@ -1,0 +1,31 @@
+# 资源管理器打开时显示「此电脑」，而不是「主页 / 快速访问」。
+# HKCU\…\Explorer\Advanced 的 LaunchTo：1 = 此电脑，2 = 主页（快速访问）；没有这个值时是主页（系统默认）。
+# Win11 还有 3 = 下载、4 = OneDrive。对应「文件夹选项 → 常规 → 打开文件资源管理器时打开」。新开的窗口生效。
+id: explorer.open-this-pc
+schema_version: 1
+title: { zh-CN: 资源管理器打开时显示「此电脑」 }
+description:
+  zh-CN: 打开资源管理器（Win + E、任务栏上的文件夹图标）时直接显示「此电脑」里的各个磁盘，而不是「主页」里最近用过的文件。纯属个人习惯，新开的窗口生效。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: none
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: LaunchTo
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: LaunchTo
+      delete: true
+undo: auto
+references:
+  - https://raw.githubusercontent.com/Chuyu-Team/Dism-Multi-language/master/Data.xml
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

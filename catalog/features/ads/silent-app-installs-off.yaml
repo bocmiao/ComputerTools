@@ -1,0 +1,32 @@
+# 不再自动装推荐的应用（开始菜单里莫名其妙多出来的小游戏、推广应用）。
+# HKCU\…\ContentDeliveryManager 的 SilentInstalledAppsEnabled：0 = 关，1 或者没有 = 开（系统默认）。
+# 已经装上的不会被删掉，要自己在「设置 → 应用」里卸载。
+id: ads.silent-app-installs-off
+schema_version: 1
+title: { zh-CN: 不再自动装推荐的应用 }
+description:
+  zh-CN: Windows 不再悄悄给你装推荐的应用和小游戏（开始菜单里莫名多出来的那些）。已经装上的不会自动删掉，不想要的在「设置 → 应用」里卸载就行。
+category: ads
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: none
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SilentInstalledAppsEnabled
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+      name: SilentInstalledAppsEnabled
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://github.com/Raphire/Win11Debloat
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json
