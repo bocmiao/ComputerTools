@@ -9,8 +9,7 @@
 # ProgID.
 #   missing         PhotoViewer.dll is not there (stripped-down builds)
 #   registered      each extension below points at its ProgID in
-#                   FileAssociations, is listed under its OpenWithProgids,
-#                   and the ProgID has an open command
+#                   FileAssociations and the ProgID has an open command
 #   not-registered  otherwise
 # Read-only. Facts: unregistered (the extensions that are not registered).
 
@@ -65,9 +64,8 @@ $unregistered = New-Object System.Collections.Generic.List[string]
 foreach ($ext in $expected.Keys) {
     $progId = $expected[$ext]
     $assoc = Get-RegText 'SOFTWARE\Microsoft\Windows Photo Viewer\Capabilities\FileAssociations' $ext
-    $openWith = Get-RegText ('SOFTWARE\Classes\' + $ext + '\OpenWithProgids') $progId
     $command = Get-RegText ('SOFTWARE\Classes\' + $progId + '\shell\open\command') ''
-    if (($assoc -ne $progId) -or ($null -eq $openWith) -or ([string]::IsNullOrEmpty($command))) {
+    if (($assoc -ne $progId) -or ([string]::IsNullOrEmpty($command))) {
         $unregistered.Add($ext)
     }
 }

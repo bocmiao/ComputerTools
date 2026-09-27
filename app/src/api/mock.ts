@@ -283,7 +283,7 @@ const FEATURE_LIST: MockFeature[] = [
       id: 'explorer.photo-viewer',
       title: '找回 Windows 照片查看器',
       description:
-        '老的「Windows 照片查看器」打开快、占内存少，其实还在系统里，只是 Windows 10 以后没登记成能打开 JPG、PNG 这些图片。这里把它登记回来（图片的类型和图标不变），之后在图片上点右键「打开方式」就能选它。不改默认程序，随时可以撤销。',
+        '老的「Windows 照片查看器」打开快、占内存少，其实还在系统里，只是 Windows 10 以后没登记成能打开 JPG、PNG 这些图片。这里把它登记回来（图片的类型和图标不变），之后在图片上点右键「打开方式 → 选择其他应用」就能选它。不改默认程序，随时可以撤销。',
       category: 'explorer',
       subjective: true,
     },
@@ -293,11 +293,6 @@ const FEATURE_LIST: MockFeature[] = [
           target: 'HKLM\\SOFTWARE\\Microsoft\\Windows Photo Viewer\\Capabilities\\FileAssociations\\.jpg',
           initial: ABSENT,
           planned: '字符串 PhotoViewer.FileAssoc.Jpeg',
-        },
-        {
-          target: 'HKLM\\SOFTWARE\\Classes\\.jpg\\OpenWithProgids\\PhotoViewer.FileAssoc.Jpeg',
-          initial: ABSENT,
-          planned: '字符串（空）',
         },
         {
           target: 'HKLM\\SOFTWARE\\Classes\\PhotoViewer.FileAssoc.Jpeg\\FriendlyTypeName',
