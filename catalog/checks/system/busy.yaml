@@ -1,0 +1,96 @@
+# 电脑现在忙不忙、谁在忙（调研 S07）。脚本：scripts/checks/system/busy.ps1
+# 只读：什么都不结束、不改（不做「一键加速」「内存释放」，计划书第五节第 15 条）。
+# 处理器：用 Get-Process 隔 8 秒读两次每个进程用掉的处理器时间，按程序加起来（所有 chrome.exe 算一个；每个 svchost.exe
+# 各算一个，名字后面带上它里面运行的 Windows 服务，和任务管理器的「服务主机：……」一样），这 8 秒里新启动的进程整个算上，
+# 占用 = 这 8 秒里用掉的处理器时间 ÷ 8 秒 ÷ 逻辑处理器个数。不用 WMI 的「格式化」性能类（PowerShell 里没有刷新它的办法，
+# 读出来常常是 0），也不用性能计数器（名字在中文系统里是中文的）。内存：Win32_OperatingSystem 的可用内存。
+# 结果：处理器占用到 60% 以上时，按最忙的程序给结论：defender（Windows 安全中心在查病毒）、antivirus（别的杀毒软件：
+# 360、腾讯电脑管家、火绒、金山毒霸等）、update（在下载、安装更新，包括运行 Windows 更新、传递优化服务的服务主机）、
+# indexing（Windows 搜索在建索引）、browser（浏览器）、explorer（资源管理器）、system（Windows 自己关不掉的部分：System、
+# 服务主机、桌面窗口管理器……）、other；否则内存用到 90% 以上是 memory-full（最占内存的不算 Memory Compression 这类
+# 内核的部分）；否则 ok。
+# 事实：cpu_pct、memory_pct、busiest（最忙的程序名）、top_cpu（最多 3 个「名字 35%」）、top_memory（最多 3 个「名字 1.2 GB」）。
+# 程序名用程序文件里写的说明（和任务管理器显示的一样），没有就用进程名。不读窗口标题、命令行。
+# 待真机验证：见 docs/real-machine-checklist.md。
+id: system.busy
+schema_version: 1
+title: { zh-CN: 谁在占用电脑 }
+description:
+  zh-CN: 看 8 秒钟，查查现在是哪些程序在占用处理器和内存，电脑卡、风扇狂转的时候用得上。只看不动，不会结束任何程序。
+category: system
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/system/busy.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: "看了 8 秒：处理器用了 {cpu_pct}%，内存用了 {memory_pct}%，现在不算忙。"
+    next:
+      zh-CN: 电脑是一阵一阵地卡的话，等卡的时候再查一次。
+  defender:
+    status: ok
+    message:
+      zh-CN: "处理器用了 {cpu_pct}%，最忙的是 Windows 安全中心在查病毒（{busiest}）。占得最多的：{top_cpu}。"
+    next:
+      zh-CN: 这是系统在保护电脑，一般十几分钟就查完了，等它忙完就好，不要把它关掉。老是这样的话，看看是不是同时装了别的杀毒软件，两个一起查会更卡。
+  antivirus:
+    status: ok
+    message:
+      zh-CN: "处理器用了 {cpu_pct}%，最忙的是杀毒软件（{busiest}），多半在查病毒或者更新。占得最多的：{top_cpu}。"
+    next:
+      zh-CN: 等它忙完就好。老是这样的话，看看是不是装了两个以上的杀毒软件：它们会互相查，电脑更卡，留一个就够了。
+  update:
+    status: ok
+    message:
+      zh-CN: "处理器用了 {cpu_pct}%，最忙的是 Windows 更新在下载或安装更新（{busiest}）。占得最多的：{top_cpu}。"
+    next:
+      zh-CN: 等它装完就好，装完以后可能要重启一次；这时候不要强行关机。
+  indexing:
+    status: ok
+    message:
+      zh-CN: "处理器用了 {cpu_pct}%，最忙的是 Windows 搜索在给文件建索引（{busiest}）。占得最多的：{top_cpu}。"
+    next:
+      zh-CN: 刚装完系统、刚拷进来很多文件时常见，建完就不忙了。
+  browser:
+    status: advice
+    message:
+      zh-CN: "处理器用了 {cpu_pct}%，最忙的是浏览器（{busiest}）。占得最多的：{top_cpu}。"
+    fixer: user
+    next:
+      zh-CN: 关掉不用的标签页，特别是在放视频、开着网页游戏的；装了很多浏览器插件的，停用几个不用的。
+  explorer:
+    status: advice
+    message:
+      zh-CN: "处理器用了 {cpu_pct}%，最忙的是 Windows 资源管理器（{busiest}，桌面、任务栏和文件夹窗口都靠它）。占得最多的：{top_cpu}。"
+    fixer: user
+    next:
+      zh-CN: 正在复制很多文件、打开放了很多照片视频的文件夹时，它会忙一阵，等一等就好。没做这些也一直这样的话，点下面的「重启资源管理器」重启一下它。
+    links: ["tool:system.restart-explorer"]
+  system:
+    status: advice
+    message:
+      zh-CN: "处理器用了 {cpu_pct}%，最忙的是 Windows 自己的「{busiest}」。占得最多的：{top_cpu}。"
+    fixer: helper
+    next:
+      zh-CN: 刚开机、刚装完更新的时候忙一阵是正常的，过十几分钟再查一次。一直这样的话，多半是某个驱动程序或者设备出了问题；它是 Windows 的一部分，不能直接关掉，请懂哥帮忙看看。
+  other:
+    status: advice
+    message:
+      zh-CN: "处理器用了 {cpu_pct}%，最忙的是「{busiest}」。占得最多的：{top_cpu}。"
+    fixer: user
+    next:
+      zh-CN: 是你正在用的软件（比如在看视频、打游戏、导出视频）的话，这是正常的；不认识、又不需要它的，可以关掉它，或者请懂哥看看是什么。不要用「一键加速」「内存释放」这类软件，它们结束的程序很快又会自己启动，还可能把系统弄坏。
+    links: ["tool:open.task-manager"]
+  memory-full:
+    status: advice
+    message:
+      zh-CN: "内存快用完了（用了 {memory_pct}%），最占内存的是「{busiest}」。占得最多的：{top_memory}。"
+    fixer: user
+    next:
+      zh-CN: 关掉不用的软件和浏览器标签页。经常这样的话，说明内存不够用了：4 GB 内存的电脑可以请懂哥看看能不能加到 8 GB 或者更多。
+    links: ["tool:open.task-manager"]
+references:
+  - https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.totalprocessortime
+  - https://learn.microsoft.com/en-us/windows/win32/wmisdk/monitoring-performance-data
