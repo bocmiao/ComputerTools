@@ -21,10 +21,15 @@ pub struct AppState {
     /// 引擎没能启动时，每个命令都返回这个原因，界面会显示出来
     pub engine: Result<Arc<Engine>, String>,
     pub rename: Arc<Mutex<crate::rename::RenameState>>,
+    pub images: Arc<Mutex<crate::images::ImageState>>,
 }
 
 pub fn init() -> AppState {
-    AppState { engine: build_engine().map(Arc::new), rename: Arc::new(Mutex::new(Default::default())) }
+    AppState {
+        engine: build_engine().map(Arc::new),
+        rename: Arc::new(Mutex::new(Default::default())),
+        images: Arc::new(Mutex::new(Default::default())),
+    }
 }
 
 fn build_engine() -> Result<Engine, String> {
@@ -224,5 +229,9 @@ pub use os::{claim_single_instance, fatal, harden_environment, preflight, webvie
 /// 测试用：用假系统和真实的内嵌数据造一个 AppState，不碰真实系统、不落盘到固定位置。
 #[cfg(any(test, feature = "test-helpers"))]
 pub fn test_state() -> AppState {
-    AppState { engine: build_engine().map(Arc::new), rename: Arc::new(Mutex::new(Default::default())) }
+    AppState {
+        engine: build_engine().map(Arc::new),
+        rename: Arc::new(Mutex::new(Default::default())),
+        images: Arc::new(Mutex::new(Default::default())),
+    }
 }

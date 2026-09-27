@@ -24,6 +24,9 @@ const COMMANDS: &[&str] = &[
     "rename_preview",
     "rename_apply",
     "rename_undo",
+    "image_select_folder",
+    "image_save",
+    "image_open_folder",
 ];
 
 fn main() {

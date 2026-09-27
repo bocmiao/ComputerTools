@@ -33,6 +33,10 @@ async function call<K extends CommandName>(cmd: K, args: CommandArgs<K>): Promis
   if (isTauri()) {
     return invoke<CommandResult<K>>(cmd, args as InvokeArgs)
   }
+  return callMock(cmd, args)
+}
+
+async function callMock<K extends CommandName>(cmd: K, args: CommandArgs<K>): Promise<CommandResult<K>> {
   mockModule ??= import('./mock')
   const mock = await mockModule
   return mock.mockInvoke(cmd, args)
@@ -136,4 +140,31 @@ export function renameApply(): Promise<number> {
 /** 撤销上一次改名，返回改回了几个文件 */
 export function renameUndo(): Promise<number> {
   return call('rename_undo', {})
+}
+
+/** 图片批量处理：用系统的选择框选处理好的图片存到哪里；取消返回 null */
+export function imageSelectFolder(): Promise<string | null> {
+  return call('image_select_folder', {})
+}
+
+/**
+ * 图片批量处理：把处理好的一张图片存进选好的文件夹，只新建、不覆盖（重名时后端在名字后面加「 (2)」），
+ * 返回实际用的文件名。图片内容直接作为二进制请求体传（比转成 JSON 数组快得多）；文件名按 URL 编码放进
+ * 请求头（请求头只能是 ASCII），modified 是原图的修改时间（毫秒）。
+ */
+export function imageSave(name: string, modified: number, bytes: Uint8Array): Promise<string> {
+  if (isTauri()) {
+    return invoke<string>('image_save', bytes, {
+      headers: {
+        'x-medkit-name': encodeURIComponent(name),
+        'x-medkit-modified': String(Math.max(0, Math.round(modified))),
+      },
+    })
+  }
+  return callMock('image_save', { name, modified, bytes })
+}
+
+/** 图片批量处理：在资源管理器里打开选好的保存文件夹 */
+export function imageOpenFolder(): Promise<null> {
+  return call('image_open_folder', {})
 }

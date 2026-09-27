@@ -678,15 +678,38 @@ fn open_program(exe: &str, args: &[&str]) -> PResult<()> {
 
 /// 打开「设置」里的一页（ms-settings:<page>）。「设置」是系统应用，由系统按登录用户打开。
 fn open_settings(page: &str) -> PResult<()> {
+    shell_open(OsStr::new(&format!("ms-settings:{page}")), None).map_err(|code| {
+        PlatformError::Other(format!(
+            "系统没有响应（错误代码 {code}）。可以点开始菜单里的齿轮图标，自己打开「设置」找这一项"
+        ))
+    })
+}
+
+/// 在资源管理器里打开一个文件夹（交给系统的外壳，由登录用户的资源管理器打开）。图片批量处理用它打开用户自己
+/// 选的保存位置。按「文件夹」类型打开（SEE_MASK_CLASSNAME）：检查之后这个位置就算被换成了同名的程序，
+/// 也只会被当成文件夹去打开，不会以管理员身份运行它。
+pub fn open_folder(path: &Path) -> PResult<()> {
+    if !path.is_dir() {
+        return Err(PlatformError::NotFound(path.display().to_string()));
+    }
+    shell_open(path.as_os_str(), Some("folder"))
+        .map_err(|code| PlatformError::Other(format!("资源管理器没有响应（错误代码 {code}），请自己打开这个文件夹")))
+}
+
+/// ShellExecuteExW 的 open；`class` 给了就按这个文件类型打开，不看目标本身是什么。失败时返回 GetLastError 的代码。
+fn shell_open(target: &OsStr, class: Option<&str>) -> Result<(), u32> {
     use windows_sys::Win32::Foundation::GetLastError;
     use windows_sys::Win32::System::Com::{
         COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
     };
-    use windows_sys::Win32::UI::Shell::{SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW};
+    use windows_sys::Win32::UI::Shell::{
+        SEE_MASK_CLASSNAME, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-    let uri = wide(format!("ms-settings:{page}"));
+    let uri = wide(target);
     let verb = wide("open");
+    let class = class.map(wide);
     // ShellExecute 可能通过 COM 找协议的处理程序，先在这个线程上初始化 COM（微软文档的要求）
     // SAFETY: 参数都是合法值；成功（含 S_FALSE）时要配对调用 CoUninitialize
     let com = unsafe { CoInitializeEx(null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32) };
@@ -697,6 +720,10 @@ fn open_settings(page: &str) -> PResult<()> {
     info.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
     info.lpVerb = verb.as_ptr();
     info.lpFile = uri.as_ptr();
+    if let Some(class) = &class {
+        info.fMask |= SEE_MASK_CLASSNAME;
+        info.lpClass = class.as_ptr();
+    }
     info.nShow = SW_SHOWNORMAL;
     // SAFETY: info 已按文档初始化，字符串以 NUL 结尾且在调用期间有效
     let ok = unsafe { ShellExecuteExW(&mut info) } != 0;
@@ -706,13 +733,7 @@ fn open_settings(page: &str) -> PResult<()> {
         // SAFETY: 和上面成功的 CoInitializeEx 配对
         unsafe { CoUninitialize() };
     }
-    if ok {
-        Ok(())
-    } else {
-        Err(PlatformError::Other(format!(
-            "系统没有响应（错误代码 {code}）。可以点开始菜单里的齿轮图标，自己打开「设置」找这一项"
-        )))
-    }
+    if ok { Ok(()) } else { Err(code) }
 }
 
 // ───────────── 数据目录 ─────────────

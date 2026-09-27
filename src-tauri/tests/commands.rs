@@ -21,6 +21,16 @@ fn app() -> WebviewWindow<tauri::test::MockRuntime> {
 
 /// 调一个命令，返回 Ok(结果 JSON) 或 Err(错误信息)。
 fn invoke(win: &WebviewWindow<tauri::test::MockRuntime>, cmd: &str, args: Value) -> Result<Value, Value> {
+    invoke_body(win, cmd, InvokeBody::Json(args), Default::default())
+}
+
+/// 和 `invoke` 一样，但请求体和请求头自己给（图片保存用二进制请求体）。
+fn invoke_body(
+    win: &WebviewWindow<tauri::test::MockRuntime>,
+    cmd: &str,
+    body: InvokeBody,
+    headers: tauri::http::HeaderMap,
+) -> Result<Value, Value> {
     get_ipc_response(
         win,
         InvokeRequest {
@@ -28,8 +38,8 @@ fn invoke(win: &WebviewWindow<tauri::test::MockRuntime>, cmd: &str, args: Value)
             callback: CallbackFn(0),
             error: CallbackFn(1),
             url: "tauri://localhost".parse().unwrap(),
-            body: InvokeBody::Json(args),
-            headers: Default::default(),
+            body,
+            headers,
             invoke_key: INVOKE_KEY.to_string(),
         },
     )
@@ -219,4 +229,41 @@ fn rename_commands_pass_the_permission_check() {
     assert!(e.as_str().is_some_and(|m| m.contains("预览")), "{e}");
     let e = invoke(&win, "rename_undo", json!({})).unwrap_err();
     assert!(e.as_str().is_some_and(|m| m.contains("没有可以撤销")), "{e}");
+}
+
+/// 图片批量处理的命令也要登记进权限清单；图片内容走二进制请求体，文件名走请求头。
+#[test]
+fn image_commands_pass_the_permission_check_and_save_raw_bodies() {
+    use tauri::Manager;
+
+    let win = app();
+    // mock 运行时里没有文件夹选择框：返回 null
+    assert!(ok(&win, "image_select_folder", json!({})).is_null());
+    let e = invoke(&win, "image_open_folder", json!({})).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("还没有选择")), "{e}");
+
+    let jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10];
+    let mut headers = tauri::http::HeaderMap::new();
+    headers.insert("x-medkit-name", "%E7%85%A7%E7%89%87.jpg".parse().unwrap());
+    headers.insert("x-medkit-modified", "1700000000000".parse().unwrap());
+    let e = invoke_body(&win, "image_save", InvokeBody::Raw(jpeg.clone()), headers.clone()).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("请先选择保存")), "{e}");
+    // 用 JSON 传图片内容不行
+    let e = invoke(&win, "image_save", json!({ "bytes": [255, 216, 255] })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("二进制")), "{e}");
+
+    // 选好文件夹以后（这里直接改状态，真程序里只能由系统的选择框来选）：存进去，重名不覆盖
+    let dir = std::env::temp_dir().join(format!("medkit-image-ipc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    win.state::<medkit_lib::setup::AppState>().images.lock().unwrap().folder = Some(dir.clone());
+    let first = invoke_body(&win, "image_save", InvokeBody::Raw(jpeg.clone()), headers.clone()).unwrap();
+    let second = invoke_body(&win, "image_save", InvokeBody::Raw(jpeg.clone()), headers.clone()).unwrap();
+    assert_eq!(first, json!("照片.jpg"));
+    assert_eq!(second, json!("照片 (2).jpg"));
+    assert_eq!(std::fs::read(dir.join("照片 (2).jpg")).unwrap(), jpeg);
+    // 内容和扩展名对不上的不存
+    let e = invoke_body(&win, "image_save", InvokeBody::Raw(b"MZ".to_vec()), headers).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("不是 JPG")), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

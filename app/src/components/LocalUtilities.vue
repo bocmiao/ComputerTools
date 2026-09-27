@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { sha256File } from '../utils/fileHash'
 import ImagePrivacyTool from './ImagePrivacyTool.vue'
 import BatchRenameTool from './BatchRenameTool.vue'
+import BatchImageTool from './BatchImageTool.vue'
 
 const selectedFile = ref<File | null>(null)
 const fileHash = ref('')
@@ -123,7 +124,7 @@ async function copy(value: string): Promise<void> {
   <section class="group" aria-labelledby="local-tools-title">
     <div class="group-head">
       <h2 id="local-tools-title" class="section-title">文件与文本工具</h2>
-      <p class="muted small">文件和文字只在这台电脑里处理，不上传。批量重命名会在确认后修改所选文件的名称。</p>
+      <p class="muted small">文件和文字只在这台电脑里处理，不上传。批量重命名会在确认后修改所选文件的名称；图片批量处理只新建文件，原图不动。</p>
     </div>
     <div class="local-list">
       <article class="card local-card">
@@ -187,6 +188,7 @@ async function copy(value: string): Promise<void> {
           <button type="button" class="btn btn-secondary btn-small self-start" @click="copy(textOutput)">复制结果</button>
         </template>
       </article>
+      <BatchImageTool />
       <ImagePrivacyTool />
       <BatchRenameTool />
     </div>

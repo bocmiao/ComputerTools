@@ -9,6 +9,7 @@ use medkit_core::views::{
 };
 use tauri::State;
 
+use crate::images;
 use crate::rename::{self, RenamePreview, RenameRules};
 use crate::setup::AppState;
 
@@ -162,4 +163,60 @@ pub async fn rename_undo(state: State<'_, AppState>) -> CmdResult<usize> {
     })
     .await
     .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// 图片批量处理：用系统的文件夹选择框选保存到哪里。界面拿不到、也传不了别的路径。
+#[tauri::command]
+pub async fn image_select_folder(state: State<'_, AppState>) -> CmdResult<Option<String>> {
+    #[cfg(windows)]
+    let folder = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new().set_title("选择处理好的图片保存到哪个文件夹").pick_folder()
+    })
+    .await
+    .map_err(|e| format!("打开文件夹选择器失败：{e}"))?;
+    #[cfg(not(windows))]
+    let folder: Option<std::path::PathBuf> = None;
+    let Some(folder) = folder else { return Ok(None) };
+    let folder = folder.canonicalize().map_err(|e| format!("无法读取所选文件夹：{e}"))?;
+    let display = folder.display().to_string();
+    state.images.lock().map_err(|_| "图片处理状态异常。")?.folder = Some(folder);
+    Ok(Some(display))
+}
+
+/// 图片批量处理：把界面处理好的一张图片存进选好的文件夹，只新建、不覆盖（重名就在后面加「 (2)」）。
+/// 图片内容就是请求体（二进制）；文件名按 URL 编码放在请求头 `x-medkit-name` 里（请求头只能是 ASCII），
+/// 原图的修改时间（毫秒）放在 `x-medkit-modified` 里。返回实际用的文件名。
+#[tauri::command]
+pub async fn image_save(state: State<'_, AppState>, request: tauri::ipc::Request<'_>) -> CmdResult<String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("图片内容的格式不对（要直接传二进制）。".into());
+    };
+    let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok());
+    let name = header("x-medkit-name").and_then(images::decode_component).ok_or("没有给出文件名。")?;
+    let modified = header("x-medkit-modified").and_then(images::modified_from_millis);
+    let folder = state.images.lock().map_err(|_| "图片处理状态异常。")?.folder.clone();
+    let folder = folder.ok_or("请先选择保存到哪个文件夹。")?;
+    let bytes = bytes.clone();
+    tauri::async_runtime::spawn_blocking(move || images::save(&folder, &name, &bytes, modified))
+        .await
+        .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// 图片批量处理：在资源管理器里打开选好的保存文件夹。
+#[tauri::command]
+pub async fn image_open_folder(state: State<'_, AppState>) -> CmdResult<()> {
+    let folder = state.images.lock().map_err(|_| "图片处理状态异常。")?.folder.clone();
+    let folder = folder.ok_or("还没有选择保存的文件夹。")?;
+    #[cfg(windows)]
+    {
+        tauri::async_runtime::spawn_blocking(move || medkit_core::platform::windows::open_folder(&folder))
+            .await
+            .map_err(|e| format!("内部错误：{e}"))?
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = folder;
+        Err("只有在 Windows 上才能打开文件夹。".into())
+    }
 }

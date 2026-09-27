@@ -169,7 +169,7 @@ const RESERVED: &[&str] = &["con", "prn", "aux", "nul"];
 
 /// Windows 能不能用这个名字：不能是空的，不能有 <>:"/\|?* 和控制字符，不能以空格、句点结尾，
 /// 不能是 CON、NUL、COM1 这类设备名（带不带扩展名都不行），不能超过 255 个字符（UTF-16）。
-fn check_name(name: &str) -> Result<(), String> {
+pub(crate) fn check_name(name: &str) -> Result<(), String> {
     if name.trim().is_empty() {
         return Err("新名字是空的。".into());
     }

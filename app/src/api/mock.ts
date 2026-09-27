@@ -2150,7 +2150,31 @@ const handlers: Handlers = {
     demoLast = []
     return back.length
   },
+  image_select_folder: () => {
+    demoImageFolder = true
+    return DEMO_IMAGE_FOLDER
+  },
+  // 和后端一样：只新建、不覆盖，重名就在名字后面加「 (2)」（演示里只记名字，不真的保存）
+  image_save: ({ name, bytes }) => {
+    if (!demoImageFolder) throw '请先选择保存到哪个文件夹。'
+    if (!bytes.length) throw `「${name}」是空的，没有保存。`
+    const dot = name.lastIndexOf('.')
+    const [stem, ext] = [name.slice(0, dot), name.slice(dot + 1)]
+    let candidate = name
+    for (let n = 2; demoSaved.has(candidate.toLowerCase()); n++) candidate = `${stem} (${n}).${ext}`
+    demoSaved.add(candidate.toLowerCase())
+    return candidate
+  },
+  image_open_folder: () => {
+    if (!demoImageFolder) throw '还没有选择保存的文件夹。'
+    return null
+  },
 }
+
+// ── 图片批量处理的演示（浏览器里真的处理图片，但不保存）──
+const DEMO_IMAGE_FOLDER = '演示文件夹（浏览器里不会真的保存）'
+let demoImageFolder = false
+const demoSaved = new Set<string>()
 
 // ── 批量重命名的演示文件（浏览器里预览界面用，不碰真实文件）──
 const DEMO_FOLDER = '演示文件夹（不会改动真实文件）'

@@ -317,7 +317,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 
 ## 9. 界面与后端的接口（Tauri 命令）
 
-前端只能调用下面这些命令。系统诊断与修复命令只接受 ID，不接受命令字符串或路径。批量重命名的目录由后端的系统文件夹选择器取得，前端只能传改名规则（查找替换、序号、前后缀、扩展名），拿不到、也传不了路径。每个命令都要登记在 `src-tauri/build.rs` 的 `COMMANDS` 和 `capabilities/main.json` 里，否则界面调不动（接线测试会查）。
+前端只能调用下面这些命令。系统诊断与修复命令只接受 ID，不接受命令字符串或路径。批量重命名、图片批量处理的目录由后端的系统文件夹选择器取得，前端只能传改名规则（查找替换、序号、前后缀、扩展名）或者文件名和图片内容，拿不到、也传不了路径。每个命令都要登记在 `src-tauri/build.rs` 的 `COMMANDS` 和 `capabilities/main.json` 里，否则界面调不动（接线测试会查）。
 
 | 命令 | 参数 | 返回 |
 |---|---|---|
@@ -341,6 +341,11 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `rename_preview` | `rules` | `RenamePreview`（最多 500 个直属普通文件的原名、新名、名字变不变；不处理的文件数） |
 | `rename_apply` | — | `number`（执行已预览、文件夹没有变化的改名，返回改了几个） |
 | `rename_undo` | — | `number`（把上一次改名改回原名；文件改动过、原名被占用时不撤销） |
+| `image_select_folder` | — | `string \| null`（系统对话框选定的保存目录；取消返回 null） |
+| `image_save` | 请求体是图片内容（二进制，不是 JSON）；请求头 `x-medkit-name`（URL 编码的文件名）、`x-medkit-modified`（原图修改时间，毫秒） | `string`（实际用的文件名。只新建、不覆盖，重名加「 (2)」；只收 JPG、PNG、WebP，内容开头要和扩展名对得上） |
+| `image_open_folder` | — | `null`（按「文件夹」类型交给资源管理器打开选定的保存目录） |
+
+图片批量处理（`app/src/components/BatchImageTool.vue`、`src-tauri/src/images.rs`）：解码、缩放、裁剪、编码都在界面里用 WebView2 自带的解码器和画布做（不加新的依赖，能打开 JPG、PNG、WebP、GIF、BMP、ICO、AVIF，打不开 HEIC 和 TIFF；只能存成 JPG、PNG、WebP）；后端只负责把结果存进用户选的文件夹。原图从不改动。重新编码不带原图的拍摄信息；「压完反而更大时存原图」的那几张原样复制。
 
 开机启动项（`crates/medkit-core/src/startup.rs`）：
 

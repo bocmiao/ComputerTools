@@ -19,7 +19,8 @@ type NoArgs = Record<string, never>
 /**
  * 前端能调用的全部后端命令（docs/architecture.md 第 9 节）。
  * 参数名用 camelCase，Tauri 会自动转成 Rust 那边的 snake_case。
- * 系统诊断命令只接受 ID；批量重命名的目录由原生选择器取得，界面只传文件名前缀。
+ * 系统诊断命令只接受 ID；批量重命名、图片批量处理的目录由原生选择器取得，界面只传改名规则、文件名和图片内容。
+ * image_save 的图片内容走二进制请求体、文件名走请求头（见 ./index.ts 的 imageSave），不走 JSON。
  */
 export type CommandMap = {
   system_info: { args: NoArgs; result: SystemInfo }
@@ -42,6 +43,9 @@ export type CommandMap = {
   rename_preview: { args: { rules: RenameRules }; result: RenamePreview }
   rename_apply: { args: NoArgs; result: number }
   rename_undo: { args: NoArgs; result: number }
+  image_select_folder: { args: NoArgs; result: string | null }
+  image_save: { args: { name: string; modified: number; bytes: Uint8Array }; result: string }
+  image_open_folder: { args: NoArgs; result: null }
 }
 
 export type CommandName = keyof CommandMap
