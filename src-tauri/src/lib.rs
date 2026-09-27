@@ -1,10 +1,11 @@
 //! 电脑小药箱的桌面外壳。拆成 lib + bin 两部分，是为了让 tests/ 里的集成测试能调用命令。
 //!
 //! 诊断和修复命令只接受 ID；批量重命名、图片批量处理的目录，「文件删不掉」要查的文件，图片合成的 PDF 存到哪里，
-//! 都由原生选择器取得（见 docs/architecture.md 第 9 节）。
+//! 「U 盘里的文件不见了」要查的 U 盘，都由原生选择器取得（见 docs/architecture.md 第 9 节）。
 
 pub mod awake;
 pub mod commands;
+pub mod hidden;
 pub mod images;
 pub mod pdf;
 pub mod rename;
@@ -46,6 +47,10 @@ macro_rules! command_handler {
             $crate::commands::image_open_folder,
             $crate::commands::pdf_save,
             $crate::commands::pdf_reveal,
+            $crate::commands::hidden_pick_folder,
+            $crate::commands::hidden_rescan,
+            $crate::commands::hidden_restore,
+            $crate::commands::hidden_undo,
             $crate::commands::screen_fullscreen,
             $crate::commands::awake_get,
             $crate::commands::awake_set,

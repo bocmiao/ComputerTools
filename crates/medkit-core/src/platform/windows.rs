@@ -766,6 +766,27 @@ pub fn reveal_file(path: &Path) -> PResult<()> {
     Ok(())
 }
 
+/// 文件或文件夹的属性（GetFileAttributesW：只读 0x1、隐藏 0x2、系统 0x4、文件夹 0x10……）；读不到返回 None。
+/// 不跟着符号链接走：链接自己的属性里有 0x400（重解析点）。「U 盘里的文件不见了」用它找被藏起来的文件。
+pub fn file_attributes(path: &Path) -> Option<u32> {
+    use windows_sys::Win32::Storage::FileSystem::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
+    let wide_path = wide(path.as_os_str());
+    // SAFETY: wide_path 以 NUL 结尾
+    let value = unsafe { GetFileAttributesW(wide_path.as_ptr()) };
+    (value != INVALID_FILE_ATTRIBUTES).then_some(value)
+}
+
+/// 设文件或文件夹的属性（SetFileAttributesW）。只传它能设的位；什么都不留时传 FILE_ATTRIBUTE_NORMAL（0x80）。
+pub fn set_file_attributes(path: &Path, value: u32) -> std::io::Result<()> {
+    use windows_sys::Win32::Storage::FileSystem::SetFileAttributesW;
+    let wide_path = wide(path.as_os_str());
+    // SAFETY: wide_path 以 NUL 结尾
+    if unsafe { SetFileAttributesW(wide_path.as_ptr(), value) } == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 /// ShellExecuteExW 的 open；`class` 给了就按这个文件类型打开，不看目标本身是什么。失败时返回 GetLastError 的代码。
 fn shell_open(target: &OsStr, class: Option<&str>) -> Result<(), u32> {
     use windows_sys::Win32::Foundation::GetLastError;

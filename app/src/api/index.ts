@@ -8,6 +8,9 @@ import type {
   ContextMenuItem,
   FeatureState,
   FileLockReport,
+  HiddenReport,
+  HiddenRestore,
+  HiddenUndo,
   JournalSession,
   NewMenuItem,
   Preview,
@@ -210,6 +213,26 @@ export function pdfSave(name: string, bytes: Uint8Array): Promise<string | null>
 /** 图片合成 PDF：在资源管理器里显示刚存好的 PDF */
 export function pdfReveal(): Promise<null> {
   return call('pdf_reveal', {})
+}
+
+/** U 盘里的文件不见了：用系统的选择框选 U 盘（系统盘不行），列出被藏起来的东西；取消返回 null */
+export function hiddenPickFolder(): Promise<HiddenReport | null> {
+  return call('hidden_pick_folder', {})
+}
+
+/** U 盘里的文件不见了：把上次选的再查一遍；还没选过返回 null */
+export function hiddenRescan(): Promise<HiddenReport | null> {
+  return call('hidden_rescan', {})
+}
+
+/** U 盘里的文件不见了：把勾选的（结果里的编号）显示出来，程序和脚本文件照样藏着；能撤销 */
+export function hiddenRestore(ids: number[]): Promise<HiddenRestore> {
+  return call('hidden_restore', { ids })
+}
+
+/** U 盘里的文件不见了：撤销上一次「显示出来」（重新藏起来） */
+export function hiddenUndo(): Promise<HiddenUndo> {
+  return call('hidden_undo', {})
 }
 
 /** 屏幕坏点测试：小药箱窗口进入、退出全屏 */

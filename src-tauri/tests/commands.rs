@@ -341,6 +341,37 @@ fn pdf_commands_pass_the_permission_check() {
     assert!(invoke_body(&win, "pdf_save", InvokeBody::Raw(pdf), headers).unwrap().is_null());
 }
 
+/// 「U 盘里的文件不见了」的命令也要登记进权限清单；U 盘只能在系统的选择框里选，界面只传结果里的编号。
+#[test]
+fn hidden_file_commands_pass_the_permission_check() {
+    use tauri::Manager;
+
+    let win = app();
+    // mock 运行时里没有文件夹选择框：返回 null；没选过就没有可以再查的
+    assert!(ok(&win, "hidden_pick_folder", json!({})).is_null());
+    assert!(ok(&win, "hidden_rescan", json!({})).is_null());
+    let e = invoke(&win, "hidden_restore", json!({ "ids": [0] })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("请先选择")), "{e}");
+    let e = invoke(&win, "hidden_undo", json!({})).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("没有可以撤销")), "{e}");
+
+    // 选好文件夹以后（这里直接改状态）：再查一遍，结果里是这个文件夹；不在结果里的编号不认
+    let dir = std::env::temp_dir().join(format!("medkit-hidden-ipc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("看得见.txt"), b"x").unwrap();
+    win.state::<medkit_lib::setup::AppState>().hidden.lock().unwrap().root = Some(dir.clone());
+    let report = ok(&win, "hidden_rescan", json!({}));
+    assert_eq!(report["folder"], json!(dir.display().to_string()));
+    assert_eq!(report["items"], json!([]), "看得见的文件不列：{report}");
+    assert_eq!(report["canUndo"], json!(0));
+    let e = invoke(&win, "hidden_restore", json!({ "ids": [5] })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("不在刚才的结果里")), "{e}");
+    let e = invoke(&win, "hidden_restore", json!({ "ids": [] })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("没有勾选")), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 「文件删不掉：是谁占着」的命令也要登记进权限清单；结果只有文件名、没有完整路径。
 #[test]
 fn locker_commands_pass_the_permission_check() {

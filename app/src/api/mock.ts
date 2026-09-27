@@ -33,6 +33,7 @@ import type {
   FeatureStateKind,
   FeatureSummary,
   FileLockReport,
+  HiddenReport,
   FileLockUser,
   JournalEntryView,
   JournalSession,
@@ -2367,6 +2368,54 @@ const handlers: Handlers = {
     if (!demoSpace || id < 0 || id >= DEMO_SPACE_IDS) throw '这个文件不在刚才的结果里，请重新查一遍。'
     return null
   },
+  // 和后端一样：程序和脚本文件照样藏着，改过的能撤销（演示里只记着，不碰真实文件）
+  hidden_pick_folder: () => {
+    demoHiddenPicked = true
+    return demoHiddenReport()
+  },
+  hidden_rescan: () => (demoHiddenPicked ? demoHiddenReport() : null),
+  hidden_restore: ({ ids }) => {
+    if (!demoHiddenPicked) throw '请先选择 U 盘。'
+    if (!ids.length) throw '没有勾选要显示出来的文件。'
+    const visible = DEMO_HIDDEN.filter((item) => !demoHiddenShown.has(item.name))
+    let changed = 0
+    for (const id of ids) {
+      const item = visible[id]
+      if (!item) throw '有的项目不在刚才的结果里，请重新查一遍。'
+      demoHiddenShown.add(item.name)
+      changed += 1 + item.hiddenInside - (item.name === '作业' ? 1 : 0)
+    }
+    const keptPrograms = ids.some((id) => visible[id]?.name === '作业') ? 1 : 0
+    demoHiddenChanged += changed
+    return { result: { changed, keptPrograms, failed: 0, truncated: false }, report: demoHiddenReport() }
+  },
+  hidden_undo: () => {
+    if (!demoHiddenChanged) throw '没有可以撤销的。'
+    const restored = demoHiddenChanged
+    demoHiddenShown.clear()
+    demoHiddenChanged = 0
+    return { result: { restored, failed: 0 }, report: demoHiddenPicked ? demoHiddenReport() : null }
+  },
+}
+
+// ── U 盘里的文件不见了（演示：一个中了病毒的 U 盘）──
+let demoHiddenPicked = false
+let demoHiddenChanged = 0
+const demoHiddenShown = new Set<string>()
+const DEMO_HIDDEN = [
+  { name: '作业', isDir: true, size: 0, inside: 128, hiddenInside: 127, countedAll: true },
+  { name: '照片', isDir: true, size: 0, inside: 356, hiddenInside: 356, countedAll: true },
+  { name: '简历.docx', isDir: false, size: 48_213, inside: 0, hiddenInside: 0, countedAll: true },
+]
+function demoHiddenReport(): HiddenReport {
+  const items = DEMO_HIDDEN.filter((item) => !demoHiddenShown.has(item.name)).map((item, id) => ({ id, ...item }))
+  return {
+    folder: 'F:\\',
+    items,
+    programs: ['autorun.inf', 'DeviceConfigManager.vbs'],
+    shortcuts: ['作业.lnk', '照片.lnk', '简历.docx.lnk'],
+    canUndo: demoHiddenChanged,
+  }
 }
 
 // ── 找大文件和重复文件（演示）──

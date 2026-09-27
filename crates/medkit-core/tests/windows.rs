@@ -923,6 +923,47 @@ fn shutdown_can_be_scheduled_and_cancelled() {
     assert!(shutdown::abort().unwrap());
 }
 
+/// 「U 盘里的文件不见了」要用的文件属性：设上隐藏、系统（病毒就是这么藏的），读回来一样；去掉以后文件夹只剩
+/// 「文件夹」属性、只传 NORMAL 的文件读回来是 NORMAL；链接自己带「重解析点」属性（不跟着走）。在临时文件夹里做，不碰别的。
+#[test]
+fn file_attributes_can_be_hidden_and_shown_again() {
+    use medkit_core::platform::windows::{file_attributes, set_file_attributes};
+    const READONLY: u32 = 0x1;
+    const HIDDEN: u32 = 0x2;
+    const SYSTEM: u32 = 0x4;
+    const DIRECTORY: u32 = 0x10;
+    const ARCHIVE: u32 = 0x20;
+    const NORMAL: u32 = 0x80;
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("作业");
+    std::fs::create_dir(&folder).unwrap();
+    let file = folder.join("第一章.docx");
+    std::fs::write(&file, b"x").unwrap();
+    let mask = READONLY | HIDDEN | SYSTEM | DIRECTORY | ARCHIVE | NORMAL;
+
+    set_file_attributes(&folder, HIDDEN | SYSTEM).unwrap();
+    set_file_attributes(&file, HIDDEN | SYSTEM | READONLY | ARCHIVE).unwrap();
+    assert_eq!(file_attributes(&folder).unwrap() & mask, DIRECTORY | HIDDEN | SYSTEM);
+    assert_eq!(file_attributes(&file).unwrap() & mask, HIDDEN | SYSTEM | READONLY | ARCHIVE);
+    // 隐藏、系统的文件夹照样能列出里面的东西
+    assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
+
+    set_file_attributes(&folder, NORMAL).unwrap();
+    set_file_attributes(&file, ARCHIVE).unwrap();
+    assert_eq!(file_attributes(&folder).unwrap() & mask, DIRECTORY, "文件夹去掉以后只剩「文件夹」");
+    assert_eq!(file_attributes(&file).unwrap() & mask, ARCHIVE);
+    set_file_attributes(&file, NORMAL).unwrap();
+    assert_eq!(file_attributes(&file).unwrap() & mask, NORMAL);
+    assert!(file_attributes(&dir.path().join("没有这个文件")).is_none());
+    assert!(set_file_attributes(&dir.path().join("没有这个文件"), NORMAL).is_err());
+
+    // 目录联接（不用管理员权限就能建）：自己的属性里有重解析点
+    let link = dir.path().join("联接");
+    let status = Command::new("cmd").args(["/c", "mklink", "/J"]).arg(&link).arg(&folder).output().unwrap();
+    assert!(status.status.success(), "{}", String::from_utf8_lossy(&status.stderr));
+    assert_ne!(file_attributes(&link).unwrap() & 0x400, 0, "联接带「重解析点」属性");
+}
+
 /// 为「找回 Windows 照片查看器」「管理新建菜单」收集这台机器上的实际情况（照片查看器的 ProgID、系统自带的图片
 /// 文件类型写了什么、PhotoViewer.dll 里的文字，每一个「新建」菜单项和资源管理器的缓存），打印出来。只读。
 #[test]

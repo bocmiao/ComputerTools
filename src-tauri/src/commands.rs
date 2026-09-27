@@ -11,6 +11,7 @@ use medkit_core::views::{
 use tauri::State;
 
 use crate::awake::AwakeStatus;
+use crate::hidden::{self, HiddenReport, HiddenRestore, HiddenUndo};
 use crate::images;
 use crate::pdf;
 use crate::rename::{self, RenamePreview, RenameRules};
@@ -310,6 +311,101 @@ pub async fn pdf_reveal(state: State<'_, AppState>) -> CmdResult<()> {
         let _ = path;
         Err("只有在 Windows 上才能打开资源管理器。".into())
     }
+}
+
+/// U 盘里的文件不见了：用系统的文件夹选择框选 U 盘（或者 U 盘上的文件夹），列出被藏起来的东西。点了「取消」返回 null。
+/// Windows 所在的盘不给用：那里的隐藏文件大多是系统自己的。
+#[tauri::command]
+pub async fn hidden_pick_folder(state: State<'_, AppState>) -> CmdResult<Option<HiddenReport>> {
+    #[cfg(windows)]
+    let folder = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new().set_title("选择 U 盘（或者 U 盘上的文件夹）").pick_folder()
+    })
+    .await
+    .map_err(|e| format!("打开文件夹选择器失败：{e}"))?;
+    #[cfg(not(windows))]
+    let folder: Option<std::path::PathBuf> = None;
+    let Some(folder) = folder else { return Ok(None) };
+    if hidden::on_system_drive(&folder) {
+        return Err(
+            "这是 Windows 所在的盘（系统盘），这里的隐藏文件大多是系统自己的，不能在这里用。请选 U 盘、移动硬盘或者别的盘。".into(),
+        );
+    }
+    hidden_scan(state, folder).await.map(Some)
+}
+
+async fn hidden_scan(state: State<'_, AppState>, root: std::path::PathBuf) -> CmdResult<HiddenReport> {
+    let shared = state.hidden.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut s = shared.lock().map_err(|_| "状态异常。")?;
+        let (report, shown) = hidden::scan(&root, &hidden::SystemAttrs, s.changed.len())?;
+        s.root = Some(root);
+        s.shown = shown;
+        Ok(report)
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// U 盘里的文件不见了：把上次选的文件夹再查一遍。还没选过返回 null。
+#[tauri::command]
+pub async fn hidden_rescan(state: State<'_, AppState>) -> CmdResult<Option<HiddenReport>> {
+    let root = state.hidden.lock().map_err(|_| "状态异常。")?.root.clone();
+    match root {
+        Some(root) => hidden_scan(state, root).await.map(Some),
+        None => Ok(None),
+    }
+}
+
+/// U 盘里的文件不见了：把勾选的（最近一次结果里的编号）显示出来，文件夹里的一起；程序和脚本文件照样藏着。
+/// 原来的属性都记下来，能撤销。返回做了什么和重新查的结果。
+#[tauri::command]
+pub async fn hidden_restore(state: State<'_, AppState>, ids: Vec<usize>) -> CmdResult<HiddenRestore> {
+    let shared = state.hidden.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut s = shared.lock().map_err(|_| "状态异常。")?;
+        let root = s.root.clone().ok_or("请先选择 U 盘。")?;
+        let targets = ids
+            .iter()
+            .map(|&id| s.shown.get(id).cloned().ok_or("有的项目不在刚才的结果里，请重新查一遍。"))
+            .collect::<Result<Vec<_>, _>>()?;
+        if targets.is_empty() {
+            return Err("没有勾选要显示出来的文件。".to_owned());
+        }
+        let mut changed = std::mem::take(&mut s.changed);
+        let result = hidden::restore(&targets, &hidden::SystemAttrs, &mut changed);
+        s.changed = changed;
+        let (report, shown) = hidden::scan(&root, &hidden::SystemAttrs, s.changed.len())?;
+        s.shown = shown;
+        Ok(HiddenRestore { result, report })
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// U 盘里的文件不见了：把上一次「显示出来」改过的属性都改回去（重新藏起来）。
+#[tauri::command]
+pub async fn hidden_undo(state: State<'_, AppState>) -> CmdResult<HiddenUndo> {
+    let shared = state.hidden.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut s = shared.lock().map_err(|_| "状态异常。")?;
+        if s.changed.is_empty() {
+            return Err("没有可以撤销的。".to_owned());
+        }
+        let mut changed = std::mem::take(&mut s.changed);
+        let result = hidden::undo(&mut changed, &hidden::SystemAttrs);
+        let report = match s.root.clone() {
+            Some(root) => {
+                let (report, shown) = hidden::scan(&root, &hidden::SystemAttrs, 0)?;
+                s.shown = shown;
+                Some(report)
+            }
+            None => None,
+        };
+        Ok(HiddenUndo { result, report })
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
 }
 
 /// 屏幕坏点测试：窗口进入、退出全屏（盖住任务栏，整块屏幕都是测试的颜色）。

@@ -317,7 +317,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 
 ## 9. 界面与后端的接口（Tauri 命令）
 
-前端只能调用下面这些命令。系统诊断与修复命令只接受 ID，不接受命令字符串或路径。批量重命名、图片批量处理、找大文件的目录，「文件删不掉」要查的文件，图片合成的 PDF 存到哪里，由后端的系统选择器取得，前端只能传改名规则（查找替换、序号、前后缀、扩展名）或者文件名和图片内容，拿不到、也传不了路径。每个命令都要登记在 `src-tauri/build.rs` 的 `COMMANDS` 和 `capabilities/main.json` 里，否则界面调不动（接线测试会查）。
+前端只能调用下面这些命令。系统诊断与修复命令只接受 ID，不接受命令字符串或路径。批量重命名、图片批量处理、找大文件的目录，「文件删不掉」要查的文件，图片合成的 PDF 存到哪里，「U 盘里的文件不见了」要查的 U 盘，由后端的系统选择器取得，前端只能传改名规则（查找替换、序号、前后缀、扩展名）或者文件名和图片内容，拿不到、也传不了路径。每个命令都要登记在 `src-tauri/build.rs` 的 `COMMANDS` 和 `capabilities/main.json` 里，否则界面调不动（接线测试会查）。
 
 | 命令 | 参数 | 返回 |
 |---|---|---|
@@ -350,6 +350,10 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `image_open_folder` | — | `null`（按「文件夹」类型交给资源管理器打开选定的保存目录） |
 | `pdf_save` | 请求体是界面拼好的 PDF（二进制）；请求头 `x-medkit-name`（URL 编码的建议文件名） | `string \| null`（弹出系统的「另存为」对话框，存到用户选的地方，返回完整路径；点了取消返回 null。只收开头是 `%PDF-`、最后有 `%%EOF` 的内容；先写临时文件再换名，写失败时原来的同名文件不受影响；选的名字不是 .pdf 结尾的补上 .pdf，补出来的名字已经有文件时不存） |
 | `pdf_reveal` | — | `null`（在资源管理器里打开刚存好的 PDF 所在的文件夹并选中它） |
+| `hidden_pick_folder` | — | `HiddenReport \| null`（用系统的文件夹选择框选 U 盘；Windows 所在的盘报错。列出所选文件夹里直接的、带隐藏或系统属性的文件和文件夹，被藏起来的程序和脚本文件、病毒放的快捷方式单独列出；取消返回 null） |
+| `hidden_rescan` | — | `HiddenReport \| null`（把上次选的再查一遍；没选过返回 null） |
+| `hidden_restore` | `ids`（结果里的编号） | `HiddenRestore`（去掉这些文件、文件夹连同里面一切的隐藏、系统属性，原来带着的也去掉只读；程序和脚本文件照样藏着；原属性都记下来，返回改了多少和重新查的结果） |
+| `hidden_undo` | — | `HiddenUndo`（把上一次「显示出来」改过的属性都改回去） |
 | `screen_fullscreen` | `on` | `null`（屏幕坏点测试：窗口进入、退出全屏） |
 | `awake_get` | — | `AwakeStatus`（`{ on, display }`：「别让电脑自己睡着」开没开） |
 | `awake_set` | `on`、`display` | `AwakeStatus`（SetThreadExecutionState，只在小药箱开着时有效，不改电源设置） |

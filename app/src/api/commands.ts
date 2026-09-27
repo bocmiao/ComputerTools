@@ -6,6 +6,9 @@ import type {
   ContextMenuItem,
   FeatureState,
   FileLockReport,
+  HiddenReport,
+  HiddenRestore,
+  HiddenUndo,
   JournalSession,
   NewMenuItem,
   Preview,
@@ -59,6 +62,10 @@ export type CommandMap = {
   image_open_folder: { args: NoArgs; result: null }
   pdf_save: { args: { name: string; bytes: Uint8Array }; result: string | null }
   pdf_reveal: { args: NoArgs; result: null }
+  hidden_pick_folder: { args: NoArgs; result: HiddenReport | null }
+  hidden_rescan: { args: NoArgs; result: HiddenReport | null }
+  hidden_restore: { args: { ids: number[] }; result: HiddenRestore }
+  hidden_undo: { args: NoArgs; result: HiddenUndo }
   screen_fullscreen: { args: { on: boolean }; result: null }
   awake_get: { args: NoArgs; result: AwakeStatus }
   awake_set: { args: { on: boolean; display: boolean }; result: AwakeStatus }

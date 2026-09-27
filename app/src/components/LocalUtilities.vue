@@ -8,6 +8,7 @@ import BatchImageTool from './BatchImageTool.vue'
 import ImagesToPdfTool from './ImagesToPdfTool.vue'
 import FileLockers from './FileLockers.vue'
 import SpaceFinder from './SpaceFinder.vue'
+import HiddenFilesTool from './HiddenFilesTool.vue'
 import TextQrTool from './TextQrTool.vue'
 import AmountWordsTool from './AmountWordsTool.vue'
 
@@ -156,7 +157,7 @@ async function copy(value: string): Promise<void> {
   <section class="group" aria-labelledby="local-tools-title">
     <div class="group-head">
       <h2 id="local-tools-title" class="section-title">文件与文本工具</h2>
-      <p class="muted small">文件和文字只在这台电脑里处理，不上传。批量重命名会在确认后修改所选文件的名称；图片批量处理只新建文件，原图不动；「文件删不掉」「找大文件和重复文件」只查不改。</p>
+      <p class="muted small">文件和文字只在这台电脑里处理，不上传。批量重命名会在确认后修改所选文件的名称；图片批量处理只新建文件，原图不动；「文件删不掉」「找大文件和重复文件」只查不改；「U 盘里的文件不见了」只去掉被藏起来的文件的隐藏属性，能改回去。</p>
     </div>
     <div class="local-list">
       <article class="card local-card">
@@ -254,6 +255,7 @@ async function copy(value: string): Promise<void> {
       <BatchRenameTool />
       <FileLockers />
       <SpaceFinder />
+      <HiddenFilesTool />
     </div>
     <p v-if="copyNotice" class="muted small" role="status">{{ copyNotice }}</p>
   </section>

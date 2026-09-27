@@ -147,6 +147,39 @@ export interface SpaceReport {
   comparedAll: boolean
 }
 
+// U 盘里的文件不见了（只有名字，编号用来勾选）
+export interface HiddenItem {
+  id: number
+  name: string
+  isDir: boolean
+  /** 文件的大小（文件夹是 0） */
+  size: number
+  /** 文件夹里一共有多少个文件和文件夹、其中藏起来的有多少 */
+  inside: number
+  hiddenInside: number
+  /** 数完了（太多了或者时间到了就是 false） */
+  countedAll: boolean
+}
+export interface HiddenReport {
+  folder: string
+  /** 被藏起来的文件和文件夹（能显示出来的） */
+  items: HiddenItem[]
+  /** 被藏起来的程序和脚本文件：多半是病毒，不显示出来 */
+  programs: string[]
+  /** 病毒放的快捷方式 */
+  shortcuts: string[]
+  /** 上一次「显示出来」改了多少处，能撤销 */
+  canUndo: number
+}
+export interface HiddenRestore {
+  result: { changed: number; keptPrograms: number; failed: number; truncated: boolean }
+  report: HiddenReport
+}
+export interface HiddenUndo {
+  result: { restored: number; failed: number }
+  report: HiddenReport | null
+}
+
 // 文件删不掉：是谁占着（只有文件名，查文件夹时是相对这个文件夹的路径，没有完整路径）
 export type FileUserKind = 'window' | 'console' | 'explorer' | 'other' | 'service' | 'critical'
 export interface FileLockUser {

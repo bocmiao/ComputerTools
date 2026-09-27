@@ -24,6 +24,8 @@ pub struct AppState {
     pub images: Arc<Mutex<crate::images::ImageState>>,
     /// 「图片合成 PDF」最近一次存好的文件
     pub pdf: Arc<Mutex<crate::pdf::PdfState>>,
+    /// 「U 盘里的文件不见了」选的文件夹、最近一次结果和能撤销的改动
+    pub hidden: Arc<Mutex<crate::hidden::HiddenState>>,
     pub awake: Arc<Mutex<crate::awake::AwakeState>>,
     /// 小药箱安排的定时关机、定时重启
     pub shutdown: Arc<Mutex<crate::shutdown::ShutdownState>>,
@@ -39,6 +41,7 @@ pub fn init() -> AppState {
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
         pdf: Arc::new(Mutex::new(Default::default())),
+        hidden: Arc::new(Mutex::new(Default::default())),
         awake: Arc::new(Mutex::new(Default::default())),
         shutdown: Arc::new(Mutex::new(Default::default())),
         lockers: Arc::new(Mutex::new(None)),
@@ -250,6 +253,7 @@ pub fn test_state() -> AppState {
         rename: Arc::new(Mutex::new(Default::default())),
         images: Arc::new(Mutex::new(Default::default())),
         pdf: Arc::new(Mutex::new(Default::default())),
+        hidden: Arc::new(Mutex::new(Default::default())),
         awake: Arc::new(Mutex::new(Default::default())),
         shutdown: Arc::new(Mutex::new(Default::default())),
         lockers: Arc::new(Mutex::new(None)),
