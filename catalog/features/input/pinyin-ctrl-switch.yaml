@@ -1,0 +1,34 @@
+# 微软拼音改成按 Ctrl 切换中英文，Shift 不再切换。HKCU\Software\Microsoft\InputMethod\Settings\CHS 的「English Switch Key」（DWORD）：
+# 0 = Shift（系统默认；没有这个值时也是 Shift）、1 = Ctrl、2 = 不用按键切换。和「设置 → 时间和语言 → 语言和区域 → 中文（简体）→
+# 语言选项 → 微软拼音 → 按键」里「中/英文模式切换」的三个选项是同一个值（ContextMenuManager 的作者整理的微软拼音注册表清单）。
+# 玩游戏时按 Shift 跑步、打字时按着 Shift 打大写，都会把微软拼音切成英文或者中文；改成 Ctrl 以后单按一下 Ctrl 才切换。
+# 不选「不用按键切换」：那样只能点任务栏上的「中 / 英」来切，平时打字太麻烦。
+# 只管微软拼音：搜狗、QQ、百度这些输入法有自己的设置。直接改注册表，按注销再登录生效来说（设置里改会马上通知输入法，小药箱不调）。
+id: input.pinyin-ctrl-switch
+schema_version: 1
+title: { zh-CN: 微软拼音改成按 Ctrl 切换中英文 }
+description:
+  zh-CN: 玩游戏时按 Shift 跑步、打字时按 Shift 打大写字母，微软拼音老是被切成英文或者中文？改成单按一下 Ctrl 才切换中英文，Shift 就只是 Shift。只对微软拼音有效，搜狗、QQ 这些输入法在它们自己的设置里改。改完注销再登录生效。
+category: input
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: logoff
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\InputMethod\Settings\CHS
+      name: English Switch Key
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\InputMethod\Settings\CHS
+      name: English Switch Key
+      delete: true
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/microsoft-simplified-chinese-ime-9b962a3b-2fa4-4f37-811c-b1886320dd72
+  - https://www.cnblogs.com/BluePointLilac/p/11688166.html

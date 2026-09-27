@@ -1,0 +1,33 @@
+# 桌面显示「控制面板」。和「此电脑」（desktop.show-this-pc）是同一个地方：HKCU\…\Explorer\HideDesktopIcons\NewStartPanel 下，
+# 名为 {5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0}（「控制面板」的 CLSID）的 DWORD：0 = 显示，1 = 隐藏。
+# 全新安装的系统里这个值不存在，桌面上也没有「控制面板」，所以 windows_default 写 delete: true。
+# 对应「设置 → 个性化 → 主题 → 桌面图标设置」里的「控制面板」勾选框。
+# 注意：CLSID 以 { 开头，必须加引号，否则 YAML 会把它当成映射。
+id: desktop.show-control-panel
+schema_version: 1
+title: { zh-CN: 桌面显示「控制面板」 }
+description:
+  zh-CN: 在桌面上放一个「控制面板」图标：卸载软件、电源选项、设备和打印机、鼠标这些用惯了的老地方，双击就能进去，不用在「设置」里到处找。
+category: desktop
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel
+      name: "{5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0}"
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel
+      name: "{5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0}"
+      delete: true
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/customize-the-desktop-icons-in-windows-c13270f0-3812-c71d-f27e-29aa32588b20
+  - https://social.technet.microsoft.com/Forums/windows/en-US/a8e85060-7675-484e-a9aa-f619d2a1e79a/hide-the-icon-quotcontrol-panelquot-form-desktop?forum=w7itproui
