@@ -47,6 +47,8 @@ async function generate(): Promise<boolean> {
   loading.value = true
   error.value = null
   copyState.value = 'idle'
+  // 重新生成的报告还没复制过：文本框里先显示报告本身（复制给 AI 时再换）
+  copiedFor.value = 'helper'
   const runAt = health.lastRunAt
   const text = note.value
   try {

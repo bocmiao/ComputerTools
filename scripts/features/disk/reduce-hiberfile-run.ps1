@@ -10,7 +10,9 @@
 #   HiberFileSizePercent (null when missing). The undo script gets it back
 #   through -Before.
 # Run: -Before is that JSON. Returns skipped (nothing changed) when the state
-#   is no longer what was recorded, or the file is not the full one. Otherwise
+#   is no longer what was recorded, the file is not the full one, or reducing
+#   is not offered on this PC (a battery or a laptop, or less than 1 GB to
+#   gain: Get-HiberBlock, the same rules as the check). Otherwise
 #   runs powercfg and reads the state back: it must now be the reduced file
 #   (HiberFileType 1, or a file of about 20 percent of memory when powercfg
 #   left that value out), or the script throws (the engine then runs the undo
@@ -34,10 +36,11 @@ $ErrorActionPreference = 'Stop'
 #   HiberFileSizePercent  a size set by hand, in percent of memory;
 #                         0 or missing = Windows manages the size
 # and the file itself, hiberfil.sys in the root of the system drive.
-# Kind: off (no hibernation file), custom (a size set by hand: powercfg treats
-# it as full and cannot reduce it before the size is reset), reduced, full or
-# unknown. Without HiberFileType the kind is told by the size of the file:
-# Windows makes a full file 40 percent of memory and a reduced one 20 percent.
+# Kind, in this order: off (no hibernation file), reduced (HiberFileType 1),
+# custom (a size set by hand: powercfg treats it as full and cannot reduce it
+# before the size is reset), full (HiberFileType 2), else told by the size of
+# the file (Windows makes a full file 40 percent of memory and a reduced one 20
+# percent), or unknown.
 $powerKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power'
 
 function Get-PowerDword {
@@ -67,7 +70,8 @@ function Get-HiberState {
     if (($null -ne $file) -and (-not $file.PSIsContainer)) {
         $size = [double]$file.Length
     }
-    $memory = [double](Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory
+    $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+    $memory = [double]$computer.TotalPhysicalMemory
     $state = [pscustomobject]@{
         Kind    = 'unknown'
         Enabled = Get-PowerDword $properties 'HibernateEnabled'
@@ -75,15 +79,17 @@ function Get-HiberState {
         Percent = Get-PowerDword $properties 'HiberFileSizePercent'
         Size    = $size
         Memory  = $memory
+        # PCSystemType 2 = mobile (a laptop, even with the battery taken out)
+        Mobile  = ([int]$computer.PCSystemType -eq 2)
     }
     if (($state.Enabled -eq 0) -or ($size -le 0)) {
         $state.Kind = 'off'
     }
-    elseif (($null -ne $state.Percent) -and ($state.Percent -gt 0)) {
-        $state.Kind = 'custom'
-    }
     elseif ($state.Type -eq 1) {
         $state.Kind = 'reduced'
+    }
+    elseif (($null -ne $state.Percent) -and ($state.Percent -gt 0)) {
+        $state.Kind = 'custom'
     }
     elseif ($state.Type -eq 2) {
         $state.Kind = 'full'
@@ -97,6 +103,22 @@ function Get-HiberState {
         }
     }
     return $state
+}
+
+# For a full file: why reducing is not offered. 'battery': a PC with a battery
+# (laptop, tablet, a UPS that reports as one) or a laptop by its system type:
+# hibernation keeps the work when the battery runs out. 'small': reducing would
+# free less than 1 GB (the reduced file is 20 percent of memory). '' when the
+# file can be reduced.
+function Get-HiberBlock {
+    param($State)
+    if ($State.Mobile -or (@(Get-CimInstance -ClassName Win32_Battery).Count -gt 0)) {
+        return 'battery'
+    }
+    if (($State.Size - ($State.Memory * 0.2)) -lt 1GB) {
+        return 'small'
+    }
+    return ''
 }
 # ---- end of shared block hiberfile-state ----
 
@@ -130,7 +152,8 @@ function ConvertTo-HiberSnapshot {
     }
 }
 
-$snapshot = ConvertTo-HiberSnapshot (Get-HiberState)
+$state = Get-HiberState
+$snapshot = ConvertTo-HiberSnapshot $state
 if ($Prepare) {
     return [pscustomobject]@{ before = $snapshot }
 }
@@ -141,7 +164,9 @@ foreach ($name in @('kind', 'enabled', 'type', 'percent')) {
         return [pscustomobject]@{ skipped = $true }
     }
 }
-if ($snapshot.kind -ne 'full') {
+# The engine only runs this when the disk.hiberfile check allows it; the same
+# rules are checked here again, in case that check could not run.
+if (($snapshot.kind -ne 'full') -or ((Get-HiberBlock $state).Length -gt 0)) {
     return [pscustomobject]@{ skipped = $true }
 }
 

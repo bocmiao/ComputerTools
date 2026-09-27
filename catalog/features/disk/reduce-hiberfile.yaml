@@ -3,15 +3,18 @@
 # （shared block hiberfile-powercfg）。
 # 用系统自己的 powercfg /hibernate /type reduced：休眠文件换成只给快速启动用的精简版（内存的 20% 左右，
 # 完整版是 40% 左右），马上生效，不用重启。精简版不支持「休眠」和「混合睡眠」（微软文档：System power states）。
-# 能不能执行、改好没有都看 disk.hiberfile（verify）：没有休眠文件、有电池（笔记本、平板、接了 UPS）、
-# 大小是手动设过的，检测给 na，引擎不让执行，理由就是检测的结论；精简版是 ok；完整版是 advice。
+# 能不能执行、改好没有都看 disk.hiberfile（verify）：没有休眠文件、有电池或者是笔记本、大小是手动设过的、
+# 腾不出 1 GB，检测给 na，引擎不让执行，理由就是检测的结论；精简版是 ok；完整版是 advice。
+# 检测没跑成（出错、超时）时引擎照常让执行，所以执行脚本自己再按同样的规则核对（Get-HiberBlock）。
 #   reduce-hiberfile-detect.ps1  撤销前核对：精简版或者没有休眠文件 → applied，完整版 → not-applied
 #   reduce-hiberfile-run.ps1     -Prepare：记下 before = { kind, enabled, type, percent }（注册表里的原值，没有就是 null）；
-#                                执行：状态和 before 不一样、或者不是完整版，就跳过（什么都不改）；否则运行
+#                                执行：状态和 before 不一样、不是完整版、有电池或是笔记本、腾不出 1 GB，就跳过
+#                                （什么都不改）；否则运行
 #                                powercfg /hibernate /type reduced，再读回来：不是精简版（HiberFileType 为 1，
 #                                powercfg 没写这个值时按文件大小判断）就报错（引擎会用撤销脚本退回）。
-#   reduce-hiberfile-undo.ps1    休眠还开着：powercfg /hibernate /type full，再把 HiberFileType 恢复成原值（原来没有就删掉）；
-#                                休眠后来被关掉了：只恢复 HiberFileType，不重新打开休眠。
+#   reduce-hiberfile-undo.ps1    休眠还开着：powercfg /hibernate /type full，再把 HiberFileType、HiberFileSizePercent 恢复成
+#                                原值（原来没有就删掉；删不掉、写不进就报错，不说撤销成功）；休眠后来被关掉了：只恢复这两个值，
+#                                不重新打开休眠。
 #   reduce-hiberfile-break.ps1   只在测试中使用：powercfg /hibernate /type full。
 # 待真机验证（虚拟机一般没有休眠文件，CI 上测不到执行和撤销）：见 docs/real-machine-checklist.md。
 id: disk.reduce-hiberfile

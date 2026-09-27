@@ -2,15 +2,19 @@
 # 完整版休眠文件默认是内存的 40% 左右，支持「休眠」「混合睡眠」和快速启动；精简版是 20% 左右，只给快速启动用
 # （微软文档：System power states → Hibernation file types）。powercfg /hibernate /type reduced 换成精简版。
 # 判断是哪一种：注册表 HKLM\SYSTEM\CurrentControlSet\Control\Power 的 HibernateEnabled、HiberFileType
-# （1 精简、2 完整）、HiberFileSizePercent（手动设过的大小）；没有 HiberFileType 时按文件大小占内存的比例判断
-# （不到 30% 算精简版）。这段代码和 disk.reduce-hiberfile 的脚本共用（shared block hiberfile-state）。
+# （1 精简、2 完整）、HiberFileSizePercent（手动设过的大小）；按「没有休眠文件 → HiberFileType 是 1 → 手动设过大小 →
+# HiberFileType 是 2 → 文件大小占内存的比例（不到 30% 算精简版）」的顺序。能不能缩小（有没有电池、是不是笔记本、
+# 能不能腾出 1 GB）也在同一段代码里（Get-HiberBlock）。这段代码和 disk.reduce-hiberfile 的脚本共用
+# （shared block hiberfile-state），修复的执行脚本会再按同样的规则核对一遍，检测没跑成时也挡得住。
 # 结果（按这个顺序判断）：
 #   off：没有休眠文件（休眠关着，或者这台电脑用不了休眠，虚拟机常见）→ na
-#   custom：大小是手动设过的（powercfg 要先把大小改回系统管理才能换成精简版），小药箱不动 → na
 #   reduced：已经是精简版 → ok
-#   battery：完整版，但这台电脑有电池（笔记本、平板，或者接了会报告成电池的 UPS）：电量快用完时要靠它
-#            把正在做的事存下来，不建议缩小 → na
-#   small：完整版，但缩小也腾不出 1 GB（内存不到 5 GB 左右）→ ok
+#   custom：大小是手动设过的（powercfg 要先把大小改回系统管理才能换成精简版），小药箱不动 → na
+#   battery：完整版，但这台电脑有电池（笔记本、平板，或者接了会报告成电池的 UPS），或者按系统类型是笔记本
+#            （Win32_ComputerSystem.PCSystemType 为 2，拆了电池的笔记本也算）：电量快用完时要靠它把正在做的事存下来，
+#            不建议缩小 → na
+#   small：完整版，但缩小也腾不出 1 GB（内存不到 5 GB 左右），不值得为此放弃「休眠」→ na（预览里拿它当原因，
+#          不能说成「本来就是好的」）
 #   full：完整版、没有电池、缩小能腾出 1 GB 以上 → advice，给「缩小休眠文件」的按钮
 # 功能 disk.reduce-hiberfile 用这个检测复查（verify）：na 的几种情况引擎不让执行，理由就是这里的结论。
 # 待真机验证：接了 USB 不间断电源（UPS）的台式机，Win32_Battery 是否会把 UPS 当成电池（是的话只是不给按钮）。
@@ -41,9 +45,9 @@ results:
   battery:
     status: na
     message:
-      zh-CN: "休眠文件占 {size_gb} GB。这台电脑有电池（笔记本、平板，或者接了不间断电源）：电量快用完时，系统靠它把正在做的事存下来，所以不建议缩小。"
+      zh-CN: "休眠文件占 {size_gb} GB。这是带电池的电脑（笔记本、平板，或者接了不间断电源）：电量快用完时，系统靠它把正在做的事存下来，所以不建议缩小。"
   small:
-    status: ok
+    status: na
     message:
       zh-CN: "休眠文件占 {size_gb} GB，缩小也腾不出 1 GB，不值得为此放弃「休眠」，不用动它。"
   full:

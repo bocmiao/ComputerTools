@@ -32,7 +32,7 @@ pub type PResult<T> = Result<T, PlatformError>;
 pub struct KeyboardAids {
     /// 筛选键：按键要按住一会儿才算数，短按、连按被忽略（按住右 Shift 8 秒会打开）
     pub filter_keys: bool,
-    /// 粘滞键：Shift、Ctrl、Alt 按一下就一直算「按着」（连按 5 次 Shift 会打开）
+    /// 粘滞键：Shift、Ctrl、Alt 按一下就算「按着」，直到按下一个键；连按两下会锁住（连按 5 次 Shift 会打开）
     pub sticky_keys: bool,
     /// 鼠标键：小键盘用来移动鼠标指针，按了不出数字（左 Alt + 左 Shift + Num Lock 会打开）
     pub mouse_keys: bool,

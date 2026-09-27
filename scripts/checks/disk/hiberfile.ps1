@@ -7,8 +7,9 @@
 #   custom   the size was set by hand (HiberFileSizePercent); left alone
 #   reduced  already the reduced file (fast startup only)
 #   battery  a full file on a PC with a battery (laptop, tablet, or a desktop
-#            with a UPS that reports as a battery): hibernation keeps the work
-#            when the battery runs out, so reducing is not offered
+#            with a UPS that reports as a battery) or on a laptop by its
+#            system type: hibernation keeps the work when the battery runs
+#            out, so reducing is not offered
 #   small    a full file, but reducing would free less than 1 GB
 #   full     a full file on a PC without a battery: can be reduced
 #   unknown  the kind of file could not be told
@@ -30,10 +31,11 @@ $ErrorActionPreference = 'Stop'
 #   HiberFileSizePercent  a size set by hand, in percent of memory;
 #                         0 or missing = Windows manages the size
 # and the file itself, hiberfil.sys in the root of the system drive.
-# Kind: off (no hibernation file), custom (a size set by hand: powercfg treats
-# it as full and cannot reduce it before the size is reset), reduced, full or
-# unknown. Without HiberFileType the kind is told by the size of the file:
-# Windows makes a full file 40 percent of memory and a reduced one 20 percent.
+# Kind, in this order: off (no hibernation file), reduced (HiberFileType 1),
+# custom (a size set by hand: powercfg treats it as full and cannot reduce it
+# before the size is reset), full (HiberFileType 2), else told by the size of
+# the file (Windows makes a full file 40 percent of memory and a reduced one 20
+# percent), or unknown.
 $powerKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power'
 
 function Get-PowerDword {
@@ -63,7 +65,8 @@ function Get-HiberState {
     if (($null -ne $file) -and (-not $file.PSIsContainer)) {
         $size = [double]$file.Length
     }
-    $memory = [double](Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory
+    $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+    $memory = [double]$computer.TotalPhysicalMemory
     $state = [pscustomobject]@{
         Kind    = 'unknown'
         Enabled = Get-PowerDword $properties 'HibernateEnabled'
@@ -71,15 +74,17 @@ function Get-HiberState {
         Percent = Get-PowerDword $properties 'HiberFileSizePercent'
         Size    = $size
         Memory  = $memory
+        # PCSystemType 2 = mobile (a laptop, even with the battery taken out)
+        Mobile  = ([int]$computer.PCSystemType -eq 2)
     }
     if (($state.Enabled -eq 0) -or ($size -le 0)) {
         $state.Kind = 'off'
     }
-    elseif (($null -ne $state.Percent) -and ($state.Percent -gt 0)) {
-        $state.Kind = 'custom'
-    }
     elseif ($state.Type -eq 1) {
         $state.Kind = 'reduced'
+    }
+    elseif (($null -ne $state.Percent) -and ($state.Percent -gt 0)) {
+        $state.Kind = 'custom'
     }
     elseif ($state.Type -eq 2) {
         $state.Kind = 'full'
@@ -94,20 +99,34 @@ function Get-HiberState {
     }
     return $state
 }
+
+# For a full file: why reducing is not offered. 'battery': a PC with a battery
+# (laptop, tablet, a UPS that reports as one) or a laptop by its system type:
+# hibernation keeps the work when the battery runs out. 'small': reducing would
+# free less than 1 GB (the reduced file is 20 percent of memory). '' when the
+# file can be reduced.
+function Get-HiberBlock {
+    param($State)
+    if ($State.Mobile -or (@(Get-CimInstance -ClassName Win32_Battery).Count -gt 0)) {
+        return 'battery'
+    }
+    if (($State.Size - ($State.Memory * 0.2)) -lt 1GB) {
+        return 'small'
+    }
+    return ''
+}
 # ---- end of shared block hiberfile-state ----
 
 $state = Get-HiberState
 $result = $state.Kind
-# What reducing frees: the reduced file is 20 percent of memory.
-$save = [math]::Max([double]0, $state.Size - ($state.Memory * 0.2))
 if ($result -eq 'full') {
-    if (@(Get-CimInstance -ClassName Win32_Battery).Count -gt 0) {
-        $result = 'battery'
-    }
-    elseif ($save -lt 1GB) {
-        $result = 'small'
+    $block = Get-HiberBlock $state
+    if ($block.Length -gt 0) {
+        $result = $block
     }
 }
+# What reducing frees: the reduced file is 20 percent of memory.
+$save = [math]::Max([double]0, $state.Size - ($state.Memory * 0.2))
 
 $percent = 0
 if ($null -ne $state.Percent) {

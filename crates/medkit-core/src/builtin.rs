@@ -24,7 +24,7 @@ pub fn run(name: &str, env: &Env<'_>) -> Result<Value, String> {
 }
 
 /// 键盘的辅助功能开着哪一项。几项都开着时按「最像键盘坏了」的顺序报：筛选键（短按全被忽略）、
-/// 粘滞键（Shift、Ctrl 一直「按着」）、鼠标键（小键盘不出数字）；三项的状态都记在事实里。
+/// 粘滞键（Shift、Ctrl 按一下就算「按着」）、鼠标键（小键盘不出数字）；三项的状态都记在事实里。
 fn keyboard_aids(aids: KeyboardAids) -> Value {
     let result = if aids.filter_keys {
         "filter-keys"
