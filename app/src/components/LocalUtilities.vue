@@ -53,6 +53,13 @@ async function calculateHash(): Promise<void> {
   }
 }
 
+function cancelHash(): void {
+  hashRun++
+  hashBusy.value = false
+  hashProgress.value = 0
+  hashError.value = '已取消计算。'
+}
+
 const jsonInput = ref('')
 const jsonOutput = ref('')
 const jsonError = ref('')
@@ -127,6 +134,7 @@ async function copy(value: string): Promise<void> {
           <button type="button" class="btn btn-secondary" :disabled="!selectedFile || hashBusy" @click="calculateHash">
             {{ hashBusy ? `计算中 ${hashProgress}%` : '计算 SHA-256' }}
           </button>
+          <button v-if="hashBusy" type="button" class="btn btn-ghost btn-small" @click="cancelHash">取消</button>
           <span v-if="selectedFile" class="muted small">{{ selectedFile.name }} · {{ fileSize(selectedFile.size) }}</span>
         </div>
         <p v-if="hashBusy" role="status" class="muted small">已读取 {{ hashProgress }}%</p>
