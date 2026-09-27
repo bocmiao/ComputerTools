@@ -2083,6 +2083,15 @@ const handlers: Handlers = {
     item.disabledEntry = entry.id
     return entry.id
   },
+  rename_select_folder: () => '演示文件夹（不会改动真实文件）',
+  rename_preview: ({ prefix }) => ({
+    folder: '演示文件夹（不会改动真实文件）',
+    entries: [
+      { source: '旅行.jpg', target: `${prefix}01.jpg` },
+      { source: '海边.png', target: `${prefix}02.png` },
+    ],
+  }),
+  rename_apply: () => 2,
 }
 
 /** 个别小工具要多等一会儿（读电脑配置、重启资源管理器），好看清「正在…」的样子 */

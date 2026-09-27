@@ -1,8 +1,9 @@
 //! 电脑小药箱的桌面外壳。拆成 lib + bin 两部分，是为了让 tests/ 里的集成测试能调用命令。
 //!
-//! 界面只能传 ID（见 docs/architecture.md 第 9 节），不能传命令字符串或路径。
+//! 诊断和修复命令只接受 ID；批量重命名的目录由原生选择器取得（见 docs/architecture.md 第 9 节）。
 
 pub mod commands;
+pub mod rename;
 pub mod setup;
 
 /// 注册命令处理器。`run()` 和集成测试都用它，保证测的和真跑的是同一套。
@@ -26,6 +27,9 @@ macro_rules! command_handler {
             $crate::commands::tool_open,
             $crate::commands::startup_list,
             $crate::commands::startup_disable,
+            $crate::commands::rename_select_folder,
+            $crate::commands::rename_preview,
+            $crate::commands::rename_apply,
         ]
     };
 }

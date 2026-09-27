@@ -17,7 +17,7 @@ type NoArgs = Record<string, never>
 /**
  * 前端能调用的全部后端命令（docs/architecture.md 第 9 节）。
  * 参数名用 camelCase，Tauri 会自动转成 Rust 那边的 snake_case。
- * 参数里只有 ID，没有命令字符串，也没有路径。
+ * 系统诊断命令只接受 ID；批量重命名的目录由原生选择器取得，界面只传文件名前缀。
  */
 export type CommandMap = {
   system_info: { args: NoArgs; result: SystemInfo }
@@ -36,6 +36,9 @@ export type CommandMap = {
   tool_open: { args: { id: string }; result: null }
   startup_list: { args: NoArgs; result: StartupItem[] }
   startup_disable: { args: { id: string }; result: string }
+  rename_select_folder: { args: NoArgs; result: string | null }
+  rename_preview: { args: { prefix: string }; result: { folder: string; entries: { source: string; target: string }[] } }
+  rename_apply: { args: NoArgs; result: number }
 }
 
 export type CommandName = keyof CommandMap

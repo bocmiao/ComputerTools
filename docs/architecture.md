@@ -307,7 +307,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 
 ## 9. 界面与后端的接口（Tauri 命令）
 
-前端只能调用下面这些命令。**参数里只有 ID，没有命令字符串，也没有路径。**
+前端只能调用下面这些命令。系统诊断与修复命令只接受 ID，不接受命令字符串或路径。批量重命名的目录由后端的系统文件夹选择器取得，前端只能传文件名前缀。
 
 | 命令 | 参数 | 返回 |
 |---|---|---|
@@ -327,6 +327,9 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `tool_open` | `id` | `null`（只能用于 `open` 小工具；打不开时返回错误字符串） |
 | `startup_list` | — | `StartupItem[]`（当前登录用户和所有用户的 Run 项，以及小药箱停用的项） |
 | `startup_disable` | `id` | `string`（修改日志条目 ID；仅接受当前列表中的项目 ID） |
+| `rename_select_folder` | — | `string \| null`（系统对话框选定的目录；取消返回 null） |
+| `rename_preview` | `prefix` | `RenamePreview`（最多 500 个直属普通文件的原名与目标名） |
+| `rename_apply` | — | `number`（执行已预览且文件列表与属性未变化的重命名数量） |
 
 启动项操作只管理三个注册表 Run 路径：HKCU、HKLM 和 HKLM 的 32 位路径。停用前保存原值并删除 Run 值；恢复走 `journal_undo`，会核对该值是否被其他程序改过。任务计划、启动文件夹和任务管理器自己的启停状态不在此接口范围。
 

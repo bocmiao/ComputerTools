@@ -7,7 +7,7 @@
 //! 在其他系统上（只用于开发界面）改用假的系统和脚本执行器，数据放在临时目录里。
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use medkit_core::Engine;
 use medkit_core::bundle::Bundle;
@@ -20,10 +20,11 @@ const BUNDLE_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/bundle.json"))
 pub struct AppState {
     /// 引擎没能启动时，每个命令都返回这个原因，界面会显示出来
     pub engine: Result<Arc<Engine>, String>,
+    pub rename: Arc<Mutex<crate::rename::RenameState>>,
 }
 
 pub fn init() -> AppState {
-    AppState { engine: build_engine().map(Arc::new) }
+    AppState { engine: build_engine().map(Arc::new), rename: Arc::new(Mutex::new(Default::default())) }
 }
 
 fn build_engine() -> Result<Engine, String> {
@@ -220,5 +221,5 @@ pub use os::{claim_single_instance, fatal, harden_environment, preflight, webvie
 /// 测试用：用假系统和真实的内嵌数据造一个 AppState，不碰真实系统、不落盘到固定位置。
 #[cfg(any(test, feature = "test-helpers"))]
 pub fn test_state() -> AppState {
-    AppState { engine: build_engine().map(Arc::new) }
+    AppState { engine: build_engine().map(Arc::new), rename: Arc::new(Mutex::new(Default::default())) }
 }

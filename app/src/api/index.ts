@@ -115,3 +115,15 @@ export function startupList(): Promise<StartupItem[]> {
 export function startupDisable(id: string): Promise<string> {
   return call('startup_disable', { id })
 }
+
+export function renameSelectFolder(): Promise<string | null> {
+  return call('rename_select_folder', {})
+}
+
+export function renamePreview(prefix: string): Promise<{ folder: string; entries: { source: string; target: string }[] }> {
+  return call('rename_preview', { prefix })
+}
+
+export function renameApply(): Promise<number> {
+  return call('rename_apply', {})
+}

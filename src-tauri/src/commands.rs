@@ -10,6 +10,7 @@ use medkit_core::views::{
 use tauri::State;
 
 use crate::setup::AppState;
+use crate::rename::{self, RenamePreview};
 
 type CmdResult<T> = Result<T, String>;
 
@@ -102,4 +103,43 @@ pub async fn startup_list(state: State<'_, AppState>) -> CmdResult<Vec<StartupIt
 #[tauri::command]
 pub async fn startup_disable(state: State<'_, AppState>, id: String) -> CmdResult<String> {
     with_engine(state, move |e| e.startup_disable(&id)).await
+}
+
+#[tauri::command]
+pub async fn rename_select_folder(state: State<'_, AppState>) -> CmdResult<Option<String>> {
+    #[cfg(windows)]
+    let folder = tauri::async_runtime::spawn_blocking(|| rfd::FileDialog::new().set_title("选择要批量重命名的文件夹").pick_folder())
+        .await
+        .map_err(|e| format!("打开文件夹选择器失败：{e}"))?;
+    #[cfg(not(windows))]
+    let folder: Option<std::path::PathBuf> = None;
+    let Some(folder) = folder else { return Ok(None) };
+    let folder = folder.canonicalize().map_err(|e| format!("无法读取所选文件夹：{e}"))?;
+    let display = folder.display().to_string();
+    let mut rename = state.rename.lock().map_err(|_| "批量重命名状态异常。")?;
+    rename.folder = Some(folder);
+    rename.preview = None;
+    Ok(Some(display))
+}
+
+#[tauri::command]
+pub async fn rename_preview(state: State<'_, AppState>, prefix: String) -> CmdResult<RenamePreview> {
+    let selected = state.rename.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut rename = selected.lock().map_err(|_| "批量重命名状态异常。")?;
+        rename::preview(&mut rename, &prefix)
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
+}
+
+#[tauri::command]
+pub async fn rename_apply(state: State<'_, AppState>) -> CmdResult<usize> {
+    let selected = state.rename.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut rename = selected.lock().map_err(|_| "批量重命名状态异常。")?;
+        rename::apply(&mut rename)
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
 }
