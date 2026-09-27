@@ -217,6 +217,13 @@ fn startup_commands_pass_the_permission_check() {
 }
 
 #[test]
+fn screen_fullscreen_passes_the_permission_check() {
+    let win = app();
+    assert!(ok(&win, "screen_fullscreen", json!({ "on": true })).is_null());
+    assert!(ok(&win, "screen_fullscreen", json!({ "on": false })).is_null());
+}
+
+#[test]
 fn context_menu_commands_pass_the_permission_check() {
     let win = app();
     assert!(ok(&win, "context_menu_list", json!({})).is_array());

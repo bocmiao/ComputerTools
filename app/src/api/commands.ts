@@ -49,6 +49,7 @@ export type CommandMap = {
   image_select_folder: { args: NoArgs; result: string | null }
   image_save: { args: { name: string; modified: number; bytes: Uint8Array }; result: string }
   image_open_folder: { args: NoArgs; result: null }
+  screen_fullscreen: { args: { on: boolean }; result: null }
 }
 
 export type CommandName = keyof CommandMap

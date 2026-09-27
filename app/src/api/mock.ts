@@ -2231,6 +2231,7 @@ const handlers: Handlers = {
     demoSaved.add(candidate.toLowerCase())
     return candidate
   },
+  screen_fullscreen: () => null,
   image_open_folder: () => {
     if (!demoImageFolder) throw '还没有选择保存的文件夹。'
     return null

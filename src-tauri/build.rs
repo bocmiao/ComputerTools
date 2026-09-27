@@ -29,6 +29,7 @@ const COMMANDS: &[&str] = &[
     "image_select_folder",
     "image_save",
     "image_open_folder",
+    "screen_fullscreen",
 ];
 
 fn main() {

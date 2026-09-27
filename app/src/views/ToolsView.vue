@@ -6,6 +6,7 @@ import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LocalUtilities from '../components/LocalUtilities.vue'
+import DeviceTests from '../components/DeviceTests.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import TagPill from '../components/TagPill.vue'
 import ToolInfoResult from '../components/ToolInfoResult.vue'
@@ -227,6 +228,7 @@ function onApplied(r: ApplyResult): void {
     <p v-else-if="tools.length === 0" class="card muted">这个版本的小药箱还没有小工具。</p>
 
     <LocalUtilities />
+    <DeviceTests />
 
     <!-- 看信息 -->
     <section v-if="infoTools.length" class="group" aria-labelledby="tools-info-title">

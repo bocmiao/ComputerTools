@@ -179,3 +179,8 @@ export function imageSave(name: string, modified: number, bytes: Uint8Array): Pr
 export function imageOpenFolder(): Promise<null> {
   return call('image_open_folder', {})
 }
+
+/** 屏幕坏点测试：小药箱窗口进入、退出全屏 */
+export function screenFullscreen(on: boolean): Promise<null> {
+  return call('screen_fullscreen', { on })
+}

@@ -346,6 +346,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `image_select_folder` | — | `string \| null`（系统对话框选定的保存目录；取消返回 null） |
 | `image_save` | 请求体是图片内容（二进制，不是 JSON）；请求头 `x-medkit-name`（URL 编码的文件名）、`x-medkit-modified`（原图修改时间，毫秒） | `string`（实际用的文件名。只新建、不覆盖，重名加「 (2)」；只收 JPG、PNG、WebP，内容开头要和扩展名对得上） |
 | `image_open_folder` | — | `null`（按「文件夹」类型交给资源管理器打开选定的保存目录） |
+| `screen_fullscreen` | `on` | `null`（屏幕坏点测试：窗口进入、退出全屏） |
 
 图片批量处理（`app/src/components/BatchImageTool.vue`、`src-tauri/src/images.rs`）：解码、缩放、裁剪、编码都在界面里用 WebView2 自带的解码器和画布做（不加新的依赖，能打开 JPG、PNG、WebP、GIF、BMP、ICO、AVIF，打不开 HEIC 和 TIFF；只能存成 JPG、PNG、WebP）；后端只负责把结果存进用户选的文件夹。原图从不改动。重新编码不带原图的拍摄信息；「压完反而更大时存原图」的那几张原样复制。
 

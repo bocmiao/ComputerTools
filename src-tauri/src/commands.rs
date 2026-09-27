@@ -232,3 +232,9 @@ pub async fn image_open_folder(state: State<'_, AppState>) -> CmdResult<()> {
         Err("只有在 Windows 上才能打开文件夹。".into())
     }
 }
+
+/// 屏幕坏点测试：窗口进入、退出全屏（盖住任务栏，整块屏幕都是测试的颜色）。
+#[tauri::command]
+pub async fn screen_fullscreen<R: tauri::Runtime>(window: tauri::WebviewWindow<R>, on: bool) -> CmdResult<()> {
+    window.set_fullscreen(on).map_err(|e| format!("窗口没能{}全屏：{e}", if on { "进入" } else { "退出" }))
+}

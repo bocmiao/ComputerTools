@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { sha256File } from '../utils/fileHash'
+import { algorithmOf, hashFile, type FileDigests, type HashAlgorithm } from '../utils/fileHash'
+import { applyTextAction, textStats, type TextAction } from '../utils/textTools'
 import ImagePrivacyTool from './ImagePrivacyTool.vue'
 import BatchRenameTool from './BatchRenameTool.vue'
 import BatchImageTool from './BatchImageTool.vue'
 
 const selectedFile = ref<File | null>(null)
-const fileHash = ref('')
+const digests = ref<FileDigests | null>(null)
 const expectedHash = ref('')
 const hashBusy = ref(false)
 const hashProgress = ref(0)
@@ -20,17 +21,25 @@ function fileSize(bytes: number): string {
   return `${(bytes / 1073741824).toFixed(2)} GB`
 }
 
+const HASH_LABELS: Record<HashAlgorithm, string> = { md5: 'MD5', sha1: 'SHA-1', sha256: 'SHA-256' }
+const HASH_ORDER: HashAlgorithm[] = ['sha256', 'sha1', 'md5']
+
+// 官方给的是哪一种，按长度认（32 位 MD5、40 位 SHA-1、64 位 SHA-256），和算出来的同一种比
 const comparison = computed(() => {
   const expected = expectedHash.value.trim().toLowerCase()
-  if (!expected || !fileHash.value) return ''
-  if (!/^[0-9a-f]{64}$/.test(expected)) return '校验值应是 64 位 SHA-256 十六进制字符。'
-  return expected === fileHash.value ? '一致：文件与提供的校验值相符。' : '不一致：请核对来源，不要运行这个文件。'
+  if (!expected || !digests.value) return ''
+  const algorithm = algorithmOf(expected)
+  if (!algorithm) return '校验值应是 32 位（MD5）、40 位（SHA-1）或 64 位（SHA-256）的十六进制字符。'
+  const name = HASH_LABELS[algorithm]
+  return expected === digests.value[algorithm]
+    ? `一致：文件和提供的 ${name} 相符。`
+    : `不一致：${name} 对不上，请核对来源，不要运行这个文件。`
 })
 
 function selectFile(event: Event): void {
   hashRun++
   selectedFile.value = (event.target as HTMLInputElement).files?.[0] ?? null
-  fileHash.value = ''
+  digests.value = null
   hashError.value = ''
   hashProgress.value = 0
   hashBusy.value = false
@@ -42,12 +51,12 @@ async function calculateHash(): Promise<void> {
   const run = ++hashRun
   hashBusy.value = true
   hashError.value = ''
-  fileHash.value = ''
+  digests.value = null
   hashProgress.value = 0
   try {
-    const result = await sha256File(file, (percent) => { hashProgress.value = percent }, () => run !== hashRun)
+    const result = await hashFile(file, (percent) => { hashProgress.value = percent }, () => run !== hashRun)
     if (run !== hashRun || result === null) return
-    fileHash.value = result
+    digests.value = result
   } catch (error) {
     if (run === hashRun) hashError.value = error instanceof Error ? error.message : '读取文件失败。'
   } finally {
@@ -109,6 +118,24 @@ function convertText(): void {
   }
 }
 
+// ── 文本整理 ──
+const TEXT_ACTIONS: { id: TextAction; label: string }[] = [
+  { id: 'to-half', label: '全角转半角' },
+  { id: 'to-full', label: '半角转全角' },
+  { id: 'drop-empty', label: '去掉空行' },
+  { id: 'dedupe', label: '去掉重复的行' },
+  { id: 'trim', label: '去掉每行首尾空格' },
+  { id: 'sort', label: '按行排序' },
+]
+const tidyInput = ref('')
+const tidyOutput = ref('')
+watch(tidyInput, () => { tidyOutput.value = '' })
+const tidyStats = computed(() => textStats(tidyInput.value))
+
+function tidy(action: TextAction): void {
+  tidyOutput.value = applyTextAction(action, tidyInput.value)
+}
+
 const copyNotice = ref('')
 async function copy(value: string): Promise<void> {
   try {
@@ -128,29 +155,55 @@ async function copy(value: string): Promise<void> {
     </div>
     <div class="local-list">
       <article class="card local-card">
-        <h3 class="section-title">文件 SHA-256 校验</h3>
-        <p class="muted small">选择下载的安装包或镜像，算出校验值；有官方提供的 SHA-256 时可直接比对。按小块读取，大文件也能处理。</p>
+        <h3 class="section-title">文件校验（MD5、SHA-1、SHA-256）</h3>
+        <p class="muted small">选择下载的安装包或镜像，一次算出三种校验值；把官方公布的值粘进下面，自动认出是哪一种并比对。按小块读取，大文件也能处理。</p>
         <label class="field-label" for="hash-file">选择文件</label>
         <input id="hash-file" type="file" @change="selectFile" />
         <div class="local-actions">
           <button type="button" class="btn btn-secondary" :disabled="!selectedFile || hashBusy" @click="calculateHash">
-            {{ hashBusy ? `计算中 ${hashProgress}%` : '计算 SHA-256' }}
+            {{ hashBusy ? `计算中 ${hashProgress}%` : '计算校验值' }}
           </button>
           <button v-if="hashBusy" type="button" class="btn btn-ghost btn-small" @click="cancelHash">取消</button>
           <span v-if="selectedFile" class="muted small">{{ selectedFile.name }} · {{ fileSize(selectedFile.size) }}</span>
         </div>
         <p v-if="hashBusy" role="status" class="muted small">已读取 {{ hashProgress }}%</p>
         <p v-if="hashError" role="alert" class="danger-text small">{{ hashError }}</p>
-        <template v-if="fileHash">
-          <label class="field-label" for="hash-result">计算结果</label>
-          <div class="result-row">
-            <input id="hash-result" class="input mono" :value="fileHash" readonly />
-            <button type="button" class="btn btn-secondary btn-small" @click="copy(fileHash)">复制</button>
+        <template v-if="digests">
+          <div v-for="algorithm in HASH_ORDER" :key="algorithm" class="hash-row">
+            <label class="field-label" :for="`hash-${algorithm}`">{{ HASH_LABELS[algorithm] }}</label>
+            <div class="result-row">
+              <input :id="`hash-${algorithm}`" class="input mono" :value="digests[algorithm]" readonly />
+              <button type="button" class="btn btn-secondary btn-small" @click="copy(digests[algorithm])">复制</button>
+            </div>
           </div>
+          <p class="muted small">MD5 和 SHA-1 只能用来核对文件有没有下载坏；官方给了 SHA-256 的，以 SHA-256 为准。</p>
         </template>
         <label class="field-label" for="hash-expected">官方校验值（可选）</label>
-        <input id="hash-expected" v-model="expectedHash" class="input mono" type="text" maxlength="64" spellcheck="false" placeholder="粘贴官方公布的 SHA-256" />
+        <input id="hash-expected" v-model="expectedHash" class="input mono" type="text" maxlength="64" spellcheck="false" placeholder="粘贴官方公布的 MD5、SHA-1 或 SHA-256" />
         <p v-if="comparison" :class="comparison.startsWith('一致') ? 'success-text' : 'danger-text'" role="status">{{ comparison }}</p>
+      </article>
+
+      <article class="card local-card">
+        <h3 class="section-title">文本整理</h3>
+        <p class="muted small">把文字粘进来：全角半角互换（「ＡＢＣ１２３」变「ABC123」）、去掉空行和重复的行、按行排序（中文按拼音），顺便数数有多少字。</p>
+        <label class="field-label" for="tidy-input">输入文字</label>
+        <textarea id="tidy-input" v-model="tidyInput" class="input text-box" rows="5" spellcheck="false"></textarea>
+        <p class="muted small" role="status">
+          汉字 {{ tidyStats.chinese }} 个 · 英文单词 {{ tidyStats.words }} 个 · 字符 {{ tidyStats.chars }} 个（不算空格）、{{ tidyStats.charsWithSpaces }} 个（算空格） · {{ tidyStats.lines }} 行
+        </p>
+        <div class="local-actions">
+          <button v-for="a in TEXT_ACTIONS" :key="a.id" type="button" class="btn btn-secondary btn-small" :disabled="!tidyInput" @click="tidy(a.id)">
+            {{ a.label }}
+          </button>
+        </div>
+        <template v-if="tidyOutput">
+          <label class="field-label" for="tidy-output">结果</label>
+          <textarea id="tidy-output" class="input text-box" :value="tidyOutput" rows="5" readonly spellcheck="false"></textarea>
+          <div class="local-actions">
+            <button type="button" class="btn btn-secondary btn-small" @click="copy(tidyOutput)">复制结果</button>
+            <button type="button" class="btn btn-ghost btn-small" @click="tidyInput = tidyOutput">接着整理结果</button>
+          </div>
+        </template>
       </article>
 
       <article class="card local-card">
@@ -207,6 +260,7 @@ async function copy(value: string): Promise<void> {
 .text-box { resize: vertical; line-height: 1.5; }
 .local-actions, .result-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .result-row .input { flex: 1; }
+.hash-row { display: flex; flex-direction: column; gap: 4px; }
 .self-start { align-self: flex-start; }
 @media (max-width: 900px) { .local-list { grid-template-columns: 1fr; } }
 </style>

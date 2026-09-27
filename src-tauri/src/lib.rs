@@ -37,6 +37,7 @@ macro_rules! command_handler {
             $crate::commands::image_select_folder,
             $crate::commands::image_save,
             $crate::commands::image_open_folder,
+            $crate::commands::screen_fullscreen,
         ]
     };
 }
