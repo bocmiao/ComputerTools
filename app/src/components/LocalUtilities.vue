@@ -9,6 +9,7 @@ import ImagesToPdfTool from './ImagesToPdfTool.vue'
 import FileLockers from './FileLockers.vue'
 import SpaceFinder from './SpaceFinder.vue'
 import TextQrTool from './TextQrTool.vue'
+import AmountWordsTool from './AmountWordsTool.vue'
 
 const selectedFile = ref<File | null>(null)
 const digests = ref<FileDigests | null>(null)
@@ -246,6 +247,7 @@ async function copy(value: string): Promise<void> {
         </template>
       </article>
       <TextQrTool />
+      <AmountWordsTool />
       <BatchImageTool />
       <ImagesToPdfTool />
       <ImagePrivacyTool />
