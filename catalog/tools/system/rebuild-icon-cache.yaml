@@ -1,0 +1,86 @@
+# 重建图标和缩略图缓存（action）。脚本：scripts/tools/system/rebuild-icon-cache.ps1
+# 图标变成白纸、空白方块，或者显示成别的程序的图标；图片、视频的缩略图不对、不显示：多半是资源管理器的缓存坏了。
+# 缓存是登录用户 %LOCALAPPDATA% 里的这几种文件：Microsoft\Windows\Explorer\iconcache_*.db（图标）、
+# thumbcache_*.db（缩略图）、IconCache.db（Windows 7 的图标缓存，有的电脑上还留着）。资源管理器开着它们，
+# 所以先结束资源管理器（和「重启资源管理器」同一段代码：shared block explorer-restart），进程退出后马上删掉这几种
+# 文件，再由系统（Winlogon）按登录用户的身份把资源管理器拉起来，它会重新生成缓存。只删这几个名字的文件，
+# 只在这两个文件夹里找，不跟着链接走；别的程序还开着的文件跳过不删、计数（partly）。
+# 小工具不改设置：删的是缓存，资源管理器会自己重建，不用撤销。
+# AutoRestartShell 被改成 0 的电脑上什么都不做（auto-restart-off）；资源管理器没在运行时也不动（not-running）。
+# HKLM\...\Explorer\Shell Icons 里有指向不存在的文件的图标设置时也不动（shell-icons-broken）：这时删了缓存，
+# 资源管理器可能再也建不起来图标缓存，所有图标都消失（「去掉快捷方式小箭头」这类优化留下的，微软问答里有人遇到）。
+# 隐私：路径里有用户名，不输出，只输出个数和大小。
+# 事实：deleted、locked、freed（「85 MB」「320 KB」）、stopped、waited_sec、broken_icons。
+# 待真机验证：Win10、Win11 上结束资源管理器以后还有哪些程序开着这些缓存文件（开始菜单、搜索、输入法的进程），
+# 删完图标是不是真的好了，见 docs/real-machine-checklist.md。
+id: system.rebuild-icon-cache
+schema_version: 1
+group: action
+title: { zh-CN: 重建图标和缩略图缓存 }
+description:
+  zh-CN: 桌面、文件夹里的图标变成白纸、空白方块，或者显示成别的程序的图标；图片、视频的缩略图不对、显示不出来时用。会把资源管理器关掉再打开，图标和缩略图在接下来一会儿里重新生成。
+category: system
+requires_admin: true
+user_hive: true
+# 超时要比脚本最多等的 15 秒宽裕得多：资源管理器已经关掉时引擎要是把脚本宿主结束了，就没人告诉用户怎么把桌面找回来。
+timeout_sec: 60
+run:
+  script: tools/system/rebuild-icon-cache.ps1
+confirm:
+  zh-CN: 资源管理器会关掉再重新打开：桌面和任务栏会消失几秒钟，已经打开的文件夹窗口会关掉。正在复制或移动文件的话，先等它做完再点。重新打开以后，图标、缩略图要过一会儿才都显示出来。
+results:
+  rebuilt:
+    status: ok
+    message:
+      zh-CN: "清掉了 {deleted} 个图标和缩略图缓存文件（{freed}），资源管理器已经重新打开了。图标、缩略图会在接下来一会儿里重新生成，刚开始显示得慢一点是正常的。"
+    next:
+      zh-CN: 过几分钟还是不对的话，重启一次电脑。只有某一个程序的图标不对，多半是它的快捷方式指向的程序被挪走、删掉了，重新装一下这个程序，或者删掉快捷方式重新建一个。
+  partly:
+    status: ok
+    message:
+      zh-CN: "清掉了 {deleted} 个图标和缩略图缓存文件（{freed}），还有 {locked} 个被别的程序开着，没有删；资源管理器已经重新打开了。"
+    next:
+      zh-CN: 一般这样就够了。过几分钟图标还是不对的话，重启一次电脑，再点一次这个小工具。
+  nothing:
+    status: ok
+    message:
+      zh-CN: 没有找到图标和缩略图的缓存文件（可能刚清过），不用重建，资源管理器也没有动。
+    next:
+      zh-CN: 图标还是不对的话，重启一次电脑。只有某一个程序的图标不对，多半是它的快捷方式指向的程序被挪走、删掉了。
+  no-folder:
+    status: unknown
+    message:
+      zh-CN: 找不到登录用户存放缓存的文件夹，没有动任何东西。
+  shell-icons-broken:
+    status: advice
+    message:
+      zh-CN: "注册表里有 {broken_icons} 项图标设置指向的文件不存在（常见于「去掉快捷方式小箭头」这类优化）。这时重建缓存，Windows 可能再也建不起来图标缓存，所有图标都会消失，所以小药箱没有动。"
+    fixer: helper
+    next:
+      zh-CN: 请懂哥打开注册表的 HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons，把指向不存在的文件的项改好或者删掉（删之前先导出备份），重启电脑，再来重建缓存。图标显示不对，可能也正是这一项引起的。
+  not-restarted:
+    status: advice
+    message:
+      zh-CN: "缓存清掉了（{deleted} 个文件），但资源管理器关掉以后，等了 {waited_sec} 秒还没有自己重新打开，所以桌面和任务栏暂时不见了。"
+    next:
+      zh-CN: 点下面的按钮（或者按 Ctrl + Shift + Esc）打开任务管理器，点「运行新任务」（Windows 10 在「文件」菜单里），输入 explorer，按回车。「以系统管理权限创建此任务」不要勾。
+    links: ["tool:open.task-manager"]
+  not-running:
+    status: advice
+    message:
+      zh-CN: 资源管理器现在没有在运行，所以桌面和任务栏都不见了。缓存没有动。
+    next:
+      zh-CN: 点下面的按钮（或者按 Ctrl + Shift + Esc）打开任务管理器，点「运行新任务」（Windows 10 在「文件」菜单里），输入 explorer，按回车。「以系统管理权限创建此任务」不要勾。
+    links: ["tool:open.task-manager"]
+  auto-restart-off:
+    status: advice
+    message:
+      zh-CN: 这台电脑设置了资源管理器关掉后不会自动重新打开。为了不让桌面和任务栏消失，小药箱没有关掉它，缓存也没有动。
+    next:
+      zh-CN: 可以重启一次电脑试试。
+references:
+  - https://learn.microsoft.com/en-us/answers/questions/4166178/how-to-rebuild-icon-cache-in-windows-11-tried-the
+  - https://learn.microsoft.com/en-us/answers/questions/3299176/how-to-rebuild-icon-cache-clear-thumbnail-cache-in
+  - https://learn.microsoft.com/en-us/answers/questions/3907166/deleted-my-iconcache-db-and-now-i-dont-have-any-ic
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/cc939703(v=technet.10)
+  - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/stop-process

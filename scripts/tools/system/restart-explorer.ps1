@@ -21,6 +21,8 @@
 #   PID, or the same PID with a different start time). The YAML's timeout_sec
 #   leaves plenty of room above that, so the engine never kills the host while
 #   Explorer is stopped.
+# The stopping and waiting are a shared block (explorer-restart), identical in
+# tools/system/rebuild-icon-cache.ps1.
 # If Explorer does not come back, or was not running at all, the YAML tells the
 # user how to start it from Task Manager, which starts it as the user.
 #
@@ -32,9 +34,11 @@ param()
 
 $ErrorActionPreference = 'Stop'
 
-$pollMs = 500
-$maxWaitMs = 15000
-
+# ---- shared block explorer-restart: identical in tools/system/restart-explorer.ps1 and tools/system/rebuild-icon-cache.ps1 (medkit-data check compares them) ----
+# Explorer is never started from here (it would run elevated, and so would
+# every program started from the desktop): it is stopped, and Winlogon starts
+# it again as the signed-in user (AutoRestartShell = 1, the default; a forced
+# stop leaves a non-zero exit code, which counts as unexpected).
 function Get-ShellProcess {
     param([int]$SessionId)
     return @(Get-Process -Name 'explorer' -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $SessionId })
@@ -50,6 +54,76 @@ function Get-StartTick {
         return [long]0
     }
 }
+
+# False when Winlogon would not start the shell again (AutoRestartShell = 0).
+# A missing value means the default (1).
+function Test-ShellAutoRestart {
+    $value = $null
+    try {
+        $value = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoRestartShell').AutoRestartShell
+    }
+    catch {
+        $value = $null
+    }
+    return (-not (($null -ne $value) -and ([string]$value -eq '0')))
+}
+
+# Stops the given explorer.exe processes. Returns what Wait-ShellRestart
+# needs: how many were stopped, their PIDs and start times, and a stopwatch
+# started at the first stop (the wait is measured from there).
+function Stop-Shell {
+    param([object[]]$Processes)
+    $old = @{}
+    foreach ($p in $Processes) {
+        $old[[int]$p.Id] = Get-StartTick $p
+    }
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    $stopped = 0
+    $errors = New-Object System.Collections.Generic.List[string]
+    foreach ($p in $Processes) {
+        try {
+            Stop-Process -Id $p.Id -Force
+            $stopped++
+        }
+        catch {
+            # A process that ended on its own in the meantime is fine.
+            $still = @(Get-Process -Id $p.Id -ErrorAction SilentlyContinue)
+            if ($still.Count -eq 0) {
+                $stopped++
+            }
+            else {
+                $errors.Add($_.Exception.Message)
+            }
+        }
+    }
+    if ($stopped -eq 0) {
+        throw ('Could not stop explorer.exe: {0}' -f ($errors -join '; '))
+    }
+    return [pscustomobject]@{ Stopped = $stopped; Old = $old; Watch = $watch }
+}
+
+# Waits, up to 15 seconds from the stop and polling every 500 ms, for an
+# explorer.exe in the session that was not running before (a new PID, or the
+# same PID with a different start time). True when one came.
+function Wait-ShellRestart {
+    param([int]$SessionId, $Stop)
+    $pollMs = 500
+    $maxWaitMs = 15000
+    $restarted = $false
+    while ((-not $restarted) -and ($Stop.Watch.ElapsedMilliseconds -lt $maxWaitMs)) {
+        $sleepMs = [int][math]::Min($pollMs, [math]::Max(1, $maxWaitMs - $Stop.Watch.ElapsedMilliseconds))
+        Start-Sleep -Milliseconds $sleepMs
+        foreach ($p in @(Get-ShellProcess -SessionId $SessionId)) {
+            $id = [int]$p.Id
+            if ((-not $Stop.Old.ContainsKey($id)) -or ($Stop.Old[$id] -ne (Get-StartTick $p))) {
+                $restarted = $true
+            }
+        }
+    }
+    $Stop.Watch.Stop()
+    return $restarted
+}
+# ---- end of shared block explorer-restart ----
 
 function New-Result {
     param([string]$Code, [int]$Stopped, [double]$Waited)
@@ -69,65 +143,16 @@ if ($before.Count -eq 0) {
     New-Result -Code 'not-running' -Stopped 0 -Waited 0
     return
 }
-
-$autoRestart = $null
-try {
-    $autoRestart = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoRestartShell').AutoRestartShell
-}
-catch {
-    # Missing value: the default (1) applies.
-    $autoRestart = $null
-}
-if (($null -ne $autoRestart) -and ([string]$autoRestart -eq '0')) {
+if (-not (Test-ShellAutoRestart)) {
     New-Result -Code 'auto-restart-off' -Stopped 0 -Waited 0
     return
 }
 
-# PID -> start time of the processes that are about to be stopped.
-$old = @{}
-foreach ($p in $before) {
-    $old[[int]$p.Id] = Get-StartTick $p
-}
-
-# The wait starts with the first stop.
-$watch = [System.Diagnostics.Stopwatch]::StartNew()
-$stopped = 0
-$errors = New-Object System.Collections.Generic.List[string]
-foreach ($p in $before) {
-    try {
-        Stop-Process -Id $p.Id -Force
-        $stopped++
-    }
-    catch {
-        # A process that ended on its own in the meantime is fine.
-        $still = @(Get-Process -Id $p.Id -ErrorAction SilentlyContinue)
-        if ($still.Count -eq 0) {
-            $stopped++
-        }
-        else {
-            $errors.Add($_.Exception.Message)
-        }
-    }
-}
-if ($stopped -eq 0) {
-    throw ('Could not stop explorer.exe: {0}' -f ($errors -join '; '))
-}
-
-$restarted = $false
-while ((-not $restarted) -and ($watch.ElapsedMilliseconds -lt $maxWaitMs)) {
-    $sleepMs = [int][math]::Min($pollMs, [math]::Max(1, $maxWaitMs - $watch.ElapsedMilliseconds))
-    Start-Sleep -Milliseconds $sleepMs
-    foreach ($p in @(Get-ShellProcess -SessionId $session)) {
-        $id = [int]$p.Id
-        if ((-not $old.ContainsKey($id)) -or ($old[$id] -ne (Get-StartTick $p))) {
-            $restarted = $true
-        }
-    }
-}
-$watch.Stop()
+$stop = Stop-Shell -Processes $before
+$restarted = Wait-ShellRestart -SessionId $session -Stop $stop
 
 $code = 'not-restarted'
 if ($restarted) {
     $code = 'restarted'
 }
-New-Result -Code $code -Stopped $stopped -Waited $watch.Elapsed.TotalSeconds
+New-Result -Code $code -Stopped $stop.Stopped -Waited $stop.Watch.Elapsed.TotalSeconds
