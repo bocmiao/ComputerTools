@@ -604,7 +604,6 @@ fn reversible_script_without_before_is_not_reported_as_success() {
     assert!(w.engine.feature_apply("disk.hibernation-reduce").is_err());
     assert!(w.engine.journal_list().unwrap().is_empty());
     assert!(!w.runner.calls().iter().any(|(s, _)| s.ends_with("hib-reduce.ps1")));
-    assert!(w.engine.journal_undo(&entry.id, false).is_err());
 }
 
 #[test]

@@ -1,0 +1,38 @@
+id: disk.clean-old-temp
+schema_version: 1
+group: action
+title: { zh-CN: 清理旧临时文件 }
+description:
+  zh-CN: 删除系统和当前登录用户临时目录里超过 7 天的普通文件，跳过链接和无法删除的文件，不动下载、桌面、文档和回收站。
+category: disk
+requires_admin: true
+user_hive: true
+timeout_sec: 180
+run:
+  script: tools/disk/clean-old-temp.ps1
+confirm:
+  zh-CN: 将删除 Windows 临时目录和当前登录用户临时目录中超过 7 天的文件。删除后不能撤销；请先保存正在进行的安装或更新工作。
+results:
+  done:
+    status: ok
+    message:
+      zh-CN: "已清理 {deleted} 个旧临时文件，约释放 {freed_mb} MB；{skipped} 个文件因占用或权限等原因跳过。"
+    next:
+      zh-CN: 再检查一次 C 盘剩余空间；如果仍然不够，请看「存储」里的其他占用项目。
+    links: ["symptom:disk-full", "tool:settings.storage"]
+  empty:
+    status: advice
+    message:
+      zh-CN: 没找到可以清理的旧临时文件，C 盘空间没有变化。
+    next:
+      zh-CN: 打开「存储」查看其他占用项目，例如下载文件、回收站或旧系统文件。
+    links: ["symptom:disk-full", "tool:settings.storage"]
+  partial:
+    status: advice
+    message:
+      zh-CN: "没有删除任何文件；{skipped} 个旧临时文件或目录因占用或权限等原因跳过。"
+    next:
+      zh-CN: 可以稍后重试，或打开「存储」查看其他占用项目。
+    links: ["symptom:disk-full", "tool:settings.storage"]
+references:
+  - https://support.microsoft.com/en-us/windows/free-up-drive-space-in-windows-85529ccb-c365-490d-b548-831022bc9b32
