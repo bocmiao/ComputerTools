@@ -30,6 +30,7 @@ macro_rules! command_handler {
             $crate::commands::rename_select_folder,
             $crate::commands::rename_preview,
             $crate::commands::rename_apply,
+            $crate::commands::rename_undo,
         ]
     };
 }

@@ -2110,16 +2110,53 @@ const handlers: Handlers = {
       : '已经停用：下次开机登录时，它不会再自动启动。软件本身还在，想用时照样能打开；想改回来，在这里或者任务管理器的「启动应用」里都行。'
     return result
   },
-  rename_select_folder: () => '演示文件夹（不会改动真实文件）',
-  rename_preview: ({ prefix }) => ({
-    folder: '演示文件夹（不会改动真实文件）',
-    entries: [
-      { source: '旅行.jpg', target: `${prefix}01.jpg` },
-      { source: '海边.png', target: `${prefix}02.png` },
-    ],
-  }),
-  rename_apply: () => 2,
+  rename_select_folder: () => DEMO_FOLDER,
+  rename_preview: ({ rules }) => {
+    const wanted = rules.extensions
+      .split(/[,，;；\s]+/)
+      .map((e) => e.trim().replace(/^\./, '').toLowerCase())
+      .filter(Boolean)
+    const files = demoFiles.filter((f) => !wanted.length || wanted.includes(f.split('.').pop()!.toLowerCase()))
+    if (!files.length) throw '文件夹里没有这几种扩展名的文件。'
+    const last = rules.start + files.length - 1
+    const width = rules.digits || Math.max(2, String(last).length)
+    const entries = files.map((source, i) => {
+      const dot = source.lastIndexOf('.')
+      let name = dot > 0 ? source.slice(0, dot) : source
+      let ext: string | null = dot > 0 ? source.slice(dot + 1) : null
+      if (rules.find) name = name.split(rules.find).join(rules.replace)
+      if (rules.numbering) name = `${rules.base}${String(rules.start + i).padStart(width, '0')}`
+      name = `${rules.prefix}${name}${rules.suffix}`
+      if (rules.extension === 'lower') ext = ext?.toLowerCase() ?? null
+      if (rules.extension === 'set') ext = rules.newExtension.trim().replace(/^\./, '') || null
+      const target = ext ? `${name}.${ext}` : name
+      return { source, target, changed: source !== target }
+    })
+    demoPlan = entries
+    return { folder: DEMO_FOLDER, entries, changed: entries.filter((e) => e.changed).length, skipped: demoFiles.length - files.length }
+  },
+  rename_apply: () => {
+    const changed = demoPlan.filter((e) => e.changed)
+    if (!changed.length) throw '按这些规则，没有文件的名字会变。'
+    demoLast = changed
+    demoFiles = demoFiles.map((f) => changed.find((e) => e.source === f)?.target ?? f)
+    demoPlan = []
+    return changed.length
+  },
+  rename_undo: () => {
+    if (!demoLast.length) throw '没有可以撤销的重命名。'
+    const back = demoLast
+    demoFiles = demoFiles.map((f) => back.find((e) => e.target === f)?.source ?? f)
+    demoLast = []
+    return back.length
+  },
 }
+
+// ── 批量重命名的演示文件（浏览器里预览界面用，不碰真实文件）──
+const DEMO_FOLDER = '演示文件夹（不会改动真实文件）'
+let demoFiles = ['IMG_0001.JPG', 'IMG_0002.JPG', '海边.png', '说明.txt']
+let demoPlan: { source: string; target: string; changed: boolean }[] = []
+let demoLast: { source: string; target: string; changed: boolean }[] = []
 
 /** 个别小工具要多等一会儿（读电脑配置、重启资源管理器），好看清「正在…」的样子 */
 function extraDelay(cmd: CommandName, args: unknown): number {

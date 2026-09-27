@@ -5,6 +5,8 @@ import type {
   FeatureState,
   JournalSession,
   Preview,
+  RenamePreview,
+  RenameRules,
   SymptomDetail,
   SystemInfo,
   StartupItem,
@@ -37,8 +39,9 @@ export type CommandMap = {
   startup_list: { args: NoArgs; result: StartupItem[] }
   startup_set: { args: { id: string; enabled: boolean }; result: ApplyResult }
   rename_select_folder: { args: NoArgs; result: string | null }
-  rename_preview: { args: { prefix: string }; result: { folder: string; entries: { source: string; target: string }[] } }
+  rename_preview: { args: { rules: RenameRules }; result: RenamePreview }
   rename_apply: { args: NoArgs; result: number }
+  rename_undo: { args: NoArgs; result: number }
 }
 
 export type CommandName = keyof CommandMap

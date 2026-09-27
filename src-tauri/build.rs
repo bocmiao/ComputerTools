@@ -20,6 +20,10 @@ const COMMANDS: &[&str] = &[
     "tool_open",
     "startup_list",
     "startup_set",
+    "rename_select_folder",
+    "rename_preview",
+    "rename_apply",
+    "rename_undo",
 ];
 
 fn main() {

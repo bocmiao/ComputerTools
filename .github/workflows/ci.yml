@@ -65,7 +65,7 @@ jobs:
       - name: 界面类型检查和构建
         run: pnpm --dir app build
 
-      - name: 界面与后端接线测试（14 个命令的权限和序列化）
+      - name: 界面与后端接线测试（所有命令的权限和序列化）
         run: cargo test -p medkit --features test-helpers
 
   windows-test:

@@ -7,9 +7,11 @@ import type {
   FeatureState,
   JournalSession,
   Preview,
+  RenamePreview,
+  RenameRules,
+  StartupItem,
   SymptomDetail,
   SystemInfo,
-  StartupItem,
   ToolResult,
   UndoResult,
 } from './types'
@@ -116,14 +118,22 @@ export function startupSet(id: string, enabled: boolean): Promise<ApplyResult> {
   return call('startup_set', { id, enabled })
 }
 
+/** 批量重命名：用系统的选择框选文件夹；取消返回 null */
 export function renameSelectFolder(): Promise<string | null> {
   return call('rename_select_folder', {})
 }
 
-export function renamePreview(prefix: string): Promise<{ folder: string; entries: { source: string; target: string }[] }> {
-  return call('rename_preview', { prefix })
+/** 按规则预览选中文件夹里的文件会改成什么名字（不改任何东西） */
+export function renamePreview(rules: RenameRules): Promise<RenamePreview> {
+  return call('rename_preview', { rules })
 }
 
+/** 按刚才的预览改名，返回改了几个文件 */
 export function renameApply(): Promise<number> {
   return call('rename_apply', {})
+}
+
+/** 撤销上一次改名，返回改回了几个文件 */
+export function renameUndo(): Promise<number> {
+  return call('rename_undo', {})
 }

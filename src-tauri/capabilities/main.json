@@ -20,6 +20,10 @@
     "allow-tool-run",
     "allow-tool-open",
     "allow-startup-list",
-    "allow-startup-set"
+    "allow-startup-set",
+    "allow-rename-select-folder",
+    "allow-rename-preview",
+    "allow-rename-apply",
+    "allow-rename-undo"
   ]
 }

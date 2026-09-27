@@ -9,7 +9,7 @@ use medkit_core::views::{
 };
 use tauri::State;
 
-use crate::rename::{self, RenamePreview};
+use crate::rename::{self, RenamePreview, RenameRules};
 use crate::setup::AppState;
 
 type CmdResult<T> = Result<T, String>;
@@ -107,6 +107,7 @@ pub async fn startup_set(state: State<'_, AppState>, id: String, enabled: bool) 
     with_engine(state, move |e| e.startup_set(&id, enabled)).await
 }
 
+/// 批量重命名：用系统的文件夹选择框选一个文件夹。界面拿不到、也传不了别的路径。
 #[tauri::command]
 pub async fn rename_select_folder(state: State<'_, AppState>) -> CmdResult<Option<String>> {
     #[cfg(windows)]
@@ -123,26 +124,41 @@ pub async fn rename_select_folder(state: State<'_, AppState>) -> CmdResult<Optio
     let mut rename = state.rename.lock().map_err(|_| "批量重命名状态异常。")?;
     rename.folder = Some(folder);
     rename.preview = None;
+    rename.last = None;
     Ok(Some(display))
 }
 
+/// 按规则预览选中文件夹里的文件会改成什么名字（不改任何东西）。
 #[tauri::command]
-pub async fn rename_preview(state: State<'_, AppState>, prefix: String) -> CmdResult<RenamePreview> {
+pub async fn rename_preview(state: State<'_, AppState>, rules: RenameRules) -> CmdResult<RenamePreview> {
     let selected = state.rename.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let mut rename = selected.lock().map_err(|_| "批量重命名状态异常。")?;
-        rename::preview(&mut rename, &prefix)
+        rename::preview(&mut rename, &rules)
     })
     .await
     .map_err(|e| format!("内部错误：{e}"))?
 }
 
+/// 按刚才的预览改名；文件夹在预览以后变了就不改。返回改了几个文件。
 #[tauri::command]
 pub async fn rename_apply(state: State<'_, AppState>) -> CmdResult<usize> {
     let selected = state.rename.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let mut rename = selected.lock().map_err(|_| "批量重命名状态异常。")?;
         rename::apply(&mut rename)
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// 撤销上一次改名（改回原名）。返回改回了几个文件。
+#[tauri::command]
+pub async fn rename_undo(state: State<'_, AppState>) -> CmdResult<usize> {
+    let selected = state.rename.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut rename = selected.lock().map_err(|_| "批量重命名状态异常。")?;
+        rename::undo(&mut rename)
     })
     .await
     .map_err(|e| format!("内部错误：{e}"))?

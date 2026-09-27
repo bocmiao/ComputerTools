@@ -98,3 +98,24 @@ export interface ToolResult {
   sections: ToolSection[]      // 只有 info 有内容
   error: string | null; durationMs: number
 }
+
+// 批量重命名（界面只传规则，文件夹由后端的系统选择框决定）
+export type RenameOrder = 'name' | 'modified'
+export type RenameExtension = 'keep' | 'lower' | 'set'
+export interface RenameRules {
+  extensions: string           // 只处理这些扩展名（「jpg, png」）；空的表示全部
+  order: RenameOrder           // 序号按文件名还是修改时间排
+  find: string; replace: string
+  numbering: boolean           // 整个名字换成「新名字 + 序号」
+  base: string; start: number
+  digits: number               // 0：自动
+  prefix: string; suffix: string
+  extension: RenameExtension; newExtension: string
+}
+export interface RenameEntry { source: string; target: string; changed: boolean }
+export interface RenamePreview {
+  folder: string
+  entries: RenameEntry[]
+  changed: number              // 名字会变的文件数
+  skipped: number              // 扩展名不对、不处理的文件数
+}

@@ -205,3 +205,18 @@ fn startup_commands_pass_the_permission_check() {
     let e = invoke(&win, "startup_set", json!({ "id": "nope", "enabled": false })).unwrap_err();
     assert!(e.as_str().is_some_and(|m| m.contains("不在刚才的列表里")), "{e}");
 }
+
+/// 批量重命名的命令也要登记进权限清单（以前漏了，真程序里一点就报「不允许」）。
+#[test]
+fn rename_commands_pass_the_permission_check() {
+    let win = app();
+    // mock 运行时里没有文件夹选择框：返回 null
+    assert!(ok(&win, "rename_select_folder", json!({})).is_null());
+    // 没选文件夹、没预览、没执行过：都是说明，不是权限错误
+    let e = invoke(&win, "rename_preview", json!({ "rules": { "numbering": true, "base": "照片_" } })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("请先选择文件夹")), "{e}");
+    let e = invoke(&win, "rename_apply", json!({})).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("预览")), "{e}");
+    let e = invoke(&win, "rename_undo", json!({})).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("没有可以撤销")), "{e}");
+}
