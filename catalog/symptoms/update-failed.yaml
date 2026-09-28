@@ -85,4 +85,6 @@ guide:
     6. 错误代码是 0x80073712、0x800F081F、0x800F0831 这类（组件存储坏了）：用小工具「检查并修复系统文件」修一遍、重启以后再试。还不行，Windows 11 可以用小工具「恢复（重装当前版本的 Windows）」，点「使用 Windows 更新修复问题」旁边的「立即重新安装」，应用、文件和设置都保留。
     7. 升级大版本老是失败、退回原来的版本：先更新显卡驱动、暂时卸载第三方杀毒软件再试；急着升级的，可以用微软官网的「Windows 11 安装助手」，或者请懂哥帮忙。
     8. 不要用「一键关闭更新」这类软件，也不要删 C:\Windows\WinSxS、C:\Windows\Installer 里的文件：它们正是更新装不上的常见原因。
-links: ["tool:settings.windows-update", "tool:update.reset-components", "tool:open.system-file-repair", "tool:settings.recovery"]
+
+    还可以用微软自带的「Windows 更新疑难解答」自动查一遍；下载一直卡住的，再用「后台智能传输服务（BITS）疑难解答」查一查（点下面的按钮；它们在 Windows 的「获取帮助」应用里，要联网）。
+links: ["tool:settings.windows-update", "tool:update.reset-components", "tool:open.system-file-repair", "tool:settings.recovery", "tool:troubleshoot.windows-update", "tool:troubleshoot.bits"]

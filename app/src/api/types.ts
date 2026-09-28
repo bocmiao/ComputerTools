@@ -340,12 +340,13 @@ export interface WindowOwnerReport {
 
 // 小工具（第 11 节）
 export type ToolGroup = 'info' | 'action' | 'open'
-export type ToolOpens = 'program' | 'settings'
+/** 打开的是系统工具、「设置」里的一页，还是「获取帮助」里微软的疑难解答 */
+export type ToolOpens = 'program' | 'settings' | 'get-help'
 export type Audience = 'everyone' | 'helper'
 export interface ToolSummary {
   id: string; title: string; description: string; category: string
   group: ToolGroup
-  opens: ToolOpens | null      // 只有 open 有值：打开的是系统工具，还是「设置」里的一页
+  opens: ToolOpens | null      // 只有 open 有值
   audience: Audience           // helper：给懂哥用的，界面上标出来
   confirm: string | null       // 只有 action 可能有：执行前要用户确认的说明
 }

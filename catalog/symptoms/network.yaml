@@ -105,4 +105,6 @@ guide:
     - 插着网线又连着 WiFi、或者开着 VPN 时，ipconfig 里会有两个「默认网关」，一般没关系；上不了网时先断开其中一个（拔掉网线，或者关掉 WiFi、断开 VPN）试试。
     - 只有某一个网站提示「重定向次数过多」（ERR_TOO_MANY_REDIRECTS），别的网站正常：多半是这个网站的 Cookie 乱了，在浏览器里清除这个网站的 Cookie，或者换一个浏览器试试；系统时间不对也会这样。
     - 在命令提示符里输入 ping、ipconfig 提示「不是内部或外部命令」：不是网络的问题，看「命令提示符里提示「不是内部或外部命令」」。
-links: ["tool:network.open-login", "symptom:command-not-found"]
+
+    还可以用微软自带的「网络和 Internet 疑难解答」自动查一遍（点下面的按钮；它在 Windows 的「获取帮助」应用里。完全上不了网时它可能打不开，那就照上面的步骤来）。
+links: ["tool:network.open-login", "tool:troubleshoot.network", "symptom:command-not-found"]

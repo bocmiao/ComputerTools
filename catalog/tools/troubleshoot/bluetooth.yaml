@@ -1,0 +1,12 @@
+# 「获取帮助」里微软的自动疑难解答（open：ms-contact-support://smc-to-emerald/BluetoothTroubleshooter，名字照微软《Windows troubleshooters》）。
+# 小药箱只负责打开；检查、修复由「获取帮助」完成，要联网。没有「获取帮助」应用的电脑（精简过的系统、服务器版）上会说清楚。
+id: troubleshoot.bluetooth
+schema_version: 1
+group: open
+title: { zh-CN: 蓝牙疑难解答 }
+description:
+  zh-CN: 蓝牙打不开、连不上耳机和鼠标时用：检查蓝牙服务、蓝牙设备和驱动。
+category: hardware
+open: { troubleshooter: BluetoothTroubleshooter }
+references:
+  - https://support.microsoft.com/en-us/support/get-help/windows-troubleshooters

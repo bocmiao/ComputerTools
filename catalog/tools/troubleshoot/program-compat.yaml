@@ -1,0 +1,12 @@
+# 「获取帮助」里微软的自动疑难解答（open：ms-contact-support://smc-to-emerald/ProgramCompatTroubleshooter，名字照微软《Windows troubleshooters》）。
+# 小药箱只负责打开；检查、修复由「获取帮助」完成，要联网。没有「获取帮助」应用的电脑（精简过的系统、服务器版）上会说清楚。
+id: troubleshoot.program-compat
+schema_version: 1
+group: open
+title: { zh-CN: 程序兼容性疑难解答 }
+description:
+  zh-CN: 老软件在新系统上打不开、一打开就出错时用：按问题试几种兼容模式，找到能用的设置。
+category: system
+open: { troubleshooter: ProgramCompatTroubleshooter }
+references:
+  - https://support.microsoft.com/en-us/support/get-help/windows-troubleshooters

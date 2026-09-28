@@ -94,6 +94,8 @@ pub enum ToolOpens {
     Program,
     /// 「设置」里的一页
     Settings,
+    /// 「获取帮助」里微软的疑难解答
+    GetHelp,
 }
 
 #[derive(Debug, Clone, Serialize)]

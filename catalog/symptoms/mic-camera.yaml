@@ -53,5 +53,7 @@ guide:
     5. 外接的 USB 摄像头、耳机：换一个 USB 口，直接插在电脑上，不要接在扩展坞、延长线上。台式机的耳机麦克风要插在粉色的孔里；只有一个插头（带三道环）的耳机要插在耳麦二合一的孔上。
     6. 都试过还不行，可能是驱动的问题，请懂哥帮忙看看。
 
+    还可以用微软自带的「相机疑难解答」「声音疑难解答」（麦克风也归它查）自动查一遍，能修的它们直接修（点下面的按钮；它们在 Windows 的「获取帮助」应用里，要联网）。
+
     改好以后，点下面的「测一测麦克风」「测一测摄像头」试一试，不用打开聊天软件。
-links: ["test:microphone", "test:camera", "tool:settings.sound", "tool:settings.privacy-microphone", "tool:settings.privacy-camera"]
+links: ["test:microphone", "test:camera", "tool:settings.sound", "tool:settings.privacy-microphone", "tool:settings.privacy-camera", "tool:troubleshoot.camera", "tool:troubleshoot.audio"]

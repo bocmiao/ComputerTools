@@ -1,0 +1,12 @@
+# 「获取帮助」里微软的自动疑难解答（open：ms-contact-support://smc-to-emerald/TroubleshootCamera，名字照微软《Windows troubleshooters》）。
+# 小药箱只负责打开；检查、修复由「获取帮助」完成，要联网。没有「获取帮助」应用的电脑（精简过的系统、服务器版）上会说清楚。
+id: troubleshoot.camera
+schema_version: 1
+group: open
+title: { zh-CN: 相机疑难解答 }
+description:
+  zh-CN: 摄像头打不开、黑屏、视频会议里没有画面时用：检查摄像头驱动、隐私权限和被别的软件占着的情况。
+category: hardware
+open: { troubleshooter: TroubleshootCamera }
+references:
+  - https://support.microsoft.com/en-us/support/get-help/windows-troubleshooters

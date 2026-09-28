@@ -427,7 +427,15 @@ impl Engine {
             description: t.description.get(&self.lang).to_owned(),
             category: t.category.clone(),
             group: t.group,
-            opens: t.open.as_ref().map(|o| if o.program.is_some() { ToolOpens::Program } else { ToolOpens::Settings }),
+            opens: t.open.as_ref().map(|o| {
+                if o.program.is_some() {
+                    ToolOpens::Program
+                } else if o.troubleshooter.is_some() {
+                    ToolOpens::GetHelp
+                } else {
+                    ToolOpens::Settings
+                }
+            }),
             audience: t.audience,
             confirm: t.confirm.as_ref().map(|c| c.get(&self.lang).to_owned()),
         }
@@ -498,23 +506,34 @@ impl Engine {
         result
     }
 
-    /// 打开一个 open 小工具：系统自带的工具，或者「设置」里的一页。
+    /// 打开一个 open 小工具：系统自带的工具、「设置」里的一页，或者「获取帮助」里微软的疑难解答。
     pub fn tool_open(&self, id: &str) -> Result<()> {
         let tool = self.tool(id)?;
         let title = tool.title.get(&self.lang);
-        let request = match tool.open.as_ref().map(|o| (o.program.as_deref(), o.settings.as_deref())) {
-            Some((Some(name), None)) => {
+        let request = match tool
+            .open
+            .as_ref()
+            .map(|o| (o.program.as_deref(), o.settings.as_deref(), o.troubleshooter.as_deref()))
+        {
+            Some((Some(name), None, None)) => {
                 let p = tools::program(name)
                     .ok_or_else(|| Error::Catalog(format!("{id} 的 open.program 不在名单里：{name}")))?;
                 OpenRequest::Program { exe: p.exe, args: p.args, console: p.console }
             }
-            Some((None, Some(page))) => OpenRequest::Settings(
+            Some((None, Some(page), None)) => OpenRequest::Settings(
                 tools::settings_page(page)
                     .ok_or_else(|| Error::Catalog(format!("{id} 的 open.settings 不在名单里：{page}")))?,
+            ),
+            Some((None, None, Some(name))) => OpenRequest::GetHelp(
+                tools::troubleshooter(name)
+                    .ok_or_else(|| Error::Catalog(format!("{id} 的 open.troubleshooter 不在名单里：{name}")))?,
             ),
             _ => return Err(Error::Invalid(format!("「{title}」不是用来打开的工具"))),
         };
         self.platform.open(&request).map_err(|e| match e {
+            PlatformError::NotFound(_) if matches!(request, OpenRequest::GetHelp(_)) => Error::Invalid(format!(
+                "这台电脑上没有「获取帮助」应用（精简过的系统、服务器版常常没有），打不开微软的「{title}」。可以在 Microsoft Store 里搜「获取帮助」装上再试，或者到「设置」的「疑难解答」页里找。"
+            )),
             PlatformError::NotFound(file) => {
                 Error::Invalid(format!("这台电脑上没有「{title}」（找不到 {file}），可能被精简系统删掉了。"))
             }

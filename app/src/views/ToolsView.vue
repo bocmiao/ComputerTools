@@ -124,8 +124,9 @@ const opener = useToolOpen()
 
 const openGroups = computed(() => {
   const open = tools.value.filter((t) => t.group === 'open')
-  const programs = open.filter((t) => t.opens !== 'settings')
+  const programs = open.filter((t) => t.opens === 'program' || t.opens === null)
   const settings = open.filter((t) => t.opens === 'settings')
+  const troubleshooters = open.filter((t) => t.opens === 'get-help')
   const helperNote = programs.some((t) => t.audience === 'helper')
     ? '标着「给懂哥」的比较专业，不熟悉的话别动里面的东西。'
     : ''
@@ -141,6 +142,12 @@ const openGroups = computed(() => {
       title: '打开「设置」里的页面',
       note: '直接跳到 Windows「设置」里对应的那一页。在「设置」里改的东西，小药箱同样不会记下来。',
       tools: settings,
+    },
+    {
+      id: 'get-help',
+      title: '微软的疑难解答',
+      note: 'Windows「获取帮助」应用里微软自己的自动疑难解答：它会检查一遍，能修的直接修，要联网。小药箱只负责打开，它改了什么不会记进「修改日志」。精简过的系统可能没有「获取帮助」，会提示你。',
+      tools: troubleshooters,
     },
   ]
     .filter((g) => g.tools.length > 0)

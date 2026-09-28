@@ -1,0 +1,12 @@
+# 「获取帮助」里微软的自动疑难解答（open：ms-contact-support://smc-to-emerald/VideoPlaybackTroubleshooter，名字照微软《Windows troubleshooters》）。
+# 小药箱只负责打开；检查、修复由「获取帮助」完成，要联网。没有「获取帮助」应用的电脑（精简过的系统、服务器版）上会说清楚。
+id: troubleshoot.video-playback
+schema_version: 1
+group: open
+title: { zh-CN: 视频播放疑难解答 }
+description:
+  zh-CN: 视频放不出来、卡顿、只有声音没有画面时用：检查播放设置、显卡驱动和编解码器。
+category: system
+open: { troubleshooter: VideoPlaybackTroubleshooter }
+references:
+  - https://support.microsoft.com/en-us/support/get-help/windows-troubleshooters

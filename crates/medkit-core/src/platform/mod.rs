@@ -89,6 +89,9 @@ pub enum OpenRequest {
     Program { exe: &'static str, args: &'static [&'static str], console: &'static [&'static str] },
     /// 「设置」里的一页：`ms-settings:<page>`
     Settings(&'static str),
+    /// 「获取帮助」里微软的疑难解答：`ms-contact-support://smc-to-emerald/<名字>`。没有「获取帮助」应用时是
+    /// [`PlatformError::NotFound`]
+    GetHelp(&'static str),
 }
 
 /// 屏幕上的一块长方形（像素，和系统的 RECT 一样：右边、下边不算在里面）。

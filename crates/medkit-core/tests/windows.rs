@@ -469,8 +469,8 @@ fn open_tools_launch_or_explain_why_not() {
     let mut failures = Vec::new();
     for t in bundle.catalog.tools.iter().filter(|t| t.group == ToolGroup::Open) {
         let open = t.open.as_ref().expect("open 小工具有 open");
-        match (&open.program, &open.settings) {
-            (Some(name), None) => {
+        match (&open.program, &open.settings, &open.troubleshooter) {
+            (Some(name), None, None) => {
                 let p = tools::program(name).expect("名单里有");
                 // 命令行窗口里依次运行的程序（DISM 还会再起一个 DismHost）：打开以后一起关掉
                 let mut children: Vec<&str> = p.console.iter().map(|c| c.split(' ').next().unwrap_or(c)).collect();
@@ -511,7 +511,7 @@ fn open_tools_launch_or_explain_why_not() {
                     close_new(c, b);
                 }
             }
-            (None, Some(page)) => {
+            (None, Some(page), None) => {
                 let before = pids_of("SystemSettings.exe");
                 match engine.tool_open(&t.id) {
                     Ok(()) => eprintln!("打开了 {:<28} ms-settings:{page}", t.id),
@@ -519,6 +519,22 @@ fn open_tools_launch_or_explain_why_not() {
                 }
                 std::thread::sleep(Duration::from_secs(2));
                 close_new("SystemSettings.exe", &before);
+            }
+            // 「获取帮助」是应用商店的应用，服务器版上多半没有：没有时要说清楚，有的话打开再关掉
+            (None, None, Some(name)) => {
+                let before = pids_of("GetHelp.exe");
+                // 没有处理这种链接的应用时，有的系统会弹「需要使用新应用以打开此链接」（OpenWith.exe）
+                let before_open_with = pids_of("OpenWith.exe");
+                match engine.tool_open(&t.id) {
+                    Ok(()) => eprintln!("打开了 {:<28} 「获取帮助」的 {name}", t.id),
+                    Err(e) if e.to_string().contains("没有「获取帮助」应用") => {
+                        println!("::notice title={}::这台 CI 机器上没有「获取帮助」：{e}", t.id);
+                    }
+                    Err(e) => println!("::warning title={}::「获取帮助」的 {name} 打不开：{e}", t.id),
+                }
+                std::thread::sleep(Duration::from_secs(2));
+                close_new("GetHelp.exe", &before);
+                close_new("OpenWith.exe", &before_open_with);
             }
             _ => failures.push(format!("{}：open 写得不对", t.id)),
         }

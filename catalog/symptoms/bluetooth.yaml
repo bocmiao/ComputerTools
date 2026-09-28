@@ -59,4 +59,6 @@ guide:
     7. 台式机没有蓝牙：买一个 USB 蓝牙适配器，选写着「免驱」、蓝牙 5.0 以上的。
 
     都不行的话，到电脑品牌的官网按型号下载最新的蓝牙驱动重新装，或者请懂哥帮忙。
-links: ["tool:open.device-manager"]
+
+    还可以用微软自带的「蓝牙疑难解答」自动查一遍，能修的它直接修（点下面的按钮；它在 Windows 的「获取帮助」应用里，要联网）。
+links: ["tool:open.device-manager", "tool:troubleshoot.bluetooth"]

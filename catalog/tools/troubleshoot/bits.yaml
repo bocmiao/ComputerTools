@@ -1,0 +1,12 @@
+# 「获取帮助」里微软的自动疑难解答（open：ms-contact-support://smc-to-emerald/BITSTroubleshooter，名字照微软《Windows troubleshooters》）。
+# 小药箱只负责打开；检查、修复由「获取帮助」完成，要联网。没有「获取帮助」应用的电脑（精简过的系统、服务器版）上会说清楚。
+id: troubleshoot.bits
+schema_version: 1
+group: open
+title: { zh-CN: 后台智能传输服务（BITS）疑难解答 }
+description:
+  zh-CN: Windows 更新、应用商店下载一直卡住时用：检查 Windows 用来在后台下载更新的服务（BITS）有没有问题。
+category: update
+open: { troubleshooter: BITSTroubleshooter }
+references:
+  - https://support.microsoft.com/en-us/support/get-help/windows-troubleshooters

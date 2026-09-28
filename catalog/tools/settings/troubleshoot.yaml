@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:troubleshoot。Windows 11 在「系统 → 疑难解答」（「其他疑难解答」里就是
+# 「获取帮助」的那几个），Windows 10 在「更新和安全 → 疑难解答」（「其他疑难解答」里是系统自带的老疑难解答）。
+id: settings.troubleshoot
+schema_version: 1
+group: open
+title: { zh-CN: 疑难解答 }
+description:
+  zh-CN: 打开「设置」里的疑难解答页面，在「其他疑难解答」里能找到声音、网络、打印机、Windows 更新这些微软自带的自动修复。
+category: settings
+open: { settings: troubleshoot }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/support/get-help/windows-troubleshooters

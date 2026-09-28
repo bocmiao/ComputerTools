@@ -113,7 +113,28 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "notifications",
     // 「个性化 → 任务栏」：右下角显示哪些图标（Windows 10 还有「打开或关闭系统图标」）、任务栏的位置和自动隐藏
     "taskbar",
+    // 「疑难解答」：Windows 11 在「系统」里（「其他疑难解答」是「获取帮助」的那几个），Windows 10 在「更新和安全」里
+    "troubleshoot",
 ];
+
+/// 「获取帮助」应用里微软的自动疑难解答（`ms-contact-support://smc-to-emerald/<名字>`），照微软《Windows
+/// troubleshooters》页面列的 10 个。小药箱只负责打开，检查和修复由「获取帮助」完成。
+pub const TROUBLESHOOTERS: &[&str] = &[
+    "AudioTroubleshooter",
+    "BITSTroubleshooter",
+    "BluetoothTroubleshooter",
+    "TroubleshootCamera",
+    "NetworkAndInternetTroubleshooter",
+    "PrinterTroubleshooter",
+    "ProgramCompatTroubleshooter",
+    "VideoPlaybackTroubleshooter",
+    "WMPTroubleshooter",
+    "WUTroubleshooter",
+];
+
+pub fn troubleshooter(name: &str) -> Option<&'static str> {
+    TROUBLESHOOTERS.iter().copied().find(|t| *t == name)
+}
 
 /// 命令行窗口里要运行的那一串：`/k ""<System32>\Dism.exe" /Online … & "<System32>\sfc.exe" /scannow"`。程序都写
 /// 绝对路径（cmd 找程序时先找当前文件夹）；一条失败了下一条照样运行（`&`）。整串外面再包一层引号：里面有引号和 `&`
@@ -280,6 +301,9 @@ mod tests {
         assert!(program("cmd").is_none());
         assert_eq!(settings_page("windowsupdate"), Some("windowsupdate"));
         assert!(settings_page("../x").is_none());
+        assert_eq!(troubleshooter("AudioTroubleshooter"), Some("AudioTroubleshooter"));
+        assert!(troubleshooter("audiotroubleshooter").is_none(), "名字要一字不差");
+        assert!(troubleshooter("Audio/../x").is_none());
     }
 
     #[test]

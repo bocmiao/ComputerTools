@@ -186,8 +186,12 @@ function joinWords(a: string, b: string): string {
   return /^[A-Za-z0-9]/.test(b) ? `${a} ${b}` : `${a}${b}`
 }
 
-/** 打开系统工具的按钮：「打开磁盘清理」「打开「存储」设置」；名字本身以「设置」结尾的不再加（「打开「通知设置」」） */
+/**
+ * 打开系统工具的按钮：「打开磁盘清理」「打开「存储」设置」；名字本身以「设置」结尾的不再加（「打开「通知设置」」）；
+ * 微软的疑难解答：「运行微软的「声音疑难解答」」
+ */
 export function toolOpenLabel(t: ToolSummary): string {
+  if (t.opens === 'get-help') return `运行微软的「${t.title}」`
   if (t.opens !== 'settings') return joinWords('打开', t.title)
   return t.title.endsWith('设置') ? `打开「${t.title}」` : `打开「${t.title}」设置`
 }

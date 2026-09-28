@@ -470,7 +470,7 @@ pub struct ToolLabels {
     pub values: BTreeMap<String, Text>,
 }
 
-/// open 小工具打开什么：`program` 和 `settings` 二选一，都必须在引擎的名单里。
+/// open 小工具打开什么：`program`、`settings`、`troubleshooter` 三选一，都必须在引擎的名单里。
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OpenTarget {
@@ -480,4 +480,8 @@ pub struct OpenTarget {
     /// 「设置」里的页面，例如 `windowsupdate`（打开 ms-settings:windowsupdate）
     #[serde(default)]
     pub settings: Option<String>,
+    /// 「获取帮助」应用里微软的自动疑难解答，例如 `AudioTroubleshooter`
+    /// （打开 ms-contact-support://smc-to-emerald/AudioTroubleshooter）
+    #[serde(default)]
+    pub troubleshooter: Option<String>,
 }

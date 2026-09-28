@@ -1,0 +1,12 @@
+# 「获取帮助」里微软的自动疑难解答（open：ms-contact-support://smc-to-emerald/AudioTroubleshooter，名字照微软《Windows troubleshooters》）。
+# 小药箱只负责打开；检查、修复由「获取帮助」完成，要联网。没有「获取帮助」应用的电脑（精简过的系统、服务器版）上会说清楚。
+id: troubleshoot.audio
+schema_version: 1
+group: open
+title: { zh-CN: 声音疑难解答 }
+description:
+  zh-CN: 电脑没声音、声音断断续续、耳机或音箱没反应时用：微软「获取帮助」里的自动疑难解答，会检查声音服务、输出设备和驱动，能修的直接修。
+category: audio
+open: { troubleshooter: AudioTroubleshooter }
+references:
+  - https://support.microsoft.com/en-us/support/get-help/windows-troubleshooters

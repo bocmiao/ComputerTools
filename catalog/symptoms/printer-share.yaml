@@ -41,4 +41,6 @@ guide:
     4. 0x000003e3：多半是旧的打印机和驱动留下的残留：删掉这台打印机，在「打印机和扫描仪 → 打印服务器属性 → 驱动程序」里删掉它的驱动，再重新添加。
     5. 0x00000040（指定的网络名不再可用）：看上面「局域网共享用到的服务」这一步，或者改成按打印机的 IP 地址添加。
     6. 0x80070035、0x80004005：找不到或者进不去主机，见症状「共享文件夹打不开、看不到别的电脑」。
-links: ["tool:printer.clear-queue", "tool:open.services", "symptom:printer-offline", "symptom:lan-share", "symptom:printer-709"]
+
+    还可以在连接打印机的电脑上用微软自带的「打印机疑难解答」自动查一遍（点下面的按钮；它在 Windows 的「获取帮助」应用里，要联网）。
+links: ["tool:printer.clear-queue", "tool:open.services", "tool:troubleshoot.printer", "symptom:printer-offline", "symptom:lan-share", "symptom:printer-709"]

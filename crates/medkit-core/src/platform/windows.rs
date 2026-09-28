@@ -632,6 +632,7 @@ impl Platform for WindowsPlatform {
         match request {
             OpenRequest::Program { exe, args, console } => open_program(exe, args, console),
             OpenRequest::Settings(page) => open_settings(page),
+            OpenRequest::GetHelp(name) => open_get_help(name),
         }
     }
 
@@ -740,6 +741,17 @@ fn open_settings(page: &str) -> PResult<()> {
         PlatformError::Other(format!(
             "系统没有响应（错误代码 {code}）。可以点开始菜单里的齿轮图标，自己打开「设置」找这一项"
         ))
+    })
+}
+
+/// 「获取帮助」里微软的疑难解答。精简过的系统、服务器版常常没有「获取帮助」应用，系统找不到处理这种链接的应用。
+fn open_get_help(name: &str) -> PResult<()> {
+    const ERROR_FILE_NOT_FOUND: u32 = 2;
+    const SE_ERR_NOASSOC: u32 = 31;
+    const ERROR_NO_ASSOCIATION: u32 = 1155;
+    shell_open(OsStr::new(&format!("ms-contact-support://smc-to-emerald/{name}")), None).map_err(|code| match code {
+        ERROR_FILE_NOT_FOUND | SE_ERR_NOASSOC | ERROR_NO_ASSOCIATION => PlatformError::NotFound("获取帮助".into()),
+        code => PlatformError::Other(format!("系统没有响应（错误代码 {code}）")),
     })
 }
 

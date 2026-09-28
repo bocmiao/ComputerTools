@@ -98,6 +98,16 @@ category: settings
 open: { settings: windowsupdate }
 references: [ "https://example.com" ]
 "#,
+    r#"
+id: test.sound-troubleshooter
+schema_version: 1
+group: open
+title: { zh-CN: 声音疑难解答 }
+description: { zh-CN: 微软的自动疑难解答。 }
+category: audio
+open: { troubleshooter: AudioTroubleshooter }
+references: [ "https://example.com" ]
+"#,
 ];
 
 fn tools() -> Vec<Tool> {
@@ -161,9 +171,15 @@ fn open_tools_can_only_name_allowlisted_programs_and_pages() {
     let e = errors_after("test.windows-update", |t| t.open.as_mut().unwrap().settings = Some("../x".into()));
     assert!(e.iter().any(|m| m.contains("不在名单里：../x")), "{e:?}");
     let e = errors_after("test.cleanup", |t| t.open.as_mut().unwrap().settings = Some("windowsupdate".into()));
-    assert!(e.iter().any(|m| m.contains("只能写 program 或 settings 之一")), "{e:?}");
+    assert!(e.iter().any(|m| m.contains("只能写 program、settings、troubleshooter 之一")), "{e:?}");
     let e = errors_after("test.cleanup", |t| t.open = None);
-    assert!(e.iter().any(|m| m.contains("只能写 program 或 settings 之一")), "{e:?}");
+    assert!(e.iter().any(|m| m.contains("只能写 program、settings、troubleshooter 之一")), "{e:?}");
+    let e = errors_after("test.sound-troubleshooter", |t| {
+        t.open.as_mut().unwrap().troubleshooter = Some("ms-msdt:/id x".into())
+    });
+    assert!(e.iter().any(|m| m.contains("open.troubleshooter 不在名单里：ms-msdt:/id x")), "{e:?}");
+    let e = errors_after("test.sound-troubleshooter", |t| t.open.as_mut().unwrap().settings = Some("sound".into()));
+    assert!(e.iter().any(|m| m.contains("之一")), "{e:?}");
 }
 
 #[test]
@@ -261,6 +277,8 @@ fn catalog_summary_lists_tools() {
     assert_eq!((flush.group, flush.opens, flush.confirm.as_deref()), (ToolGroup::Action, None, Some("确定要刷新吗？")));
     assert_eq!(by_id("test.cleanup").opens, Some(ToolOpens::Program));
     assert_eq!(by_id("test.windows-update").opens, Some(ToolOpens::Settings));
+    assert_eq!(by_id("test.sound-troubleshooter").opens, Some(ToolOpens::GetHelp));
+    assert_eq!(serde_json::to_value(ToolOpens::GetHelp).unwrap(), "get-help");
     let dm = serde_json::to_value(by_id("test.device-manager")).unwrap();
     assert_eq!(dm["audience"], "helper");
     assert_eq!(dm["group"], "open");
@@ -371,13 +389,24 @@ fn open_tools_ask_the_platform_to_open_allowlisted_targets() {
     let w = world();
     w.engine.tool_open("test.device-manager").unwrap();
     w.engine.tool_open("test.windows-update").unwrap();
+    w.engine.tool_open("test.sound-troubleshooter").unwrap();
     assert_eq!(
         w.platform.opened(),
         vec![
             OpenRequest::Program { exe: "mmc.exe", args: &["devmgmt.msc"], console: &[] },
             OpenRequest::Settings("windowsupdate"),
+            OpenRequest::GetHelp("AudioTroubleshooter"),
         ]
     );
+}
+
+/// 没有「获取帮助」应用（精简过的系统、服务器版）：说清楚缺的是它，给出别的路。
+#[test]
+fn a_missing_get_help_app_is_explained() {
+    let w = world();
+    w.platform.remove_get_help();
+    let e = w.engine.tool_open("test.sound-troubleshooter").unwrap_err().to_string();
+    assert!(e.contains("没有「获取帮助」应用") && e.contains("「声音疑难解答」") && e.contains("疑难解答"), "{e}");
 }
 
 #[test]

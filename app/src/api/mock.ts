@@ -1546,7 +1546,7 @@ function openTool(
   title: string,
   description: string,
   category: string,
-  opens: 'program' | 'settings',
+  opens: 'program' | 'settings' | 'get-help',
   target: string,
   audience: ToolSummary['audience'] = 'everyone',
 ): MockTool {
@@ -1920,6 +1920,10 @@ const TOOL_LIST: MockTool[] = [
   ),
   openTool('open.services', '服务管理', '查看 Print Spooler 等服务的状态。', 'system', 'program', 'services.msc'),
   openTool('settings.sound', '声音', '选择从哪个喇叭或耳机出声、用哪个麦克风，调整音量。', 'settings', 'settings', 'ms-settings:sound'),
+  openTool('troubleshoot.audio', '声音疑难解答', '电脑没声音、声音断断续续时用：微软「获取帮助」里的自动疑难解答，能修的直接修。', 'audio', 'get-help', 'AudioTroubleshooter'),
+  openTool('troubleshoot.network', '网络和 Internet 疑难解答', '上不了网时用：检查网卡、WiFi、IP 地址和 DNS，能修的直接修。', 'network', 'get-help', 'NetworkAndInternetTroubleshooter'),
+  openTool('troubleshoot.printer', '打印机疑难解答', '打印机不打印、显示脱机时用：检查打印服务、打印队列和驱动。', 'printer', 'get-help', 'PrinterTroubleshooter'),
+  openTool('troubleshoot.windows-update', 'Windows 更新疑难解答', 'Windows 更新装不上、一直失败时用。', 'update', 'get-help', 'WUTroubleshooter'),
   openTool(
     'settings.date-time',
     '日期和时间',
@@ -1973,6 +1977,9 @@ function openMockTool(id: string): null {
   if (t.summary.group !== 'open') throw `「${title}」不是用来打开的工具`
   if (DEMO_OPEN_FAIL) {
     // ShellExecuteEx 失败，GetLastError 是 2（说法和引擎一样）
+    if (t.summary.opens === 'get-help') {
+      throw `这台电脑上没有「获取帮助」应用（精简过的系统、服务器版常常没有），打不开微软的「${title}」。可以在 Microsoft Store 里搜「获取帮助」装上再试，或者到「设置」的「疑难解答」页里找。`
+    }
     throw t.summary.opens === 'settings'
       ? `没能打开「${title}」：系统没有响应（错误代码 2）。可以点开始菜单里的齿轮图标，自己打开「设置」找这一项`
       : `这台电脑上没有「${title}」（找不到 ${t.target ?? id}），可能被精简系统删掉了。`

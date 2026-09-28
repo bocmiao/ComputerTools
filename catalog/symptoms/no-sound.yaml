@@ -46,5 +46,7 @@ guide:
     4. 音箱、耳机：插头插紧（台式机插在绿色的孔里），音箱打开电源、旋钮调大；换一个孔试试；蓝牙耳机断开再重新连接。
     5. 还是不行，点「重启音频服务」，再不行就重启电脑；设备管理器里声卡带感叹号的，请懂哥帮忙装驱动。
 
+    还可以用微软自带的「声音疑难解答」自动查一遍，能修的它直接修（点下面的按钮；它在 Windows 的「获取帮助」应用里，要联网）。
+
     修好以后，点下面的「测一测喇叭、耳机」，听听左边、右边是不是都响。
-links: ["test:speaker", "tool:settings.volume-mixer", "tool:audio.restart-service"]
+links: ["test:speaker", "tool:settings.volume-mixer", "tool:audio.restart-service", "tool:troubleshoot.audio"]

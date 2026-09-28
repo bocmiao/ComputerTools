@@ -50,4 +50,6 @@ guide:
     6. 网卡的高级设置里还有省电项：用小工具「网络连接（网卡）」，在网卡上点右键「属性」→「配置」→「高级」，把「节能以太网」「绿色以太网」「省电模式」这类改成「关闭」。
 
     都不行的话，可能是网卡或者路由器坏了，请懂哥帮忙。
-links: ["tool:open.network-connections"]
+
+    还可以用微软自带的「网络和 Internet 疑难解答」自动查一遍，能修的它直接修（点下面的按钮；它在 Windows 的「获取帮助」应用里，要联网）。
+links: ["tool:open.network-connections", "tool:troubleshoot.network"]

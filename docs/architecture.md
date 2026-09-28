@@ -634,11 +634,12 @@ labels:                      # 只有 info 能写：表格里的文字（脚本�
 
 ### 11.3 `open`
 
-二选一：
+三选一：
 
 ```yaml
-open: { program: device-manager }   # 系统工具：名字必须在下面的名单里
-open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<页面>）：页面也必须在名单里
+open: { program: device-manager }             # 系统工具：名字必须在下面的名单里
+open: { settings: windowsupdate }             # 「设置」里的一页（ms-settings:<页面>）：页面也必须在名单里
+open: { troubleshooter: AudioTroubleshooter } # 「获取帮助」里微软的疑难解答（ms-contact-support://smc-to-emerald/<名字>）
 ```
 
 名单写在 `crates/medkit-core/src/tools.rs` 里，改名单要改代码、过代码审核，数据文件里不能随便写程序路径：
@@ -671,7 +672,9 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 
 settings 页面：`windowsupdate`、`windowsupdate-optionalupdates`、`windowsupdate-history`、`windowsupdate-activehours`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、
-`sound`、`powersleep`、`batterysaver-usagedetails`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`easeofaccess-colorfilter`、`easeofaccess-highcontrast`、`nightlight`、`regionlanguage`、`apps-volume`、`notifications`、`taskbar`。
+`sound`、`powersleep`、`batterysaver-usagedetails`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`easeofaccess-colorfilter`、`easeofaccess-highcontrast`、`nightlight`、`regionlanguage`、`apps-volume`、`notifications`、`taskbar`、`troubleshoot`。
+
+troubleshooter（照微软《[Windows troubleshooters](https://support.microsoft.com/en-us/support/get-help/windows-troubleshooters)》列的 10 个，名字一字不差）：`AudioTroubleshooter`、`BITSTroubleshooter`、`BluetoothTroubleshooter`、`TroubleshootCamera`、`NetworkAndInternetTroubleshooter`、`PrinterTroubleshooter`、`ProgramCompatTroubleshooter`、`VideoPlaybackTroubleshooter`、`WMPTroubleshooter`、`WUTroubleshooter`。由「获取帮助」应用打开、检查和修复（要联网），小药箱只负责打开，不记修改日志；界面上按钮写「运行微软的「…」」，工具箱里单独一组。没有「获取帮助」应用的电脑（精简过的系统、服务器版：系统说没有处理这种链接的应用）如实说明，让用户在 Microsoft Store 里装上，或者到「设置」的「疑难解答」页里找。不用 `ms-msdt:` 协议（Follina 漏洞的入口），也不直接跑 msdt.exe：Windows 11 22H2 以后的版本已经把它退役了。
 
 - 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。
 - 命令行窗口里运行的程序都写 System32 下的绝对路径（cmd 找程序时先找当前文件夹，便携版可能放在「下载」里），

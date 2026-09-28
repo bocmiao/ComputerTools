@@ -44,6 +44,8 @@ struct State {
     programs: Vec<InstalledProgram>,
     /// Winsock 目录；没设过时是 Windows 刚装好的样子（64 位、32 位各一项 TCP/IP）
     winsock: Option<Vec<WinsockEntry>>,
+    /// 没有「获取帮助」应用
+    no_get_help: bool,
 }
 
 pub struct MockPlatform {
@@ -121,6 +123,11 @@ impl MockPlatform {
     /// 测试用：模拟精简系统删掉了某个程序（文件名，不区分大小写）。
     pub fn remove_program(&self, exe: &str) {
         self.state.lock().unwrap().missing_programs.insert(exe.to_ascii_lowercase());
+    }
+
+    /// 测试用：这台电脑上没有「获取帮助」应用。
+    pub fn remove_get_help(&self) {
+        self.state.lock().unwrap().no_get_help = true;
     }
 
     /// 测试用：让 `indirect_string(source)` 返回 `text`。
@@ -289,6 +296,9 @@ impl Platform for MockPlatform {
             && state.missing_programs.contains(&exe.to_ascii_lowercase())
         {
             return Err(PlatformError::NotFound((*exe).to_owned()));
+        }
+        if matches!(request, OpenRequest::GetHelp(_)) && state.no_get_help {
+            return Err(PlatformError::NotFound("获取帮助".into()));
         }
         state.opened.push(*request);
         Ok(())
