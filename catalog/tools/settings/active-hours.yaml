@@ -1,0 +1,12 @@
+# 打开「设置」里的一页（open）：ms-settings:windowsupdate-activehours（Windows 更新 → 高级选项 → 使用时段），由系统打开。
+# 使用时段里 Windows 不会为了装更新自动重启。
+id: settings.active-hours
+schema_version: 1
+group: open
+title: { zh-CN: 使用时段（这段时间里不自动重启） }
+description:
+  zh-CN: 打开「Windows 更新」的「使用时段」：设成你平时用电脑的时间（比如早上 8 点到晚上 11 点），Windows 就不会在这段时间里为了装更新自动重启；也可以选「自动」，让 Windows 按你的使用习惯自己调。
+category: settings
+open: { settings: windowsupdate-activehours }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

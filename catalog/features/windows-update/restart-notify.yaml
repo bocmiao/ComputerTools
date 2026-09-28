@@ -1,0 +1,31 @@
+# 需要重启才能装完更新时提前通知：HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings 的 RestartNotificationsAllowed2 = 1，
+# 就是「Windows 更新 → 高级选项」里的「需要重启以完成更新时通知我」。没有这个值 = 不通知（系统默认）。
+# 这是「设置」自己存开关的位置，不是组策略（组策略的 WindowsUpdate 键在禁改名单里）。整台电脑生效，要管理员。
+id: update.restart-notify
+schema_version: 1
+title: { zh-CN: 需要重启装更新时提前通知我 }
+description:
+  zh-CN: Windows 更新下载好、要重启才能装完的时候，先弹通知告诉你，不会不声不响地找时间重启，来得及保存文件。对应「Windows 更新 → 高级选项」里的「需要重启以完成更新时通知我」。
+category: windows-update
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+actions:
+  - registry:
+      key: HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings
+      name: RestartNotificationsAllowed2
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings
+      name: RestartNotificationsAllowed2
+      delete: true
+undo: auto
+references:
+  - https://www.elevenforum.com/t/enable-or-disable-auto-restart-notifications-for-windows-update-in-windows-11.2840/
+  - https://geekrewind.com/manage-windows-11-update-restart-notifications-easily/

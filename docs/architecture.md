@@ -638,7 +638,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `store-reset` | `WSReset.exe`（重置 Microsoft Store 的缓存：空白窗口自己关掉、商店自动打开，不删应用） |
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 
-settings 页面：`windowsupdate`、`windowsupdate-optionalupdates`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、
+settings 页面：`windowsupdate`、`windowsupdate-optionalupdates`、`windowsupdate-history`、`windowsupdate-activehours`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、
 `sound`、`powersleep`、`batterysaver-usagedetails`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`easeofaccess-colorfilter`、`easeofaccess-highcontrast`、`nightlight`、`regionlanguage`、`apps-volume`、`notifications`。
 
 - 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。

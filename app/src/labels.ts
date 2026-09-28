@@ -155,6 +155,7 @@ export const settingsCategories = [
   { id: 'ads', title: '推荐和广告' },
   { id: 'input', title: '键盘和鼠标' },
   { id: 'power', title: '电源' },
+  { id: 'windows-update', title: 'Windows 更新' },
 ] as const
 
 // ── 小工具 ──

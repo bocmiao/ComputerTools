@@ -1,0 +1,31 @@
+# 按使用习惯自动调整使用时段：HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings 的 SmartActiveHoursState = 1，就是
+# 「Windows 更新 → 高级选项 → 使用时段」选「自动」（Windows 按你平时用电脑的时间调，这段时间里不为了装更新自动重启）。
+# 没有这个值 = 手动（系统默认，早 8 点到晚 5 点）。这是「设置」自己存开关的位置，不是组策略。整台电脑生效，要管理员。
+id: update.smart-active-hours
+schema_version: 1
+title: { zh-CN: 按使用习惯自动调整使用时段 }
+description:
+  zh-CN: 让 Windows 按你平时用电脑的时间自动调整「使用时段」，在这段时间里不会为了装更新自动重启，晚上加班、周末打游戏也不会被打断。对应「Windows 更新 → 高级选项 → 使用时段」里的「自动」。
+category: windows-update
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: true
+reboot: none
+target: machine
+actions:
+  - registry:
+      key: HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings
+      name: SmartActiveHoursState
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings
+      name: SmartActiveHoursState
+      delete: true
+undo: auto
+references:
+  - https://winaero.com/automatically-adjust-active-hours-windows-10/
+  - https://www.elevenforum.com/t/set-active-hours-for-windows-update-in-windows-11.3436/

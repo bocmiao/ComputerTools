@@ -1,0 +1,48 @@
+# Windows 更新自动重启前会不会提醒、会不会避开用电脑的时间（只检测）。脚本：scripts/checks/update/restart-settings.ps1
+# 读「设置」里 Windows 更新自己存开关的位置 HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings（不是组策略）：
+# RestartNotificationsAllowed2 = 1（需要重启时通知我，修复 update.restart-notify）、SmartActiveHoursState = 1（按使用习惯自动
+# 调整使用时段，修复 update.smart-active-hours），否则是手动的 ActiveHoursStart / End（默认 8 点到 17 点）。
+# 不进体检（这是系统的默认状态），「装了更新以后出问题、老是自己重启更新」里查。
+# 结果：ok、notify-off、hours-off、both-off。事实：notify、smart_hours、hours_start、hours_end。
+id: update.restart-settings
+schema_version: 1
+title: { zh-CN: 更新重启前的提醒和使用时段 }
+description:
+  zh-CN: 看看 Windows 更新要重启时会不会先通知你，会不会避开你平时用电脑的时间。
+category: update
+requires_admin: false
+timeout_sec: 20
+probe:
+  script: checks/update/restart-settings.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 需要重启装更新时会先通知你，使用时段也会按你用电脑的习惯自动调整，不会在你用电脑的时候自己重启。
+  notify-off:
+    status: advice
+    message:
+      zh-CN: 需要重启才能装完更新时，Windows 不会先通知你（系统默认是这样），可能趁你离开的时候就重启了，没保存的文件会丢。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮打开「需要重启时通知我」，能撤销。
+    links: ["feature:update.restart-notify", "tool:settings.windows-update"]
+  hours-off:
+    status: advice
+    message:
+      zh-CN: "使用时段是手动设的（{hours_start} 点到 {hours_end} 点），这段时间以外 Windows 可能为了装更新自动重启。晚上、周末也常用电脑的话，容易被打断。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮让 Windows 按你用电脑的习惯自动调整使用时段，或者点「使用时段」自己把时间设长一点（最长 18 个小时）。
+    links: ["feature:update.smart-active-hours", "tool:settings.active-hours"]
+  both-off:
+    status: advice
+    message:
+      zh-CN: "需要重启才能装完更新时 Windows 不会先通知你，使用时段也是手动设的（{hours_start} 点到 {hours_end} 点），这段时间以外可能自己重启，没保存的文件会丢。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮打开「需要重启时通知我」、让使用时段按你的习惯自动调整，都能撤销。
+    links: ["feature:update.restart-notify", "feature:update.smart-active-hours", "tool:settings.active-hours"]
+references:
+  - https://www.elevenforum.com/t/enable-or-disable-auto-restart-notifications-for-windows-update-in-windows-11.2840/
+  - https://winaero.com/automatically-adjust-active-hours-windows-10/

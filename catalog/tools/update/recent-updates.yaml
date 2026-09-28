@@ -1,0 +1,39 @@
+# 最近装的更新（info）。脚本：scripts/tools/update/recent-updates.ps1，只读。
+# 最近 30 天装好的更新，按天列出（新的在前，最多 20 个），用来看出问题之前刚装了哪个更新。读 Windows 更新的历史记录
+# （Microsoft.Update.Session 的 QueryHistory：安装成功的，标题是 Windows 更新里显示的那样）；Defender 的病毒库更新
+# （KB2267602，一天好几次）不列。历史记录读不了时（Windows 更新被禁用），改列已安装的补丁（Win32_QuickFixEngineering：
+# KB 号和日期）。结果：found、none。事实：days、count、source（history / hotfixes）。
+id: update.recent-updates
+schema_version: 1
+group: info
+title: { zh-CN: 最近装的更新 }
+description:
+  zh-CN: 电脑是装完更新以后才出的问题（变卡、打印机用不了、蓝屏、软件打不开）时用：按天列出最近一个月装好的更新，看看出问题前一天装了哪个。只看不改，卸载更新的按钮在结果里。
+category: update
+requires_admin: false
+timeout_sec: 90
+run:
+  script: tools/update/recent-updates.ps1
+results:
+  found:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天装好了 {count} 个更新（杀毒软件的病毒库更新不算），下面按天列出来了。"
+    next:
+      zh-CN: 是装了某个更新以后才出的问题：点「更新历史记录（卸载更新）」，在最下面的「卸载更新」里找到名字里带同一个 KB 号的更新，点「卸载」，重启电脑。有的累积更新不能卸载，可以用「恢复」里的「使用 Windows 更新修复问题」，或者用系统还原退回到装更新之前。卸载以后在「Windows 更新」里先「暂停更新」一两周，等微软修好了再装。
+    links: ["tool:settings.update-history", "tool:settings.windows-update", "tool:settings.recovery", "tool:open.system-restore"]
+  none:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天没有装过更新（杀毒软件的病毒库更新不算）。"
+    next:
+      zh-CN: 最近的问题和 Windows 更新多半没有关系。好久都没有装过更新的，看看「系统更新失败、卡住」。
+    links: ["symptom:update-failed"]
+labels:
+  sections:
+    day: { zh-CN: 日期 }
+  rows:
+    update: { zh-CN: 装好了 }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-queryhistory
+  - https://support.microsoft.com/en-us/windows/update-windows-3c5ae7fc-9fb6-9af1-1984-b5e0412c556a

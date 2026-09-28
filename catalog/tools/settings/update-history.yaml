@@ -1,0 +1,12 @@
+# 打开「设置」里的一页（open）：ms-settings:windowsupdate-history（Windows 更新 → 更新历史记录），由系统打开。
+# 最下面的「卸载更新」列出能卸载的更新（Windows 10 会转到控制面板的「已安装更新」）。
+id: settings.update-history
+schema_version: 1
+group: open
+title: { zh-CN: 更新历史记录（卸载更新） }
+description:
+  zh-CN: 打开「Windows 更新」里的「更新历史记录」：看看什么时候装了哪些更新、哪些没装上；最下面的「卸载更新」可以把装了以后出问题的那个更新卸掉。
+category: settings
+open: { settings: windowsupdate-history }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

@@ -75,6 +75,9 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "windowsupdate",
     // 「Windows 更新 → 高级选项 → 可选更新」：驱动程序更新在这里（Windows 10 2004 起）
     "windowsupdate-optionalupdates",
+    // 「更新历史记录」：最下面的「卸载更新」；「使用时段」：Windows 在这段时间里不自动重启
+    "windowsupdate-history",
+    "windowsupdate-activehours",
     "storagesense",
     "storagepolicies",
     "appsfeatures",

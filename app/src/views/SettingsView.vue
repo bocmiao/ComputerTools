@@ -20,7 +20,7 @@ import {
 import { catalog, goTo, markHealthStale } from '../state'
 import { errorText } from '../utils/format'
 
-// 常用设置：只列资源管理器、桌面、任务栏、开始菜单、推荐和广告、键盘和鼠标、电源这几类。每次进入页面都重新检测一遍当前状态。
+// 常用设置：只列资源管理器、桌面、任务栏、开始菜单、推荐和广告、键盘和鼠标、电源、Windows 更新这几类。每次进入页面都重新检测一遍当前状态。
 // 最下面是右键菜单里软件加的项目（ContextMenuManager）、「新建」菜单里的项目（NewMenuManager）和资源管理器里
 // 软件加的图标（ShellPlacesManager），都是点了才列。
 // 这台电脑用不了的项（系统版本不对等）照样列出来，但只说明原因：不检测、不给执行、不放进「只应用推荐项」。
