@@ -63,6 +63,9 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     // 「ClearType 文本调谐器」：控制面板里「调整 ClearType 文本」打开的就是它。勾上「启用 ClearType」，每一页点看着最清楚的
     // 那段字，最后点「完成」（微软问答里调谐器的用法）。字发虚、字的边上带彩边时用
     ("cleartype", Program { exe: "cttune.exe", args: &[], console: &[] }),
+    // 「鼠标属性」（微软《Canonical Names of Control Panel Items》：Microsoft.Mouse，main.cpl）：「按钮」页有双击速度、
+    // 单击锁定，「指针选项」页有指针速度、提高指针精确度、自动移到默认按钮、指针轨迹
+    ("mouse-properties", Program { exe: "control.exe", args: &["/name", "Microsoft.Mouse"], console: &[] }),
     // 「远程桌面连接」：Windows 自带的远程桌面客户端（微软《在电脑上启用远程桌面》里「远程连接到设备」用的就是它），
     // 填要连的电脑名或者 IP 地址
     ("remote-desktop-client", Program { exe: "mstsc.exe", args: &[], console: &[] }),
@@ -129,6 +132,8 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "devices-touchpad",
     // 「系统 → 远程桌面」：打开、关闭远程桌面（同时在防火墙里放行），这台电脑的名字，谁能连进来
     "remotedesktop",
+    // 「蓝牙和其他设备 → 鼠标」：主按钮、指针速度、一次滚动几行（有触摸板的电脑上还有触摸板的设置）
+    "mousetouchpad",
     // 「疑难解答」：Windows 11 在「系统」里（「其他疑难解答」是「获取帮助」的那几个），Windows 10 在「更新和安全」里
     "troubleshoot",
     // 某个自带应用的「高级选项」：终止、修复、重置（微软《Launch Windows Settings》：ms-settings:appsfeatures-app?<包系列名>；

@@ -6,7 +6,7 @@ use medkit_core::builtin;
 use medkit_core::bundle::Bundle;
 use medkit_core::catalog::Severity;
 use medkit_core::platform::mock::MockPlatform;
-use medkit_core::platform::{Display, Displays, Platform, WifiLink, WifiStatus};
+use medkit_core::platform::{Display, Displays, MouseSettings, Platform, WifiLink, WifiStatus};
 use medkit_core::render::{render, unresolved};
 
 #[test]
@@ -158,6 +158,9 @@ fn common_error_messages_find_their_symptom() {
         ("Edge 浏览器打不开，点了没反应", "edge-broken"),
         ("此页面存在问题 错误代码: STATUS_INVALID_IMAGE_HASH", "edge-broken"),
         ("网页老是崩溃，错误代码 STATUS_ACCESS_VIOLATION", "edge-broken"),
+        ("鼠标左右键反了，怎么改回来", "mouse"),
+        ("鼠标单击变双击，拖文件拖着拖着就松开了", "mouse"),
+        ("无线鼠标没反应，指针不动", "mouse"),
     ];
     let wrong: Vec<String> = cases
         .iter()
@@ -206,6 +209,48 @@ fn every_display_resolution_result_has_its_words_filled_in() {
         let os = platform.os_info();
         let env = builtin::Env { os: &os, now: time::OffsetDateTime::now_utc(), platform: &platform };
         let v = builtin::run("display-resolution", &env).expect("模拟的平台读得到显示器");
+        assert_eq!(v["result"], want, "{v}");
+        let facts = v["facts"].as_object().expect("事实是一个对象");
+        let spec = check.results.get(want).unwrap_or_else(|| panic!("数据里没有结果 {want}"));
+        for text in std::iter::once(&spec.message).chain(spec.next.as_ref()) {
+            let filled = render(text.get("zh-CN"), facts);
+            assert!(unresolved(&filled).is_empty(), "{want}：有没填上的占位符：{filled}");
+        }
+        seen.push(want);
+    }
+    let mut defined: Vec<&str> = check.results.keys().map(String::as_str).collect();
+    defined.sort_unstable();
+    seen.sort_unstable();
+    assert_eq!(defined, seen, "数据里的结果和这里试过的对不上");
+}
+
+/// 鼠标的设置：每一种结果都真的跑一遍内置检测（模拟的平台），说法里的占位符都要填得上。
+#[test]
+fn every_mouse_settings_result_has_its_words_filled_in() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let (bundle, _) = Bundle::from_repo(&root);
+    let bundle = bundle.expect("数据要能打包");
+    let check = bundle.catalog.checks.iter().find(|c| c.id == "hardware.mouse-settings").expect("有这个检测");
+    let normal = MouseSettings::default();
+    let cases: Vec<(&str, MouseSettings)> = vec![
+        ("ok", normal),
+        ("swapped", MouseSettings { swapped: true, ..normal }),
+        ("wheel-off", MouseSettings { wheel_lines: 0, ..normal }),
+        ("click-lock", MouseSettings { click_lock: true, ..normal }),
+        ("snap-to-default", MouseSettings { snap_to_default: true, ..normal }),
+        ("trails", MouseSettings { trails: 7, ..normal }),
+        ("double-click-fast", MouseSettings { double_click_ms: 200, ..normal }),
+        ("double-click-slow", MouseSettings { double_click_ms: 900, ..normal }),
+        ("pointer-slow", MouseSettings { speed: 1, ..normal }),
+        ("pointer-fast", MouseSettings { speed: 20, ..normal }),
+    ];
+    let mut seen = Vec::new();
+    for (want, mouse) in cases {
+        let platform = MockPlatform::new();
+        platform.set_mouse(mouse);
+        let os = platform.os_info();
+        let env = builtin::Env { os: &os, now: time::OffsetDateTime::now_utc(), platform: &platform };
+        let v = builtin::run("mouse-settings", &env).expect("模拟的平台读得到鼠标设置");
         assert_eq!(v["result"], want, "{v}");
         let facts = v["facts"].as_object().expect("事实是一个对象");
         let spec = check.results.get(want).unwrap_or_else(|| panic!("数据里没有结果 {want}"));

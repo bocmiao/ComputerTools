@@ -54,6 +54,44 @@ pub struct KeyboardAids {
     pub mouse_keys: bool,
 }
 
+/// 鼠标的几项设置在这次登录里实际生效的值（和 [`KeyboardAids`] 一样用系统当下的状态，不读注册表）。读哪几项照
+/// MartinGC94/MouseSettings（MIT）的 Get-MouseSetting；默认值照微软 SystemParametersInfo、SetDoubleClickTime 的说明。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MouseSettings {
+    /// 左右键互换了（主按钮是右键）
+    pub swapped: bool,
+    /// 单击锁定：按住主按钮一会儿就「锁住」，松开也当作按着
+    pub click_lock: bool,
+    /// 双击时间（毫秒）：两次单击在这个时间内算双击，默认 500
+    pub double_click_ms: u32,
+    /// 指针速度：1（最慢）到 20（最快），默认 10
+    pub speed: u32,
+    /// 指针轨迹：0 或 1 是关，大于 1 是开着、拖着几个影子
+    pub trails: u32,
+    /// 自动把指针移到对话框的默认按钮（「确定」「应用」）上
+    pub snap_to_default: bool,
+    /// 滚轮滚一格滚几行，默认 3；`u32::MAX` 是一次滚一屏；0 是滚轮没反应
+    pub wheel_lines: u32,
+    /// 提高指针精确度（鼠标加速）
+    pub enhance_precision: bool,
+}
+
+impl Default for MouseSettings {
+    /// Windows 刚装好的样子。
+    fn default() -> Self {
+        Self {
+            swapped: false,
+            click_lock: false,
+            double_click_ms: 500,
+            speed: 10,
+            trails: 0,
+            snap_to_default: false,
+            wheel_lines: 3,
+            enhance_precision: true,
+        }
+    }
+}
+
 /// 正在用的一个显示器（「设置 → 屏幕」里列出来的一个）。怎么看结论见 [`crate::builtin`] 里的 display-resolution。
 /// 只有型号名和分辨率，没有序列号。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -392,6 +430,11 @@ pub trait Platform: Send + Sync {
     /// 每个显示器现在的亮度（见 [`MonitorBrightness`]）。只读。
     fn monitor_brightness(&self) -> PResult<Vec<MonitorBrightness>> {
         Err(PlatformError::Unsupported("读显示器的亮度".into()))
+    }
+
+    /// 鼠标的几项设置（见 [`MouseSettings`]）。只读。
+    fn mouse_settings(&self) -> PResult<MouseSettings> {
+        Err(PlatformError::Unsupported("读鼠标的设置".into()))
     }
 
     /// 现在连着的 WiFi（见 [`WifiStatus`]）。只读。

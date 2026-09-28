@@ -1383,6 +1383,21 @@ fn monitor_brightness_is_read_and_unsupported_monitors_say_so() {
     }
 }
 
+/// 鼠标的设置：真的读一次这次登录生效的值（只读），数值要在系统说的范围里，检测要给出结论（CI 机器上是 Windows 刚装好的样子）。
+#[test]
+fn mouse_settings_are_read_from_this_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    let m = platform.mouse_settings().unwrap_or_else(|e| panic!("读鼠标设置失败：{e}"));
+    eprintln!("{m:?}");
+    assert!((1..=20).contains(&m.speed), "{m:?}");
+    assert!(m.double_click_ms > 0 && m.double_click_ms <= 5000, "{m:?}");
+    let r = engine.run_check("hardware.mouse-settings").unwrap();
+    eprintln!("检测：{:?} {:?} {}", r.status, r.result_code, r.message);
+    assert!(r.error.is_none(), "{r:?}");
+    assert!(unresolved(&r.message).is_empty(), "{}", r.message);
+}
+
 /// WiFi 连接情况：真的读一次（只读，wlanapi.dll 按需加载）。CI 机器是虚拟机，一般没有无线网卡、也没有「WLAN AutoConfig」
 /// 服务，要如实说读不了；有 WiFi 的机器上打印信号、频段、速率和加密方式（没有 WiFi 名称）。
 #[test]

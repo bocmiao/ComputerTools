@@ -4,7 +4,9 @@
 use serde_json::{Value, json};
 use time::{Date, OffsetDateTime};
 
-use crate::platform::{Display, Displays, KeyboardAids, OsInfo, Platform, WifiStatus, wifi_band, wifi_channel};
+use crate::platform::{
+    Display, Displays, KeyboardAids, MouseSettings, OsInfo, Platform, WifiStatus, wifi_band, wifi_channel,
+};
 
 /// 内置检测能用到的信息。
 pub struct Env<'a> {
@@ -22,6 +24,7 @@ pub fn run(name: &str, env: &Env<'_>) -> Result<Value, String> {
         "winsock" => env.platform.winsock_catalog().map(|c| crate::winsock::verdict(&c)).map_err(|e| e.to_string()),
         "display-resolution" => env.platform.displays().map(|d| display_resolution(&d)).map_err(|e| e.to_string()),
         "wifi-link" => env.platform.wifi_status().map(|w| wifi_link(&w)).map_err(|e| e.to_string()),
+        "mouse-settings" => env.platform.mouse_settings().map(|m| mouse_settings(&m)).map_err(|e| e.to_string()),
         _ => Err(format!("不认识的内置检测：{name}")),
     }
 }
@@ -99,6 +102,68 @@ fn display_name(index: usize, d: &Display, count: usize) -> String {
         None if count > 1 => format!("第 {} 个显示器", index + 1),
         None => "显示器".to_owned(),
     }
+}
+
+/// 双击时间短于这个（毫秒）算太快：两下点不了这么快，双击老是变成两次单击。默认 500，「鼠标属性」的滑块是 200 到 900；
+/// 这两个界限是自己定的，只提很偏的设置。
+const DOUBLE_CLICK_FAST_MS: u32 = 300;
+/// 双击时间长于这个算太慢：隔一会儿的两次单击也算成双击，想选中文件却打开了。
+const DOUBLE_CLICK_SLOW_MS: u32 = 800;
+/// 指针速度 1–20，默认 10；这么慢、这么快才提（自己定的）。
+const POINTER_SLOW: u32 = 3;
+const POINTER_FAST: u32 = 18;
+
+/// 鼠标的设置。按「最像鼠标坏了」的顺序报一项：左右键互换、滚轮不滚、单击锁定、自动跳到默认按钮、指针轨迹、双击太快太慢、
+/// 指针太慢太快；都正常是 ok。事实里的 summary 把每一项都列出来。
+fn mouse_settings(m: &MouseSettings) -> Value {
+    let result = if m.swapped {
+        "swapped"
+    } else if m.wheel_lines == 0 {
+        "wheel-off"
+    } else if m.click_lock {
+        "click-lock"
+    } else if m.snap_to_default {
+        "snap-to-default"
+    } else if m.trails > 1 {
+        "trails"
+    } else if m.double_click_ms < DOUBLE_CLICK_FAST_MS {
+        "double-click-fast"
+    } else if m.double_click_ms > DOUBLE_CLICK_SLOW_MS {
+        "double-click-slow"
+    } else if m.speed <= POINTER_SLOW {
+        "pointer-slow"
+    } else if m.speed >= POINTER_FAST {
+        "pointer-fast"
+    } else {
+        "ok"
+    };
+    let on = |b: bool| if b { "开" } else { "关" };
+    let wheel = match m.wheel_lines {
+        0 => "不滚动".to_owned(),
+        u32::MAX => "一次滚一屏".to_owned(),
+        n => format!("一次滚 {n} 行"),
+    };
+    let summary = format!(
+        "主按钮是{}；双击速度 {} 毫秒（默认 500）；指针速度第 {} 档（共 20 档，默认第 10 档）；滚轮{wheel}；单击锁定{}；\
+         自动移到默认按钮{}；指针轨迹{}；提高指针精确度{}",
+        if m.swapped { "右键" } else { "左键" },
+        m.double_click_ms,
+        m.speed,
+        on(m.click_lock),
+        on(m.snap_to_default),
+        on(m.trails > 1),
+        on(m.enhance_precision),
+    );
+    json!({
+        "result": result,
+        "facts": {
+            "summary": summary,
+            "double_click_ms": m.double_click_ms,
+            "speed": m.speed,
+            "wheel": wheel,
+            "trails": m.trails,
+        }
+    })
 }
 
 /// 信号质量低于这个就算弱：40 相当于 -80 dBm（0 是 -100 dBm，100 是 -50 dBm，按直线换算）。
@@ -496,6 +561,52 @@ mod tests {
         assert_eq!(wifi_link(&none(false, 0))["result"], "no-service");
         assert_eq!(wifi_link(&none(true, 0))["result"], "no-adapter");
         assert_eq!(wifi_link(&none(true, 2))["result"], "disconnected");
+    }
+
+    #[test]
+    fn mouse_settings_report_the_most_confusing_one_first() {
+        let normal = MouseSettings::default();
+        let v = mouse_settings(&normal);
+        assert_eq!(v["result"], "ok");
+        assert_eq!(
+            v["facts"]["summary"],
+            "主按钮是左键；双击速度 500 毫秒（默认 500）；指针速度第 10 档（共 20 档，默认第 10 档）；滚轮一次滚 3 行；\
+             单击锁定关；自动移到默认按钮关；指针轨迹关；提高指针精确度开"
+        );
+        let with = |f: &dyn Fn(&mut MouseSettings)| {
+            let mut m = normal;
+            f(&mut m);
+            mouse_settings(&m)["result"].as_str().unwrap_or_default().to_owned()
+        };
+        // 几项同时不对时先报左右键互换
+        assert_eq!(
+            with(&|m| {
+                m.swapped = true;
+                m.click_lock = true;
+                m.trails = 7;
+            }),
+            "swapped"
+        );
+        assert_eq!(with(&|m| m.wheel_lines = 0), "wheel-off");
+        assert_eq!(with(&|m| m.click_lock = true), "click-lock");
+        assert_eq!(with(&|m| m.snap_to_default = true), "snap-to-default");
+        assert_eq!(with(&|m| m.trails = 7), "trails");
+        // 轨迹是 0 或者 1 都是关着
+        assert_eq!(with(&|m| m.trails = 1), "ok");
+        assert_eq!(with(&|m| m.double_click_ms = 200), "double-click-fast");
+        assert_eq!(with(&|m| m.double_click_ms = 300), "ok");
+        assert_eq!(with(&|m| m.double_click_ms = 900), "double-click-slow");
+        assert_eq!(with(&|m| m.double_click_ms = 800), "ok");
+        assert_eq!(with(&|m| m.speed = 1), "pointer-slow");
+        assert_eq!(with(&|m| m.speed = 4), "ok");
+        assert_eq!(with(&|m| m.speed = 20), "pointer-fast");
+        assert_eq!(with(&|m| m.speed = 17), "ok");
+        // 一次滚一屏不算坏
+        let mut page = normal;
+        page.wheel_lines = u32::MAX;
+        let v = mouse_settings(&page);
+        assert_eq!(v["result"], "ok");
+        assert_eq!(v["facts"]["wheel"], "一次滚一屏");
     }
 
     #[test]

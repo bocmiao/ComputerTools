@@ -704,6 +704,43 @@ impl Platform for WindowsPlatform {
     fn wifi_status(&self) -> PResult<super::WifiStatus> {
         super::wifi::status()
     }
+
+    fn mouse_settings(&self) -> PResult<super::MouseSettings> {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetSystemMetrics, SM_SWAPBUTTON, SPI_GETMOUSE, SPI_GETMOUSECLICKLOCK, SPI_GETMOUSESPEED,
+            SPI_GETMOUSETRAILS, SPI_GETSNAPTODEFBUTTON, SPI_GETWHEELSCROLLLINES, SystemParametersInfoW,
+        };
+
+        /// 读一项：值写进 `value` 指向的整数（或者整数数组）。
+        fn get<T>(action: u32, value: &mut T, what: &str) -> PResult<()> {
+            // SAFETY: value 是系统要的那种整数（数组），系统只往里写这么多
+            if unsafe { SystemParametersInfoW(action, 0, std::ptr::from_mut(value).cast(), 0) } == 0 {
+                return Err(map_io(what, last_error()));
+            }
+            Ok(())
+        }
+        let (mut click_lock, mut speed, mut trails, mut snap, mut wheel) = (0i32, 0i32, 0i32, 0i32, 0u32);
+        let mut mouse = [0i32; 3];
+        get(SPI_GETMOUSECLICKLOCK, &mut click_lock, "读单击锁定")?;
+        get(SPI_GETMOUSESPEED, &mut speed, "读指针速度")?;
+        get(SPI_GETMOUSETRAILS, &mut trails, "读指针轨迹")?;
+        get(SPI_GETSNAPTODEFBUTTON, &mut snap, "读「自动移到默认按钮」")?;
+        get(SPI_GETWHEELSCROLLLINES, &mut wheel, "读滚轮滚动的行数")?;
+        get(SPI_GETMOUSE, &mut mouse, "读「提高指针精确度」")?;
+        Ok(super::MouseSettings {
+            // SAFETY: 没有参数
+            swapped: unsafe { GetSystemMetrics(SM_SWAPBUTTON) } != 0,
+            click_lock: click_lock != 0,
+            // SAFETY: 没有参数
+            double_click_ms: unsafe { GetDoubleClickTime() },
+            speed: u32::try_from(speed).unwrap_or(10),
+            trails: u32::try_from(trails).unwrap_or(0),
+            snap_to_default: snap != 0,
+            wheel_lines: wheel,
+            enhance_precision: mouse[2] != 0,
+        })
+    }
 }
 
 // ───────────── 打开系统工具 ─────────────

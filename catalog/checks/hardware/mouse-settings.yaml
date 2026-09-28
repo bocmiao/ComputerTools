@@ -1,0 +1,100 @@
+# 鼠标的几项设置。内置检测（Rust 实现，见 crates/medkit-core/src/builtin.rs 的 mouse_settings 和 platform/windows.rs）：
+# 和「键盘的辅助功能」一样用 SystemParametersInfo、GetSystemMetrics、GetDoubleClickTime 读这次登录实际生效的值（不读注册表），
+# 读哪几项照 MartinGC94/MouseSettings（MIT）。默认值照微软的说明：双击 500 毫秒（SetDoubleClickTime）、指针速度 1–20 默认 10、
+# 滚轮一次 3 行、指针轨迹 0 或 1 是关（SystemParametersInfo）。只读，改在「设置 → 鼠标」和「鼠标属性」里。
+# 结果（按「最像鼠标坏了」的顺序报一项）：swapped（左右键互换）、wheel-off（滚轮滚 0 行）、click-lock（单击锁定）、
+# snap-to-default（自动移到默认按钮）、trails（指针轨迹）、double-click-fast（双击时间短于 300 毫秒）、double-click-slow
+# （长于 800 毫秒）、pointer-slow（指针速度第 3 档及以下）、pointer-fast（第 18 档及以上）；都正常是 ok。双击、指针速度的
+# 界限是自己定的，只提很偏的设置。
+# 事实：summary（每一项）、double_click_ms、speed、wheel、trails。
+id: hardware.mouse-settings
+schema_version: 1
+title: { zh-CN: 鼠标的设置 }
+description:
+  zh-CN: 看看鼠标的左右键有没有被互换、滚轮是不是被设成不滚、有没有开着「单击锁定」「指针轨迹」「自动跳到默认按钮」，双击速度、指针速度是不是调得太偏。
+category: hardware
+requires_admin: false
+probe:
+  builtin: mouse-settings
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 鼠标的设置都是常见的样子：{summary}。
+  swapped:
+    status: advice
+    message:
+      zh-CN: 鼠标的左右键互换了：现在右键是「主按钮」（点选、拖动用右键，弹出菜单用左键）。左撇子特意这样设的不用管。
+    fixer: user
+    next:
+      zh-CN: 点下面的「鼠标」设置，把「主鼠标按钮」改回「向左」（Windows 10 叫「选择主按钮」）。鼠标点不准的：按一下 Win 键，输入「鼠标设置」按回车，用 Tab 键和方向键改。
+    links: ["tool:settings.mouse"]
+  wheel-off:
+    status: advice
+    message:
+      zh-CN: 鼠标滚轮一次滚动的行数被设成了 0，滚轮怎么滚页面都不动。
+    fixer: user
+    next:
+      zh-CN: 点下面的「鼠标」设置，把滚轮一次滚动的行数调回 3（默认）。
+    links: ["tool:settings.mouse"]
+  click-lock:
+    status: advice
+    message:
+      zh-CN: 「单击锁定」开着：按住鼠标左键一小会儿，松开了也当作一直按着，拖文件、选文字时东西会「粘」在鼠标上，要再点一下才放下。
+    fixer: user
+    next:
+      zh-CN: 点下面的「鼠标属性」，在「按钮」页最下面，把「启用单击锁定」（有的版本写「启用 ClickLock」）前面的勾去掉，点「确定」。
+    links: ["tool:open.mouse-properties"]
+  snap-to-default:
+    status: advice
+    message:
+      zh-CN: 「自动将指针移动到对话框中的默认按钮」开着：弹出对话框时，鼠标指针会自己跳到「确定」这些按钮上，不小心一点就点了。
+    fixer: user
+    next:
+      zh-CN: 点下面的「鼠标属性」，在「指针选项」页，把「自动将指针移动到对话框中的默认按钮」前面的勾去掉，点「确定」。
+    links: ["tool:open.mouse-properties"]
+  trails:
+    status: advice
+    message:
+      zh-CN: 「显示指针轨迹」开着：鼠标一动，指针后面就拖着一串影子。
+    fixer: user
+    next:
+      zh-CN: 点下面的「鼠标属性」，在「指针选项」页，把「显示指针轨迹」（有的版本写「显示指针跟踪」）前面的勾去掉，点「确定」。
+    links: ["tool:open.mouse-properties"]
+  double-click-fast:
+    status: advice
+    message:
+      zh-CN: 双击速度调得很快（{double_click_ms} 毫秒，默认 500）：两下要点得非常快才算双击，常常打不开文件，变成了两次单击或者改名字。
+    fixer: user
+    next:
+      zh-CN: 点下面的「鼠标属性」，在「按钮」页把「双击速度」的滑块往「慢」那边拖回中间，双击右边的文件夹图标试试，能打开就行，点「确定」。
+    links: ["tool:open.mouse-properties"]
+  double-click-slow:
+    status: advice
+    message:
+      zh-CN: 双击速度调得很慢（{double_click_ms} 毫秒，默认 500）：隔一会儿点两下也算双击，想单击选中文件时常常就打开了，像是「单击变双击」。
+    fixer: user
+    next:
+      zh-CN: 点下面的「鼠标属性」，在「按钮」页把「双击速度」的滑块往「快」那边拖回中间，双击右边的文件夹图标试试，点「确定」。
+    links: ["tool:open.mouse-properties"]
+  pointer-slow:
+    status: advice
+    message:
+      zh-CN: 指针速度调到了很慢的一档（第 {speed} 档，共 20 档，默认第 10 档），鼠标要挪很远指针才动一点。觉得合适的不用改。
+    fixer: user
+    next:
+      zh-CN: 点下面的「鼠标」设置，把「鼠标指针速度」往右拖到中间。
+    links: ["tool:settings.mouse"]
+  pointer-fast:
+    status: advice
+    message:
+      zh-CN: 指针速度调到了很快的一档（第 {speed} 档，共 20 档，默认第 10 档），鼠标一动指针就跑老远，点不准。觉得合适的不用改。
+    fixer: user
+    next:
+      zh-CN: 点下面的「鼠标」设置，把「鼠标指针速度」往左拖到中间。
+    links: ["tool:settings.mouse"]
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfow
+  - https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setdoubleclicktime
+  - https://support.microsoft.com/zh-cn/windows/hardware/input-devices/change-mouse-settings
+  - https://github.com/MartinGC94/MouseSettings

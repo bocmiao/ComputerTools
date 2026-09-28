@@ -45,6 +45,7 @@ CI 在 Windows Server 虚拟机上跑脚本和往返测试，能发现大部分�
 | `system.os-support` | Win11 26H2（build 26300）正式发布后要把日期补进表里；国内能否在「Windows 更新」里完成免费 ESU 登记；登记了 ESU 的电脑现在仍显示「建议处理」（文案写的是「如果还没登记……」），因为微软没有公开登记状态。社区工具读的是 `HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\ConsumerESU` 的 `ESUEligibility`（据说 3 = 按设备登记、5 = 按微软账户登记），要确认它是否可靠、登记前后怎么变、换一个 Windows 账户登录时怎么样 | 26H2 发布后更新表格；在 Win10 22H2 家庭版上走一遍 ESU 登记，登记前后都导出这个键对照；可靠的话给检测加一个「已登记」的 ok 结果（要 `user_hive: true`） |
 | `boot.last-boot-duration` 快速启动 | 事实 `fast_startup` 按 `HiberbootEnabled` 和 `HibernateEnabled` 任一为 0 判为关着（慢的话报 slow-no-fast-startup）；有的电脑休眠不可用（`powercfg /a` 里没有「休眠」）但这两个值都是 1，现在按「开着」处理、不提快速启动 | 分别在「控制面板 → 电源选项」里关掉快速启动、`powercfg /h off` 之后运行检测，看 `fast_startup`；在不支持休眠的电脑（部分虚拟机、精简系统）上看这两个值 |
 | `network.wifi-link` | 连着 2.4 GHz、5 GHz、6 GHz（WiFi 6E 路由器）的 WiFi 时，报的频段、信道和「设置 → 网络和 Internet → WLAN → 硬件属性」里的「网络频带」「网络通道」对不对；WiFi 几代和「协议」对不对；连接速率和「链接速度（接收/传输）」对不对（ulRxRate 按 kbps 换算）；信号百分比和任务栏的格数大致对得上；WPA2、WPA3、没有密码的、路由器改成 WPA-TKIP 时报的加密方式和结论对不对；拔掉无线网卡、关掉 WLAN AutoConfig 服务时报什么；结果里没有 WiFi 名称 | 一台笔记本连家里的双频路由器，靠近、隔两堵墙各查一次；在路由器里临时改成 WPA-TKIP 再查，查完改回 |
+| `hardware.mouse-settings`、症状「鼠标不听使唤」、小工具「鼠标」「鼠标属性」 | 在「设置 → 鼠标」里把主按钮改成右、滚轮行数调成最少（有没有 0）、指针速度拖到两头，在「鼠标属性」里打开单击锁定、指针轨迹、自动移到默认按钮、把双击速度拖到两头，每改一项查一次，报的结果对不对；以另一个管理员账户运行小药箱时读到的是不是登录用户的设置；「鼠标属性」里这几个选项的中文名字（「启用单击锁定」还是「启用 ClickLock」、「显示指针轨迹」还是「显示指针跟踪」、「提高指针精确度」还是「提高指针精度」）和说明里写的对不对 | 一台 Win11、一台 Win10 上逐项改、逐项查，查完改回 |
 
 ## 修复
 

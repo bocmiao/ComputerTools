@@ -1,0 +1,13 @@
+# 打开控制面板的「鼠标属性」（open：control.exe /name Microsoft.Mouse，微软《Canonical Names of Control Panel Items》）。「按钮」页有
+# 双击速度（旁边的文件夹图标能试双击）、单击锁定；「指针选项」页有指针速度、提高指针精确度、自动移到默认按钮、显示指针轨迹。
+id: open.mouse-properties
+schema_version: 1
+group: open
+title: { zh-CN: 鼠标属性（双击速度、单击锁定、指针轨迹） }
+description:
+  zh-CN: 打开 Windows 的「鼠标属性」：「按钮」页调双击速度（双击右边的文件夹图标试试）、关掉单击锁定；「指针选项」页关掉指针轨迹、「自动将指针移动到对话框中的默认按钮」，玩游戏准星飘的取消「提高指针精确度」。
+category: hardware
+open: { program: mouse-properties }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/controlpanel-canonical-names
+  - https://support.microsoft.com/zh-cn/windows/hardware/input-devices/change-mouse-settings

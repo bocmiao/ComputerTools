@@ -4,8 +4,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
 use super::{
-    Display, Displays, FileStrings, FileUser, InstalledProgram, KeyboardAids, MonitorBrightness, OpenRequest, OsInfo,
-    PResult, Platform, PlatformError, PointedWindow, UserIdentity, WifiLink, WifiStatus, WinsockEntry,
+    Display, Displays, FileStrings, FileUser, InstalledProgram, KeyboardAids, MonitorBrightness, MouseSettings,
+    OpenRequest, OsInfo, PResult, Platform, PlatformError, PointedWindow, UserIdentity, WifiLink, WifiStatus,
+    WinsockEntry,
 };
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue, key_ancestors};
@@ -50,6 +51,8 @@ struct State {
     brightness: Option<Vec<MonitorBrightness>>,
     /// WiFi；没设过时见 [`MockPlatform::good_wifi`]
     wifi: Option<WifiStatus>,
+    /// 鼠标设置；没设过时是 Windows 刚装好的样子
+    mouse: Option<MouseSettings>,
     /// 没有「获取帮助」应用
     no_get_help: bool,
     /// 桌面（资源管理器）没在运行，网页打不开
@@ -184,6 +187,10 @@ impl MockPlatform {
 
     pub fn set_brightness(&self, monitors: Vec<MonitorBrightness>) {
         self.state.lock().unwrap().brightness = Some(monitors);
+    }
+
+    pub fn set_mouse(&self, mouse: MouseSettings) {
+        self.state.lock().unwrap().mouse = Some(mouse);
     }
 
     pub fn set_wifi(&self, wifi: WifiStatus) {
@@ -416,6 +423,10 @@ impl Platform for MockPlatform {
 
     fn displays(&self) -> PResult<Displays> {
         Ok(self.state.lock().unwrap().displays.clone().unwrap_or_else(Self::laptop_display))
+    }
+
+    fn mouse_settings(&self) -> PResult<MouseSettings> {
+        Ok(self.state.lock().unwrap().mouse.unwrap_or_default())
     }
 
     fn wifi_status(&self) -> PResult<WifiStatus> {

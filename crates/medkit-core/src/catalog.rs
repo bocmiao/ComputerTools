@@ -18,7 +18,7 @@ use crate::yaml;
 
 pub const SCHEMA_VERSION: u32 = 1;
 pub const BUILTIN_PROBES: &[&str] =
-    &["cpu-features", "clock", "keyboard-aids", "winsock", "display-resolution", "wifi-link"];
+    &["cpu-features", "clock", "keyboard-aids", "winsock", "display-resolution", "wifi-link", "mouse-settings"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]

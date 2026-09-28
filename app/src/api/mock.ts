@@ -1169,6 +1169,29 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'hardware.mouse-settings': {
+    title: '鼠标的设置',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          resultCode: 'ok',
+          message: '鼠标的设置都是常见的样子：主按钮是左键；双击速度 500 毫秒（默认 500）；指针速度第 10 档（共 20 档，默认第 10 档）；滚轮一次滚 3 行；单击锁定关；自动移到默认按钮关；指针轨迹关；提高指针精确度开。',
+          facts: { double_click_ms: 500, speed: 10, wheel: '一次滚 3 行', trails: 0 },
+        }
+      }
+      // 说法和 catalog/checks/hardware/mouse-settings.yaml 一样
+      return {
+        status: 'advice',
+        resultCode: 'click-lock',
+        message: '「单击锁定」开着：按住鼠标左键一小会儿，松开了也当作一直按着，拖文件、选文字时东西会「粘」在鼠标上，要再点一下才放下。',
+        fixer: 'user',
+        next: '点下面的「鼠标属性」，在「按钮」页最下面，把「启用单击锁定」（有的版本写「启用 ClickLock」）前面的勾去掉，点「确定」。',
+        links: ['tool:open.mouse-properties'],
+        facts: { double_click_ms: 500, speed: 10, wheel: '一次滚 3 行', trails: 0 },
+      }
+    },
+  },
   'network.wifi-link': {
     title: 'WiFi 连接情况',
     evaluate: () => {
@@ -1595,6 +1618,15 @@ const SYMPTOMS: MockSymptom[] = [
     guide: '先重启一次电脑。再点「修复 Office」，先选「快速修复」，不行再选「联机修复」。只有 Word 一打开就闪退的，按住 Ctrl 双击它用安全模式打开，能打开就是加载项的问题。装不上、卸不干净的，用「微软官方的 Office 卸载工具」卸干净再装。提示要激活的，用买 Office 的微软账户登录，别用「激活工具」。',
     steps: [{ check: 'system.office-installs', fixes: [] }],
     links: ['tool:system.office-repair', 'tool:web.office-uninstall', 'tool:web.office-install', 'tool:settings.apps'],
+  },
+  {
+    id: 'mouse', title: '鼠标不听使唤：左右键反了、单击变双击、指针乱跳',
+    summary: '鼠标左右键反了；点一下变成两下、双击打不开；拖东西松开了还粘着；指针乱跳、太快太慢、后面拖着影子；滚轮不滚；或者鼠标完全没反应。',
+    keywords: ['鼠标左右键反了', '单击变双击', '鼠标乱跳', '鼠标没反应'], maturity: 'semi',
+    causes: ['设置被改了：左右键互换、滚轮一次滚 0 行、开了「单击锁定」「指针轨迹」，双击速度、指针速度调得太偏', '鼠标的微动开关用久了老化，点一下会连击两下', '无线鼠标没电、接收器没插好，蓝牙鼠标掉了配对', '光学鼠标在玻璃、反光的桌面上认不准；笔记本手掌碰到了触摸板'],
+    guide: '先看上面的检查，设置被改了的按提示改回来。没反应的先换 USB 口、换电池、重新配对；单击变双击而双击速度正常的，多半是鼠标的微动开关老化，换个鼠标；指针乱跳的垫个鼠标垫、擦擦镜头。',
+    steps: [{ check: 'hardware.mouse-settings', fixes: [] }],
+    links: ['tool:settings.mouse', 'tool:open.mouse-properties', 'test:mouse'],
   },
   {
     id: 'edge-broken', title: 'Edge 浏览器打不开、闪退、网页崩溃',
@@ -2551,6 +2583,22 @@ const TOOL_LIST: MockTool[] = [
     'system',
     'program',
     'cttune.exe',
+  ),
+  openTool(
+    'settings.mouse',
+    '鼠标（主按钮、指针速度、滚轮）',
+    '打开「设置」里的鼠标：左右键反了的，把「主鼠标按钮」改回「左」；指针太快太慢的调「鼠标指针速度」；滚轮滚得太多太少、不滚的，调「一次滚动的行数」。',
+    'settings',
+    'settings',
+    'ms-settings:mousetouchpad',
+  ),
+  openTool(
+    'open.mouse-properties',
+    '鼠标属性（双击速度、单击锁定、指针轨迹）',
+    '打开 Windows 的「鼠标属性」：「按钮」页调双击速度（双击右边的文件夹图标试试）、关掉单击锁定；「指针选项」页关掉指针轨迹、「自动将指针移动到对话框中的默认按钮」，玩游戏准星飘的取消「提高指针精确度」。',
+    'hardware',
+    'program',
+    'control.exe /name Microsoft.Mouse',
   ),
   openTool(
     'settings.remote-desktop',
