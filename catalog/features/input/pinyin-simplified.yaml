@@ -1,0 +1,37 @@
+# 微软拼音改回简体：HKCU\Software\Microsoft\InputMethod\Settings\CHS 的「Output CharSet」= 0（1 = 繁体，默认简体）。
+# 和在微软拼音里按 Ctrl + Shift + F 切回简体一样；写注册表的办法要注销再登录才生效（输入法进程启动时才读）。
+# break 只在测试中使用：改成 1（繁体）。
+id: input.pinyin-simplified
+schema_version: 1
+title: { zh-CN: 微软拼音改回简体 }
+description:
+  zh-CN: 微软拼音被切成了繁体、打出来都是繁体字时，改回简体中文。马上生效的办法是切到微软拼音按一下 Ctrl + Shift + F；这个修复要注销再登录以后生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: logoff
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\InputMethod\Settings\CHS
+      name: Output CharSet
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\InputMethod\Settings\CHS
+      name: Output CharSet
+      type: dword
+      value: 0
+break_actions:
+  - registry:
+      key: HKCU\Software\Microsoft\InputMethod\Settings\CHS
+      name: Output CharSet
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://www.cnblogs.com/BluePointLilac/p/11688166.html

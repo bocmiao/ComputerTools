@@ -1,0 +1,35 @@
+# 微软拼音是不是被切成了繁体（只检测）。脚本：scripts/checks/system/pinyin-charset.ps1（读登录用户的注册表）
+# 微软拼音的设置在 HKCU\Software\Microsoft\InputMethod\Settings\CHS：「Output CharSet」1 = 繁体，0 或者没有 = 简体（默认）。
+# Ctrl + Shift + F 能切换简繁，常被不小心按到（EnableSimplifiedTraditionalOutputSwitch 1 或者没有 = 这个快捷键开着）。
+# 值的含义见 BluePointLilac《Win10微软拼音输入法设置-注册表》。
+# 结果：simplified、traditional（修复 input.pinyin-simplified）、not-used（没用过微软拼音）。事实：shortcut。
+id: system.pinyin-charset
+schema_version: 1
+title: { zh-CN: 微软拼音是简体还是繁体 }
+description:
+  zh-CN: 看看微软拼音是不是被切成了繁体（打出来的字都是「電腦」「輸入法」这样的繁体字）。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/pinyin-charset.ps1
+results:
+  simplified:
+    status: ok
+    message:
+      zh-CN: 微软拼音打的是简体字。
+  traditional:
+    status: advice
+    message:
+      zh-CN: 微软拼音被切成了繁体，打出来的字都是繁体（比如「電腦」）。多半是不小心按到了切换简繁的快捷键 Ctrl + Shift + F。
+    fixer: user
+    next:
+      zh-CN: 马上改回来：切到微软拼音以后按一下 Ctrl + Shift + F；或者右键任务栏右下角的「中」或者「英」，在菜单里选「简体中文」。也可以点下面的修复（注销再登录以后生效）。以后不想再误按，在微软拼音的设置「按键」里把「简体/繁体中文输入切换」的快捷键关掉。
+    links: ["feature:input.pinyin-simplified", "tool:settings.language"]
+  not-used:
+    status: na
+    message:
+      zh-CN: 这个账户没用过微软拼音。
+references:
+  - https://www.cnblogs.com/BluePointLilac/p/11688166.html
+  - https://support.microsoft.com/en-us/windows/microsoft-simplified-chinese-ime-9b962a3b-2fa4-4f37-811c-b1886320dd72

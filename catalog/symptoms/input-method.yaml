@@ -1,13 +1,21 @@
 # 症状：输入法不见了、打不出中文（调研 S03 的一部分）。检测 system.input-method 查三样：登录时启动输入法的
 # 计划任务 MsCtfMonitor 有没有被「优化」软件关掉（能一键恢复，能撤销）、输入法的后台程序 ctfmon 在不在运行
-# （小工具「重启输入法」）、语言列表里有没有中文（给「设置」的入口）。其余给图文指引。
+# （小工具「重启输入法」）、语言列表里有没有中文（给「设置」的入口）。检测 system.pinyin-charset 看微软拼音是不是
+# 被 Ctrl + Shift + F 切成了繁体（修复 input.pinyin-simplified 改回简体）。其余给图文指引。
 id: input-method
 schema_version: 1
 title: { zh-CN: 输入法不见了、打不出中文 }
 summary:
-  zh-CN: 右下角的输入法图标不见了，切换不出中文，只能打英文，或者输入法的候选框卡住不动。
+  zh-CN: 右下角的输入法图标不见了，切换不出中文，只能打英文，打出来都是繁体字，或者输入法的候选框卡住不动。
 keywords:
   - 输入法不见了
+  - 繁体
+  - 打出来是繁体
+  - 输入法变成繁体
+  - 输入法繁体
+  - 繁体字
+  - 简繁切换
+  - ctrl+shift+f
   - 输入法没了
   - 输入法消失
   - 输入法图标不见了
@@ -29,9 +37,12 @@ causes:
   - zh-CN: 输入法的后台程序（ctfmon）卡住或者没在运行
   - zh-CN: 语言列表里没有中文，或者中文输入法被删掉了
   - zh-CN: 不小心切到了英文模式（按了 Shift 或者 Ctrl + 空格）
+  - zh-CN: 微软拼音被不小心切成了繁体（按了 Ctrl + Shift + F），打出来都是繁体字
 maturity: semi
 steps:
   - check: system.input-method
+  - check: system.pinyin-charset
+    fixes: [input.pinyin-simplified]
 guide:
   zh-CN: |
     先看上面的检查结果，按提示处理。
