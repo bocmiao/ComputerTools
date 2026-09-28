@@ -1332,3 +1332,57 @@ fn shell_places_are_listed_hidden_and_restored() {
     assert!(!platform.reg_key_exists(&root, &class(&machine)).unwrap(), "撤销时新建的键跟着删掉");
     assert_eq!(platform.reg_get(&hklm, &machine_class, PINNED).unwrap(), Some(RegValue::Dword(1)));
 }
+
+/// 清空打印队列：在打印文件夹里放一个测试用的任务（一对 .SHD、.SPL，打印服务运行时不会去读新放进来的），用真的
+/// 脚本清空，核对这两个文件没了、别的文件还在、打印服务又在运行；再清一次是「本来就没有」。和小工具的冒烟测试错开
+/// （它也会跑这个小工具）。结束时（包括断言失败时）删掉测试文件、把打印服务启动起来。
+#[test]
+#[ignore = "会停一下打印服务、在打印文件夹里放测试文件（结束时删掉）；需要管理员权限"]
+fn print_queue_is_cleared_and_the_spooler_comes_back() {
+    let _update = update_lock();
+    let folder = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()))
+        .join(r"System32\spool\PRINTERS");
+    let id = new_id();
+    let job = [folder.join(format!("MEDKIT{id}.SHD")), folder.join(format!("MEDKIT{id}.SPL"))];
+    let keep = folder.join(format!("medkit-{id}.txt"));
+    struct Cleanup(Vec<PathBuf>);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            for f in &self.0 {
+                let _ = std::fs::remove_file(f);
+            }
+            let _ = Command::new("sc.exe").args(["start", "Spooler"]).output();
+        }
+    }
+    let _cleanup = Cleanup(job.iter().cloned().chain([keep.clone()]).collect());
+    let spooler = || {
+        let out = Command::new("sc.exe").args(["query", "Spooler"]).output().unwrap();
+        String::from_utf8_lossy(&out.stdout).contains("RUNNING")
+    };
+    if !spooler() || !folder.is_dir() {
+        println!("::notice title=print queue::这台 CI 机器上打印服务没在运行，或者没有打印文件夹，跳过");
+        return;
+    }
+    let others_before = std::fs::read_dir(&folder).map(|d| d.count()).unwrap_or(0);
+    eprintln!("打印文件夹里原来有 {others_before} 个文件");
+    for f in &job {
+        std::fs::write(f, b"medkit test job").unwrap();
+    }
+    std::fs::write(&keep, b"not a print job").unwrap();
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+    let r = engine.tool_run("printer.clear-queue").unwrap();
+    eprintln!("{:?} {}", r.status, r.message);
+    assert!(r.error.is_none(), "{r:?}");
+    assert!(job.iter().all(|f| !f.exists()), "测试用的任务没删掉：{r:?}");
+    assert!(keep.exists(), "只删 .SHD、.SPL");
+    assert!(r.message.contains("个卡住的打印任务"), "{r:?}");
+    assert!(spooler(), "打印服务没有重新启动起来");
+    std::fs::remove_file(&keep).unwrap();
+    let again = engine.tool_run("printer.clear-queue").unwrap();
+    // 打印文件夹里原来就有任务（CI 机器上一般没有）时，第二次是「清掉了」
+    if others_before == 0 {
+        assert!(again.message.contains("本来就没有"), "{again:?}");
+    }
+}

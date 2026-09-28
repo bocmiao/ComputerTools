@@ -10,8 +10,8 @@ probe:
 results:
   running:
     status: ok
-    message: { zh-CN: 打印服务正在运行。若打印任务卡住，可以尝试重启打印服务。 }
-    links: ["tool:printer.restart-spooler"]
+    message: { zh-CN: 打印服务正在运行。若打印任务卡住、队列里的文档删不掉，可以清空打印队列，或者重启打印服务。 }
+    links: ["tool:printer.clear-queue", "tool:printer.restart-spooler"]
   stopped:
     status: advice
     message: { zh-CN: 打印服务已停止，这台电脑暂时不能正常打印。 }

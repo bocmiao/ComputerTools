@@ -1,0 +1,48 @@
+# 清空打印队列：停下打印服务，删掉打印队列里的任务（打印文件夹里的 .SHD 和 .SPL，一个任务一对），再把打印服务
+# 和依赖它、原来在运行的服务（传真）启动起来。只删这两种文件、只删打印文件夹里的（不往下找），打印文件夹不在
+# Windows 文件夹里就不删；原来的文档不受影响。队列里本来就没有任务时什么都不停。
+# 打印文件夹是 HKLM\SYSTEM\CurrentControlSet\Control\Print\Printers 的 DefaultSpoolDirectory，默认
+# %SystemRoot%\System32\spool\PRINTERS。
+id: printer.clear-queue
+schema_version: 1
+group: action
+title: { zh-CN: 清空打印队列 }
+description:
+  zh-CN: 打印任务卡住、队列里的文档删不掉、打印机一直显示「正在打印」却出不来时用：停下打印服务，删掉打印队列里所有还没打印完的文档，再把打印服务启动起来。只删打印队列里的临时文件，原来的文档不受影响，要打印的话重新点打印就行。
+category: printer
+requires_admin: true
+timeout_sec: 90
+run:
+  script: tools/printer/clear-queue.ps1
+confirm:
+  zh-CN: 打印队列里所有还没打印完的文档都会被删掉（原来的文件不受影响，要打印的话重新点打印），打印服务会停几秒钟再重新启动。现在清空吗？
+results:
+  cleared:
+    status: ok
+    message: { zh-CN: "清掉了 {jobs} 个卡住的打印任务，打印服务已经重新启动。" }
+    next: { zh-CN: 重新打印一次。还是打印不出来，看看打印机是不是开着、缺纸、卡纸，在「设置」的打印机里是不是显示「脱机」。 }
+    links: ["tool:settings.printers", "symptom:printer-share"]
+  partial:
+    status: advice
+    message: { zh-CN: "清掉了打印任务，但还有 {left} 个文件删不掉（可能被别的程序占着），打印服务已经重新启动。" }
+    next: { zh-CN: 重启电脑以后再清空一次。 }
+  empty:
+    status: ok
+    message: { zh-CN: 打印队列里本来就没有文档，不用清空。 }
+    next: { zh-CN: 打印不出来的话，看看打印机是不是开着、缺纸、卡纸，在「设置」的打印机里是不是显示「脱机」；也可以试试「重启打印服务」。 }
+    links: ["tool:settings.printers", "tool:printer.restart-spooler"]
+  disabled:
+    status: manual
+    message: { zh-CN: 打印服务被设置为禁用，小药箱没有更改它。 }
+    next: { zh-CN: 若需要打印，请先查清禁用原因，再请懂哥到服务设置中恢复。 }
+    links: ["tool:open.services"]
+  missing:
+    status: na
+    message: { zh-CN: 这台系统上没有找到打印服务。 }
+  failed:
+    status: manual
+    message: { zh-CN: 没能把打印服务停下来或者重新启动起来，它可能被打印机驱动卡住了。 }
+    next: { zh-CN: 重启电脑。重启以后还是这样，打开「服务」看 Print Spooler 的状态，必要时更新或者重装打印机驱动。 }
+    links: ["tool:open.services"]
+references:
+  - https://support.microsoft.com/en-us/windows/hardware/printer/fix-print-spooler-service-not-running-errors-in-windows
