@@ -143,6 +143,13 @@ fn common_error_messages_find_their_symptom() {
         ("Word 打不开，一打开就闪退", "office-broken"),
         ("安装 Office 时出错，错误代码 30015-6", "office-broken"),
         ("WINWORD.EXE - 应用程序错误：应用程序无法正常启动(0xc0000142)。请单击“确定”关闭应用程序。", "office-broken"),
+        ("远程桌面连不上公司的电脑", "remote-desktop"),
+        ("出现身份验证错误。要求的函数不受支持。这可能是由于 CredSSP 加密数据库修正。", "remote-desktop"),
+        (
+            "远程桌面由于以下原因之一无法连接到远程计算机：1) 未启用对服务器的远程访问 2) 远程计算机已关闭 3) 远程计算机在网络上不可用",
+            "remote-desktop",
+        ),
+        ("你的凭据不工作，用于连接的凭据无效", "remote-desktop"),
     ];
     let wrong: Vec<String> = cases
         .iter()

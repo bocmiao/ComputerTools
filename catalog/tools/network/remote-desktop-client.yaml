@@ -1,0 +1,12 @@
+# 打开「远程桌面连接」（open：mstsc.exe），Windows 自带的远程桌面客户端：填要连的那台电脑的名字（或者 IP 地址），点「连接」，
+# 再输入那台电脑上账户的用户名和密码（微软《在电脑上启用远程桌面》「远程连接到设备」）。「显示选项」里能删掉保存错的凭据。
+id: open.remote-desktop-client
+schema_version: 1
+group: open
+title: { zh-CN: 远程桌面连接（从这台电脑连别的电脑） }
+description:
+  zh-CN: 打开 Windows 自带的「远程桌面连接」：在「计算机」里填要连的那台电脑的名字（在那台电脑的「设置 → 系统 → 远程桌面」里能看到），点「连接」，再输入那台电脑上的用户名和密码。
+category: network
+open: { program: remote-desktop-client }
+references:
+  - https://learn.microsoft.com/zh-cn/windows-server/remote/remote-desktop-services/remotepc/remote-desktop-allow-access

@@ -1,0 +1,94 @@
+# 别的电脑能不能用「远程桌面」连到这台电脑。脚本：scripts/checks/network/remote-desktop.ps1（只读，不改任何设置：打开远程桌面
+# 留给「设置 → 系统 → 远程桌面」里的开关，它会同时在防火墙里放行）。
+# 查的东西照微软《General Remote Desktop connection troubleshooting》《Remote Desktop can't connect to the remote computer》
+# （和 paulmann/RDP-Diagnostic-Tool（MIT）列的项目对过）：
+# - 版本：家庭版（EditionID 以 Core 开头）不能被远程桌面连（微软《在电脑上启用远程桌面》：家庭版不能用作远程桌面主机）；
+# - 策略：Policies\Microsoft\Windows NT\Terminal Services 的 fDenyTSConnections（组策略「允许用户通过使用远程桌面服务进行远程连接」，
+#   1 是关掉；策略比设置优先），只说明、不改；
+# - 设置：Control\Terminal Server 的 fDenyTSConnections（0 是打开）；
+# - 服务：远程桌面服务（TermService）被禁用；
+# - 监听：WinStations\RDP-Tcp 的 fEnableWinStation（要是 1）和 PortNumber（一般是 3389，改过的要在电脑名后面加「:端口」）；
+# - 防火墙：「远程桌面」组（@FirewallAPI.dll,-28752，微软无人值守文档里的 FirewallGroup）的入站规则有没有一条打开着。
+# 不读电脑名、IP 地址、账户。
+# 结果（按这个顺序）：home、policy-off、missing、service-disabled、off、listener-off、firewall-closed（advice）/ custom-port、on（ok）。
+# 事实：port、service（TermService 的 Start 值）、firewall（open / closed / unknown）。
+id: network.remote-desktop
+schema_version: 1
+title: { zh-CN: 别的电脑能不能用远程桌面连进来 }
+description:
+  zh-CN: 看看这台电脑能不能被别的电脑用 Windows 自带的「远程桌面」连进来：是不是家庭版、远程桌面打开了没有、有没有被单位的策略或者「优化」软件关掉、防火墙放行了没有。只看不改。
+category: network
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/network/remote-desktop.ps1
+results:
+  on:
+    status: ok
+    message:
+      zh-CN: 这台电脑打开了远程桌面，同一个网络里的电脑可以用「远程桌面连接」连进来（这台电脑要开着、没睡着）。
+  custom-port:
+    status: ok
+    message:
+      zh-CN: 这台电脑打开了远程桌面，不过端口改成了 {port}（一般是 3389）：连的时候要在电脑名后面加上「:{port}」。
+  home:
+    status: advice
+    message:
+      zh-CN: 这台电脑是家庭版的 Windows，别的电脑不能用「远程桌面」连进来（微软说家庭版只能去连别的电脑，不能被连）。从这台电脑去连别的电脑不受影响。
+    fixer: user
+    next:
+      zh-CN: 要让别人远程帮你操作这台电脑，用「远程求助（快速助手）」；一定要用远程桌面的，要把这台电脑升级成专业版。
+    links: ["tool:system.remote-help"]
+  policy-off:
+    status: advice
+    message:
+      zh-CN: 远程桌面被组策略关掉了（「允许用户通过使用远程桌面服务进行远程连接」设成了「已禁用」），在「设置」里打不开。单位的电脑一般是管理员设的。
+    fixer: user
+    next:
+      zh-CN: 单位的电脑找单位的网管；自己的电脑，多半是装过的「优化」「安全加固」软件改的，在那个软件里恢复，或者把这个检查结果发给懂哥。
+  missing:
+    status: advice
+    message:
+      zh-CN: 这台电脑的 Windows 里没有「远程桌面服务」（Remote Desktop Services），多半是装了被精简过的系统，别的电脑连不进来。
+    fixer: user
+    next:
+      zh-CN: 只能重装原版 Windows（专业版）才能被远程桌面连；临时让别人远程帮忙的，用「远程求助（快速助手）」。
+    links: ["tool:system.remote-help"]
+  service-disabled:
+    status: advice
+    message:
+      zh-CN: 「远程桌面服务」（Remote Desktop Services）被禁用了，就算在「设置」里打开了远程桌面，别的电脑也连不进来。多半是「优化」软件、「关闭无用服务」教程关的。
+    fixer: user
+    next:
+      zh-CN: 点下面的「服务」，找到「Remote Desktop Services」，双击它，把「启动类型」改成「手动」，点「确定」；再到「设置 → 系统 → 远程桌面」里把远程桌面关掉再打开。
+    links: ["tool:open.services", "tool:settings.remote-desktop"]
+  off:
+    status: advice
+    message:
+      zh-CN: 这台电脑没有打开远程桌面，别的电脑连不进来。
+    fixer: user
+    next:
+      zh-CN: 要从别处连这台电脑的，点下面的「远程桌面」设置，打开「远程桌面」开关（Windows 10 上叫「启用远程桌面」），点「确认」；这一页上还能看到这台电脑的名字，连的时候要填它。只在家里、单位这种信得过的网络里打开；不用了就关上。
+    links: ["tool:settings.remote-desktop"]
+  listener-off:
+    status: advice
+    message:
+      zh-CN: 远程桌面打开了，但是接收连接的「RDP-Tcp」被关掉了（注册表里的 fEnableWinStation 不是 1），别的电脑连不进来。这是改过系统设置才会有的情况。
+    fixer: user
+    next:
+      zh-CN: 先在「设置 → 系统 → 远程桌面」里把远程桌面关掉再打开，重启电脑再试；还不行，把这个检查结果发给懂哥或者单位的网管。
+    links: ["tool:settings.remote-desktop"]
+  firewall-closed:
+    status: advice
+    message:
+      zh-CN: 远程桌面打开了，但是 Windows 防火墙里「远程桌面」的入站规则都被关掉了，别的电脑连不进来。
+    fixer: user
+    next:
+      zh-CN: 在「设置 → 系统 → 远程桌面」里把远程桌面关掉再打开，Windows 会重新在防火墙里放行。装了别的防火墙、安全软件的（比如火绒、360），还要在它里面放行「远程桌面」。
+    links: ["tool:settings.remote-desktop", "tool:open.firewall-advanced"]
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/rdp-error-general-troubleshooting
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/remote-desktop-cannot-connect-remote-computer
+  - https://learn.microsoft.com/zh-cn/windows-server/remote/remote-desktop-services/remotepc/remote-desktop-allow-access
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/networking-mpssvc-svc-firewallgroups-firewallgroup
+  - https://github.com/paulmann/RDP-Diagnostic-Tool

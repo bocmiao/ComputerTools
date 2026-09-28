@@ -1,0 +1,14 @@
+# 打开「设置」里的一页（open）：ms-settings:remotedesktop，由系统打开。「系统 → 远程桌面」：最上面是「远程桌面」开关（Windows 10
+# 上叫「启用远程桌面」，打开时 Windows 同时在防火墙里放行），下面有这台电脑的名字（连的时候填它）和「远程桌面用户」（除了管理员，
+# 还有谁能连进来）。家庭版上这一页只说「你的家庭版不支持远程桌面」（微软《如何使用远程桌面》《在电脑上启用远程桌面》）。
+id: settings.remote-desktop
+schema_version: 1
+group: open
+title: { zh-CN: 远程桌面（让别的电脑连进来） }
+description:
+  zh-CN: 打开「设置」里的远程桌面：打开「远程桌面」开关，别的电脑就能用「远程桌面连接」连进来；这一页上能看到这台电脑的名字（连的时候要填），也能加上允许连进来的账户。家庭版的 Windows 不能被连。
+category: settings
+open: { settings: remotedesktop }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/zh-cn/windows/experience/connectivity-networking/how-to-use-remote-desktop

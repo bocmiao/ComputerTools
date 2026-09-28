@@ -1169,6 +1169,29 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'network.remote-desktop': {
+    title: '别的电脑能不能用远程桌面连进来',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          resultCode: 'on',
+          message: '这台电脑打开了远程桌面，同一个网络里的电脑可以用「远程桌面连接」连进来（这台电脑要开着、没睡着）。',
+          facts: { port: 3389, service: 3, firewall: 'open' },
+        }
+      }
+      // 说法和 catalog/checks/network/remote-desktop.yaml 一样
+      return {
+        status: 'advice',
+        resultCode: 'off',
+        message: '这台电脑没有打开远程桌面，别的电脑连不进来。',
+        fixer: 'user',
+        next: '要从别处连这台电脑的，点下面的「远程桌面」设置，打开「远程桌面」开关（Windows 10 上叫「启用远程桌面」），点「确认」；这一页上还能看到这台电脑的名字，连的时候要填它。只在家里、单位这种信得过的网络里打开；不用了就关上。',
+        links: ['tool:settings.remote-desktop'],
+        facts: { port: 3389, service: 3, firewall: 'unknown' },
+      }
+    },
+  },
   'system.jpeg-extension': {
     title: '网页上保存的图片的扩展名',
     evaluate: () => {
@@ -1550,6 +1573,15 @@ const SYMPTOMS: MockSymptom[] = [
     guide: '先重启一次电脑。再点「修复 Office」，先选「快速修复」，不行再选「联机修复」。只有 Word 一打开就闪退的，按住 Ctrl 双击它用安全模式打开，能打开就是加载项的问题。装不上、卸不干净的，用「微软官方的 Office 卸载工具」卸干净再装。提示要激活的，用买 Office 的微软账户登录，别用「激活工具」。',
     steps: [{ check: 'system.office-installs', fixes: [] }],
     links: ['tool:system.office-repair', 'tool:web.office-uninstall', 'tool:web.office-install', 'tool:settings.apps'],
+  },
+  {
+    id: 'remote-desktop', title: '远程桌面连不上',
+    summary: '用 Windows 自带的「远程桌面连接」连不上别的电脑，或者别的电脑连不进这台电脑；提示「你的凭据不工作」「出现身份验证错误」「CredSSP 加密数据库修正」「无法连接到远程计算机」；不知道远程桌面怎么打开。',
+    keywords: ['远程桌面', 'mstsc', '你的凭据不工作', 'credssp', '无法连接到远程计算机'], maturity: 'semi',
+    causes: ['要连的那台电脑是家庭版（家庭版不能被远程桌面连），或者它没打开远程桌面', '要连的那台电脑关机了、睡着了，或者两台电脑不在同一个网络里', '用户名、密码填得不对：PIN 码、指纹不能用来登录远程桌面', '两台电脑有一台很久没更新，提示「CredSSP 加密数据库修正」'],
+    guide: '上面的检查查的是别的电脑能不能连进这台电脑。在要连的那台电脑上打开「设置 → 系统 → 远程桌面」的开关，记下电脑名；在这台电脑上点「远程桌面连接」，填电脑名，再填那台电脑上账户的用户名和密码（不是 PIN 码）。提示 CredSSP 的，把两台电脑都装上最新的 Windows 更新。',
+    steps: [{ check: 'network.remote-desktop', fixes: [] }],
+    links: ['tool:settings.remote-desktop', 'tool:open.remote-desktop-client', 'tool:system.remote-help', 'tool:open.services'],
   },
   {
     id: 'builtin-app-broken', title: '照片、计算器这些自带的应用打不开',
@@ -2443,6 +2475,22 @@ const TOOL_LIST: MockTool[] = [
     'system',
     'program',
     'cttune.exe',
+  ),
+  openTool(
+    'settings.remote-desktop',
+    '远程桌面（让别的电脑连进来）',
+    '打开「设置」里的远程桌面：打开「远程桌面」开关，别的电脑就能用「远程桌面连接」连进来；这一页上能看到这台电脑的名字（连的时候要填），也能加上允许连进来的账户。家庭版的 Windows 不能被连。',
+    'settings',
+    'settings',
+    'ms-settings:remotedesktop',
+  ),
+  openTool(
+    'open.remote-desktop-client',
+    '远程桌面连接（从这台电脑连别的电脑）',
+    '打开 Windows 自带的「远程桌面连接」：在「计算机」里填要连的那台电脑的名字（在那台电脑的「设置 → 系统 → 远程桌面」里能看到），点「连接」，再输入那台电脑上的用户名和密码。',
+    'network',
+    'program',
+    'mstsc.exe',
   ),
   openTool(
     'settings.lock-screen',

@@ -63,6 +63,9 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     // 「ClearType 文本调谐器」：控制面板里「调整 ClearType 文本」打开的就是它。勾上「启用 ClearType」，每一页点看着最清楚的
     // 那段字，最后点「完成」（微软问答里调谐器的用法）。字发虚、字的边上带彩边时用
     ("cleartype", Program { exe: "cttune.exe", args: &[], console: &[] }),
+    // 「远程桌面连接」：Windows 自带的远程桌面客户端（微软《在电脑上启用远程桌面》里「远程连接到设备」用的就是它），
+    // 填要连的电脑名或者 IP 地址
+    ("remote-desktop-client", Program { exe: "mstsc.exe", args: &[], console: &[] }),
     // 重置 Microsoft Store 的缓存（微软《Microsoft Store 应用疑难解答》里的 wsreset）：先出现一个空白的命令行窗口，
     // 十几秒后自己关掉、商店自动打开；不删已经装的应用
     ("store-reset", Program { exe: "WSReset.exe", args: &[], console: &[] }),
@@ -124,6 +127,8 @@ pub const SETTINGS_PAGES: &[&str] = &[
     // 「网络和 Internet → 移动热点」；「触摸板」（只有带触摸板的电脑有这一页）
     "network-mobilehotspot",
     "devices-touchpad",
+    // 「系统 → 远程桌面」：打开、关闭远程桌面（同时在防火墙里放行），这台电脑的名字，谁能连进来
+    "remotedesktop",
     // 「疑难解答」：Windows 11 在「系统」里（「其他疑难解答」是「获取帮助」的那几个），Windows 10 在「更新和安全」里
     "troubleshoot",
     // 某个自带应用的「高级选项」：终止、修复、重置（微软《Launch Windows Settings》：ms-settings:appsfeatures-app?<包系列名>；
