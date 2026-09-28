@@ -1,0 +1,15 @@
+# 打开「设置」里的一页（open）：ms-settings:taskbar（「个性化 → 任务栏」），由系统打开。
+# Windows 11 在这里打开或关掉右下角「其他系统托盘图标」、任务栏上的搜索、任务视图、小组件，改任务栏的对齐方式和自动隐藏；
+# Windows 10 在这里「选择哪些图标显示在任务栏上」「打开或关闭系统图标」（时钟、音量、网络、电源、输入指示），也能锁定任务栏、
+# 改位置。被策略锁住的开关是灰的（检测 system.taskbar-policies）。
+id: settings.taskbar
+schema_version: 1
+group: open
+title: { zh-CN: 任务栏设置 }
+description:
+  zh-CN: 打开「设置」里的任务栏页面：右下角的图标藏起来了、任务栏跑到屏幕旁边或者自动隐藏了，在这里改回来。
+category: settings
+open: { settings: taskbar }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/windows/customize-the-taskbar-in-windows-0657a50f-0cc7-dbfd-ae6b-05020b195b07

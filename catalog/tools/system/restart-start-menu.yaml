@@ -1,0 +1,50 @@
+# 一键处理（action）：重启开始菜单、搜索和通知中心。脚本：scripts/tools/system/restart-start-menu.ps1
+# 结束这次登录里显示它们的进程：StartMenuExperienceHost（开始菜单，Windows 10 1903 起）、SearchHost / SearchApp / SearchUI（搜索）、
+# ShellExperienceHost（通知中心、快速设置、日历、网络和音量面板；Windows 10 1809 和更早也管开始菜单）。它们由资源管理器按登录用户
+# 的身份重新启动（微软《Troubleshoot Start menu errors》：每个登录的用户在自己的会话里有一个 StartMenuExperienceHost），脚本
+# 自己什么都不启动（以管理员身份启动的会带着管理员权限）。不重启资源管理器：任务栏和打开的文件夹窗口都留着。
+# 资源管理器没在运行时什么都不结束（no-explorer）。结束以后最多等 10 秒，看开始菜单是不是已经回来了。
+# 事实：stopped（结束了几个进程）、waited_sec（等了几秒）。
+id: system.restart-start-menu
+schema_version: 1
+group: action
+title: { zh-CN: 重启开始菜单和搜索 }
+description:
+  zh-CN: 点开始按钮、按 Win 键没反应，开始菜单、搜索框打开是空白的、卡住不动，或者右下角的通知中心、音量和网络面板点不开时用。只重启开始菜单、搜索和通知中心，任务栏和打开的窗口都不受影响。
+category: system
+requires_admin: true
+timeout_sec: 30
+run:
+  script: tools/system/restart-start-menu.ps1
+results:
+  restarted:
+    status: ok
+    message:
+      zh-CN: 开始菜单、搜索和通知中心已经重新启动了。
+    next:
+      zh-CN: 点一下开始按钮或者按一下 Win 键试试。还是打不开的，点「重启资源管理器」；再不行就注销再登录，或者重启电脑。
+    links: ["tool:system.restart-explorer"]
+  stopped:
+    status: ok
+    message:
+      zh-CN: 已经关掉了卡住的开始菜单、搜索和通知中心，下次打开时 Windows 会重新启动它们（第一次可能要等一两秒）。
+    next:
+      zh-CN: 点一下开始按钮或者按一下 Win 键试试。还是打不开的，点「重启资源管理器」；再不行就注销再登录，或者重启电脑。
+    links: ["tool:system.restart-explorer"]
+  none:
+    status: advice
+    message:
+      zh-CN: 开始菜单、搜索和通知中心现在都没有在运行，小药箱没有需要重启的。
+    next:
+      zh-CN: 点一下开始按钮试试。还是打不开的，点「重启资源管理器」，它会把开始菜单一起带起来；再不行就注销再登录，或者重启电脑。
+    links: ["tool:system.restart-explorer"]
+  no-explorer:
+    status: advice
+    message:
+      zh-CN: 资源管理器现在没有在运行，所以桌面、任务栏和开始菜单都不见了。小药箱没有动开始菜单。
+    next:
+      zh-CN: 点下面的按钮（或者按 Ctrl + Shift + Esc）打开任务管理器，点「运行新任务」（Windows 10 在「文件」菜单里），输入 explorer，按回车。「以系统管理权限创建此任务」不要勾。
+    links: ["tool:open.task-manager"]
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/troubleshoot-start-menu-errors
+  - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/stop-process

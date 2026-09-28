@@ -103,6 +103,8 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "regionlanguage",
     "apps-volume",
     "notifications",
+    // 「个性化 → 任务栏」：右下角显示哪些图标（Windows 10 还有「打开或关闭系统图标」）、任务栏的位置和自动隐藏
+    "taskbar",
 ];
 
 /// 命令行窗口里要运行的那一串：`/k ""<System32>\Dism.exe" /Online … & "<System32>\sfc.exe" /scannow"`。程序都写

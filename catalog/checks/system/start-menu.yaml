@@ -1,0 +1,63 @@
+# 开始菜单装得好不好、最近有没有崩溃（只读）。脚本：scripts/checks/system/start-menu.ps1（读登录用户的设置）
+# 按微软《Troubleshoot Start menu errors》的步骤查：
+#   - 开始菜单是系统自带的应用 Microsoft.Windows.StartMenuExperienceHost（Windows 10 1809 和更早是 ShellExperienceHost），每个用户都要
+#     注册一份。用 Get-AppxPackage 查登录用户的（问别的用户要管理员权限，没有时查当前用户）。没注册时看它的文件
+#     （%windir%\SystemApps\…_cw5n1h2txyewy\AppxManifest.xml）在不在：在的能重新注册（not-registered），不在的微软没有单独装回的
+#     办法，只能卸载更新、系统还原或者重置（missing）。
+#   - 最近 7 天应用程序日志里开始菜单、搜索、通知中心、资源管理器的崩溃（Application Error 1000）和卡住（Application Hang 1002）。
+# 结果：ok、crashing（advice）、not-registered、missing（manual）、unsupported（服务器核心版，没有开始菜单）。
+# 事实：days、crashes、hangs、apps（start / search / shell / explorer）。
+id: system.start-menu
+schema_version: 1
+title: { zh-CN: 开始菜单装好了没有、最近崩溃过没有 }
+description:
+  zh-CN: 看看开始菜单在这个账户里装好了没有，最近一周开始菜单、搜索、通知中心、任务栏有没有崩溃或者卡住没有响应。
+category: system
+requires_admin: false
+user_hive: true
+timeout_sec: 60
+probe:
+  script: checks/system/start-menu.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: "开始菜单装得好好的，最近 {days} 天开始菜单、搜索、通知中心和任务栏也没有崩溃过。"
+  crashing:
+    status: advice
+    message:
+      zh-CN: "最近 {days} 天{apps_text}出过问题：崩溃 {crashes} 次，卡住没有响应 {hangs} 次。"
+    fixer: medkit
+    next:
+      zh-CN: 先点下面的「重启开始菜单和搜索」，不行再点「重启资源管理器」。老是这样的：装上最新的 Windows 更新（微软常在更新里修这类问题）；点「检查并修复系统文件」（要二十分钟左右），做完重启电脑；是装了哪个软件以后开始的（特别是改任务栏、开始菜单样子的美化软件，右键菜单工具，输入法），卸载它试试。还不行，新建一个用户账户登录看看：新账户里正常的，是这个账户的设置坏了，可以把文件搬到新账户里用。
+    links: ["tool:system.restart-start-menu", "tool:system.restart-explorer", "tool:open.system-file-repair", "tool:settings.windows-update", "tool:system.app-crashes"]
+  not-registered:
+    status: manual
+    message:
+      zh-CN: 开始菜单没有在这个账户里装好（Windows 里它的文件还在），所以点开始按钮、按 Win 键都没有反应。
+    fixer: helper
+    next:
+      zh-CN: 先注销再登录一次，或者重启电脑。还是这样的，请懂哥用这个账户登录，打开 PowerShell（不要「以管理员身份运行」，不然只会装给管理员），运行微软文档里重新注册开始菜单的命令：Add-AppxPackage -Path "C:\Windows\SystemApps\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\AppxManifest.xml" -Register -DisableDevelopmentMode 。也可以新建一个用户账户，把文件搬过去用。
+  missing:
+    status: manual
+    message:
+      zh-CN: 开始菜单的系统文件不见了（Windows 自带的开始菜单被删掉了），所以开始菜单打不开。
+    fixer: helper
+    next:
+      zh-CN: 多半是用了「精简版」系统，或者「精简」「优化」工具删掉了系统自带的应用。微软没有单独装回开始菜单的办法：刚装了更新以后出现的，卸载这个更新；也可以用「系统还原」退回去；还不行，Windows 11 在「恢复」里用「使用 Windows 更新修复问题」重装当前版本（文件和软件都保留），或者备份好文件以后重装系统。
+    links: ["tool:settings.update-history", "tool:open.system-restore", "tool:settings.recovery"]
+  unsupported:
+    status: na
+    message:
+      zh-CN: 这个系统没有开始菜单（服务器的核心版）。
+fact_labels:
+  apps_text:
+    from: apps
+    values:
+      start: { zh-CN: 「开始菜单」 }
+      search: { zh-CN: 「搜索」 }
+      shell: { zh-CN: 「通知中心」 }
+      explorer: { zh-CN: 「资源管理器」（任务栏和桌面） }
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/troubleshoot-start-menu-errors
+  - https://learn.microsoft.com/en-us/powershell/module/appx/get-appxpackage
