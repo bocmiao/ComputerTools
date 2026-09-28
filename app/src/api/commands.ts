@@ -14,6 +14,7 @@ import type {
   JournalSession,
   KeyMappingInput,
   KeyRemapView,
+  MonitorBrightness,
   NewMenuItem,
   OcrView,
   Preview,
@@ -100,6 +101,8 @@ export type CommandMap = {
   lockers_refresh: { args: NoArgs; result: FileLockReport | null }
   popup_find: { args: { seconds: number }; result: WindowOwnerReport }
   popup_reveal: { args: NoArgs; result: null }
+  brightness_list: { args: NoArgs; result: MonitorBrightness[] }
+  brightness_set: { args: { id: string; percent: number }; result: number }
   space_pick_folder: { args: NoArgs; result: SpaceReport | null }
   space_rescan: { args: NoArgs; result: SpaceReport | null }
   space_reveal: { args: { id: number }; result: null }

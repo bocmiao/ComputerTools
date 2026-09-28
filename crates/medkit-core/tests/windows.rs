@@ -17,8 +17,8 @@ use medkit_core::bundle::Bundle;
 use medkit_core::catalog::{BREAK_IN_TESTS, Catalog};
 use medkit_core::journal::{Journal, new_id};
 use medkit_core::model::{Action, Feature, StartType, ToolGroup};
-use medkit_core::platform::Platform;
 use medkit_core::platform::windows::{WindowsPlatform, dir_owner_sid, ensure_secure_dir};
+use medkit_core::platform::{Platform, PlatformError};
 use medkit_core::registry::{RegRoot, RegValue, SpecRoot, is_sid, split_key};
 use medkit_core::render::unresolved;
 use medkit_core::script::{HostConfig, PowerShellHost};
@@ -472,6 +472,17 @@ fn close_new(exe: &str, before: &[u32]) {
     }
 }
 
+/// 关掉测试打开的 Edge：结束以后还会冒出新的 Edge 进程（CI 148 结束时还剩 4 个），隔一秒再看，最多看 5 次。
+fn close_browser(before: &[u32]) {
+    for _ in 0..5 {
+        if pids_of("msedge.exe").iter().all(|pid| before.contains(pid)) {
+            return;
+        }
+        close_new("msedge.exe", before);
+        std::thread::sleep(Duration::from_secs(1));
+    }
+}
+
 /// 桌面上的顶层窗口（句柄按整数存，方便比较）。
 fn top_windows() -> Vec<isize> {
     use windows_sys::Win32::Foundation::{HWND, LPARAM};
@@ -693,7 +704,7 @@ fn open_tools_launch_or_explain_why_not() {
                     Err(e) => failures.push(format!("{}（{name}）：{e}", t.id)),
                 }
                 std::thread::sleep(Duration::from_secs(3));
-                close_new("msedge.exe", &before);
+                close_browser(&before);
             }
             // 品牌官网的驱动下载页：CI 机器是 Azure 上的 Hyper-V 虚拟机，要如实说「这是虚拟机」、不打开网页。
             // 把 BIOS 里写的厂商和型号打印出来（这里没有序列号），核对认虚拟机的规则
@@ -1340,6 +1351,30 @@ fn displays_are_read_with_their_recommended_resolution() {
     eprintln!("检测：{:?} {:?} {}", r.status, r.result_code, r.message);
     assert!(r.error.is_none(), "{r:?}");
     assert!(unresolved(&r.message).is_empty(), "{}", r.message);
+}
+
+/// 显示器亮度：真的读一次（只读，不改亮度）。每个显示器都列出来；读不到亮度的（虚拟机的显示器、笔记本自带的屏幕）
+/// 去调要说「不支持」，不存在的显示器要说「找不到」，都不能乱写。CI 机器是虚拟机，显示器不支持 DDC/CI。
+#[test]
+fn monitor_brightness_is_read_and_unsupported_monitors_say_so() {
+    let platform = WindowsPlatform::new();
+    let list = platform.monitor_brightness().unwrap_or_else(|e| panic!("读亮度失败：{e}"));
+    eprintln!("{} 个显示器", list.len());
+    for m in &list {
+        eprintln!("  {} {:?} 自带的屏幕：{} 亮度：{:?}", m.id, m.name, m.internal, m.percent);
+        assert!(m.percent.is_none_or(|p| p <= 100), "{m:?}");
+        if m.percent.is_none() {
+            let e = platform.set_monitor_brightness(&m.id, 50).unwrap_err();
+            assert!(matches!(e, PlatformError::Unsupported(_)), "{}：{e}", m.id);
+        }
+    }
+    if !list.iter().any(|m| m.percent.is_some()) {
+        println!("::notice title=brightness::这台机器上没有能用电脑调亮度的显示器，只核对了「不支持」「找不到」的说法");
+    }
+    for id in [r"\\.\DISPLAY99#0", "乱写的", "#"] {
+        let e = platform.set_monitor_brightness(id, 50).unwrap_err();
+        assert!(matches!(e, PlatformError::NotFound(_)), "{id}：{e}");
+    }
 }
 
 /// Winsock 目录：真的读一次（只读）。64 位的目录里要有 Windows 自己的 TCP/IP（mswsock.dll，文件在），64 位 Windows 上

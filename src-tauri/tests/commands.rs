@@ -580,3 +580,25 @@ fn popup_commands_pass_the_permission_check() {
     let e = invoke(&win, "popup_reveal", json!({})).unwrap_err();
     assert!(e.as_str().is_some_and(|m| m.contains("开始找")), "{e}");
 }
+
+/// 显示器亮度的两个命令也要登记进权限清单；结果是界面要的 camelCase；调不了、已经拔掉、超过 100 的说清楚。
+#[test]
+fn brightness_commands_pass_the_permission_check() {
+    let win = app();
+    let list = ok(&win, "brightness_list", json!({}));
+    let monitors = list.as_array().expect("是一个列表");
+    assert!(!monitors.is_empty());
+    for m in monitors {
+        has_keys(m, &["id", "name", "internal", "percent"]);
+    }
+    let external = monitors.iter().find(|m| m["percent"].is_number()).expect("假系统里有一台能调的显示器");
+    let id = external["id"].as_str().unwrap();
+    assert_eq!(ok(&win, "brightness_set", json!({ "id": id, "percent": 35 })), json!(35));
+    let e = invoke(&win, "brightness_set", json!({ "id": id, "percent": 101 })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("0 到 100")), "{e}");
+    let e = invoke(&win, "brightness_set", json!({ "id": "\\\\.\\DISPLAY9#0", "percent": 35 })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("拔掉")), "{e}");
+    let laptop = monitors.iter().find(|m| m["percent"].is_null()).expect("假系统里有一块调不了的笔记本屏幕");
+    let e = invoke(&win, "brightness_set", json!({ "id": laptop["id"], "percent": 35 })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("DDC/CI")), "{e}");
+}

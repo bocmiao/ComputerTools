@@ -790,3 +790,15 @@ pub async fn space_reveal(state: State<'_, AppState>, id: usize) -> CmdResult<()
         Err("只有在 Windows 上才能打开资源管理器。".into())
     }
 }
+
+/// 显示器亮度：每个显示器现在的亮度（外接显示器用 DDC/CI 读；电脑调不了的也列出来，亮度是 null）。
+#[tauri::command]
+pub async fn brightness_list(state: State<'_, AppState>) -> CmdResult<Vec<medkit_core::platform::MonitorBrightness>> {
+    with_engine(state, |e| e.monitor_brightness()).await
+}
+
+/// 显示器亮度：把一个显示器调到 `percent`（0–100），返回调完以后读回来的亮度。
+#[tauri::command]
+pub async fn brightness_set(state: State<'_, AppState>, id: String, percent: u8) -> CmdResult<u8> {
+    with_engine(state, move |e| e.set_monitor_brightness(&id, percent)).await
+}

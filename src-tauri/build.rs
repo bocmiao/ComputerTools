@@ -63,6 +63,8 @@ const COMMANDS: &[&str] = &[
     "space_reveal",
     "popup_find",
     "popup_reveal",
+    "brightness_list",
+    "brightness_set",
 ];
 
 fn main() {

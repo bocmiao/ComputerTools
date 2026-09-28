@@ -692,6 +692,14 @@ impl Platform for WindowsPlatform {
     fn displays(&self) -> PResult<super::Displays> {
         super::displays::displays()
     }
+
+    fn monitor_brightness(&self) -> PResult<Vec<super::MonitorBrightness>> {
+        super::brightness::list()
+    }
+
+    fn set_monitor_brightness(&self, id: &str, percent: u8) -> PResult<u8> {
+        super::brightness::set(id, percent)
+    }
 }
 
 // ───────────── 打开系统工具 ─────────────

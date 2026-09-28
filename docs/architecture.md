@@ -402,6 +402,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `screen_fullscreen` | `on` | `null`（屏幕坏点测试：窗口进入、退出全屏） |
 | `awake_get` | — | `AwakeStatus`（`{ on, display }`：「别让电脑自己睡着」开没开） |
 | `awake_set` | `on`、`display` | `AwakeStatus`（SetThreadExecutionState，只在小药箱开着时有效，不改电源设置） |
+| `brightness_list` | — | `MonitorBrightness[]`（显示器亮度：每个显示器的 `id`（`<GDI 设备名>#<序号>`，插拔、换接口以后就变）、型号名（一块桌面上只接着一个显示器时才对得上）、是不是电脑自带的屏幕、现在的亮度 `percent`（0–100）。外接显示器用 DDC/CI 读，读不到的（笔记本自带的屏幕、虚拟机、显示器菜单里关了 DDC/CI）也列出来，`percent` 是 null） |
+| `brightness_set` | `id`、`percent`（0–100） | `number`（调完以后显示器读回来的亮度。做法照 emoacht/Monitorian（MIT）：先用高级接口 SetMonitorBrightness，不支持时用 VCP 代码 0x10（SetVCPFeature），按显示器报的最小、最大值换算；有的显示器报成功其实没设上，所以设完读回来。找不到这个显示器、显示器不让调、调不上各有一句话。改的是显示器自己的亮度，和按显示器上的按钮一样，不记修改日志） |
 | `shutdown_get` | — | `ShutdownStatus`（`{ plan: { at, restart } \| null }`：小药箱安排的定时关机；系统查不到别处安排的） |
 | `shutdown_schedule` | `seconds`（60 到 24 小时加 60 秒）、`restart` | `ShutdownStatus`（InitiateSystemShutdownExW，到时间强制关掉程序，和 `shutdown /s /t` 一样；小药箱安排过的先取消再换成新的时间；已经有别处安排的就报错，不去动它） |
 | `shutdown_cancel` | — | `ShutdownCancel`（`{ cancelled }`：AbortSystemShutdownW，不管是谁安排的；false 表示本来就没有安排） |

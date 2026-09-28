@@ -3,6 +3,7 @@ import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
 import { runCheck, startupList, startupSet, symptomDetail, toolOpen } from '../api'
 import type { ApplyResult, CheckResult, StartupItem, SymptomDetail, SymptomSummary } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
+import BrightnessControl from '../components/BrightnessControl.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import ErrorShotSearch from '../components/ErrorShotSearch.vue'
 import ExeCheck from '../components/ExeCheck.vue'
@@ -513,6 +514,7 @@ watch(
         <RecycleBinRepair v-if="detail.id === 'recycle-bin-corrupted'" class="block" />
         <FileLockers v-if="detail.id === 'file-in-use'" class="block" />
         <ExeCheck v-if="detail.id === 'app-cannot-run'" class="block" />
+        <BrightnessControl v-if="detail.id === 'screen-display'" class="block" />
 
         <section v-if="showsStartup(detail.id)" class="card block" aria-labelledby="startup-title">
           <div class="steps-head">

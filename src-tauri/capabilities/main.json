@@ -63,6 +63,8 @@
     "allow-space-rescan",
     "allow-space-reveal",
     "allow-popup-find",
-    "allow-popup-reveal"
+    "allow-popup-reveal",
+    "allow-brightness-list",
+    "allow-brightness-set"
   ]
 }

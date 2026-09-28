@@ -158,6 +158,18 @@ export interface KeyMappingInput { from: string; to: string | null }
 /** 别让电脑自己睡着：只在小药箱开着时有效 */
 export interface AwakeStatus { on: boolean; display: boolean }
 
+/** 一个显示器的亮度（工具箱「显示器亮度」）；percent 是 null 时电脑调不了（笔记本自带的屏幕、没开 DDC/CI 的显示器） */
+export interface MonitorBrightness {
+  /** 这次认这个显示器用的名字，调亮度时原样传回去 */
+  id: string
+  /** 显示器自己报的型号名；读不到、「复制」时是 null */
+  name: string | null
+  /** 笔记本、一体机自带的屏幕 */
+  internal: boolean
+  /** 现在的亮度（0–100） */
+  percent: number | null
+}
+
 /** 定时关机：小药箱安排的那一次（at 是 Unix 毫秒）。系统查不到别处安排的，重新打开小药箱也不知道 */
 export interface ShutdownPlan { at: number; restart: boolean }
 export interface ShutdownStatus { plan: ShutdownPlan | null }

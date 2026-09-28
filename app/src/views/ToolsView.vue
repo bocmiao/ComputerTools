@@ -9,6 +9,7 @@ import LocalUtilities from '../components/LocalUtilities.vue'
 import DeviceTests from '../components/DeviceTests.vue'
 import DiskSpeedTest from '../components/DiskSpeedTest.vue'
 import KeepAwake from '../components/KeepAwake.vue'
+import BrightnessControl from '../components/BrightnessControl.vue'
 import ShutdownTimer from '../components/ShutdownTimer.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import TagPill from '../components/TagPill.vue'
@@ -279,6 +280,7 @@ function onApplied(r: ApplyResult): void {
     <DeviceTests :highlight="highlightedTest" />
     <DiskSpeedTest />
     <KeepAwake />
+    <BrightnessControl />
     <ShutdownTimer />
 
     <!-- 看信息 -->

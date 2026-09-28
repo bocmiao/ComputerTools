@@ -81,6 +81,8 @@ macro_rules! command_handler {
             $crate::commands::space_reveal,
             $crate::commands::popup_find,
             $crate::commands::popup_reveal,
+            $crate::commands::brightness_list,
+            $crate::commands::brightness_set,
         ]
     };
 }

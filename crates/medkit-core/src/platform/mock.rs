@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
 use super::{
-    Display, Displays, FileStrings, FileUser, InstalledProgram, KeyboardAids, OpenRequest, OsInfo, PResult, Platform,
-    PlatformError, PointedWindow, UserIdentity, WinsockEntry,
+    Display, Displays, FileStrings, FileUser, InstalledProgram, KeyboardAids, MonitorBrightness, OpenRequest, OsInfo,
+    PResult, Platform, PlatformError, PointedWindow, UserIdentity, WinsockEntry,
 };
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue, key_ancestors};
@@ -46,6 +46,8 @@ struct State {
     winsock: Option<Vec<WinsockEntry>>,
     /// 显示器；没设过时是一块笔记本屏幕，用的就是推荐分辨率
     displays: Option<Displays>,
+    /// 显示器亮度；没设过时见 [`MockPlatform::demo_brightness`]
+    brightness: Option<Vec<MonitorBrightness>>,
     /// 没有「获取帮助」应用
     no_get_help: bool,
     /// 桌面（资源管理器）没在运行，网页打不开
@@ -176,6 +178,23 @@ impl MockPlatform {
 
     pub fn set_displays(&self, displays: Displays) {
         self.state.lock().unwrap().displays = Some(displays);
+    }
+
+    pub fn set_brightness(&self, monitors: Vec<MonitorBrightness>) {
+        self.state.lock().unwrap().brightness = Some(monitors);
+    }
+
+    /// 一台能用电脑调亮度的外接显示器（70%）和一块调不了的笔记本屏幕。
+    pub fn demo_brightness() -> Vec<MonitorBrightness> {
+        vec![
+            MonitorBrightness { id: r"\\.\DISPLAY1#0".into(), name: None, internal: true, percent: None },
+            MonitorBrightness {
+                id: r"\\.\DISPLAY2#0".into(),
+                name: Some("DELL U2414H".into()),
+                internal: false,
+                percent: Some(70),
+            },
+        ]
     }
 
     /// 一块笔记本屏幕，1920×1080，用的就是推荐分辨率。
@@ -372,5 +391,21 @@ impl Platform for MockPlatform {
 
     fn displays(&self) -> PResult<Displays> {
         Ok(self.state.lock().unwrap().displays.clone().unwrap_or_else(Self::laptop_display))
+    }
+
+    fn monitor_brightness(&self) -> PResult<Vec<MonitorBrightness>> {
+        Ok(self.state.lock().unwrap().brightness.clone().unwrap_or_else(Self::demo_brightness))
+    }
+
+    fn set_monitor_brightness(&self, id: &str, percent: u8) -> PResult<u8> {
+        let mut state = self.state.lock().unwrap();
+        let monitors = state.brightness.get_or_insert_with(Self::demo_brightness);
+        let monitor =
+            monitors.iter_mut().find(|m| m.id == id).ok_or_else(|| PlatformError::NotFound("显示器".into()))?;
+        if monitor.percent.is_none() {
+            return Err(PlatformError::Unsupported("用电脑调这台显示器的亮度".into()));
+        }
+        monitor.percent = Some(percent.min(100));
+        Ok(percent.min(100))
     }
 }

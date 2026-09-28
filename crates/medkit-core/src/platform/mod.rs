@@ -9,6 +9,8 @@ use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue};
 
 #[cfg(windows)]
+mod brightness;
+#[cfg(windows)]
 mod displays;
 #[cfg(windows)]
 pub mod explorer_exec;
@@ -73,6 +75,39 @@ pub struct Displays {
     /// 现在是远程桌面连着这台电脑：分辨率由连过来的那台电脑决定
     pub remote: bool,
     pub list: Vec<Display>,
+}
+
+/// 一个显示器的亮度（工具箱「显示器亮度」）。外接显示器用 DDC/CI 读写；笔记本自带的屏幕、没开 DDC/CI 的显示器也列出来，
+/// 亮度是 `None`（电脑调不了，界面上说用哪个键、哪个按钮调）。只有型号名，没有序列号。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MonitorBrightness {
+    /// 这次认这个显示器用的名字：桌面的 GDI 设备名加上物理显示器的序号（`\\.\DISPLAY2#0`），调亮度时原样传回来
+    pub id: String,
+    /// 显示器自己报的型号名；「复制」时几台共用一个画面、读不到时是 `None`
+    pub name: Option<String>,
+    /// 笔记本、一体机自带的屏幕
+    pub internal: bool,
+    /// 现在的亮度（0–100，按显示器报的最小、最大值换算）；`None` 是电脑调不了
+    pub percent: Option<u8>,
+}
+
+/// 显示器报的原始亮度换成百分比。显示器报的最小、最大值不一定是 0 和 100（Monitorian 的注释）；最大值不比最小值大的
+/// 读数不可信，是 `None`。
+pub fn brightness_percent(min: u32, current: u32, max: u32) -> Option<u8> {
+    if max <= min {
+        return None;
+    }
+    let span = u64::from(max - min);
+    let value = u64::from(current.clamp(min, max) - min);
+    u8::try_from((value * 100 + span / 2) / span).ok()
+}
+
+/// 百分比换回显示器的原始亮度（四舍五入，超过 100 的按 100）。
+pub fn brightness_raw(min: u32, max: u32, percent: u8) -> u32 {
+    let span = u64::from(max.saturating_sub(min));
+    let raw = (span * u64::from(percent.min(100)) + 50) / 100;
+    min.saturating_add(u32::try_from(raw).unwrap_or(u32::MAX))
 }
 
 /// 在用文件的是什么样的程序（重启管理器报的类型），决定界面上怎么说。
@@ -295,6 +330,18 @@ pub trait Platform: Send + Sync {
     fn displays(&self) -> PResult<Displays> {
         Err(PlatformError::Unsupported("读显示器的分辨率".into()))
     }
+
+    /// 每个显示器现在的亮度（见 [`MonitorBrightness`]）。只读。
+    fn monitor_brightness(&self) -> PResult<Vec<MonitorBrightness>> {
+        Err(PlatformError::Unsupported("读显示器的亮度".into()))
+    }
+
+    /// 把 `id` 这个显示器的亮度调成 `percent`（0–100），返回调完以后读回来的亮度。显示器已经不在时返回
+    /// [`PlatformError::NotFound`]，电脑调不了时返回 [`PlatformError::Unsupported`]。
+    fn set_monitor_brightness(&self, id: &str, percent: u8) -> PResult<u8> {
+        let _ = (id, percent);
+        Err(PlatformError::Unsupported("调显示器的亮度".into()))
+    }
 }
 
 /// 注册表 EditionID → 版本类型。
@@ -316,6 +363,34 @@ pub fn edition_from_id(id: &str) -> Option<Edition> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn brightness_is_scaled_by_what_the_monitor_reports() {
+        assert_eq!(brightness_percent(0, 50, 100), Some(50));
+        assert_eq!(brightness_percent(0, 0, 100), Some(0));
+        assert_eq!(brightness_percent(0, 100, 100), Some(100));
+        // 最小、最大值不是 0 和 100 的显示器
+        assert_eq!(brightness_percent(10, 55, 100), Some(50));
+        assert_eq!(brightness_percent(0, 30, 60), Some(50));
+        assert_eq!(brightness_percent(0, 120, 100), Some(100));
+        assert_eq!(brightness_percent(50, 50, 50), None);
+        assert_eq!(brightness_percent(0, 0, 0), None);
+        assert_eq!(brightness_raw(0, 100, 50), 50);
+        assert_eq!(brightness_raw(0, 60, 50), 30);
+        assert_eq!(brightness_raw(10, 100, 100), 100);
+        assert_eq!(brightness_raw(10, 100, 0), 10);
+        assert_eq!(brightness_raw(0, 100, 200), 100);
+        // 显示器的档数不少于 100 时，换过去再换回来还是原来的百分比
+        for max in [100u32, 255] {
+            for percent in 0..=100u8 {
+                assert_eq!(
+                    brightness_percent(0, brightness_raw(0, max, percent), max),
+                    Some(percent),
+                    "{max} {percent}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn editions() {

@@ -16,6 +16,7 @@ import type {
   JournalSession,
   KeyMappingInput,
   KeyRemapView,
+  MonitorBrightness,
   NewMenuItem,
   OcrView,
   Preview,
@@ -371,6 +372,16 @@ export function popupFind(seconds: number): Promise<WindowOwnerReport> {
 /** 在资源管理器里打开刚才找到的程序所在的文件夹，并选中它 */
 export function popupReveal(): Promise<null> {
   return call('popup_reveal', {})
+}
+
+/** 显示器亮度：每个显示器现在的亮度（外接显示器用 DDC/CI 读；电脑调不了的 percent 是 null） */
+export function brightnessList(): Promise<MonitorBrightness[]> {
+  return call('brightness_list', {})
+}
+
+/** 显示器亮度：把一个显示器调到 percent（0–100），返回调完以后读回来的亮度 */
+export function brightnessSet(id: string, percent: number): Promise<number> {
+  return call('brightness_set', { id, percent })
 }
 
 /** 找大文件和重复文件：用系统的选择框选文件夹，数一遍（只读）；取消返回 null */

@@ -1189,6 +1189,28 @@ fn keyboard_aids_are_read_from_the_platform() {
     assert!(w.runner.calls().is_empty(), "不该跑脚本：{:?}", w.runner.calls());
 }
 
+/// 显示器亮度：读的是平台报的；调得了的调完读回来，调不了的、已经拔掉的说清楚怎么办；超过 100 的不接受；不记修改日志。
+#[test]
+fn monitor_brightness_is_read_and_set_through_the_platform() {
+    let w = world();
+    let list = w.engine.monitor_brightness().unwrap();
+    assert_eq!(list.len(), 2);
+    let external = list.iter().find(|m| m.percent.is_some()).unwrap().clone();
+    assert_eq!(w.engine.set_monitor_brightness(&external.id, 40).unwrap(), 40);
+    let after = w.engine.monitor_brightness().unwrap();
+    assert_eq!(after.iter().find(|m| m.id == external.id).unwrap().percent, Some(40));
+
+    let laptop = list.iter().find(|m| m.internal).unwrap();
+    let e = w.engine.set_monitor_brightness(&laptop.id, 40).unwrap_err().to_string();
+    assert!(e.contains("DDC/CI") && e.contains("按钮"), "{e}");
+    let e = w.engine.set_monitor_brightness(r"\\.\DISPLAY9#0", 40).unwrap_err().to_string();
+    assert!(e.contains("拔掉"), "{e}");
+    let e = w.engine.set_monitor_brightness(&external.id, 101).unwrap_err().to_string();
+    assert!(e.contains("0 到 100"), "{e}");
+    assert!(w.engine.journal_list().unwrap().is_empty(), "调亮度不记修改日志");
+    assert!(w.runner.calls().is_empty(), "不该跑脚本：{:?}", w.runner.calls());
+}
+
 /// 用户自己写的问题描述放在报告最前面，和其余部分一样脱敏；太长的截断，空的不写这一节。
 #[test]
 fn the_users_own_note_is_redacted_and_kept_short() {

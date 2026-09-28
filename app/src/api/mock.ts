@@ -40,6 +40,7 @@ import type {
   JournalSession,
   KeyMappingInput,
   KeyOption,
+  MonitorBrightness,
   NewMenuItem,
   Preview,
   ShellPlaceItem,
@@ -3109,6 +3110,16 @@ const handlers: Handlers = {
     if (!demoPopupFound) throw '还没有找到是哪个程序，请先点「开始找」。'
     return null
   },
+  // 说法和引擎一样
+  brightness_list: () => demoBrightness.map((m) => ({ ...m })),
+  brightness_set: ({ id, percent }) => {
+    const m = demoBrightness.find((x) => x.id === id)
+    if (percent > 100) throw `亮度只能是 0 到 100，收到的是 ${percent}`
+    if (!m) throw '这个显示器已经拔掉了，或者换了接口。点「重新读取」再调。'
+    if (m.percent === null) throw '这个显示器不让电脑调亮度：用显示器上的按钮调，或者在显示器的菜单里打开「DDC/CI」以后再试。'
+    m.percent = percent
+    return percent
+  },
   space_pick_folder: () => {
     demoSpace = true
     return demoSpaceReport()
@@ -3307,6 +3318,12 @@ function demoLockReport(): FileLockReport {
 
 // ── 别让电脑自己睡着（演示）──
 let demoAwake = { on: false, display: false }
+
+// 显示器亮度：一块调不了的笔记本屏幕和一台能调的外接显示器（和引擎的模拟平台一样）
+const demoBrightness: MonitorBrightness[] = [
+  { id: '\\\\.\\DISPLAY1#0', name: null, internal: true, percent: null },
+  { id: '\\\\.\\DISPLAY2#0', name: 'DELL U2414H', internal: false, percent: 70 },
+]
 
 // ── 定时关机（演示：只记着，不会真的关机）──
 let demoShutdown: { at: number; restart: boolean } | null = null

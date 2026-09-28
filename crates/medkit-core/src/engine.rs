@@ -25,7 +25,7 @@ use crate::model::{
 };
 use crate::new_menu;
 use crate::ocr;
-use crate::platform::{OpenRequest, Platform, PlatformError};
+use crate::platform::{MonitorBrightness, OpenRequest, Platform, PlatformError};
 use crate::registry::{RegRoot, RegValue, SpecRoot, display_opt, is_sid, key_ancestors, split_key};
 use crate::render::{label_fact, render};
 use crate::report::redact;
@@ -1498,6 +1498,33 @@ impl Engine {
     pub fn window_owner(&self) -> Result<(crate::views::WindowOwnerReport, Option<std::path::PathBuf>)> {
         crate::window_owner::find(self.platform.as_ref())
             .map_err(|e| Error::Invalid(format!("没能看出是哪个程序的窗口：{e}")))
+    }
+
+    // ───────────── 显示器亮度 ─────────────
+
+    /// 每个显示器现在的亮度。外接显示器用 DDC/CI 读；电脑调不了的（笔记本自带的屏幕、没开 DDC/CI 的显示器）也列出来，
+    /// 亮度是 `None`。
+    pub fn monitor_brightness(&self) -> Result<Vec<MonitorBrightness>> {
+        self.platform
+            .monitor_brightness()
+            .map_err(|e| Error::Invalid(format!("没能读显示器的亮度：{}", platform_text(&e))))
+    }
+
+    /// 把 `id` 这个显示器的亮度调成 `percent`（0–100），返回调完以后读回来的亮度。改的是显示器自己的亮度，和按显示器上的
+    /// 按钮一样，拖回去就行，不记修改日志。
+    pub fn set_monitor_brightness(&self, id: &str, percent: u8) -> Result<u8> {
+        if percent > 100 {
+            return Err(Error::Invalid(format!("亮度只能是 0 到 100，收到的是 {percent}")));
+        }
+        self.platform.set_monitor_brightness(id, percent).map_err(|e| match e {
+            PlatformError::NotFound(_) => {
+                Error::Invalid("这个显示器已经拔掉了，或者换了接口。点「重新读取」再调。".into())
+            }
+            PlatformError::Unsupported(_) => Error::Invalid(
+                "这个显示器不让电脑调亮度：用显示器上的按钮调，或者在显示器的菜单里打开「DDC/CI」以后再试。".into(),
+            ),
+            e => Error::Invalid(format!("没能调亮度：{}", platform_text(&e))),
+        })
     }
 
     // ───────────── 右键菜单 ─────────────

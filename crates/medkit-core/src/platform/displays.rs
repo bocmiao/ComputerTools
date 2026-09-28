@@ -8,14 +8,14 @@ use std::mem::size_of;
 use std::ptr::null_mut;
 
 use windows_sys::Win32::Devices::Display::{
-    DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME, DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_PREFERRED_MODE,
-    DISPLAYCONFIG_DEVICE_INFO_HEADER, DISPLAYCONFIG_DEVICE_INFO_TYPE, DISPLAYCONFIG_MODE_INFO,
-    DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE, DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED,
-    DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL, DISPLAYCONFIG_OUTPUT_TECHNOLOGY_LVDS,
-    DISPLAYCONFIG_OUTPUT_TECHNOLOGY_UDI_EMBEDDED, DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_ROTATION_ROTATE90,
-    DISPLAYCONFIG_ROTATION_ROTATE270, DISPLAYCONFIG_TARGET_DEVICE_NAME, DISPLAYCONFIG_TARGET_PREFERRED_MODE,
-    DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY, DisplayConfigGetDeviceInfo, GetDisplayConfigBufferSizes,
-    QDC_ONLY_ACTIVE_PATHS, QueryDisplayConfig,
+    DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME, DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME,
+    DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_PREFERRED_MODE, DISPLAYCONFIG_DEVICE_INFO_HEADER,
+    DISPLAYCONFIG_DEVICE_INFO_TYPE, DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE,
+    DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED, DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL,
+    DISPLAYCONFIG_OUTPUT_TECHNOLOGY_LVDS, DISPLAYCONFIG_OUTPUT_TECHNOLOGY_UDI_EMBEDDED, DISPLAYCONFIG_PATH_INFO,
+    DISPLAYCONFIG_ROTATION_ROTATE90, DISPLAYCONFIG_ROTATION_ROTATE270, DISPLAYCONFIG_SOURCE_DEVICE_NAME,
+    DISPLAYCONFIG_TARGET_DEVICE_NAME, DISPLAYCONFIG_TARGET_PREFERRED_MODE, DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY,
+    DisplayConfigGetDeviceInfo, GetDisplayConfigBufferSizes, QDC_ONLY_ACTIVE_PATHS, QueryDisplayConfig,
 };
 use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS, LUID};
 use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_REMOTESESSION};
@@ -57,6 +57,29 @@ pub fn displays() -> PResult<Displays> {
         });
     }
     Ok(Displays { remote, list })
+}
+
+/// 每条活动路径的桌面 GDI 设备名（`\\.\DISPLAY1` 这种，EnumDisplayMonitors、GetMonitorInfo 给的就是它）和上面接着的
+/// 显示器：型号名、是不是自带的屏幕。「复制」时一个设备名上接着好几个。调亮度时按设备名对上名字用。
+pub(super) fn monitors_by_gdi_name() -> PResult<Vec<(String, Option<String>, bool)>> {
+    let (paths, _) = query()?;
+    Ok(paths
+        .iter()
+        .filter_map(|path| {
+            let source = &path.sourceInfo;
+            // SAFETY: DISPLAYCONFIG_SOURCE_DEVICE_NAME 以 header 开头，是 GET_SOURCE_NAME 要的结构体
+            let gdi: DISPLAYCONFIG_SOURCE_DEVICE_NAME =
+                unsafe { device_info(DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME, source.adapterId, source.id)? };
+            let target = &path.targetInfo;
+            let name = target_name(target.adapterId, target.id);
+            let technology = name.as_ref().map_or(target.outputTechnology, |n| n.outputTechnology);
+            Some((
+                text(&gdi.viewGdiDeviceName)?,
+                name.as_ref().and_then(|n| text(&n.monitorFriendlyDeviceName)),
+                is_internal(technology),
+            ))
+        })
+        .collect())
 }
 
 /// 活动的显示路径和它们用到的模式。两次调用之间有显示器插拔时缓冲区会不够，重来（微软文档的做法）。
@@ -145,7 +168,7 @@ fn same_source(a: &DISPLAYCONFIG_PATH_INFO, b: &DISPLAYCONFIG_PATH_INFO) -> bool
 }
 
 /// 以 NUL 结尾的定长 UTF-16 字符串；空的是 `None`。
-fn text(buf: &[u16]) -> Option<String> {
+pub(super) fn text(buf: &[u16]) -> Option<String> {
     let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
     let s = String::from_utf16_lossy(&buf[..len]).trim().to_owned();
     (!s.is_empty()).then_some(s)
