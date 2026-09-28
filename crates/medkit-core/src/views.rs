@@ -334,6 +334,33 @@ pub struct NewMenuItem {
     pub visible: bool,
 }
 
+/// 资源管理器里的图标在哪。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ShellPlace {
+    /// 左边导航栏的最上面一层（和「此电脑」「网络」并列）
+    Nav,
+    /// 「此电脑」里
+    Pc,
+}
+
+/// 软件加在资源管理器导航栏或者「此电脑」里的一个图标（网盘、WPS 云文档这些）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellPlaceItem {
+    /// `nav:{CLSID}` 或者 `pc:{CLSID}`，改开关时原样传回来
+    pub id: String,
+    /// 资源管理器里显示的名字
+    pub title: String,
+    pub place: ShellPlace,
+    /// Windows 自带的（OneDrive、图库、3D 对象这些）
+    pub windows_own: bool,
+    /// 现在显示不显示
+    pub visible: bool,
+    /// 要特别说明的（比如是在所有用户的设置里隐藏的），多数是空的
+    pub note: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JournalEntryView {

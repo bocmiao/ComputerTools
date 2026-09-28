@@ -105,6 +105,19 @@ export interface NewMenuItem {
   visible: boolean             // 现在在菜单里显示不显示
 }
 
+/** 资源管理器里的图标在哪：左边导航栏的最上面一层，或者「此电脑」里 */
+export type ShellPlace = 'nav' | 'pc'
+
+/** 软件加在资源管理器导航栏或者「此电脑」里的一个图标（网盘、WPS 云文档这些） */
+export interface ShellPlaceItem {
+  id: string                   // `nav:{CLSID}` 或 `pc:{CLSID}`，改开关时原样传回
+  title: string                // 资源管理器里显示的名字
+  place: ShellPlace
+  windowsOwn: boolean          // Windows 自带的（OneDrive、图库、3D 对象这些）
+  visible: boolean             // 现在显示不显示
+  note: string                 // 要特别说明的，多数是空的
+}
+
 /** 别让电脑自己睡着：只在小药箱开着时有效 */
 export interface AwakeStatus { on: boolean; display: boolean }
 

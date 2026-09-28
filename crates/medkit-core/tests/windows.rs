@@ -1091,3 +1091,217 @@ fn new_menu_entries_are_listed_hidden_and_restored() {
         assert_eq!(platform.reg_get(&hklm, bmp, "MedkitHidden.NullFile").unwrap(), None);
     }
 }
+
+/// 资源管理器里多出来的图标：照网盘的做法（微软《Integrate a Cloud Storage Provider》）登记三个测试用的图标，都指向
+/// 一个临时文件夹——导航栏里一个登记在当前用户的注册表里（像 OneDrive）、一个的 CLSID 只在所有用户的注册表里（像
+/// 图库），「此电脑」里一个（像 WPS 云文档）。用真的脚本列出来，隐藏、恢复、在修改日志里撤销，逐个核对注册表；
+/// 再另起进程用 Windows 自己的外壳（Shell.Application）看「此电脑」里还有没有、导航栏的开关外壳读出来是多少。
+/// 结束时（包括断言失败时）删掉测试用的键。
+#[test]
+#[ignore = "会临时往资源管理器里加三个测试用的图标（结束时删掉）；需要管理员权限"]
+fn shell_places_are_listed_hidden_and_restored() {
+    use medkit_core::views::{ShellPlace, ShellPlaceItem};
+    use serde_json::Value;
+
+    const PINNED: &str = "System.IsPinnedToNameSpaceTree";
+    const EXPLORER: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer";
+    let clsid = || format!("{{{}}}", new_id().to_uppercase());
+    let (cloud, machine, pc) = (clsid(), clsid(), clsid());
+    let hide_pc = format!(r"{EXPLORER}\HideMyComputerIcons");
+    struct Cleanup(Vec<String>, String, String);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            for key in &self.0 {
+                let _ = Command::new("reg.exe").args(["delete", key, "/f"]).output();
+            }
+            let _ = Command::new("reg.exe").args(["delete", &self.1, "/v", &self.2, "/f"]).output();
+        }
+    }
+    let _cleanup = Cleanup(
+        vec![
+            format!(r"HKCU\Software\Classes\CLSID\{cloud}"),
+            format!(r"HKCU\Software\Classes\WOW6432Node\CLSID\{cloud}"),
+            format!(r"HKCU\Software\Classes\CLSID\{machine}"),
+            format!(r"HKLM\SOFTWARE\Classes\CLSID\{machine}"),
+            format!(r"HKCU\Software\Classes\CLSID\{pc}"),
+            format!(r"HKCU\{EXPLORER}\Desktop\NameSpace\{cloud}"),
+            format!(r"HKCU\{EXPLORER}\Desktop\NameSpace\{machine}"),
+            format!(r"HKCU\{EXPLORER}\MyComputer\NameSpace\{pc}"),
+        ],
+        format!(r"HKCU\{hide_pc}"),
+        pc.clone(),
+    );
+
+    let platform = WindowsPlatform::new();
+    let (hkcu, hklm) = (RegRoot::CurrentUser, RegRoot::LocalMachine);
+    let s = |v: &str| RegValue::String(v.to_owned());
+    let x = |v: &str| RegValue::ExpandString(v.to_owned());
+    let target = tempfile::tempdir().unwrap();
+    // 网盘的登记方式：shell32 里的文件系统文件夹，指向一个文件夹
+    let register = |root: &RegRoot, classes: &str, id: &str, title: &str, pinned: Option<u32>| {
+        let class = format!(r"{classes}\CLSID\{id}");
+        platform.reg_set(root, &class, "", &s(title)).unwrap();
+        if let Some(p) = pinned {
+            platform.reg_set(root, &class, PINNED, &RegValue::Dword(p)).unwrap();
+        }
+        platform.reg_set(root, &class, "SortOrderIndex", &RegValue::Dword(0x42)).unwrap();
+        platform
+            .reg_set(root, &format!(r"{class}\InProcServer32"), "", &x(r"%SystemRoot%\system32\shell32.dll"))
+            .unwrap();
+        platform
+            .reg_set(root, &format!(r"{class}\Instance"), "CLSID", &s("{0E5AAE11-A475-4c5b-AB00-C66DE400274E}"))
+            .unwrap();
+        let bag = format!(r"{class}\Instance\InitPropertyBag");
+        platform.reg_set(root, &bag, "Attributes", &RegValue::Dword(0x11)).unwrap();
+        platform.reg_set(root, &bag, "TargetFolderPath", &x(&target.path().display().to_string())).unwrap();
+        let folder = format!(r"{class}\ShellFolder");
+        platform.reg_set(root, &folder, "FolderValueFlags", &RegValue::Dword(0x28)).unwrap();
+        platform.reg_set(root, &folder, "Attributes", &RegValue::Dword(0xF080_004D)).unwrap();
+    };
+    register(&hkcu, r"Software\Classes", &cloud, "MedkitTest Cloud", Some(1));
+    platform
+        .reg_set(&hkcu, &format!(r"Software\Classes\WOW6432Node\CLSID\{cloud}"), PINNED, &RegValue::Dword(1))
+        .unwrap();
+    platform.reg_set(&hkcu, &format!(r"{EXPLORER}\Desktop\NameSpace\{cloud}"), "", &s("MedkitTest Cloud")).unwrap();
+    register(&hklm, r"SOFTWARE\Classes", &machine, "MedkitTest Machine", Some(1));
+    platform.reg_set(&hkcu, &format!(r"{EXPLORER}\Desktop\NameSpace\{machine}"), "", &s("MedkitTest Machine")).unwrap();
+    register(&hkcu, r"Software\Classes", &pc, "MedkitTest PC", None);
+    platform.reg_set(&hkcu, &format!(r"{EXPLORER}\MyComputer\NameSpace\{pc}"), "", &s("MedkitTest PC")).unwrap();
+
+    let dir = tempfile::tempdir().unwrap();
+    let probe_script = dir.path().join("probe.ps1");
+    std::fs::write(&probe_script, include_str!("facts/shell-places-probe.ps1")).unwrap();
+    let nav_ids = format!("{cloud},{machine}");
+    let probe = || -> Value {
+        let out = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+            .arg(&probe_script)
+            .args(["-Nav", &nav_ids])
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+        assert!(out.status.success(), "外壳探测脚本出错：{}", String::from_utf8_lossy(&out.stderr));
+        serde_json::from_str(&text).unwrap_or_else(|e| panic!("探测结果不是 JSON（{e}）：{text}"))
+    };
+    let in_pc = |v: &Value, key: &str| v[key].as_array().is_some_and(|a| a.iter().any(|n| n == "MedkitTest PC"));
+    let on = |v: &Value| match v {
+        Value::Bool(b) => *b,
+        Value::Number(n) => n.as_f64().is_some_and(|f| f != 0.0),
+        Value::String(t) => t == "1" || t.eq_ignore_ascii_case("true"),
+        _ => false,
+    };
+    let report = |when: &str, v: &Value| {
+        eprintln!(
+            "{when}：「此电脑」里{}测试图标（算上隐藏的{}），外壳读到的导航栏开关 {} / {}，HKCR 里的名字 {} / {}",
+            if in_pc(v, "pc") { "有" } else { "没有" },
+            if in_pc(v, "pc_all") { "有" } else { "也没有" },
+            v["pinned"][cloud.as_str()],
+            v["pinned"][machine.as_str()],
+            v["merged"][cloud.as_str()],
+            v["merged"][machine.as_str()],
+        );
+    };
+
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    let root =
+        platform.interactive_user().filter(|u| is_sid(&u.sid)).map_or(RegRoot::CurrentUser, |u| RegRoot::User(u.sid));
+    let started = std::time::Instant::now();
+    let items = engine.shell_places_list().unwrap();
+    eprintln!("列资源管理器里的图标用了 {} 毫秒：", started.elapsed().as_millis());
+    for i in &items {
+        eprintln!(
+            "  {:?} {:<28} {} {}",
+            i.place,
+            i.title,
+            if i.visible { "显示" } else { "不显示" },
+            if i.windows_own { "Windows 自带" } else { "" }
+        );
+    }
+    let find = |items: &[ShellPlaceItem], title: &str| {
+        items.iter().find(|i| i.title == title).cloned().unwrap_or_else(|| panic!("没列出 {title}：{items:#?}"))
+    };
+    let ids: Vec<String> = ["MedkitTest Cloud", "MedkitTest Machine", "MedkitTest PC"]
+        .into_iter()
+        .map(|title| {
+            let i = find(&items, title);
+            assert!(i.visible && !i.windows_own && i.note.is_empty(), "{i:?}");
+            i.id
+        })
+        .collect();
+    assert_eq!(find(&items, "MedkitTest PC").place, ShellPlace::Pc);
+    assert_eq!(find(&items, "MedkitTest Machine").place, ShellPlace::Nav);
+    // Windows 自己的基本位置一个都不能列：此电脑、网络、回收站、库、主文件夹
+    for own in [
+        "{20D04FE0-3AEA-1069-A2D8-08002B30309D}",
+        "{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}",
+        "{645FF040-5081-101B-9F08-00AA002F954E}",
+        "{031E4825-7B94-4DC3-B131-E946B44C8DD5}",
+        "{F874310E-B6B7-47DC-BC84-B9E6B38F5903}",
+    ] {
+        assert!(items.iter().all(|i| !i.id.ends_with(own)), "Windows 自己的不应该列出来：{own}");
+    }
+
+    let before = probe();
+    report("隐藏前", &before);
+    for id in &ids {
+        let r = engine.shell_places_set(id, false).unwrap();
+        assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
+    }
+    let class = |id: &str| format!(r"Software\Classes\CLSID\{id}");
+    let wow = format!(r"Software\Classes\WOW6432Node\CLSID\{cloud}");
+    let machine_class = format!(r"SOFTWARE\Classes\CLSID\{machine}");
+    assert_eq!(platform.reg_get(&root, &class(&cloud), PINNED).unwrap(), Some(RegValue::Dword(0)));
+    assert_eq!(platform.reg_get(&root, &wow, PINNED).unwrap(), Some(RegValue::Dword(0)), "32 位程序看的那一份也改");
+    assert_eq!(platform.reg_get(&root, &class(&machine), PINNED).unwrap(), Some(RegValue::Dword(0)));
+    assert_eq!(
+        platform.reg_get(&hklm, &machine_class, PINNED).unwrap(),
+        Some(RegValue::Dword(1)),
+        "所有用户的那份不动，只在当前用户这里隐藏"
+    );
+    assert_eq!(platform.reg_get(&root, &hide_pc, &pc).unwrap(), Some(RegValue::Dword(1)));
+    let hidden = probe();
+    report("隐藏后", &hidden);
+    if in_pc(&before, "pc") {
+        assert!(!in_pc(&hidden, "pc"), "外壳列「此电脑」时还有测试图标：HideMyComputerIcons 没起作用");
+    } else {
+        eprintln!("注意：隐藏前外壳列「此电脑」时就没有测试图标，核对不了「此电脑」里的显示");
+    }
+    for id in [&cloud, &machine] {
+        if on(&before["pinned"][id.as_str()]) {
+            assert!(!on(&hidden["pinned"][id.as_str()]), "外壳读到的导航栏开关还开着：{id}");
+        }
+    }
+    let items = engine.shell_places_list().unwrap();
+    for title in ["MedkitTest Cloud", "MedkitTest Machine", "MedkitTest PC"] {
+        assert!(!find(&items, title).visible, "{title} 隐藏以后要显示成不显示");
+    }
+
+    for id in &ids {
+        let r = engine.shell_places_set(id, true).unwrap();
+        assert!(r.ok && r.verified == FeatureStateKind::Applied, "{r:?}");
+    }
+    assert_eq!(platform.reg_get(&root, &class(&cloud), PINNED).unwrap(), Some(RegValue::Dword(1)));
+    assert_eq!(platform.reg_get(&root, &wow, PINNED).unwrap(), Some(RegValue::Dword(1)));
+    assert!(!platform.reg_key_exists(&root, &class(&machine)).unwrap(), "隐藏时新建的键删掉了，回到登记时的样子");
+    assert_eq!(platform.reg_get(&root, &hide_pc, &pc).unwrap(), None);
+    let shown = probe();
+    report("恢复后", &shown);
+    if in_pc(&before, "pc") {
+        assert!(in_pc(&shown, "pc"), "恢复以后外壳列「此电脑」时没有测试图标");
+    }
+    for id in [&cloud, &machine] {
+        if on(&before["pinned"][id.as_str()]) {
+            assert!(on(&shown["pinned"][id.as_str()]), "恢复以后外壳读到的导航栏开关还是关着的：{id}");
+        }
+    }
+
+    // 在修改日志里撤销
+    engine.shell_places_list().unwrap();
+    let r = engine.shell_places_set(&ids[1], false).unwrap();
+    for id in r.entry_ids.iter().rev() {
+        let u = engine.journal_undo(id, false).unwrap();
+        assert!(u.ok, "{u:?}");
+    }
+    assert!(!platform.reg_key_exists(&root, &class(&machine)).unwrap(), "撤销时新建的键跟着删掉");
+    assert_eq!(platform.reg_get(&hklm, &machine_class, PINNED).unwrap(), Some(RegValue::Dword(1)));
+}

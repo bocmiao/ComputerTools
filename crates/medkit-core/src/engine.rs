@@ -28,13 +28,14 @@ use crate::registry::{RegRoot, RegValue, SpecRoot, display_opt, is_sid, key_ance
 use crate::render::render;
 use crate::report::redact;
 use crate::script::ScriptRunner;
+use crate::shell_places;
 use crate::startup;
 use crate::tools;
 use crate::views::{
     ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, ContextMenuKind, FeatureState, FeatureStateKind,
     FeatureSummary, FileLockReport, JournalEntryView, JournalSession, NewMenuItem, Preview, PreviewChange,
-    ProfileSummary, StartupItem, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo, ToolOpens, ToolResult,
-    ToolSummary, UndoResult,
+    ProfileSummary, ShellPlace, ShellPlaceItem, StartupItem, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo,
+    ToolOpens, ToolResult, ToolSummary, UndoResult,
 };
 
 const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -49,6 +50,7 @@ const STARTUP_LIST_TIMEOUT: Duration = Duration::from_secs(90);
 /// 列右键菜单要查程序的签名、读应用清单；脚本自己有时间上限，这里再留些余量
 const CONTEXT_MENU_LIST_TIMEOUT: Duration = Duration::from_secs(120);
 const NEW_MENU_LIST_TIMEOUT: Duration = Duration::from_secs(60);
+const SHELL_PLACES_LIST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// 一个原语没改成功。
 struct StepError {
@@ -127,6 +129,8 @@ pub struct Engine {
     context_menu: Mutex<Vec<context_menu::Group>>,
     /// 最近一次列出的「新建」菜单项目：改开关时只认这里面有的
     new_menu: Mutex<Vec<new_menu::Group>>,
+    /// 最近一次列出的资源管理器图标：改开关时只认这里面有的
+    shell_places: Mutex<Vec<shell_places::Group>>,
 }
 
 impl Engine {
@@ -155,6 +159,7 @@ impl Engine {
             startup_items: Mutex::new(Vec::new()),
             context_menu: Mutex::new(Vec::new()),
             new_menu: Mutex::new(Vec::new()),
+            shell_places: Mutex::new(Vec::new()),
         }
     }
 
@@ -511,7 +516,12 @@ impl Engine {
     }
 
     fn resolve_registry(&self, r: &RegistryAction) -> Result<(RegRoot, String)> {
-        let (spec_root, sub) = split_key(&r.key).map_err(Error::Catalog)?;
+        self.resolve_key(&r.key)
+    }
+
+    /// 带根的键（`HKLM\…`、`HKCU\…`）换成根和子键；HKCU 换成登录用户的。
+    fn resolve_key(&self, key: &str) -> Result<(RegRoot, String)> {
+        let (spec_root, sub) = split_key(key).map_err(Error::Catalog)?;
         let root = match spec_root {
             SpecRoot::Hklm => RegRoot::LocalMachine,
             SpecRoot::Hkcu => match self.platform.interactive_user() {
@@ -1479,11 +1489,11 @@ impl Engine {
                 } else {
                     ((*name).to_owned(), new_menu::hidden_name(name))
                 };
-                let Some(value) = self.new_menu_value(&key, &from)? else {
+                let Some(value) = self.registry_value(&key, &from)? else {
                     continue;
                 };
                 // 恢复时原来的名字已经有值了（软件自己又写了一遍）：留着它，只删掉改过名的
-                if !(visible && self.new_menu_value(&key, &to)?.is_some()) {
+                if !(visible && self.registry_value(&key, &to)?.is_some()) {
                     actions.push(Self::value_action(&key, &to, Some(&value)));
                 }
                 actions.push(Self::value_action(&key, &from, None));
@@ -1534,7 +1544,7 @@ impl Engine {
     fn new_menu_visible(&self, g: &new_menu::Group) -> Result<bool> {
         for loc in g.locations.iter().filter(|l| l.counts(&g.current_progid)) {
             for name in new_menu::DEFINING {
-                if self.new_menu_value(&loc.key(), name)?.is_some() {
+                if self.registry_value(&loc.key(), name)?.is_some() {
                     return Ok(true);
                 }
             }
@@ -1542,7 +1552,8 @@ impl Engine {
         Ok(false)
     }
 
-    fn new_menu_value(&self, key: &str, name: &str) -> Result<Option<RegValue>> {
+    /// 注册表里一个值现在的样子（`key` 带根，HKCU 换成登录用户的）。
+    fn registry_value(&self, key: &str, name: &str) -> Result<Option<RegValue>> {
         Ok(match self.current(&Self::value_action(key, name, None))?.1 {
             State::Registry { value, .. } => value,
             _ => None,
@@ -1587,6 +1598,212 @@ impl Engine {
         match state {
             State::Registry { value, .. } if value.is_some() != renamed => "显示".to_owned(),
             State::Registry { .. } => "不显示（已关掉）".to_owned(),
+            other => Self::state_label(other),
+        }
+    }
+
+    // ───────────── 资源管理器里多出来的图标 ─────────────
+
+    /// 软件加在资源管理器导航栏和「此电脑」里的图标（Windows 自己的基本位置不列），导航栏的在前，按名字排好。
+    pub fn shell_places_list(&self) -> Result<Vec<ShellPlaceItem>> {
+        let mut args = Map::new();
+        args.insert("UserHive".into(), Value::String(self.user_hive()));
+        let v = self
+            .runner
+            .run(shell_places::LIST_SCRIPT, &args, SHELL_PLACES_LIST_TIMEOUT)
+            .map_err(|e| Error::Invalid(format!("没能列出资源管理器里的图标：{e}")))?;
+        let groups = shell_places::group(shell_places::parse_list(&v).map_err(Error::Invalid)?);
+        let mut items = Vec::with_capacity(groups.len());
+        for g in &groups {
+            // 按注册表里现在的值（和改开关时用的是同一个判断）
+            let visible = self.shell_place_visible(g)?;
+            let machine_hidden = g.place == ShellPlace::Nav && !visible && !g.user.exists;
+            items.push(ShellPlaceItem {
+                id: g.id(),
+                title: self.shell_place_title(g),
+                place: g.place,
+                windows_own: g.windows_own(),
+                visible,
+                note: if machine_hidden {
+                    "是在所有用户的设置里隐藏的，恢复以后这台电脑上的所有用户都能看到。".to_owned()
+                } else {
+                    String::new()
+                },
+            });
+        }
+        items.sort_by(|a, b| (a.place, a.title.to_lowercase()).cmp(&(b.place, b.title.to_lowercase())));
+        *self.shell_places.lock().unwrap() = groups;
+        Ok(items)
+    }
+
+    /// 隐藏（`visible` 为 false）或者恢复一个图标，记进修改日志，能撤销。只认最近一次列出来的项目。
+    pub fn shell_places_set(&self, id: &str, visible: bool) -> Result<ApplyResult> {
+        let _guard = self.apply_lock.lock().unwrap();
+        let group = self
+            .shell_places
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|g| g.id() == id)
+            .cloned()
+            .ok_or_else(|| Error::Invalid("这一项不在刚才的列表里了，请刷新一下再试。".to_owned()))?;
+        let mut r = ApplyResult {
+            feature: shell_places::FEATURE_ID.to_owned(),
+            session_id: self.session.clone(),
+            entry_ids: Vec::new(),
+            ok: true,
+            verified: FeatureStateKind::Applied,
+            message: "本来就是这样，不用改。".to_owned(),
+            reboot: crate::model::Reboot::None,
+            notes: Vec::new(),
+            error: None,
+        };
+        if self.shell_place_visible(&group)? == visible {
+            return Ok(r);
+        }
+        let mut actions = Vec::new();
+        // 删掉值以后空了就删掉的键（隐藏时新建的那份用户的键）：不记进修改日志，撤销时写回值会把键建回来
+        let mut drop_keys = Vec::new();
+        match group.place {
+            ShellPlace::Pc => {
+                let key = format!(r"HKCU\{}", shell_places::HIDE_PC_KEY);
+                let hide = (!visible).then_some(RegValue::Dword(1));
+                actions.push(Self::value_action(&key, &group.clsid, hide.as_ref()));
+            }
+            ShellPlace::Nav => {
+                // 64 位程序（资源管理器）看的那一份，和 32 位程序看的那一份；按注册表里现在的值来
+                for (wow, listed) in [(false, group.user), (true, group.wow_user)] {
+                    let only_pinned = listed.exists && listed.only_pinned && listed.pinned == 0;
+                    match shell_places::plan(self.shell_place_pinned(&group.clsid, wow)?, only_pinned, visible) {
+                        Some(shell_places::Change::Write(hive, value)) => actions.push(Self::value_action(
+                            &shell_places::class_key(hive, wow, &group.clsid),
+                            shell_places::PINNED_VALUE,
+                            Some(&RegValue::Dword(value)),
+                        )),
+                        Some(shell_places::Change::DropUser) => {
+                            let key = shell_places::class_key(shell_places::Hive::User, wow, &group.clsid);
+                            actions.push(Self::value_action(&key, shell_places::PINNED_VALUE, None));
+                            drop_keys.push(key);
+                        }
+                        None => {}
+                    }
+                }
+            }
+        }
+        if actions.is_empty() {
+            // 列表以后注册表里的值变了（比如软件自己删掉了这个开关）
+            r.ok = false;
+            r.verified = FeatureStateKind::Unknown;
+            r.message = "这一项的设置和刚才列出来的时候不一样了，请刷新一下列表再试。".to_owned();
+            return Ok(r);
+        }
+        let (entry_ids, failure) = self.apply_actions(shell_places::FEATURE_ID, &actions);
+        r.entry_ids = entry_ids;
+        if let Some(failed) = failure {
+            r.ok = false;
+            r.verified = FeatureStateKind::Unknown;
+            r.message = if failed.rolled_back {
+                "没有改成功，已经退回原样。".to_owned()
+            } else {
+                "没有改成功，而且改动没能自动退回，请在修改日志里手动恢复。".to_owned()
+            };
+            r.error = Some(failed.error.to_string());
+            return Ok(r);
+        }
+        for key in drop_keys {
+            // 删不掉也不要紧：键里还有别的东西（那就不该删），或者被安全软件锁住了
+            if let Ok((root, sub)) = self.resolve_key(&key) {
+                let _ = self.platform.reg_delete_key_if_empty(&root, &sub);
+            }
+        }
+        if self.shell_place_visible(&group)? != visible {
+            r.verified = FeatureStateKind::NotApplied;
+        }
+        // 已经开着的资源管理器窗口不一定马上变，给「现在重启资源管理器」
+        r.reboot = crate::model::Reboot::Explorer;
+        r.message = if visible {
+            "已经恢复了，新打开的资源管理器窗口里就能看到；还看不到的话，重启一下资源管理器。"
+        } else {
+            "已经隐藏了，新打开的资源管理器窗口里就看不到了；还看得到的话，重启一下资源管理器。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。"
+        }
+        .to_owned();
+        Ok(r)
+    }
+
+    /// 名字：LocalizedString、CLSID 键的默认值、NameSpace 键的默认值，`@…` 解开再用；都没有就用 CLSID。
+    fn shell_place_title(&self, g: &shell_places::Group) -> String {
+        [&g.localized, &g.title, &g.name]
+            .into_iter()
+            .find_map(|text| {
+                let text = text.trim();
+                let resolved =
+                    if text.starts_with('@') { self.platform.indirect_string(text)? } else { text.to_owned() };
+                let clean = resolved.trim().to_owned();
+                (!clean.is_empty() && clean.chars().count() <= 80).then_some(clean)
+            })
+            .unwrap_or_else(|| g.clsid.clone())
+    }
+
+    fn shell_place_visible(&self, g: &shell_places::Group) -> Result<bool> {
+        Ok(match g.place {
+            ShellPlace::Pc => {
+                let key = format!(r"HKCU\{}", shell_places::HIDE_PC_KEY);
+                !matches!(self.registry_value(&key, &g.clsid)?, Some(RegValue::Dword(v)) if v != 0)
+            }
+            ShellPlace::Nav => self.shell_place_pinned(&g.clsid, false)?.shown(),
+        })
+    }
+
+    /// 一处（`wow`：32 位程序看的那一份）System.IsPinnedToNameSpaceTree 现在的样子。
+    fn shell_place_pinned(&self, clsid: &str, wow: bool) -> Result<shell_places::Pinned> {
+        let number = |v: Option<RegValue>| match v {
+            Some(RegValue::Dword(n)) => Some(u64::from(n)),
+            Some(RegValue::Qword(n)) => Some(n),
+            _ => None,
+        };
+        let user_key = shell_places::class_key(shell_places::Hive::User, wow, clsid);
+        let machine_key = shell_places::class_key(shell_places::Hive::Machine, wow, clsid);
+        let (root, sub) = self.resolve_key(&user_key)?;
+        Ok(shell_places::Pinned {
+            user_exists: self.platform.reg_key_exists(&root, &sub)?,
+            user: number(self.registry_value(&user_key, shell_places::PINNED_VALUE)?),
+            machine: number(self.registry_value(&machine_key, shell_places::PINNED_VALUE)?),
+        })
+    }
+
+    /// 修改日志里的标题：最近一次列表里的名字；程序重启以后没有列表，用 CLSID 键里登记的名字。
+    fn shell_place_journal_title(&self, clsid: &str) -> String {
+        let cached = self.shell_places.lock().unwrap().iter().find(|g| g.clsid == clsid).cloned();
+        if let Some(g) = cached {
+            return self.shell_place_title(&g);
+        }
+        for key in [
+            shell_places::class_key(shell_places::Hive::User, false, clsid),
+            shell_places::class_key(shell_places::Hive::Machine, false, clsid),
+        ] {
+            for name in ["LocalizedString", ""] {
+                if let Ok(Some(RegValue::String(text) | RegValue::ExpandString(text))) = self.registry_value(&key, name)
+                {
+                    let text = text.trim();
+                    let resolved =
+                        if text.starts_with('@') { self.platform.indirect_string(text) } else { Some(text.to_owned()) };
+                    if let Some(t) = resolved.filter(|t| !t.trim().is_empty()) {
+                        return t.trim().to_owned();
+                    }
+                }
+            }
+        }
+        clsid.to_owned()
+    }
+
+    /// 修改日志里图标开关的状态，说人话。`pinned`：是导航栏的 System.IsPinnedToNameSpaceTree（不然是「此电脑」的）。
+    fn shell_place_state_label(state: &State, pinned: bool) -> String {
+        match state {
+            State::Registry { value: Some(RegValue::Dword(0)), .. } if pinned => "不显示（已隐藏）".to_owned(),
+            State::Registry { value: Some(_), .. } if pinned => "显示".to_owned(),
+            State::Registry { value: None, .. } if pinned => "没有单独设置".to_owned(),
+            State::Registry { value: Some(RegValue::Dword(v)), .. } if *v != 0 => "不显示（已隐藏）".to_owned(),
+            State::Registry { .. } => "显示".to_owned(),
             other => Self::state_label(other),
         }
     }
@@ -1876,6 +2093,15 @@ impl Engine {
                 && matches!(&e.apply.target, TargetRef::Registry { key, name, .. } if new_menu::is_new_menu_target(key, name));
             let renamed =
                 matches!(&e.apply.target, TargetRef::Registry { name, .. } if new_menu::original_name(name).is_some());
+            // 资源管理器里的图标：标题用图标的名字，状态说「显示 / 不显示」
+            let place_clsid = match &e.apply.target {
+                TargetRef::Registry { key, name, .. } if e.apply.feature == shell_places::FEATURE_ID => {
+                    shell_places::target_clsid(key, name)
+                }
+                _ => None,
+            };
+            let pinned = matches!(&e.apply.target, TargetRef::Registry { name, .. }
+                if name.eq_ignore_ascii_case(shell_places::PINNED_VALUE));
             let label = |s: &State| {
                 if startup_entry {
                     Self::startup_state_label(s)
@@ -1883,6 +2109,8 @@ impl Engine {
                     Self::menu_state_label(s)
                 } else if new_menu_entry {
                     Self::new_menu_state_label(s, renamed)
+                } else if place_clsid.is_some() {
+                    Self::shell_place_state_label(s, pinned)
                 } else {
                     Self::state_label(s)
                 }
@@ -1895,6 +2123,10 @@ impl Engine {
                 TargetRef::Registry { key, .. } if new_menu_entry => {
                     format!("「新建」菜单：{}", self.new_menu_journal_title(key))
                 }
+                _ if place_clsid.is_some() => format!(
+                    "资源管理器里的图标：{}",
+                    self.shell_place_journal_title(place_clsid.as_deref().unwrap_or_default())
+                ),
                 _ if e.apply.feature == LEGACY_STARTUP_FEATURE => "停用开机启动项".to_owned(),
                 _ => self
                     .catalog

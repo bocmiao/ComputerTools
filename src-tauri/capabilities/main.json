@@ -25,6 +25,8 @@
     "allow-context-menu-set",
     "allow-new-menu-list",
     "allow-new-menu-set",
+    "allow-shell-places-list",
+    "allow-shell-places-set",
     "allow-rename-select-folder",
     "allow-rename-preview",
     "allow-rename-apply",

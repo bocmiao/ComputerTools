@@ -40,6 +40,7 @@ import type {
   JournalSession,
   NewMenuItem,
   Preview,
+  ShellPlaceItem,
   SpaceReport,
   SpeedResult,
   StartupItem,
@@ -1993,6 +1994,18 @@ const newMenuMock: NewMenuItem[] = [
   { id: '.txt', title: '文本文档', ext: '.txt', windowsOwn: true, location: '所有用户', visible: true },
   { id: '.zip', title: '压缩(zipped)文件夹', ext: '.zip', windowsOwn: true, location: '所有用户', visible: true },
 ].sort((a, b) => (a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1)) // 和引擎一样按名字排
+// 资源管理器里软件加的图标（演示）：网盘、WPS 云文档，和 Windows 自带的 OneDrive、图库
+const PLACE_SHOWN = '显示'
+const PLACE_HIDDEN = '不显示（已隐藏）'
+const shellPlacesMock: ShellPlaceItem[] = (
+  [
+    { id: 'nav:{018D5C66-4533-4307-9B53-224DE2ED1FE6}', title: 'OneDrive - Personal', place: 'nav', windowsOwn: true, visible: true, note: '' },
+    { id: 'nav:{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}', title: '图库', place: 'nav', windowsOwn: true, visible: true, note: '' },
+    { id: 'nav:{6D5C1F2A-0B1E-4C5A-9F3E-2A7B8C9D0E1F}', title: '坚果云', place: 'nav', windowsOwn: false, visible: true, note: '' },
+    { id: 'pc:{5FCD4425-CA3A-48F4-A57C-B8A75C32ACB1}', title: 'WPS云文档', place: 'pc', windowsOwn: false, visible: true, note: '' },
+    { id: 'pc:{679F137C-3162-45DA-BE3C-2F9C3D093F64}', title: '百度网盘', place: 'pc', windowsOwn: false, visible: true, note: '' },
+  ] satisfies ShellPlaceItem[]
+).sort((a, b) => a.place.localeCompare(b.place) || (a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1)) // 和引擎一样：导航栏的在前，按名字排
 const contextMenuMock: ContextMenuItem[] = [
   {
     id: 'menu-rar', kind: 'extension', title: 'WinRAR shell extension', program: 'rarext.dll',
@@ -2255,6 +2268,35 @@ const handlers: Handlers = {
     result.message = visible
       ? '已经恢复了，下次在右键「新建」里就能看到。'
       : '已经从右键「新建」菜单里拿掉了。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。'
+    return result
+  },
+
+  shell_places_list: () =>
+    shellPlacesMock.map((item) => ({ ...item, visible: values.get(`shellplace:${item.id}`) !== PLACE_HIDDEN })),
+
+  shell_places_set: ({ id, visible }) => {
+    const item = shellPlacesMock.find((x) => x.id === id)
+    if (!item) throw '这一项不在刚才的列表里了，请刷新一下再试。'
+    const target = `shellplace:${item.id}`
+    const before = values.get(target) ?? PLACE_SHOWN
+    const result: ApplyResult = {
+      feature: 'shell-places', sessionId: ensureSession().id, entryIds: [], ok: true, verified: 'applied',
+      message: '本来就是这样，不用改。', reboot: 'none', notes: [], error: null,
+    }
+    if ((before !== PLACE_HIDDEN) === visible) return result
+    const session = ensureSession()
+    const entry: JournalEntryView = {
+      id: uuid(), sessionId: session.id, time: iso(Date.now()), feature: 'shell-places',
+      featureTitle: `资源管理器里的图标：${item.title}`, target, before, after: visible ? PLACE_SHOWN : PLACE_HIDDEN,
+      ok: true, pending: false, undone: false, undoneAt: null, canUndo: true, error: null,
+    }
+    session.entries.push(entry)
+    values.set(target, entry.after)
+    result.entryIds = [entry.id]
+    result.reboot = 'explorer'
+    result.message = visible
+      ? '已经恢复了，新打开的资源管理器窗口里就能看到；还看不到的话，重启一下资源管理器。'
+      : '已经隐藏了，新打开的资源管理器窗口里就看不到了；还看得到的话，重启一下资源管理器。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。'
     return result
   },
 

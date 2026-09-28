@@ -17,6 +17,7 @@ import type {
   Preview,
   RenamePreview,
   RenameRules,
+  ShellPlaceItem,
   ShutdownCancel,
   ShutdownStatus,
   SpaceReport,
@@ -152,6 +153,16 @@ export function newMenuList(): Promise<NewMenuItem[]> {
 /** 从「新建」菜单里关掉（visible 为 false）或者恢复一项，记进修改日志 */
 export function newMenuSet(id: string, visible: boolean): Promise<ApplyResult> {
   return call('new_menu_set', { id, visible })
+}
+
+/** 软件加在资源管理器导航栏和「此电脑」里的图标 */
+export function shellPlacesList(): Promise<ShellPlaceItem[]> {
+  return call('shell_places_list', {})
+}
+
+/** 隐藏（visible 为 false）或者恢复一个图标，记进修改日志；只接受最近一次列表里的 ID */
+export function shellPlacesSet(id: string, visible: boolean): Promise<ApplyResult> {
+  return call('shell_places_set', { id, visible })
 }
 
 /** 批量重命名：用系统的选择框选文件夹；取消返回 null */

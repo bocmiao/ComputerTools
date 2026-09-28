@@ -8,6 +8,7 @@
 //! - [`script`]：PowerShell 宿主
 //! - [`tools`]：小工具能打开的程序名单、info 小工具的表格渲染
 //! - [`startup`]：开机启动项的开关（和任务管理器同一个）
+//! - [`shell_places`]：资源管理器导航栏和「此电脑」里软件加的图标，能隐藏、能恢复
 //! - [`lockers`]：文件删不掉时，看是哪些程序在用它（只读）
 //! - [`disk_speed`]：硬盘测速（只写一个关掉就删的临时文件）
 
@@ -28,6 +29,7 @@ pub mod registry;
 pub mod render;
 pub mod report;
 pub mod script;
+pub mod shell_places;
 pub mod startup;
 pub mod tools;
 pub mod views;

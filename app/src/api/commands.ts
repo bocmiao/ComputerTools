@@ -15,6 +15,7 @@ import type {
   Preview,
   RenamePreview,
   RenameRules,
+  ShellPlaceItem,
   ShutdownCancel,
   ShutdownStatus,
   SpaceReport,
@@ -56,6 +57,8 @@ export type CommandMap = {
   context_menu_set: { args: { id: string; visible: boolean }; result: ApplyResult }
   new_menu_list: { args: NoArgs; result: NewMenuItem[] }
   new_menu_set: { args: { id: string; visible: boolean }; result: ApplyResult }
+  shell_places_list: { args: NoArgs; result: ShellPlaceItem[] }
+  shell_places_set: { args: { id: string; visible: boolean }; result: ApplyResult }
   rename_select_folder: { args: NoArgs; result: string | null }
   rename_preview: { args: { rules: RenameRules }; result: RenamePreview }
   rename_apply: { args: NoArgs; result: number }

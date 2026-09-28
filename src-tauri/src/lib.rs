@@ -40,6 +40,8 @@ macro_rules! command_handler {
             $crate::commands::context_menu_set,
             $crate::commands::new_menu_list,
             $crate::commands::new_menu_set,
+            $crate::commands::shell_places_list,
+            $crate::commands::shell_places_set,
             $crate::commands::rename_select_folder,
             $crate::commands::rename_preview,
             $crate::commands::rename_apply,

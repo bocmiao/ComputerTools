@@ -6,7 +6,7 @@ use medkit_core::Engine;
 use medkit_core::lockers::LockTarget;
 use medkit_core::views::{
     ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, FeatureState, FileLockReport, JournalSession,
-    NewMenuItem, Preview, StartupItem, SymptomDetail, SystemInfo, ToolResult, UndoResult,
+    NewMenuItem, Preview, ShellPlaceItem, StartupItem, SymptomDetail, SystemInfo, ToolResult, UndoResult,
 };
 use tauri::State;
 
@@ -138,6 +138,18 @@ pub async fn new_menu_list(state: State<'_, AppState>) -> CmdResult<Vec<NewMenuI
 #[tauri::command]
 pub async fn new_menu_set(state: State<'_, AppState>, id: String, visible: bool) -> CmdResult<ApplyResult> {
     with_engine(state, move |e| e.new_menu_set(&id, visible)).await
+}
+
+/// 软件加在资源管理器导航栏和「此电脑」里的图标（网盘、WPS 云文档这些）。
+#[tauri::command]
+pub async fn shell_places_list(state: State<'_, AppState>) -> CmdResult<Vec<ShellPlaceItem>> {
+    with_engine(state, |e| e.shell_places_list()).await
+}
+
+/// 隐藏（visible 为 false）或者恢复一个图标，记进修改日志。只接受最近一次列表里的 ID。
+#[tauri::command]
+pub async fn shell_places_set(state: State<'_, AppState>, id: String, visible: bool) -> CmdResult<ApplyResult> {
+    with_engine(state, move |e| e.shell_places_set(&id, visible)).await
 }
 
 /// 批量重命名：用系统的文件夹选择框选一个文件夹。界面拿不到、也传不了别的路径。
