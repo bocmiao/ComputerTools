@@ -79,15 +79,20 @@ export function normalizeForSearch(s: string): string {
 
 const ID_RE = /^[a-z0-9]+([.-][a-z0-9]+)*$/
 
-export type LinkKind = 'symptom' | 'feature' | 'tool'
+export type LinkKind = 'symptom' | 'feature' | 'tool' | 'test'
 export type ParsedLink = { kind: LinkKind; id: string }
 
-/** 解析检测结果、小工具结果里的 links：只认 symptom:<id>、feature:<id> 和 tool:<id>，其余一律忽略 */
+/**
+ * 解析检测结果、小工具结果、症状指引里的 links：只认 symptom:<id>、feature:<id>、tool:<id> 和
+ * test:<设备测试>（工具箱里的喇叭、麦克风、键盘这些测试），其余一律忽略
+ */
 export function parseLink(link: string): ParsedLink | null {
   const i = link.indexOf(':')
   if (i < 0) return null
   const kind = link.slice(0, i)
   const id = link.slice(i + 1)
-  if ((kind === 'symptom' || kind === 'feature' || kind === 'tool') && ID_RE.test(id)) return { kind, id }
+  if ((kind === 'symptom' || kind === 'feature' || kind === 'tool' || kind === 'test') && ID_RE.test(id)) {
+    return { kind, id }
+  }
   return null
 }

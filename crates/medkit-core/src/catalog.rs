@@ -715,7 +715,10 @@ impl Validator<'_> {
         let mut seen = HashSet::new();
         for link in &s.links {
             if link.starts_with("feature:") {
-                self.err(&file, format!("症状的 links 只能是 tool: 或 symptom:，修复写在 steps 的 fixes 里：{link}"));
+                self.err(
+                    &file,
+                    format!("症状的 links 只能是 tool:、symptom: 或 test:，修复写在 steps 的 fixes 里：{link}"),
+                );
             } else if !targets.contains(link) {
                 self.err(&file, format!("links 里的链接无效：{link}"));
             }
@@ -742,6 +745,7 @@ impl LinkTargets<'_> {
             Some(("symptom", id)) => self.symptoms.contains(id),
             Some(("feature", id)) => self.features.contains(id),
             Some(("tool", id)) => self.tools.contains(id),
+            Some(("test", id)) => crate::tools::DEVICE_TESTS.contains(&id),
             _ => false,
         }
     }

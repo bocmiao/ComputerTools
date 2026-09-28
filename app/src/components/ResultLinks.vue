@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onDeactivated } from 'vue'
 import type { ToolSummary } from '../api/types'
-import { toolLinkLabel } from '../labels'
-import { findFeature, findSymptom, findTool, openSymptom, openTool } from '../state'
+import { DEVICE_TEST_LABELS, toolLinkLabel } from '../labels'
+import { findFeature, findSymptom, findTool, openSymptom, openTest, openTool } from '../state'
 import { parseLink, type LinkKind, type ParsedLink } from '../utils/format'
 import { useToolOpen } from '../utils/tools'
 import AppIcon from './AppIcon.vue'
@@ -13,11 +13,12 @@ import BusySpinner from './BusySpinner.vue'
 // - feature:<id>  预览修复（由上层打开预览对话框）
 // - tool:<id>     打开系统工具、「设置」页面的：直接打开，在下面说一句打开了没有；
 //                 看信息、一键处理的：跳到「小工具」页并定位到这个小工具
-// 目录里没有的小工具不显示按钮（例如数据比界面新）。
+// - test:<名字>   跳到「小工具」页的「屏幕、键盘、鼠标、声音测试」里的那一项（修完试一试）
+// 目录里没有的小工具、不认得的测试不显示按钮（例如数据比界面新）。
 // 打开以后的那句话，换到别的页面再回来时就不显示了（和小工具页一样）。
 
 const props = withDefaults(defineProps<{ links: string[]; kinds?: LinkKind[] }>(), {
-  kinds: () => ['symptom', 'feature', 'tool'],
+  kinds: () => ['symptom', 'feature', 'tool', 'test'],
 })
 const emit = defineEmits<{ preview: [featureId: string] }>()
 
@@ -42,7 +43,12 @@ const tools = computed(() =>
     .map((l) => findTool(l.id))
     .filter((t): t is ToolSummary => t !== undefined),
 )
-const hasButtons = computed(() => symptomLinks.value.length + featureLinks.value.length + tools.value.length > 0)
+const testLinks = computed(() =>
+  parsed.value.filter((l) => l.kind === 'test' && Object.hasOwn(DEVICE_TEST_LABELS, l.id)),
+)
+const hasButtons = computed(
+  () => symptomLinks.value.length + featureLinks.value.length + tools.value.length + testLinks.value.length > 0,
+)
 
 function symptomTitle(id: string): string {
   return findSymptom(id)?.title ?? '相关症状'
@@ -108,6 +114,15 @@ function clickTool(t: ToolSummary): void {
         <BusySpinner v-if="opener.states[t.id]?.busy" size="small" />
         <AppIcon v-else-if="t.group === 'open'" name="external" :size="16" />
         {{ toolLinkLabel(t) }}
+      </button>
+      <button
+        v-for="link in testLinks"
+        :key="`d-${link.id}`"
+        type="button"
+        class="btn btn-secondary btn-small"
+        @click="openTest(link.id)"
+      >
+        {{ DEVICE_TEST_LABELS[link.id] }}
       </button>
     </div>
     <p

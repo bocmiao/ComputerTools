@@ -94,7 +94,10 @@ references:
   ```
 
   数组逐个查，有说明的按原顺序连起来；查不到的跳过，一个都查不到（或者脚本没返回这个事实）时模板里换成空字符串，结果的事实里也不加这一项。所以说明要写成带句号的完整句子，放在模板里一句话的开头或结尾。新事实的名字不能和 `from` 相同。
-- **links**：可以写 `symptom:<id>`、`feature:<id>` 或 `tool:<id>`（第 11 节），界面会显示成跳转或打开的按钮。
+- **links**：可以写 `symptom:<id>`、`feature:<id>` 或 `tool:<id>`（第 11 节），界面会显示成跳转或打开的按钮；
+  还可以写 `test:<名字>`，跳到工具箱「屏幕、键盘、鼠标、声音测试」里的那一项（修完试一试）。名字只能是
+  `screen`、`mouse`、`keyboard`、`speaker`、`microphone`、`camera`（`crates/medkit-core/src/tools.rs` 的 `DEVICE_TESTS`，
+  界面里对应 `labels.ts` 的 `DEVICE_TEST_LABELS` 和 `DeviceTests.vue` 里的 `device-test-<名字>`，测试会核对三处一致）。
 - 脚本返回的结果代码必须在 `results` 里有定义；没定义的，引擎按 `unknown` 处理。CI 里的冒烟测试会检查这一点。
 
 ### 内置检测（builtin）
@@ -282,8 +285,9 @@ steps:                       # 按顺序检查
     stop_on: [advice, manual] # 这一步出问题就不再往下查（可省略）
     fixes: [network.proxy-off]
 guide: { zh-CN: "…手动步骤…" }   # 可省略；maturity 是 guide 时必填
-links: ["tool:settings.display", "symptom:screen-colors"]  # 可省略：手动步骤下面的按钮，给指引里提到的小工具、
-                             # 相关症状（只能是 tool: 或 symptom:，修复写在 steps 的 fixes 里；不能指向自己、不能重复；要有 guide）
+links: ["tool:settings.display", "symptom:screen-colors", "test:screen"]  # 可省略：手动步骤下面的按钮，给指引里提到的
+                             # 小工具、相关症状、修完试一试的设备测试（只能是 tool:、symptom: 或 test:，修复写在 steps 的 fixes 里；
+                             # 不能指向自己、不能重复；要有 guide）
 ```
 
 ## 7. 检测清单（`catalog/profiles/*.yaml`）

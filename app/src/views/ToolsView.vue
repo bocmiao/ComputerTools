@@ -196,9 +196,40 @@ watch(
 // 目录比页面晚读好时再试一次
 watch(tools, () => void consumeFocus())
 
+// 症状指引里「测一测喇叭」这类按钮：定位到「屏幕、键盘、鼠标、声音测试」里的那一项（DeviceTests 里的 device-test-<名字>）
+const pendingTest = ref<string | null>(null)
+const TEST_PREFIX = 'test:'
+const highlightedTest = computed(() =>
+  highlighted.value?.startsWith(TEST_PREFIX) ? highlighted.value.slice(TEST_PREFIX.length) : null,
+)
+
+async function consumeTest(): Promise<void> {
+  const id = pendingTest.value
+  if (!id || !active) return
+  pendingTest.value = null
+  await nextTick()
+  const card = document.getElementById(`device-test-${id}`)
+  if (!card) return
+  card.scrollIntoView({ block: 'start' })
+  card.focus({ preventScroll: true })
+  highlight(TEST_PREFIX + id)
+}
+
+watch(
+  () => nav.testId,
+  (id) => {
+    if (!id) return
+    nav.testId = null
+    pendingTest.value = id
+    void consumeTest()
+  },
+  { immediate: true },
+)
+
 onActivated(() => {
   active = true
   void consumeFocus()
+  void consumeTest()
 })
 
 onDeactivated(() => {
@@ -231,7 +262,7 @@ function onApplied(r: ApplyResult): void {
     <p v-else-if="tools.length === 0" class="card muted">这个版本的小药箱还没有小工具。</p>
 
     <LocalUtilities />
-    <DeviceTests />
+    <DeviceTests :highlight="highlightedTest" />
     <DiskSpeedTest />
     <KeepAwake />
     <ShutdownTimer />

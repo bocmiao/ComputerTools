@@ -199,3 +199,16 @@ export function toolOpenLabel(t: ToolSummary): string {
 export function toolLinkLabel(t: ToolSummary): string {
   return t.group === 'open' ? toolOpenLabel(t) : `用小工具：${t.title}`
 }
+
+/**
+ * 工具箱「屏幕、键盘、鼠标、声音测试」里的几项：test:<名字> 链接的按钮文字。名字和后端的名单一样
+ * （crates/medkit-core/src/tools.rs 的 DEVICE_TESTS），DeviceTests.vue 里每一项的 id 是 device-test-<名字>。
+ */
+export const DEVICE_TEST_LABELS: Record<string, string> = {
+  screen: '测一测屏幕坏点',
+  mouse: '测一测鼠标按键',
+  keyboard: '测一测键盘',
+  speaker: '测一测喇叭、耳机',
+  microphone: '测一测麦克风',
+  camera: '测一测摄像头',
+}

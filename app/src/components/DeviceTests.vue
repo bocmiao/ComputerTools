@@ -6,6 +6,10 @@ import { MAIN_ROWS, NAV_ROWS, NUMPAD_ROWS, allKeyCodes, type KeyRow } from '../u
 
 // 验机、找毛病用的几个小测试：屏幕坏点、键盘、鼠标、喇叭左右声道、麦克风、摄像头。
 // 全在界面里做，不改电脑的任何设置。麦克风和摄像头第一次用时 WebView2 会弹出询问，点「允许」才用得了。
+// 每一项的 id 是 device-test-<名字>（名字见 labels.ts 的 DEVICE_TEST_LABELS）：症状指引里的 test: 按钮跳到这里，
+// 小工具页滚到那一项、把焦点放上去，highlight 是正在突出显示的那一项。
+
+defineProps<{ highlight?: string | null }>()
 
 // ── 屏幕坏点、漏光 ──
 const SCREEN_COLORS = [
@@ -292,13 +296,13 @@ onBeforeUnmount(() => {
       <p class="muted small">买新电脑、二手电脑验机，或者怀疑哪里坏了的时候用。只是测试，不改电脑的任何设置。</p>
     </div>
     <div class="test-list">
-      <article class="card test-card">
+      <article id="device-test-screen" class="card test-card" :class="{ highlight: highlight === 'screen' }" tabindex="-1">
         <h3 class="section-title">屏幕坏点和漏光</h3>
         <p class="muted small">整个屏幕依次显示黑、白、红、绿、蓝、灰，凑近看有没有不变色的小点（坏点、亮点）；黑色时在暗处看边缘有没有透光（漏光）。点鼠标或者按空格换颜色，按 Esc 退出。</p>
         <button type="button" class="btn btn-secondary btn-small self-start" @click="startScreen">开始（全屏）</button>
       </article>
 
-      <article class="card test-card">
+      <article id="device-test-mouse" class="card test-card" :class="{ highlight: highlight === 'mouse' }" tabindex="-1">
         <h3 class="section-title">鼠标按键</h3>
         <p class="muted small">在下面的框里点各个按键、滚动滚轮。只按了一下却记了两下（「一下变两下」），多半是按键老化了。</p>
         <div
@@ -323,7 +327,12 @@ onBeforeUnmount(() => {
         <button type="button" class="btn btn-ghost btn-small self-start" @click="resetMouse">清零</button>
       </article>
 
-      <article class="card test-card wide">
+      <article
+        id="device-test-keyboard"
+        class="card test-card wide"
+        :class="{ highlight: highlight === 'keyboard' }"
+        tabindex="-1"
+      >
         <h3 class="section-title">键盘</h3>
         <p class="muted small">
           点一下下面的键盘，然后挨个按键：按过的键变成绿色，正按着的是深色。按了没变色的键可能坏了。Win 键会同时打开开始菜单；Fn 键和一些笔记本的功能键系统收不到，不会变色。
@@ -356,7 +365,7 @@ onBeforeUnmount(() => {
         <button type="button" class="btn btn-ghost btn-small self-start" @click="resetKeyboard">清空重来</button>
       </article>
 
-      <article class="card test-card">
+      <article id="device-test-speaker" class="card test-card" :class="{ highlight: highlight === 'speaker' }" tabindex="-1">
         <h3 class="section-title">喇叭、耳机的左右声道</h3>
         <p class="muted small">点「左边响」只应该左边的喇叭（耳机左耳）响，「右边响」只应该右边响。反了说明左右接反了；有一边一直不响，可能是那一边坏了，或者声音设置里的「平衡」被调到了一边。</p>
         <div class="row">
@@ -367,7 +376,12 @@ onBeforeUnmount(() => {
         <p v-if="speakerError" class="danger-text small" role="alert">{{ speakerError }}</p>
       </article>
 
-      <article class="card test-card">
+      <article
+        id="device-test-microphone"
+        class="card test-card"
+        :class="{ highlight: highlight === 'microphone' }"
+        tabindex="-1"
+      >
         <h3 class="section-title">麦克风</h3>
         <p class="muted small">点「开始」后对着麦克风说话，下面的条会跟着跳。条一直不动，说明电脑没收到声音。第一次用时会弹出询问，点「允许」。</p>
         <div class="row">
@@ -385,7 +399,7 @@ onBeforeUnmount(() => {
         </template>
       </article>
 
-      <article class="card test-card">
+      <article id="device-test-camera" class="card test-card" :class="{ highlight: highlight === 'camera' }" tabindex="-1">
         <h3 class="section-title">摄像头</h3>
         <p class="muted small">点「开始」后下面应该出现摄像头拍到的画面。第一次用时会弹出询问，点「允许」。画面只在这里显示，不保存、不上传。</p>
         <div class="row">
@@ -424,8 +438,9 @@ onBeforeUnmount(() => {
 .group { gap: 10px; }
 .group-head { gap: 2px; }
 .test-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
-.test-card { gap: 9px; }
+.test-card { gap: 9px; transition: border-color 0.2s, box-shadow 0.2s; }
 .test-card.wide { grid-column: 1 / -1; }
+.test-card.highlight { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .self-start { align-self: flex-start; }
 .mouse-area {

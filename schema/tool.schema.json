@@ -183,7 +183,7 @@
           "default": null
         },
         "links": {
-          "description": "`symptom:<id>` 或 `feature:<id>`",
+          "description": "`symptom:<id>`、`feature:<id>`、`tool:<id>` 或 `test:<设备测试>`",
           "type": "array",
           "default": [],
           "items": {

@@ -218,7 +218,7 @@ pub struct ResultSpec {
     pub fixer: Option<Fixer>,
     #[serde(default)]
     pub next: Option<Text>,
-    /// `symptom:<id>` 或 `feature:<id>`
+    /// `symptom:<id>`、`feature:<id>`、`tool:<id>` 或 `test:<设备测试>`
     #[serde(default)]
     pub links: Vec<String>,
 }
@@ -367,8 +367,8 @@ pub struct Symptom {
     pub steps: Vec<Step>,
     #[serde(default)]
     pub guide: Option<Text>,
-    /// 手动步骤下面的按钮（和检测结果的 links 一样：`tool:<id>`、`symptom:<id>`、`feature:<id>`），
-    /// 给指引里提到的小工具、相关症状
+    /// 手动步骤下面的按钮：`tool:<id>`、`symptom:<id>`，或者 `test:<设备测试>`（工具箱里的喇叭、麦克风、键盘这些测试，
+    /// 修完以后试一试），给指引里提到的小工具、相关症状
     #[serde(default)]
     pub links: Vec<String>,
 }

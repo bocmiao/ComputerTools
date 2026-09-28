@@ -41,3 +41,23 @@ fn every_update_error_code_has_a_meaning() {
     let missing: Vec<&&str> = codes.iter().filter(|c| !meanings.contains_key(**c)).collect();
     assert!(missing.is_empty(), "这些代码没有说明：{missing:?}");
 }
+
+/// `test:<名字>` 链接能用的设备测试，界面里都要有：按钮文字（labels.ts 的 DEVICE_TEST_LABELS）
+/// 和跳过去的那一项（DeviceTests.vue 里 id 为 device-test-<名字> 的元素）。
+#[test]
+fn every_device_test_has_a_ui_card() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let tests_vue = std::fs::read_to_string(root.join("app/src/components/DeviceTests.vue")).unwrap();
+    let labels_ts = std::fs::read_to_string(root.join("app/src/labels.ts")).unwrap();
+    let labels = labels_ts.split("DEVICE_TEST_LABELS").nth(1).expect("labels.ts 里有 DEVICE_TEST_LABELS");
+    let labels = &labels[..labels.find('}').expect("DEVICE_TEST_LABELS 有结尾")];
+    for name in medkit_core::tools::DEVICE_TESTS {
+        assert!(tests_vue.contains(&format!("id=\"device-test-{name}\"")), "DeviceTests.vue 里没有 device-test-{name}");
+        assert!(labels.contains(&format!("\n  {name}: '")), "DEVICE_TEST_LABELS 里没有 {name}");
+    }
+    assert_eq!(
+        labels.matches(": '").count(),
+        medkit_core::tools::DEVICE_TESTS.len(),
+        "DEVICE_TEST_LABELS 和 DEVICE_TESTS 的名字要一样多"
+    );
+}

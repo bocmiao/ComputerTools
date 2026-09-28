@@ -7,10 +7,11 @@ import { errorText } from './utils/format'
 
 export type PageId = 'health' | 'symptoms' | 'settings' | 'tools' | 'journal' | 'report'
 
-export const nav = reactive<{ page: PageId; symptomId: string | null; toolId: string | null }>({
+export const nav = reactive<{ page: PageId; symptomId: string | null; toolId: string | null; testId: string | null }>({
   page: 'health',
   symptomId: null,
   toolId: null,
+  testId: null,
 })
 
 export function goTo(page: PageId): void {
@@ -29,6 +30,12 @@ export function openSymptom(id: string): void {
  */
 export function openTool(id: string): void {
   nav.toolId = id
+  nav.page = 'tools'
+}
+
+/** 跳到「小工具」页的「屏幕、键盘、鼠标、声音测试」里的一项（症状指引里 test: 链接的按钮用，修完试一试） */
+export function openTest(id: string): void {
+  nav.testId = id
   nav.page = 'tools'
 }
 

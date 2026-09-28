@@ -74,6 +74,10 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     ),
 ];
 
+/// 工具箱「屏幕、键盘、鼠标、声音测试」里的几项。链接写 `test:<名字>`，界面上是跳到那一项的按钮。
+/// 界面里每一项的元素 id 是 `device-test-<名字>`（app/src/components/DeviceTests.vue；tests/repo_catalog.rs 核对）。
+pub const DEVICE_TESTS: &[&str] = &["screen", "mouse", "keyboard", "speaker", "microphone", "camera"];
+
 /// 「设置」里能打开的页面（ms-settings:<页面>）。
 pub const SETTINGS_PAGES: &[&str] = &[
     "windowsupdate",

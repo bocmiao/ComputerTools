@@ -199,7 +199,7 @@ fn tool_scripts_and_links_must_exist() {
     assert!(e.iter().any(|m| m.contains("链接无效：tool:test.gone")), "{e:?}");
 }
 
-/// 症状手动步骤下面的按钮：只能指向存在的小工具、别的症状；不能指向修复、自己，不能重复；要有 guide。
+/// 症状手动步骤下面的按钮：只能指向存在的小工具、别的症状、认得的设备测试；不能指向修复、自己，不能重复；要有 guide。
 #[test]
 fn symptom_links_must_exist() {
     let symptom = |links: &[&str], guide: bool| -> Symptom {
@@ -227,7 +227,11 @@ fn symptom_links_must_exist() {
     let e = errors_with(symptom(&["tool:test.nope"], true));
     assert!(e.iter().any(|m| m.contains("链接无效：tool:test.nope")), "{e:?}");
     let e = errors_with(symptom(&["feature:test.fix"], true));
-    assert!(e.iter().any(|m| m.contains("只能是 tool: 或 symptom:")), "{e:?}");
+    assert!(e.iter().any(|m| m.contains("只能是 tool:、symptom: 或 test:")), "{e:?}");
+    let e = errors_with(symptom(&["test:speaker", "test:keyboard"], true));
+    assert!(e.is_empty(), "{e:?}");
+    let e = errors_with(symptom(&["test:printer"], true));
+    assert!(e.iter().any(|m| m.contains("链接无效：test:printer")), "{e:?}");
     let e = errors_with(symptom(&["symptom:test-screen"], true));
     assert!(e.iter().any(|m| m.contains("不能指向自己")), "{e:?}");
     let e = errors_with(symptom(&["tool:test.flush", "tool:test.flush"], true));
