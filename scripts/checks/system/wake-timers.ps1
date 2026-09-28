@@ -1,17 +1,14 @@
-# Check: system.power-plan
-# Is the power plan holding the processor back? (See the shared block for
-# what is read.) Read-only. Result codes (in this order):
-#   saver       the Power saver plan is active (fix: power.balanced-plan)
-#   throttled   "Maximum processor state" of the active plan is below 80
-#               percent plugged in, or below 50 percent on battery on a PC
-#               that has a battery (fix: power.processor-full-speed)
-#   efficiency  Windows 11 power mode "Best power efficiency" while plugged
-#               in: ActiveOverlayAcPowerScheme
-#               961cc777-2547-4f9d-8174-7d86181b8a7a (Microsoft, "Customize
-#               the Windows performance power slider"); changed in Settings
-#   ok
-# Facts: plan (saver, balanced, high, ultimate or custom), ac, dc ("Maximum
-# processor state" in percent, '' when unknown), battery (true / false).
+# Check: system.wake-timers
+# May wake timers wake this PC? "Allow wake timers" (RTCWAKE,
+# bd3b718a-0680-4d9d-8ab2-e1d2b4ac806d in the sleep subgroup) of the active
+# plan: 0 No, 1 Yes, 2 Important (internal system timers only; Microsoft,
+# "Automatically wake for tasks"). With 1, scheduled tasks (Windows Update,
+# other programs' timers) can wake the PC at night. (See the shared block for
+# how it is read.)
+# Read-only. Result codes (in this order): missing (Windows does not have the
+# setting) / allowed (1 plugged in or on battery) / important (2, and not 1) /
+# off (0 both). allowed and important are fixed by power.wake-timers-off.
+# Facts: ac, dc (the values).
 
 [CmdletBinding()]
 param()
@@ -76,35 +73,12 @@ function Set-PowerSetting {
 }
 # ---- end of shared block power-plan ----
 
-$maxProcessorState = 'bc5038f7-23e0-4960-96da-33abaf5935ec'
-$powerSaverPlan = 'a1841308-3541-4fab-bc81-f71556f20b4a'
-$balancedPlan = '381b4222-f694-41f0-9685-ff5bb260df2e'
-$bestEfficiencyMode = '961cc777-2547-4f9d-8174-7d86181b8a7a'
-
-$planNames = @{
-    'a1841308-3541-4fab-bc81-f71556f20b4a' = 'saver'
-    '381b4222-f694-41f0-9685-ff5bb260df2e' = 'balanced'
-    '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' = 'high'
-    'e9a42b02-d5df-448d-aa00-03f14749eb61' = 'ultimate'
-}
+$wakeTimers = 'bd3b718a-0680-4d9d-8ab2-e1d2b4ac806d'
 
 $plan = Get-ActivePlan
-$ac = Get-PowerSetting $plan 'AC' $maxProcessorState
-$dc = Get-PowerSetting $plan 'DC' $maxProcessorState
-$battery = @(Get-CimInstance -ClassName 'Win32_Battery' -ErrorAction SilentlyContinue).Count -gt 0
-$overlay = ''
-try {
-    $overlay = ([string](Get-ItemProperty -LiteralPath $powerSchemesKey -Name 'ActiveOverlayAcPowerScheme' -ErrorAction Stop).ActiveOverlayAcPowerScheme).Trim().Trim('{', '}').ToLowerInvariant()
-}
-catch {
-    Write-Verbose 'No power mode (Windows 10, or not the Balanced plan)'
-}
-
-$name = 'custom'
-if ($planNames.ContainsKey($plan)) {
-    $name = $planNames[$plan]
-}
-$facts = [ordered]@{ plan = $name; ac = ''; dc = ''; battery = $battery }
+$ac = Get-PowerSetting $plan 'AC' $wakeTimers
+$dc = Get-PowerSetting $plan 'DC' $wakeTimers
+$facts = [ordered]@{ ac = ''; dc = '' }
 if ($null -ne $ac) {
     $facts.ac = $ac
 }
@@ -112,15 +86,15 @@ if ($null -ne $dc) {
     $facts.dc = $dc
 }
 
-$result = 'ok'
-if ($plan -eq $powerSaverPlan) {
-    $result = 'saver'
+$result = 'off'
+if (($null -eq $ac) -and ($null -eq $dc)) {
+    $result = 'missing'
 }
-elseif ((($null -ne $ac) -and ($ac -lt 80)) -or ($battery -and ($null -ne $dc) -and ($dc -lt 50))) {
-    $result = 'throttled'
+elseif (($ac -eq 1) -or ($dc -eq 1)) {
+    $result = 'allowed'
 }
-elseif (($plan -eq $balancedPlan) -and ($overlay -eq $bestEfficiencyMode)) {
-    $result = 'efficiency'
+elseif (($ac -eq 2) -or ($dc -eq 2)) {
+    $result = 'important'
 }
 
 [pscustomobject]@{

@@ -1,0 +1,41 @@
+# 唤醒定时器：计划任务能不能把电脑从睡眠中叫醒。脚本：scripts/checks/system/wake-timers.ps1（共享块 power-plan）
+# 当前电源计划的「允许使用唤醒定时器」（RTCWAKE，睡眠子组的 bd3b718a-…）：0 禁用、1 启用、2 只允许重要的（Windows 自己
+# 的定时器，微软《Automatically wake for tasks》）。启用时，Windows 更新、软件的定时任务能在半夜把电脑叫醒。
+# 结果（按这个顺序判断）：missing（这台 Windows 没有这个设置，na）、allowed（插电或用电池时是 1）、important（有 2、没有 1）、
+# off（都是 0）。allowed、important 的修复是 power.wake-timers-off。不进体检，「电脑自己开机、睡着了又自己醒」里查。
+# 事实：ac、dc。
+id: system.wake-timers
+schema_version: 1
+title: { zh-CN: 唤醒定时器 }
+description:
+  zh-CN: 看看电源计划允不允许「唤醒定时器」：允许的话，Windows 更新、软件的定时任务能在半夜把睡着的电脑叫醒。
+category: system
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/system/wake-timers.ps1
+results:
+  off:
+    status: ok
+    message: { zh-CN: 唤醒定时器是关着的，定时任务不会把睡着的电脑叫醒。 }
+  allowed:
+    status: advice
+    message:
+      zh-CN: 电源计划允许「唤醒定时器」：Windows 更新、软件的定时任务（备份、杀毒扫描、下载）都能在半夜把睡着的电脑叫醒。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮关掉唤醒定时器，马上生效。关掉以后，Windows 更新会等你用电脑的时候再装；想知道之前是谁叫醒的，打开小工具「谁把电脑叫醒的」。
+    links: ["feature:power.wake-timers-off", "tool:system.wake-sources"]
+  important:
+    status: advice
+    message:
+      zh-CN: 电源计划只允许「重要的唤醒定时器」：别的软件叫不醒电脑，但 Windows 自己（比如装更新以后重启）还能在半夜把电脑叫醒。
+    fixer: medkit
+    next:
+      zh-CN: 还是半夜自己醒的话，点下面的按钮把唤醒定时器全关掉，马上生效。想知道之前是谁叫醒的，打开小工具「谁把电脑叫醒的」。
+    links: ["feature:power.wake-timers-off", "tool:system.wake-sources"]
+  missing:
+    status: na
+    message: { zh-CN: 这台电脑的电源计划里没有唤醒定时器这个设置。 }
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/sleep-settings-automatically-wake-for-tasks

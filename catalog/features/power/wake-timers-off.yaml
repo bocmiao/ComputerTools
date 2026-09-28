@@ -1,0 +1,33 @@
+# 关掉唤醒定时器（脚本类功能）：把当前电源计划的「允许使用唤醒定时器」（RTCWAKE）插电和用电池时都改成「禁用」（0），
+# powercfg /setacvalueindex、/setdcvalueindex 以后再 /setactive 让它马上生效。脚本在 scripts/features/power/ 下，和检测
+# system.wake-timers 共用共享块 power-plan。
+#   wake-timers-off-detect.ps1  都是 0 → applied；有一个不是 → not-applied；读不到 → unknown
+#   wake-timers-off-run.ps1     -Prepare：before = { plan, ac, dc }；执行：计划或者值变了就跳过；两个都改成 0，读回来不是就报错
+#   wake-timers-off-undo.ps1    当前计划还是原来那个的，改回原来的值
+#   wake-timers-off-break.ps1   只在测试中使用：两个都改成 1
+# 分类写 system，不放进「常用设置」的「电源」里（只从检测的结论进来）。
+id: power.wake-timers-off
+schema_version: 1
+title: { zh-CN: 关掉唤醒定时器 }
+description:
+  zh-CN: 不让定时任务把睡着的电脑叫醒：Windows 更新、备份、杀毒扫描这些会等你用电脑的时候再做。只管睡眠，按电源键、键盘、鼠标照样能叫醒；马上生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/power/wake-timers-off-detect.ps1
+prepare:
+  script: features/power/wake-timers-off-run.ps1
+run:
+  script: features/power/wake-timers-off-run.ps1
+undo:
+  script: features/power/wake-timers-off-undo.ps1
+break:
+  script: features/power/wake-timers-off-break.ps1
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/sleep-settings-automatically-wake-for-tasks

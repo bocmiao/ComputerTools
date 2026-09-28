@@ -1,0 +1,57 @@
+# 谁把电脑叫醒的（info）。脚本：scripts/tools/system/wake-sources.ps1（共享块 power-plan），只读：
+#   最近 14 天从睡眠中醒来的记录（系统日志里 Microsoft-Windows-Power-Troubleshooter 的事件 1，最多 5 次）：WakeSourceText
+#   （叫醒它的设备名，或者空的）、WakeTimerContext / WakeTimerOwner（设了唤醒定时器的任务、程序）。WakeSourceType 的编号在
+#   各版本 Windows 上不一样，不用。
+#   能叫醒电脑的设备：root\wmi 的 MSPower_DeviceWakeEnable 里 Enable 为真的（就是设备管理器「电源管理」里「允许此设备唤醒
+#   计算机」勾上的），名字从 Win32_PnPEntity 来，最多 10 个。
+#   会叫醒电脑的计划任务：设置里勾了「唤醒计算机运行此任务」、没有被禁用的，最多 10 个。
+#   当前电源计划的「允许使用唤醒定时器」。
+# 隐私：程序的路径只留文件名，文字里的用户文件夹名换成 *。结果：found（14 天里醒来过）、none。
+# 事实：days、wakes、devices、tasks。
+id: system.wake-sources
+schema_version: 1
+group: info
+title: { zh-CN: 谁把电脑叫醒的 }
+description:
+  zh-CN: 电脑睡着了又自己醒过来时用：列出最近几次是被什么叫醒的（鼠标、网卡、Windows 更新……），还有哪些设备、计划任务能叫醒电脑。只看不改。
+category: system
+requires_admin: true
+timeout_sec: 60
+run:
+  script: tools/system/wake-sources.ps1
+results:
+  found:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天，电脑从睡眠中醒来过 {wakes} 次，下面列出了最近几次是被什么叫醒的。"
+    next:
+      zh-CN: 被鼠标、键盘、网卡叫醒的，在设备管理器里取消它的「允许此设备唤醒计算机」；被定时器（Windows 更新、计划任务）叫醒的，关掉唤醒定时器。「电脑自己开机、睡着了又自己醒」里有详细的办法。
+    links: ["symptom:wakes-up", "tool:open.device-manager"]
+  none:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天没有记录到电脑从睡眠中醒来。"
+    next:
+      zh-CN: 电脑是从关机状态自己开机的，Windows 记不到原因，多半是 BIOS 里的定时开机、网络唤醒或者「来电自启动」，看「电脑自己开机、睡着了又自己醒」里的办法。
+    links: ["symptom:wakes-up"]
+labels:
+  sections:
+    wake: { zh-CN: 醒来 }
+    devices: { zh-CN: 能叫醒电脑的设备 }
+    tasks: { zh-CN: 会叫醒电脑的计划任务 }
+    timers: { zh-CN: 唤醒定时器 }
+  rows:
+    source: { zh-CN: 叫醒它的 }
+    timer: { zh-CN: 定时器 }
+    device: { zh-CN: 设备 }
+    task: { zh-CN: 任务 }
+    ac: { zh-CN: 插着电源时 }
+    dc: { zh-CN: 用电池时 }
+  values:
+    unknown: { zh-CN: 没有记下原因 }
+    none: { zh-CN: 没有 }
+    enabled: { zh-CN: 允许 }
+    important: { zh-CN: 只允许重要的（Windows 自己的） }
+    disabled: { zh-CN: 不允许 }
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/sleep-settings-automatically-wake-for-tasks
