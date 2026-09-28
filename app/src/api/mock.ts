@@ -387,6 +387,22 @@ const FEATURE_LIST: MockFeature[] = [
       minBuild: 22000,
     },
   ),
+  defineFeature(
+    {
+      id: 'taskbar.no-flashing',
+      title: '任务栏上的程序不闪烁提醒（Win11）',
+      description:
+        '程序要你注意时（来了消息、下载完了），它在任务栏上的按钮不再闪、不再变成橙色，任务栏也不会因此弹出来挡住全屏的视频和游戏。重启资源管理器以后生效，能撤销。',
+      category: 'taskbar',
+      subjective: true,
+      reboot: 'explorer',
+    },
+    {
+      changes: [{ target: `${HKCU_ADVANCED}\\TaskbarFlashing`, initial: ABSENT, planned: 'DWORD 0' }],
+      notes: [],
+      minBuild: 22621,
+    },
+  ),
   // 只有 Win10 有：在默认的 Win11 示例电脑上演示「这台电脑用不了」（推荐项，也不能算进「只应用推荐项」）
   defineFeature(
     {
@@ -1121,6 +1137,24 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'system.taskbar-flashing': {
+    title: '任务栏闪烁提醒',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return { status: 'ok', resultCode: 'off', message: '任务栏上的程序不会闪烁提醒，不会因为这个把任务栏顶出来。' }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'on',
+        message:
+          '任务栏闪烁提醒开着（Windows 默认这样）：程序要你注意时（来了消息、下载完了），它在任务栏上的按钮会闪、变成橙色，任务栏也会一直显示出来，全屏看视频、玩游戏时就挡在画面下面。',
+        fixer: 'medkit',
+        next: '想留着提醒的，点一下那个在闪的按钮，看完再回到全屏的画面，任务栏就会退下去；不想要提醒的，点下面的修复关掉它。',
+        links: ['feature:taskbar.no-flashing'],
+        facts: { value: -1 },
+      }
+    },
+  },
   'system.power-timeouts': {
     title: '多久不动就关屏幕、睡眠',
     evaluate: () => {
@@ -1425,6 +1459,15 @@ const SYMPTOMS: MockSymptom[] = [
     guide: '先按一下键盘上画着触摸板图标的键；再点「触摸板设置」确认开关开着，接了鼠标就不能用的勾上「连接鼠标时让触摸板保持打开状态」。',
     steps: [{ check: 'system.device-problems', fixes: [] }],
     links: ['tool:settings.touchpad'],
+  },
+  {
+    id: 'fullscreen-taskbar', title: '全屏看视频、玩游戏时任务栏不隐藏',
+    summary: '视频、游戏已经全屏了，屏幕最下面的任务栏还在，挡住字幕、进度条和游戏界面。',
+    keywords: ['全屏任务栏不隐藏', '任务栏挡住', '任务栏还在', '任务栏闪烁'], maturity: 'semi',
+    causes: ['有程序在任务栏上闪烁提醒（来了消息、下载完了），闪着的时候任务栏会一直显示', '任务栏上挂着显示温度、网速的插件', '资源管理器卡住了', '网页视频双击画面只是把窗口放大，不是真的全屏'],
+    guide: '先看任务栏上有没有在闪、变成橙色的按钮，点一下它再回到全屏的画面；还不行就点「重启资源管理器」，最后才是在「任务栏设置」里勾上「自动隐藏任务栏」。',
+    steps: [{ check: 'system.taskbar-flashing', fixes: ['taskbar.no-flashing'] }],
+    links: ['tool:system.restart-explorer', 'tool:settings.taskbar'],
   },
   {
     id: 'builtin-app-broken', title: '照片、计算器这些自带的应用打不开',

@@ -1,0 +1,36 @@
+# 任务栏上的程序不闪烁提醒（Win11 22H2 起）：HKCU\…\Explorer\Advanced 的 TaskbarFlashing = 0，就是「设置 → 个性化 → 任务栏 →
+# 任务栏行为」里的「在任务栏应用上显示闪烁」。没有这个值 = 开（系统默认）。照 ElevenForum 教程作者 Shawn Brink 的注册表文件
+# （slpcat/NT6xTweaking 收的那份，MIT；它还改了 HKU\.DEFAULT，那是新用户的默认值，这里只改登录用户自己的）。
+# 按钮在闪时任务栏会一直显示，全屏看视频、玩游戏时挡在下面，关掉就不会因为这个弹出来。更老的 Windows 不认这个值。
+id: taskbar.no-flashing
+schema_version: 1
+title: { zh-CN: 任务栏上的程序不闪烁提醒（Win11） }
+description:
+  zh-CN: 程序要你注意时（来了消息、下载完了），它在任务栏上的按钮不再闪、不再变成橙色，任务栏也不会因此弹出来挡住全屏的视频和游戏。对应「设置 → 个性化 → 任务栏 → 任务栏行为」里的「在任务栏应用上显示闪烁」。重启资源管理器以后生效，能撤销。
+category: taskbar
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+applies_to:
+  min_build: 22621
+  max_build: null
+  editions: []
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: TaskbarFlashing
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: TaskbarFlashing
+      delete: true
+undo: auto
+references:
+  - https://www.elevenforum.com/t/enable-or-disable-show-flashing-on-taskbar-apps-in-windows-11.9968/
+  - https://github.com/slpcat/NT6xTweaking/blob/master/Win11/Disable_show_flashing_on_taskbar_apps.reg

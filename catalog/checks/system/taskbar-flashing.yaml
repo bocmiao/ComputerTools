@@ -1,0 +1,36 @@
+# 任务栏闪烁提醒开没开（登录用户的「在任务栏应用上显示闪烁」，Windows 11 22H2 起有）。脚本：scripts/checks/system/taskbar-flashing.ps1
+# （-UserHive）。程序要你注意时，它在任务栏上的按钮会闪、变成橙色，任务栏也会一直显示，全屏看视频、玩游戏时挡在下面。
+# 值是 Explorer\Advanced 的 TaskbarFlashing（DWORD）：0 关，1 或者没有这个值是开（Windows 默认），照 ElevenForum 教程作者
+# Shawn Brink 的注册表文件（slpcat/NT6xTweaking 收的那份，MIT）。
+# 结果：old-windows（Windows 11 22H2 以前没有这个开关，na）、off、on。事实：value（没有这个值时是 -1）。
+# 不在体检里（开着是 Windows 的默认设置）：只在症状「全屏看视频、玩游戏时任务栏不隐藏」里查。
+id: system.taskbar-flashing
+schema_version: 1
+title: { zh-CN: 任务栏闪烁提醒 }
+description:
+  zh-CN: 看看任务栏上的程序要你注意时会不会闪烁提醒。闪着的时候任务栏会一直显示，全屏看视频、玩游戏时就挡在画面下面。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/taskbar-flashing.ps1
+results:
+  off:
+    status: ok
+    message:
+      zh-CN: 任务栏上的程序不会闪烁提醒，不会因为这个把任务栏顶出来。
+  on:
+    status: advice
+    message:
+      zh-CN: 任务栏闪烁提醒开着（Windows 默认这样）：程序要你注意时（来了消息、下载完了），它在任务栏上的按钮会闪、变成橙色，任务栏也会一直显示出来，全屏看视频、玩游戏时就挡在画面下面。
+    next:
+      zh-CN: 想留着提醒的，点一下那个在闪的按钮，看完再回到全屏的画面，任务栏就会退下去；不想要提醒的，点下面的修复关掉它。
+    fixer: medkit
+    links: ["feature:taskbar.no-flashing"]
+  old-windows:
+    status: na
+    message:
+      zh-CN: 这个版本的 Windows 没有「在任务栏应用上显示闪烁」这个开关（Windows 11 22H2 起才有）。任务栏上有按钮在闪的，点一下它，看完再回到全屏的画面，任务栏就会退下去。
+references:
+  - https://www.elevenforum.com/t/enable-or-disable-show-flashing-on-taskbar-apps-in-windows-11.9968/
+  - https://github.com/slpcat/NT6xTweaking/blob/master/Win11/Disable_show_flashing_on_taskbar_apps.reg

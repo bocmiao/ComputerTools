@@ -132,6 +132,7 @@ fn common_error_messages_find_their_symptom() {
         ("我们无法设置移动热点，因为你的电脑未建立以太网、Wi-Fi 或手机网络数据连接。", "mobile-hotspot"),
         ("照片打不开，点开以后一直转圈", "builtin-app-broken"),
         ("截图工具打不开，按 Win+Shift+S 没反应", "builtin-app-broken"),
+        ("看视频全屏的时候下面的任务栏还在，挡住字幕", "fullscreen-taskbar"),
     ];
     let wrong: Vec<String> = cases
         .iter()
