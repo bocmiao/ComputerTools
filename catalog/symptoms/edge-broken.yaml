@@ -1,0 +1,53 @@
+# 症状：Edge 浏览器打不开、一打开就闪退、网页一直崩溃（「此页面存在问题」，错误代码 STATUS_ACCESS_VIOLATION、
+# STATUS_INVALID_IMAGE_HASH 这些）。先看最近有没有程序频繁崩溃（system.reliability-recent）。指引照微软《What to do if
+# Microsoft Edge isn't working》：重启、更新、清除浏览数据、停用扩展、查病毒、更新安全软件、修复（按钮 system.edge-repair：
+# 运行 Edge 登记的「修改」，是 Edge 更新程序的联机修复）、还不行就从官网下载安装程序装在原来的上面（按钮 web.edge-download）。
+# STATUS_INVALID_IMAGE_HASH 多半是安全软件往浏览器里注入的东西不兼容：只教更新、卸载那个软件；网上教的改策略关掉「渲染器
+# 代码完整性」会降低安全性，不教、不改。
+id: edge-broken
+schema_version: 1
+title: { zh-CN: Edge 浏览器打不开、闪退、网页崩溃 }
+summary:
+  zh-CN: 点了 Edge 没反应、一打开就闪退；网页一打开就显示「此页面存在问题」，错误代码是 STATUS_ACCESS_VIOLATION、STATUS_INVALID_IMAGE_HASH、Out of Memory 这些。
+keywords:
+  - edge打不开
+  - edge闪退
+  - edge崩溃
+  - edge无法打开
+  - edge一打开就关
+  - edge没反应
+  - edge浏览器打不开
+  - 浏览器打不开
+  - 浏览器闪退
+  - 浏览器崩溃
+  - 此页面存在问题
+  - 喔唷崩溃啦
+  - status_access_violation
+  - status_invalid_image_hash
+  - status_breakpoint
+  - result_code_hung
+  - outofmemory
+  - 修复edge
+  - edge修复
+causes:
+  - zh-CN: Edge 自己的文件坏了（更新到一半断电、被「清理」「优化」软件删了东西）
+  - zh-CN: 安全软件、网银控件、老的杀毒软件往浏览器里注入的东西不兼容（常见的是 STATUS_INVALID_IMAGE_HASH）
+  - zh-CN: 装的扩展有问题，或者缓存、浏览数据太多
+  - zh-CN: 中了病毒、流氓软件
+maturity: semi
+steps:
+  - check: system.reliability-recent
+guide:
+  zh-CN: |
+    先看上面的检查：最近 Edge（msedge.exe）崩溃得多的，照下面做。
+
+    1. 先重启一次电脑，再打开 Edge 试试。
+    2. 能打开、但网页老崩溃的：点右上角的「…」→「设置」→「关于 Microsoft Edge」更新到最新版；再点「…」→「历史记录」→「删除浏览数据」，时间范围选「所有时间」，删掉缓存；在地址栏输入 edge://extensions 回车，把用不上的扩展关掉。
+    3. 一打开就闪退、根本打不开的：先关掉所有 Edge 窗口，点下面的「修复 Edge 浏览器」（要联网，会重新下载安装一遍 Edge，收藏夹、密码、历史记录不会丢）。
+    4. 报 STATUS_INVALID_IMAGE_HASH、STATUS_ACCESS_VIOLATION，或者装了某个安全软件、网银控件以后才这样的：多半是它往浏览器里注入的东西不兼容，把它更新到最新版；还不行，先卸载它试试。网上教的改策略关掉「渲染器代码完整性」会让浏览器更容易被攻击，别这么改。
+    5. 用 Windows 安全中心或者自己装的杀毒软件全盘扫描一次，看看有没有病毒、流氓软件。
+    6. 修复以后还打不开的：点下面的「微软官网下载 Edge 浏览器」，下载安装程序装在原来的上面。默认浏览器就是 Edge、下载页也打不开的，用手机或者别的电脑下载好拷过来。
+    7. 单位的电脑，在「设置 → 应用」里 Edge 的「修改」是灰的：Edge 由单位统一管理，找单位的网管。
+
+    着急用的话，先用别的浏览器（Chrome、Firefox、360 这些）顶一下。
+links: ["tool:system.edge-repair", "tool:web.edge-download", "tool:settings.apps", "tool:system.app-crashes", "symptom:app-crash", "symptom:browser-hijacked"]

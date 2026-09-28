@@ -167,6 +167,7 @@ pub const WEBSITES: &[&str] = &[
     "oem-drivers",
     "office-uninstall",
     "office-install",
+    "edge-download",
 ];
 
 pub fn website(name: &str) -> Option<&'static str> {
@@ -185,6 +186,8 @@ pub const FIXED_WEBSITES: &[(&str, &str)] = &[
         "office-install",
         "https://support.microsoft.com/zh-cn/office/lifecycle/officeinstall/download-install-or-reinstall-microsoft-365-or-office-2024-on-a-pc-or-mac",
     ),
+    // 微软官网的 Microsoft Edge 下载页（微软《What to do if Microsoft Edge isn't working》：修复不好的，下载安装程序装在原来的上面）
+    ("edge-download", "https://www.microsoft.com/zh-cn/edge/download"),
 ];
 
 /// 固定网页的网址；按这台电脑的情况挑网址的（`oem-drivers`）是 `None`。
@@ -711,7 +714,13 @@ mod tests {
     fn fixed_websites_are_listed_official_and_https() {
         for (name, url) in FIXED_WEBSITES {
             assert_eq!(website(name), Some(*name), "{name} 要在 WEBSITES 里");
-            assert!(url.starts_with("https://support.microsoft.com/zh-cn/") && !url.contains(' '), "{url}");
+            assert!(
+                ["https://support.microsoft.com/zh-cn/", "https://www.microsoft.com/zh-cn/"]
+                    .iter()
+                    .any(|prefix| url.starts_with(prefix))
+                    && !url.contains(' '),
+                "{url}"
+            );
         }
         // 除了按电脑挑网址的品牌驱动页，名单里的都有固定网址
         for name in WEBSITES.iter().filter(|n| **n != "oem-drivers") {

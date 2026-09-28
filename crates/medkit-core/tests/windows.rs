@@ -402,6 +402,10 @@ fn every_feature_breaks_fixes_and_undoes() {
 
 // ───────────── 小工具 ─────────────
 
+/// 不真跑的一键处理：「修复 Edge」会在 CI 机器上重新下载安装 Edge，和后面打开网页的测试抢 Edge。它要运行什么由
+/// [`edge_repair_plans_edge_updates_own_repair`] 在真实的注册表上核对，只是不启动。
+const NOT_RUN_FOR_REAL: &[&str] = &["system.edge-repair"];
+
 /// 所有 info、action 小工具都用 Windows PowerShell 5.1 真跑一遍，包括重启资源管理器
 /// （CI 机器上有桌面，Winlogon 会把它拉起来）。表格里不能有没定义的文字，也不能出现电脑名、用户名。
 /// 遮住的值（WiFi 密码）不打印。
@@ -418,7 +422,9 @@ fn every_tool_runs_cleanly_on_windows_powershell() {
         .and_then(|u| u.name.rsplit_once('\\').map(|(_, n)| n.to_lowercase()))
         .unwrap_or_default();
     let mut failures = Vec::new();
-    for t in bundle.catalog.tools.iter().filter(|t| t.group != ToolGroup::Open) {
+    for t in
+        bundle.catalog.tools.iter().filter(|t| t.group != ToolGroup::Open && !NOT_RUN_FOR_REAL.contains(&t.id.as_str()))
+    {
         let r = engine.tool_run(&t.id).unwrap();
         eprintln!("{:<32} {:<8} {:>6} ms  {}", t.id, format!("{:?}", r.status), r.duration_ms, r.message);
         let mut shown = Vec::new();
@@ -1406,6 +1412,41 @@ fn wifi_status_is_read_without_the_network_name() {
     eprintln!("检测：{:?} {:?} {}", r.status, r.result_code, r.message);
     assert!(r.error.is_none(), "{r:?}");
     assert!(unresolved(&r.message).is_empty(), "{}", r.message);
+}
+
+/// 「修复 Edge」要运行什么：只加载脚本里的函数，调用 Get-RepairPlan（读真实的注册表、核对路径、参数和微软签名），不启动修复。
+/// CI 机器装着 Edge，要核对出 Edge 更新程序自己的联机修复；没装 Edge 的机器上说没有。
+#[test]
+fn edge_repair_plans_edge_updates_own_repair() {
+    let script = repo_root().join("scripts/tools/system/edge-repair.ps1");
+    let command = format!(
+        "$ErrorActionPreference = 'Stop'; \
+         $ast = [System.Management.Automation.Language.Parser]::ParseFile('{}', [ref]$null, [ref]$null); \
+         foreach ($s in $ast.EndBlock.Statements) {{ \
+           if ($s -is [System.Management.Automation.Language.FunctionDefinitionAst]) {{ . ([scriptblock]::Create($s.Extent.Text)) }} \
+         }}; \
+         Get-RepairPlan | Select-Object Code, Name, File, Arguments | ConvertTo-Json -Compress",
+        script.display()
+    );
+    let out = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &command])
+        .output()
+        .expect("能运行 powershell.exe");
+    let text = String::from_utf8_lossy(&out.stdout);
+    eprintln!("{text}");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let plan: serde_json::Value = serde_json::from_str(text.trim()).expect("输出是 JSON");
+    match plan["Code"].as_str() {
+        Some("start") => {
+            let file = plan["File"].as_str().unwrap_or_default();
+            let arguments = plan["Arguments"].as_str().unwrap_or_default();
+            assert!(file.to_lowercase().ends_with(r"\microsoft\edgeupdate\microsoftedgeupdate.exe"), "{file}");
+            assert!(arguments.contains("repairtype=windowsonlinerepair"), "{arguments}");
+            assert!(!arguments.to_lowercase().contains("uninstall"), "{arguments}");
+        }
+        Some("no-edge") => println!("::notice title=edge::这台机器上没装 Microsoft Edge"),
+        other => panic!("CI 机器上的 Edge 应该能修复，结果是 {other:?}：{plan}"),
+    }
 }
 
 /// Microsoft Edge 在「应用和功能」里登记的命令（只读，打印出来）：「设置 → 应用 → Microsoft Edge → 修改」运行的就是 ModifyPath，

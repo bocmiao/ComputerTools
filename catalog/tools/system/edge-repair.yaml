@@ -1,0 +1,60 @@
+# 一键处理（action）：打开 Microsoft Edge 自己的修复。脚本：scripts/tools/system/edge-repair.ps1
+# 和在「设置 → 应用 → 已安装的应用 → Microsoft Edge」里点「修改」一样：运行 Edge 登记在「应用和功能」里的 ModifyPath。CI 的
+# Windows 上核实过，它是 Microsoft Edge 更新程序的联机修复（MicrosoftEdgeUpdate.exe /install appguid=Edge 稳定版…
+# &repairtype=windowsonlinerepair），会重新下载安装一遍 Edge；卸载命令是另一个程序（setup.exe --uninstall），一律不运行。
+# 运行前核对：程序在 Program Files (x86)\Microsoft\EdgeUpdate 里、文件在、有效的微软签名，参数是 Edge 稳定版的修复。步骤照微软
+# 《What to do if Microsoft Edge isn't working》：先关掉 Edge；修复不影响浏览器的数据和设置；没有「修改」的是单位统一管理的 Edge。
+id: system.edge-repair
+schema_version: 1
+group: action
+title: { zh-CN: 修复 Edge 浏览器 }
+description:
+  zh-CN: Edge 打不开、一打开就闪退、网页一直崩溃时，打开 Edge 自己的修复（要联网，会重新下载安装一遍 Edge），收藏夹、密码、历史记录不会丢。和在「设置 → 应用」里点 Microsoft Edge 的「修改」一样。
+category: system
+requires_admin: true
+timeout_sec: 60
+run:
+  script: tools/system/edge-repair.ps1
+confirm:
+  zh-CN: 修复前先关掉所有 Edge 窗口。修复要联网，会重新下载安装一遍 Edge，微软说浏览器的数据和设置不受影响。现在打开 Edge 的修复吗？
+results:
+  started:
+    status: ok
+    message:
+      zh-CN: 已经打开了「{name}」的修复。
+    next:
+      zh-CN: 照窗口里的提示点「修复」，等它下载安装完（要联网，几分钟），再重新打开 Edge 试试。修完还是打不开的，看「Edge 浏览器打不开、闪退、网页崩溃」里的其他办法。
+  no-edge:
+    status: na
+    message:
+      zh-CN: 「应用和功能」里没有 Microsoft Edge，可能被卸载了。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮到微软官网下载 Edge，装上就好。
+    links: ["tool:web.edge-download"]
+  no-repair:
+    status: advice
+    message:
+      zh-CN: 「{name}」没有登记修复的办法。微软说这种一般是单位统一安装、管理的 Edge。
+    fixer: user
+    next:
+      zh-CN: 单位的电脑找单位的网管。自己的电脑，到微软官网下载 Edge 再装一遍（装在原来的上面，收藏夹这些不会丢）。
+    links: ["tool:web.edge-download"]
+  missing:
+    status: advice
+    message:
+      zh-CN: 修复 Edge 要用的「Microsoft Edge 更新程序」已经找不到了（可能被「优化」「清理」软件删了）。
+    fixer: user
+    next:
+      zh-CN: 到微软官网下载 Edge 再装一遍，会把更新程序一起装回来，收藏夹这些不会丢。
+    links: ["tool:web.edge-download"]
+  untrusted:
+    status: advice
+    message:
+      zh-CN: 「{name}」登记的修复命令不是微软的 Edge 更新程序，或者不是修复命令，小药箱没有运行它。
+    fixer: user
+    next:
+      zh-CN: 打开「设置 → 应用 → 已安装的应用」，找到 Microsoft Edge，点「…」→「修改」自己修复；修复打不开的，到微软官网下载 Edge 再装一遍。
+    links: ["tool:settings.apps", "tool:web.edge-download"]
+references:
+  - https://support.microsoft.com/en-us/microsoft-edge/what-to-do-if-microsoft-edge-isn-t-working-cc0657a6-acd2-cbbd-1528-c0335c71312a

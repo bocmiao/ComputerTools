@@ -1597,6 +1597,15 @@ const SYMPTOMS: MockSymptom[] = [
     links: ['tool:system.office-repair', 'tool:web.office-uninstall', 'tool:web.office-install', 'tool:settings.apps'],
   },
   {
+    id: 'edge-broken', title: 'Edge 浏览器打不开、闪退、网页崩溃',
+    summary: '点了 Edge 没反应、一打开就闪退；网页一打开就显示「此页面存在问题」，错误代码是 STATUS_ACCESS_VIOLATION、STATUS_INVALID_IMAGE_HASH、Out of Memory 这些。',
+    keywords: ['edge打不开', 'edge闪退', '此页面存在问题', 'status_access_violation'], maturity: 'semi',
+    causes: ['Edge 自己的文件坏了（更新到一半断电、被「清理」「优化」软件删了东西）', '安全软件、网银控件、老的杀毒软件往浏览器里注入的东西不兼容', '装的扩展有问题，或者缓存、浏览数据太多'],
+    guide: '先重启电脑。能打开但网页老崩溃的，更新 Edge、删除浏览数据、关掉用不上的扩展。一打开就闪退的，关掉所有 Edge 窗口，点「修复 Edge 浏览器」。还不行，从微软官网下载安装程序装在原来的上面。',
+    steps: [{ check: 'system.reliability-recent', fixes: [] }],
+    links: ['tool:system.edge-repair', 'tool:web.edge-download', 'tool:settings.apps'],
+  },
+  {
     id: 'downloads-grouped', title: '下载文件夹里的文件按日期分组了',
     summary: '打开「下载」文件夹，文件被分成「今天」「昨天」「本周早些时候」「上周」「很久以前」一组一组的，找文件很麻烦；另存为的窗口里也是这样。',
     keywords: ['按日期分组', '下载文件夹分组', '取消分组', '很久以前'], maturity: 'guide',
@@ -2193,6 +2202,26 @@ const TOOL_LIST: MockTool[] = [
   ),
   defineTool(
     {
+      id: 'system.edge-repair',
+      title: '修复 Edge 浏览器',
+      description: 'Edge 打不开、一打开就闪退、网页一直崩溃时，打开 Edge 自己的修复（要联网，会重新下载安装一遍 Edge），收藏夹、密码、历史记录不会丢。和在「设置 → 应用」里点 Microsoft Edge 的「修改」一样。',
+      category: 'system',
+      group: 'action',
+      confirm: '修复前先关掉所有 Edge 窗口。修复要联网，会重新下载安装一遍 Edge，微软说浏览器的数据和设置不受影响。现在打开 Edge 的修复吗？',
+    },
+    {
+      // 说法和 catalog/tools/system/edge-repair.yaml 一样
+      run: () => ({
+        status: 'ok',
+        resultCode: 'started',
+        message: '已经打开了「Microsoft Edge」的修复。',
+        next: '照窗口里的提示点「修复」，等它下载安装完（要联网，几分钟），再重新打开 Edge 试试。修完还是打不开的，看「Edge 浏览器打不开、闪退、网页崩溃」里的其他办法。',
+      }),
+      requiresAdmin: true,
+    },
+  ),
+  defineTool(
+    {
       id: 'system.restart-explorer',
       title: '重启资源管理器',
       description: '任务栏点不动、桌面图标不见了、文件夹窗口卡住时，把资源管理器关掉再重新打开，不用重启电脑。',
@@ -2303,6 +2332,14 @@ const TOOL_LIST: MockTool[] = [
     'system',
     'website',
     'https://support.microsoft.com/zh-cn/office/lifecycle/officeinstall/download-install-or-reinstall-microsoft-365-or-office-2024-on-a-pc-or-mac',
+  ),
+  openTool(
+    'web.edge-download',
+    '微软官网下载 Edge 浏览器',
+    '打开微软官网的 Microsoft Edge 下载页：Edge 修不好、被卸载了的，下载安装程序装在原来的上面，收藏夹、密码这些不会丢。',
+    'system',
+    'website',
+    'https://www.microsoft.com/zh-cn/edge/download',
   ),
   openTool(
     'open.disk-cleanup',

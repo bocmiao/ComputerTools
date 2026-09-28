@@ -1,0 +1,13 @@
+# 打开微软官网的 Edge 下载页（open：website edge-download，网址写在 tools.rs 的 FIXED_WEBSITES 里）。微软《What to do if
+# Microsoft Edge isn't working》：修复以后还打不开的，到 microsoft.com/edge 下载最新的安装程序，装在原来的上面。
+# 页面用默认浏览器打开：默认浏览器就是打不开的 Edge 时，换一台电脑或者用手机下载。
+id: web.edge-download
+schema_version: 1
+group: open
+title: { zh-CN: 微软官网下载 Edge 浏览器 }
+description:
+  zh-CN: 打开微软官网的 Microsoft Edge 下载页：Edge 修不好、被卸载了的，下载安装程序装在原来的上面，收藏夹、密码这些不会丢。
+category: system
+open: { website: edge-download }
+references:
+  - https://www.microsoft.com/zh-cn/edge/download

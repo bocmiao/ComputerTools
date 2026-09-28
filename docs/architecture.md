@@ -726,7 +726,8 @@ website（网址都写在 `tools.rs` 里，数据文件只能挑名字）：
   机械革命、雷神、机械师、神舟这些国产游戏本多是同方、蓝天的模具，BIOS 里的厂商随经销商变，官网也核实不了，先不收。
 - 网址固定的官方网页（`tools.rs` 的 `FIXED_WEBSITES`，名字也在 `WEBSITES` 里，都是逐个打开核实过内容的微软中文页面）：
   `office-uninstall`（《从电脑卸载 Microsoft 365 或 Office》，卸不掉、卸不干净时用页面里的「卸载支持工具」）、
-  `office-install`（《在电脑或 Mac 上下载、安装或重新安装 Microsoft 365 或 Office 2024》，用买 Office 的账户登录下载）。
+  `office-install`（《在电脑或 Mac 上下载、安装或重新安装 Microsoft 365 或 Office 2024》，用买 Office 的账户登录下载）、
+  `edge-download`（微软官网的 Edge 下载页 `https://www.microsoft.com/zh-cn/edge/download`，会跳到 explore.microsoft.com 的同一页；微软《What to do if Microsoft Edge isn't working》：修复以后还打不开的，下载安装程序装在原来的上面）。
 - 网页不由小药箱直接打开：小药箱是管理员，直接 ShellExecute 网址的话浏览器也会以管理员身份运行（下载的安装包不再弹
   UAC，已经开着的浏览器也接不上）。照微软的 ExecInExplorer 示例和 Raymond Chen《How can I launch an unelevated process
   from my elevated process and vice versa?》，请桌面的资源管理器（登录用户的普通权限）替我们打开：ShellWindows →
