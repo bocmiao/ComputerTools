@@ -1,0 +1,15 @@
+# 打开「设置」里媒体播放器（Windows 10 上叫 Groove 音乐）的「高级选项」（open）：ms-settings:appsfeatures-app?Microsoft.ZuneMusic_8wekyb3d8bbwe，由系统打开。这一页有「终止」「修复」「重置」，
+# 办法照微软《修复 Windows 中的应用和程序》：先修复（不删数据），不行再重置。包系列名照微软《Keep removed apps from returning
+# during an update》。应用被删掉了的电脑上打开的是什么页面，写在真机验证清单里。
+id: settings.app-media-player
+schema_version: 1
+group: open
+title: { zh-CN: 媒体播放器的高级选项 }
+description:
+  zh-CN: 媒体播放器（Windows 10 上叫 Groove 音乐）打不开、放不了歌时用：打开「设置」里它的「高级选项」，先点「终止」再点「修复」；还不行点「重置」（播放列表会清掉，音乐文件不会删）。
+category: settings
+open: { settings: "appsfeatures-app?Microsoft.ZuneMusic_8wekyb3d8bbwe" }
+references:
+  - https://support.microsoft.com/zh-cn/windows/apps/repair-apps-and-programs-in-windows
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://learn.microsoft.com/en-us/windows/application-management/remove-provisioned-apps-during-update

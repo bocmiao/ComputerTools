@@ -61,4 +61,4 @@ guide:
     都不行的话，把「最近闪退的软件」里那个软件的出错模块和错误代码截图，发给懂哥或者游戏的客服。
 
     老软件在新系统上打不开、一打开就出错的，可以用微软自带的「程序兼容性疑难解答」试几种兼容模式（点下面的按钮；它在 Windows 的「获取帮助」应用里，要联网）。
-links: ["tool:system.app-crashes", "tool:system.install-vc-runtime", "tool:settings.optional-updates", "tool:open.reliability", "tool:open.memory-diagnostic", "tool:troubleshoot.program-compat", "symptom:app-missing-dll"]
+links: ["tool:system.app-crashes", "tool:system.install-vc-runtime", "tool:settings.optional-updates", "tool:open.reliability", "tool:open.memory-diagnostic", "tool:troubleshoot.program-compat", "symptom:app-missing-dll", "symptom:builtin-app-broken"]

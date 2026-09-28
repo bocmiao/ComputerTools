@@ -1,0 +1,54 @@
+# 症状：照片、计算器、截图工具这些 Windows 自带的应用（应用商店里的那种）打不开、闪退、一直转圈。办法照微软《修复 Windows 中
+# 的应用和程序》：「设置 → 应用 → 高级选项」里先修复、再重置；常见的几个应用直接给打开它「高级选项」页的按钮
+# （ms-settings:appsfeatures-app?<包系列名>，微软《Launch Windows Settings》）。没有按钮的（截图工具、画图、记事本、Windows 安全
+# 中心）教路径：截图工具在微软官方文档里查不到包系列名，Windows 安全中心在 Windows 10、11 上的包名不一样（微软《Customize the
+# Start layout》），所以不做固定的按钮。GitHub 上一键重置所有应用、重建应用数据库的脚本太猛，不用。
+id: builtin-app-broken
+schema_version: 1
+title: { zh-CN: 照片、计算器这些自带的应用打不开 }
+summary:
+  zh-CN: Windows 自带的照片、计算器、截图工具、相机、媒体播放器这些应用，点了没反应、一打开就闪退，或者一直停在启动画面上转圈。
+keywords:
+  - 照片打不开
+  - 照片应用打不开
+  - 照片闪退
+  - 照片一直转圈
+  - 看图打不开
+  - 计算器打不开
+  - 计算器闪退
+  - 截图工具打不开
+  - 截图工具用不了
+  - 截图快捷键没反应
+  - win+shift+s没反应
+  - 相机应用打不开
+  - 媒体播放器打不开
+  - groove音乐打不开
+  - 电影和电视打不开
+  - 画图打不开
+  - 记事本打不开
+  - 安全中心打不开
+  - windows安全中心打不开
+  - 安全中心空白
+  - 自带应用打不开
+  - 系统应用打不开
+  - 应用打开就闪退
+  - 应用一直转圈
+  - 此应用无法打开
+causes:
+  - zh-CN: 应用自己的数据坏了（常见于系统或者应用更新以后）
+  - zh-CN: 应用没有更新完，和现在的 Windows 版本对不上
+  - zh-CN: 系统时间不对，应用的许可证验证不过
+  - zh-CN: 应用被「优化」软件、精简过的系统删掉了
+  - zh-CN: 系统文件坏了
+maturity: semi
+steps:
+  - check: system.clock
+guide:
+  zh-CN: |
+    1. 先重启一次电脑：应用卡在后台的时候，关掉重开也打不开，重启以后常常就好了。
+    2. 照片、计算器、相机、媒体播放器（Windows 10 上叫 Groove 音乐）、应用商店：点下面对应的「高级选项」按钮，先点「终止」，再点「修复」（不删数据），然后打开试试；还不行点「重置」（会清掉这个应用自己的设置和登录，照片、音乐这些文件不会删）。
+    3. 截图工具、画图、记事本、Windows 安全中心这些下面没有按钮的：打开「设置 → 应用 → 安装的应用」（Windows 10 是「应用和功能」），找到它，点右边的「…」或者名字下面的「高级选项」，一样先修复、再重置。Windows 10 上的「Windows 安全中心」没有这一页：先看是不是装了别的杀毒软件（装了以后病毒防护会交给它），再用「检查并修复系统文件」。
+    4. 打开 Microsoft Store，在「库」里点「获取更新」，把这个应用更新到最新。应用商店也打不开的，看「应用商店打不开」。
+    5. 提示「此应用无法打开」、「你需要一个新应用来打开此 ms-… 链接」的，多半是应用被「优化」软件、精简过的系统删掉了：到 Microsoft Store 里搜这个应用重新装上。
+    6. 还不行：用「检查并修复系统文件」修一遍，重启以后再试。
+links: ["tool:settings.app-photos", "tool:settings.app-calculator", "tool:settings.app-camera", "tool:settings.app-media-player", "tool:settings.app-store", "tool:settings.apps", "tool:open.system-file-repair", "symptom:store-broken"]

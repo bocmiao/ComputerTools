@@ -48,7 +48,7 @@ guide:
 
     1. 在开会软件自己的设置里看看选的是哪个麦克风、摄像头（腾讯会议、钉钉在「设置 → 音频 / 视频」里）。插着耳机的，麦克风要选耳机上的那个。
     2. 笔记本的摄像头：看看摄像头旁边有没有小滑块（遮挡片）没拨开；有的机型用键盘最上面一排带摄像头图标的键（有时要和 Fn 一起按）开关摄像头。
-    3. 摄像头同一时间只能给一个软件用：把别的开会软件、「相机」应用关掉，再打开要用的那个。
+    3. 摄像头同一时间只能给一个软件用：把别的开会软件、「相机」应用关掉，再打开要用的那个。别的软件能用摄像头、只是 Windows 自带的「相机」应用打不开的，点下面的「相机应用的高级选项」，先修复、不行再重置。
     4. 麦克风：打开「设置 → 系统 → 声音」，在「输入」里选你要用的麦克风，对着它说话，看音量条动不动；不动的话调高「输入音量」。
     5. 外接的 USB 摄像头、耳机：换一个 USB 口，直接插在电脑上，不要接在扩展坞、延长线上。台式机的耳机麦克风要插在粉色的孔里；只有一个插头（带三道环）的耳机要插在耳麦二合一的孔上。
     6. 都试过还不行，可能是驱动的问题，请懂哥帮忙看看。
@@ -56,4 +56,4 @@ guide:
     还可以用微软自带的「相机疑难解答」「声音疑难解答」（麦克风也归它查）自动查一遍，能修的它们直接修（点下面的按钮；它们在 Windows 的「获取帮助」应用里，要联网）。
 
     改好以后，点下面的「测一测麦克风」「测一测摄像头」试一试，不用打开聊天软件。
-links: ["test:microphone", "test:camera", "tool:settings.sound", "tool:settings.privacy-microphone", "tool:settings.privacy-camera", "tool:troubleshoot.camera", "tool:troubleshoot.audio"]
+links: ["test:microphone", "test:camera", "tool:settings.sound", "tool:settings.privacy-microphone", "tool:settings.privacy-camera", "tool:troubleshoot.camera", "tool:troubleshoot.audio", "tool:settings.app-camera"]

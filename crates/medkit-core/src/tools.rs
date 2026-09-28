@@ -123,6 +123,14 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "devices-touchpad",
     // 「疑难解答」：Windows 11 在「系统」里（「其他疑难解答」是「获取帮助」的那几个），Windows 10 在「更新和安全」里
     "troubleshoot",
+    // 某个自带应用的「高级选项」：终止、修复、重置（微软《Launch Windows Settings》：ms-settings:appsfeatures-app?<包系列名>；
+    // 办法照微软《修复 Windows 中的应用和程序》）。包系列名照微软《Keep removed apps from returning during an update》，
+    // Windows 10、11 一样：照片、计算器、相机、Microsoft Store、媒体播放器（Windows 10 上叫 Groove 音乐，同一个包）
+    "appsfeatures-app?Microsoft.Windows.Photos_8wekyb3d8bbwe",
+    "appsfeatures-app?Microsoft.WindowsCalculator_8wekyb3d8bbwe",
+    "appsfeatures-app?Microsoft.WindowsCamera_8wekyb3d8bbwe",
+    "appsfeatures-app?Microsoft.WindowsStore_8wekyb3d8bbwe",
+    "appsfeatures-app?Microsoft.ZuneMusic_8wekyb3d8bbwe",
 ];
 
 /// 「获取帮助」应用里微软的自动疑难解答（`ms-contact-support://smc-to-emerald/<名字>`），照微软《Windows

@@ -51,10 +51,10 @@ guide:
     1. 点下面的「重置应用商店缓存」：会先出现一个空白的黑色窗口，等十几秒它自己关掉、商店自动打开。已经装好的应用不会被删掉。
     2. 开着「梯子」、加速器、代理软件的，先关掉再打开商店。
     3. 在商店右上角点头像，退出微软账户，关掉商店重新打开，再登录。
-    4. 打开「设置 → 应用 → 安装的应用」（Windows 10 是「应用和功能」），找到 Microsoft Store，点「高级选项」，先点「修复」，不行再点「重置」（会退出登录，要重新登录）。
+    4. 点下面的「Microsoft Store 的高级选项」，先点「修复」，不行再点「重置」（会退出登录，要重新登录）。按钮打不开的，自己打开「设置 → 应用 → 安装的应用」（Windows 10 是「应用和功能」），找到 Microsoft Store，点「高级选项」。
     5. 运行 Windows 自带的疑难解答：Windows 11 在「设置 → 系统 → 疑难解答 → 其他疑难解答」里点「Windows 应用商店应用」旁边的「运行」；Windows 10 在「设置 → 更新和安全 → 疑难解答 → 其他疑难解答」里。
     6. 只是某一个应用装不上、别的都能装：把这个应用在「安装的应用」里卸载干净，重启电脑再装；C 盘空间不够也会装不上。
     7. 还不行：用小工具「检查并修复系统文件」修一遍，重启以后再试。
 
     商店实在用不了、只是想装某个软件的，也可以直接到软件的官网下载安装。
-links: ["tool:open.store-reset", "tool:settings.apps", "tool:open.system-file-repair", "tool:settings.date-time"]
+links: ["tool:open.store-reset", "tool:settings.app-store", "tool:settings.apps", "tool:open.system-file-repair", "tool:settings.date-time", "symptom:builtin-app-broken"]
