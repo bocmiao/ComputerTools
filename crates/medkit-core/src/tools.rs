@@ -17,23 +17,35 @@ pub struct Program {
     pub exe: &'static str,
     /// 参数；以 `.msc` 结尾的会换成 System32 下的绝对路径
     pub args: &'static [&'static str],
+    /// 不为空时（`exe` 是 cmd.exe）：在一个新的命令行窗口里依次运行这几条命令，窗口留着看结果。
+    /// 每条是「System32 下的程序名 参数」，程序换成绝对路径（见 [`console_command_line`]）
+    pub console: &'static [&'static str],
 }
 
 pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
-    ("task-manager", Program { exe: "Taskmgr.exe", args: &[] }),
-    ("device-manager", Program { exe: "mmc.exe", args: &["devmgmt.msc"] }),
-    ("disk-management", Program { exe: "mmc.exe", args: &["diskmgmt.msc"] }),
-    ("disk-cleanup", Program { exe: "cleanmgr.exe", args: &[] }),
-    ("system-restore", Program { exe: "rstrui.exe", args: &[] }),
-    ("reliability", Program { exe: "perfmon.exe", args: &["/rel"] }),
-    ("memory-diagnostic", Program { exe: "MdSched.exe", args: &[] }),
-    ("system-information", Program { exe: "msinfo32.exe", args: &[] }),
-    ("services", Program { exe: "mmc.exe", args: &["services.msc"] }),
-    ("event-viewer", Program { exe: "mmc.exe", args: &["eventvwr.msc"] }),
-    ("control-panel", Program { exe: "control.exe", args: &[] }),
-    ("uac-settings", Program { exe: "UserAccountControlSettings.exe", args: &[] }),
-    ("firewall", Program { exe: "control.exe", args: &["firewall.cpl"] }),
-    ("indexing-options", Program { exe: "control.exe", args: &["srchadmin.dll"] }),
+    ("task-manager", Program { exe: "Taskmgr.exe", args: &[], console: &[] }),
+    ("device-manager", Program { exe: "mmc.exe", args: &["devmgmt.msc"], console: &[] }),
+    ("disk-management", Program { exe: "mmc.exe", args: &["diskmgmt.msc"], console: &[] }),
+    ("disk-cleanup", Program { exe: "cleanmgr.exe", args: &[], console: &[] }),
+    ("system-restore", Program { exe: "rstrui.exe", args: &[], console: &[] }),
+    ("reliability", Program { exe: "perfmon.exe", args: &["/rel"], console: &[] }),
+    ("memory-diagnostic", Program { exe: "MdSched.exe", args: &[], console: &[] }),
+    ("system-information", Program { exe: "msinfo32.exe", args: &[], console: &[] }),
+    ("services", Program { exe: "mmc.exe", args: &["services.msc"], console: &[] }),
+    ("event-viewer", Program { exe: "mmc.exe", args: &["eventvwr.msc"], console: &[] }),
+    ("control-panel", Program { exe: "control.exe", args: &[], console: &[] }),
+    ("uac-settings", Program { exe: "UserAccountControlSettings.exe", args: &[], console: &[] }),
+    ("firewall", Program { exe: "control.exe", args: &["firewall.cpl"], console: &[] }),
+    ("indexing-options", Program { exe: "control.exe", args: &["srchadmin.dll"], console: &[] }),
+    // 微软《使用系统文件检查器工具修复丢失或损坏的系统文件》：先用 DISM 修复映像，再运行 sfc
+    (
+        "system-file-repair",
+        Program {
+            exe: "cmd.exe",
+            args: &[],
+            console: &["Dism.exe /Online /Cleanup-Image /RestoreHealth", "sfc.exe /scannow"],
+        },
+    ),
 ];
 
 /// 「设置」里能打开的页面（ms-settings:<页面>）。
@@ -60,6 +72,29 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "regionlanguage",
     "apps-volume",
 ];
+
+/// 命令行窗口里要运行的那一串：`/k ""<System32>\Dism.exe" /Online … & "<System32>\sfc.exe" /scannow"`。程序都写
+/// 绝对路径（cmd 找程序时先找当前文件夹）；一条失败了下一条照样运行（`&`）。整串外面再包一层引号：里面有引号和 `&`
+/// 时，cmd 只去掉最外面那一对（`cmd /?` 里说的规则）。没有这个程序时返回它的名字。
+pub fn console_command_line(system32: &std::path::Path, commands: &[&str]) -> Result<String, String> {
+    let mut line = String::new();
+    for command in commands {
+        let (name, rest) = command.split_once(' ').unwrap_or((command, ""));
+        let program = system32.join(name);
+        if !program.is_file() {
+            return Err(name.to_owned());
+        }
+        if !line.is_empty() {
+            line.push_str(" & ");
+        }
+        line.push_str(&format!("\"{}\"", program.display()));
+        if !rest.is_empty() {
+            line.push(' ');
+            line.push_str(rest);
+        }
+    }
+    Ok(format!("/k \"{line}\""))
+}
 
 pub fn program(name: &str) -> Option<&'static Program> {
     OPEN_PROGRAMS.iter().find(|(n, _)| *n == name).map(|(_, p)| p)
@@ -203,5 +238,31 @@ mod tests {
         assert!(program("cmd").is_none());
         assert_eq!(settings_page("windowsupdate"), Some("windowsupdate"));
         assert!(settings_page("../x").is_none());
+    }
+
+    #[test]
+    fn console_commands_use_absolute_paths_and_one_outer_pair_of_quotes() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["Dism.exe", "sfc.exe"] {
+            std::fs::write(dir.path().join(name), b"").unwrap();
+        }
+        let repair = program("system-file-repair").unwrap();
+        assert_eq!(repair.exe, "cmd.exe");
+        let line = console_command_line(dir.path(), repair.console).unwrap();
+        let d = dir.path().display();
+        assert_eq!(
+            line,
+            format!(
+                r#"/k ""{d}{sep}Dism.exe" /Online /Cleanup-Image /RestoreHealth & "{d}{sep}sfc.exe" /scannow""#,
+                sep = std::path::MAIN_SEPARATOR
+            )
+        );
+        assert_eq!(
+            console_command_line(dir.path(), &["chkdsk.exe /scan"]),
+            Err("chkdsk.exe".to_owned()),
+            "没有的程序不拼"
+        );
+        // 别的程序都不是命令行窗口
+        assert!(OPEN_PROGRAMS.iter().filter(|(_, p)| !p.console.is_empty()).all(|(_, p)| p.exe == "cmd.exe"));
     }
 }

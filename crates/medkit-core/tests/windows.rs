@@ -472,9 +472,16 @@ fn open_tools_launch_or_explain_why_not() {
         match (&open.program, &open.settings) {
             (Some(name), None) => {
                 let p = tools::program(name).expect("名单里有");
+                // 命令行窗口里依次运行的程序（DISM 还会再起一个 DismHost）：打开以后一起关掉
+                let mut children: Vec<&str> = p.console.iter().map(|c| c.split(' ').next().unwrap_or(c)).collect();
                 let present = system32.join(p.exe).is_file()
-                    && p.args.iter().filter(|a| a.ends_with(".msc")).all(|a| system32.join(a).is_file());
+                    && p.args.iter().filter(|a| a.ends_with(".msc")).all(|a| system32.join(a).is_file())
+                    && children.iter().all(|c| system32.join(c).is_file());
+                if !children.is_empty() {
+                    children.push("DismHost.exe");
+                }
                 let before = pids_of(p.exe);
+                let before_children: Vec<(&str, Vec<u32>)> = children.iter().map(|c| (*c, pids_of(c))).collect();
                 let r = engine.tool_open(&t.id);
                 match (&r, present) {
                     (Ok(()), true) => eprintln!("打开了 {:<28} {}", t.id, p.exe),
@@ -484,7 +491,25 @@ fn open_tools_launch_or_explain_why_not() {
                     _ => failures.push(format!("{}：{} 在不在：{present}，结果：{r:?}", t.id, p.exe)),
                 }
                 std::thread::sleep(Duration::from_secs(2));
+                // 命令行窗口：窗口里的程序真的起来了（DISM 在跑，或者它很快出错退出、接着跑起了 sfc），才说明命令行拼对了
+                if r.is_ok() && !p.console.is_empty() {
+                    let started = (0..12).any(|_| {
+                        let seen = before_children.iter().any(|(c, b)| pids_of(c).iter().any(|pid| !b.contains(pid)));
+                        if !seen {
+                            std::thread::sleep(Duration::from_millis(250));
+                        }
+                        seen
+                    });
+                    if started {
+                        eprintln!("  命令行窗口里的程序跑起来了：{}", p.console.join(" & "));
+                    } else {
+                        failures.push(format!("{}：命令行窗口里的程序没有跑起来，命令行可能拼错了", t.id));
+                    }
+                }
                 close_new(p.exe, &before);
+                for (c, b) in &before_children {
+                    close_new(c, b);
+                }
             }
             (None, Some(page)) => {
                 let before = pids_of("SystemSettings.exe");

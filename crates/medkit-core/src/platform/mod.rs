@@ -80,8 +80,9 @@ pub struct FileUser {
 /// 要打开的系统工具，已经按 [`crate::tools`] 的名单解析过（数据里只能写名单里的名字）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpenRequest {
-    /// System32 下的程序和参数；以 `.msc` 结尾的参数换成 System32 下的绝对路径
-    Program { exe: &'static str, args: &'static [&'static str] },
+    /// System32 下的程序和参数；以 `.msc` 结尾的参数换成 System32 下的绝对路径。`console` 不为空时在新的命令行
+    /// 窗口里依次运行这几条命令（见 [`crate::tools::Program::console`]）
+    Program { exe: &'static str, args: &'static [&'static str], console: &'static [&'static str] },
     /// 「设置」里的一页：`ms-settings:<page>`
     Settings(&'static str),
 }

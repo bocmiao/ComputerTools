@@ -594,10 +594,16 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `services` | `mmc.exe services.msc` |
 | `event-viewer` | `mmc.exe eventvwr.msc` |
 | `control-panel` | `control.exe` |
+| `uac-settings` | `UserAccountControlSettings.exe` |
+| `firewall` | `control.exe firewall.cpl` |
+| `indexing-options` | `control.exe srchadmin.dll` |
+| `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 
-settings 页面：`windowsupdate`、`storagesense`、`storagepolicies`、`appsfeatures`、`defaultapps`、`network-status`、`printers`、
+settings 页面：`windowsupdate`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、
 `sound`、`powersleep`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`regionlanguage`、`apps-volume`。
 
 - 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。
+- 命令行窗口里运行的程序都写 System32 下的绝对路径（cmd 找程序时先找当前文件夹，便携版可能放在「下载」里），
+  一条失败了下一条照样运行（`&`）；整串外面再包一层引号，里面有引号和 `&` 时 cmd 只去掉最外面那一对。
 - 精简系统上被删掉的工具，打开时如实说「这台电脑上没有这个工具」，不去别处找。
 

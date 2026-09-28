@@ -1,0 +1,15 @@
+# 检查并修复系统文件：在一个新的命令行窗口里依次运行 Windows 自带的两个修复工具（微软《使用系统文件检查器工具修复
+# 丢失或损坏的系统文件》推荐的顺序）：先 DISM /Online /Cleanup-Image /RestoreHealth（用 Windows 更新修复系统映像，
+# 要联网），再 sfc /scannow（检查受保护的系统文件，坏了的换成映像里好的）。命令行窗口一直开着，进度和结果都在里面；
+# 程序都用 System32 下的绝对路径（见 tools.rs 的 console_command_line）。DISM 失败了（比如没联网）sfc 照样运行。
+id: open.system-file-repair
+schema_version: 1
+group: open
+title: { zh-CN: 检查并修复系统文件 }
+description:
+  zh-CN: 打开一个命令行窗口，依次运行 Windows 自带的两个修复工具：先用 DISM 修复系统映像（从 Windows 更新下载好的文件，要联网），再用 SFC 检查系统文件，把坏了的换成好的。一共要 10 到 30 分钟，进度一直显示在窗口里，中途别关窗口。系统自带的程序打不开、老是报错、更新总装不上时用。最后看到「未找到任何完整性冲突」是没问题；「找到了损坏文件并成功修复了它们」要重启电脑；「无法修复其中某些文件」请懂哥看看。
+category: system
+open: { program: system-file-repair }
+references:
+  - https://support.microsoft.com/en-us/topic/use-the-system-file-checker-tool-to-repair-missing-or-corrupted-system-files-79aa86cb-ca52-166a-92a3-966e85d4094e
+  - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/repair-a-windows-image

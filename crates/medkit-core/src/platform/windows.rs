@@ -630,7 +630,7 @@ impl Platform for WindowsPlatform {
 
     fn open(&self, request: &OpenRequest) -> PResult<()> {
         match request {
-            OpenRequest::Program { exe, args } => open_program(exe, args),
+            OpenRequest::Program { exe, args, console } => open_program(exe, args, console),
             OpenRequest::Settings(page) => open_settings(page),
         }
     }
@@ -686,12 +686,19 @@ fn system_directory() -> PathBuf {
 }
 
 /// 按绝对路径启动 System32 下的程序。以小药箱的权限（管理员）运行，所以不会再弹 UAC。
-fn open_program(exe: &str, args: &[&str]) -> PResult<()> {
+fn open_program(exe: &str, args: &[&str], console: &[&str]) -> PResult<()> {
     use std::process::{Command, Stdio};
     let system32 = system_directory();
     let program = system32.join(exe);
     if !program.is_file() {
         return Err(PlatformError::NotFound(exe.to_owned()));
+    }
+    if !console.is_empty() {
+        // 命令行窗口：交给 ShellExecute 开一个新的控制台窗口（这里的输入输出不能接到空设备上，不然窗口里什么都
+        // 看不到）；当前文件夹是 System32，程序都写绝对路径
+        let params = crate::tools::console_command_line(&system32, console).map_err(PlatformError::NotFound)?;
+        return shell_execute(program.as_os_str(), None, Some(&params), Some(&system32))
+            .map_err(|code| PlatformError::Other(format!("启动 {exe} 失败（错误代码 {code}）")));
     }
     let mut cmd = Command::new(&program);
     for arg in args {
@@ -871,6 +878,11 @@ pub fn set_file_attributes(path: &Path, value: u32) -> std::io::Result<()> {
 
 /// ShellExecuteExW 的 open；`class` 给了就按这个文件类型打开，不看目标本身是什么。失败时返回 GetLastError 的代码。
 fn shell_open(target: &OsStr, class: Option<&str>) -> Result<(), u32> {
+    shell_execute(target, class, None, None)
+}
+
+/// ShellExecuteExW（open）。`params`、`dir`：程序的参数和当前文件夹。
+fn shell_execute(target: &OsStr, class: Option<&str>, params: Option<&str>, dir: Option<&Path>) -> Result<(), u32> {
     use windows_sys::Win32::Foundation::GetLastError;
     use windows_sys::Win32::System::Com::{
         COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
@@ -883,6 +895,8 @@ fn shell_open(target: &OsStr, class: Option<&str>) -> Result<(), u32> {
     let uri = wide(target);
     let verb = wide("open");
     let class = class.map(wide);
+    let params = params.map(wide);
+    let dir = dir.map(|d| wide(d.as_os_str()));
     // ShellExecute 可能通过 COM 找协议的处理程序，先在这个线程上初始化 COM（微软文档的要求）
     // SAFETY: 参数都是合法值；成功（含 S_FALSE）时要配对调用 CoUninitialize
     let com = unsafe { CoInitializeEx(null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32) };
@@ -896,6 +910,12 @@ fn shell_open(target: &OsStr, class: Option<&str>) -> Result<(), u32> {
     if let Some(class) = &class {
         info.fMask |= SEE_MASK_CLASSNAME;
         info.lpClass = class.as_ptr();
+    }
+    if let Some(params) = &params {
+        info.lpParameters = params.as_ptr();
+    }
+    if let Some(dir) = &dir {
+        info.lpDirectory = dir.as_ptr();
     }
     info.nShow = SW_SHOWNORMAL;
     // SAFETY: info 已按文档初始化，字符串以 NUL 结尾且在调用期间有效

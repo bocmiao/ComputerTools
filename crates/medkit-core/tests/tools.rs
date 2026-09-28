@@ -332,7 +332,10 @@ fn open_tools_ask_the_platform_to_open_allowlisted_targets() {
     w.engine.tool_open("test.windows-update").unwrap();
     assert_eq!(
         w.platform.opened(),
-        vec![OpenRequest::Program { exe: "mmc.exe", args: &["devmgmt.msc"] }, OpenRequest::Settings("windowsupdate"),]
+        vec![
+            OpenRequest::Program { exe: "mmc.exe", args: &["devmgmt.msc"], console: &[] },
+            OpenRequest::Settings("windowsupdate"),
+        ]
     );
 }
 

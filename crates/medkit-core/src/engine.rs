@@ -494,7 +494,7 @@ impl Engine {
             Some((Some(name), None)) => {
                 let p = tools::program(name)
                     .ok_or_else(|| Error::Catalog(format!("{id} 的 open.program 不在名单里：{name}")))?;
-                OpenRequest::Program { exe: p.exe, args: p.args }
+                OpenRequest::Program { exe: p.exe, args: p.args, console: p.console }
             }
             Some((None, Some(page))) => OpenRequest::Settings(
                 tools::settings_page(page)
