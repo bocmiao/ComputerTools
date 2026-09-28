@@ -19,6 +19,7 @@ pub fn run(name: &str, env: &Env<'_>) -> Result<Value, String> {
         "cpu-features" => Ok(cpu_features(env.os)),
         "clock" => Ok(clock(env.now.date(), build_date())),
         "keyboard-aids" => env.platform.keyboard_aids().map(keyboard_aids).map_err(|e| e.to_string()),
+        "winsock" => env.platform.winsock_catalog().map(|c| crate::winsock::verdict(&c)).map_err(|e| e.to_string()),
         _ => Err(format!("不认识的内置检测：{name}")),
     }
 }

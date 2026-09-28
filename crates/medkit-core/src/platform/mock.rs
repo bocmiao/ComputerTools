@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use super::{
     FileStrings, FileUser, InstalledProgram, KeyboardAids, OpenRequest, OsInfo, PResult, Platform, PlatformError,
-    PointedWindow, UserIdentity,
+    PointedWindow, UserIdentity, WinsockEntry,
 };
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue, key_ancestors};
@@ -42,6 +42,8 @@ struct State {
     file_strings: HashMap<String, FileStrings>,
     /// 「应用和功能」里的程序
     programs: Vec<InstalledProgram>,
+    /// Winsock 目录；没设过时是 Windows 刚装好的样子（64 位、32 位各一项 TCP/IP）
+    winsock: Option<Vec<WinsockEntry>>,
 }
 
 pub struct MockPlatform {
@@ -149,6 +151,30 @@ impl MockPlatform {
     /// 测试用：「应用和功能」里的程序。
     pub fn set_programs(&self, programs: Vec<InstalledProgram>) {
         self.state.lock().unwrap().programs = programs;
+    }
+
+    /// 测试用：Winsock 目录。
+    pub fn set_winsock(&self, entries: Vec<WinsockEntry>) {
+        self.state.lock().unwrap().winsock = Some(entries);
+    }
+
+    /// Windows 刚装好时的 Winsock 目录（简化成 64 位、32 位各一项 TCP/IP）。
+    pub fn clean_winsock() -> Vec<WinsockEntry> {
+        [false, true]
+            .into_iter()
+            .map(|wow64| WinsockEntry {
+                protocol: "MSAFD Tcpip [TCP/IP]".into(),
+                file: "mswsock.dll".into(),
+                in_windows: true,
+                exists: true,
+                company: Some("Microsoft Corporation".into()),
+                product: Some("Microsoft® Windows® Operating System".into()),
+                chain_len: 1,
+                family: crate::winsock::AF_INET,
+                socket_type: crate::winsock::SOCK_STREAM,
+                wow64,
+            })
+            .collect()
     }
 
     /// 测试用：打开过的系统工具。
@@ -297,5 +323,9 @@ impl Platform for MockPlatform {
 
     fn installed_programs(&self) -> PResult<Vec<InstalledProgram>> {
         Ok(self.state.lock().unwrap().programs.clone())
+    }
+
+    fn winsock_catalog(&self) -> PResult<Vec<WinsockEntry>> {
+        Ok(self.state.lock().unwrap().winsock.clone().unwrap_or_else(Self::clean_winsock))
     }
 }

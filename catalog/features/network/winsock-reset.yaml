@@ -1,0 +1,29 @@
+# 重置 Winsock（脚本类功能，撤销不了）。脚本：scripts/features/network/winsock-reset-run.ps1，运行 netsh winsock reset：
+# 微软说它把 Winsock 目录恢复干净、去掉自定义的 LSP，用来修 Winsock 设置坏了引起的网络问题，不动名称空间提供程序
+# （netsh winsock 文档）。文件已经不在的组件也一起去掉。要重启电脑才完全生效。
+# 撤销不了：没有办法把原来的目录装回去（netsh winsock dump 导不出 LSP），被去掉的 LSP 要重新安装它的软件。所以不推荐、
+# 不进体检的一键修复，只在检测 network.winsock 查出问题时给（第三方 LSP、文件不在了、没有 TCP/IP）。
+# 状态看检测 network.winsock，不写 detect（撤销不了，也就用不着撤销前的核对）。
+# 测试：没法安全地在测试机上装一个 LSP 来制造故障，所以列在 BREAK_IN_TESTS 里，由 tests/windows.rs 的专门测试
+# 只在 GitHub Actions 上真的重置一次（开发者自己的电脑上不跑：撤销不了，会去掉 VPN 这类软件的组件）。
+id: network.winsock-reset
+schema_version: 1
+title: { zh-CN: 重置 Winsock（网络组件） }
+description:
+  zh-CN: 把所有联网程序都要经过的 Winsock 恢复干净（netsh winsock reset）：去掉加速器、老版本安全软件、上网管理软件插进去的网络组件（LSP），和文件已经不在的组件。修「LSP 损坏」引起的上不了网，要重启电脑。
+category: network
+risk: caution
+level: medium
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+run:
+  script: features/network/winsock-reset-run.ps1
+undo: none
+irreversible_reason:
+  zh-CN: 没有办法把原来的 Winsock 装回去。被去掉的网络组件属于哪个软件，那个软件的网络功能（加速器、某些 VPN、上网管理软件）要重新安装才能用。
+verify: network.winsock
+references:
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-winsock

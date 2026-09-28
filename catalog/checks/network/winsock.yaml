@@ -1,0 +1,60 @@
+# Winsock 网络组件（Winsock 目录）。内置检测（Rust 实现，见 crates/medkit-core/src/winsock.rs），没有脚本。
+# 所有联网的程序都经过 Winsock；加速器、老版本的安全软件、上网管理软件会往 Winsock 目录里插「分层服务提供程序」（LSP），
+# 经手每个程序的网络数据。它出问题、或者软件卸载了而 DLL 被删掉、目录里的登记还在，就会出现「QQ、微信能上，网页打不开」
+# 「所有软件都上不了网」（常说的「LSP 损坏」「LSP 断网」）。
+# 用微软公开的 WSCEnumProtocols、WSCGetProviderPath 读 64 位和 32 位程序用的两份目录（64 位 Windows 上 32 位的
+# 那一份单独读，很多国产软件是 32 位的）；协议链长度不是 1 的是 LSP（微软 WSAPROTOCOLCHAIN 文档）；DLL 在 Windows
+# 文件夹里、公司是 Microsoft 的算 Windows 自己的。Windows 8 起 LSP 已经不推荐用了，Windows 自己不装 LSP。
+# 结果（先满足哪个算哪个）：missing-file（有组件的 DLL 不在了）、no-tcpip（目录里没有 TCP/IP）、lsp（有第三方 LSP）、
+# ok-others（没有 LSP，有第三方的基础协议，比如虚拟机的 vSockets）、ok。前三种给修复 network.winsock-reset
+# （netsh winsock reset，撤销不了、要重启；它不动名称空间提供程序，所以这里也只看协议目录）。
+# 事实：entries、missing、missing_count、lsp、lsp_count、others、others_count（名字是「产品名（文件名）」，用「、」隔开，
+# 没有路径）。
+id: network.winsock
+schema_version: 1
+title: { zh-CN: 网络组件（Winsock）有没有被改坏 }
+description:
+  zh-CN: 看看所有联网程序都要经过的 Winsock 里，有没有别的软件插进去的网络组件（LSP），有没有文件已经不在的组件。它们出问题时，常见的样子是 QQ、微信能用、网页打不开，或者所有软件都上不了网。
+category: network
+requires_admin: false
+probe:
+  builtin: winsock
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: Winsock 正常：{entries} 项都是 Windows 自己的，没有别的软件插进去的网络组件。
+  ok-others:
+    status: ok
+    message:
+      zh-CN: Winsock 正常，没有别的软件插进去的网络组件（LSP）。另外有 {others_count} 个软件加的协议：{others}，是它自己用的通道（比如虚拟机和电脑之间传数据），一般不影响上网。
+  lsp:
+    status: advice
+    message:
+      zh-CN: 有 {lsp_count} 个软件往 Winsock 里插了网络组件（LSP）：{lsp}。所有联网的程序都要经过它，它出问题时，常见的样子是 QQ、微信能用、网页打不开，或者所有软件都上不了网。
+    fixer: medkit
+    next:
+      zh-CN: 先退出、卸载这个软件（常见的是老版本的加速器、上网管理、安全软件），重启电脑再试。还是上不了网，再点下面的「重置 Winsock」：要重启电脑，撤销不了，这个软件的网络功能要重新安装才能用。
+    links: ["feature:network.winsock-reset", "tool:system.installed-programs"]
+  missing-file:
+    status: advice
+    message:
+      zh-CN: Winsock 里有 {missing_count} 个网络组件的文件已经不在了：{missing}。用到它的程序会全都上不了网（常说的「LSP 损坏」），多半是软件卸载、被清理软件或者杀毒软件删掉文件时，没有把它从 Winsock 里去掉。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的「重置 Winsock」把它恢复干净，再重启电脑。
+    links: ["feature:network.winsock-reset"]
+  no-tcpip:
+    status: advice
+    message:
+      zh-CN: Winsock 里找不到 TCP/IP 协议，它已经坏了，所有软件都上不了网。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的「重置 Winsock」把它恢复干净，再重启电脑。
+    links: ["feature:network.winsock-reset"]
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/api/ws2spi/nf-ws2spi-wscenumprotocols
+  - https://learn.microsoft.com/en-us/windows/win32/api/ws2spi/nf-ws2spi-wscgetproviderpath
+  - https://learn.microsoft.com/en-us/windows/win32/api/winsock2/ns-winsock2-wsaprotocolchain
+  - https://learn.microsoft.com/en-us/windows/win32/winsock/categorizing-layered-service-providers-and-applications
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-winsock

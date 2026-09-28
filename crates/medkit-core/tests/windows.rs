@@ -1049,6 +1049,60 @@ fn a_protected_recycle_bin_is_removed_without_following_junctions() {
     assert_eq!(recycle_bin::remove(root.path()).unwrap(), Removed::Absent);
 }
 
+/// Winsock 目录：真的读一次（只读）。64 位的目录里要有 Windows 自己的 TCP/IP（mswsock.dll，文件在），64 位 Windows 上
+/// 还要读到 32 位程序用的那一份；检测要给出结论（CI 机器上一般是 ok）。只打印文件名和版本信息，没有路径。
+#[test]
+fn winsock_catalog_is_read_from_both_views() {
+    let entries = WindowsPlatform::new().winsock_catalog().unwrap();
+    for e in &entries {
+        eprintln!("{e:?}");
+    }
+    let tcp = |wow64: bool| {
+        entries.iter().any(|e| {
+            e.wow64 == wow64
+                && e.chain_len == 1
+                && e.family == 2
+                && e.socket_type == 1
+                && e.exists
+                && e.in_windows
+                && e.file.eq_ignore_ascii_case("mswsock.dll")
+                && e.company.as_deref().is_some_and(|c| c.contains("Microsoft"))
+        })
+    };
+    assert!(tcp(false), "64 位的目录里要有 Windows 自己的 TCP/IP");
+    assert!(tcp(true), "32 位程序用的那一份也要读到（文件在 SysWOW64 里）");
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+    let r = engine.run_check("network.winsock").unwrap();
+    eprintln!("{:?} {:?} {}", r.status, r.result_code, r.message);
+    assert!(r.error.is_none(), "{r:?}");
+    assert!(matches!(r.result_code.as_deref(), Some("ok" | "ok-others" | "lsp")), "{r:?}");
+}
+
+/// 重置 Winsock 的脚本真的跑一次：netsh 要成功，重置完 Winsock 还是好的。撤销不了，还会去掉 VPN 这类软件装的组件，
+/// 所以只在 GitHub Actions 的一次性机器上跑（引擎在检测正常时不会执行这一项，这里直接跑脚本）。
+#[test]
+#[ignore = "会真的重置 Winsock（撤销不了）；只在 GitHub Actions 上运行"]
+fn winsock_reset_script_runs_on_ci() {
+    if std::env::var_os("GITHUB_ACTIONS").is_none() {
+        println!("不在 GitHub Actions 上：跳过（重置 Winsock 撤销不了）");
+        return;
+    }
+    let _round_trip = round_trip_lock();
+    let script = repo_root().join("scripts/features/network/winsock-reset-run.ps1");
+    let out = powershell(&format!(
+        "try {{ (& '{}').after.reset }} catch {{ 'error: ' + $_.Exception.Message }}",
+        script.display()
+    ));
+    assert_eq!(out, "True", "重置脚本没有成功：{out}");
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+    let r = engine.run_check("network.winsock").unwrap();
+    eprintln!("重置以后：{:?} {:?} {}", r.status, r.result_code, r.message);
+    assert!(matches!(r.result_code.as_deref(), Some("ok" | "ok-others")), "{r:?}");
+}
+
 /// 为「找回 Windows 照片查看器」「管理新建菜单」收集这台机器上的实际情况（照片查看器的 ProgID、系统自带的图片
 /// 文件类型写了什么、PhotoViewer.dll 里的文字，每一个「新建」菜单项和资源管理器的缓存），打印出来。只读。
 #[test]

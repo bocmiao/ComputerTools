@@ -22,6 +22,7 @@ checks:
   - network.connectivity
   - network.proxy-dead
   - network.hosts
+  - network.winsock
   # 安全
   - security.browser-shortcuts
   - security.uac

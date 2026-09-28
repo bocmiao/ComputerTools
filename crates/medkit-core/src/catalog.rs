@@ -17,7 +17,7 @@ use crate::registry::{RegValue, SpecRoot, split_key};
 use crate::yaml;
 
 pub const SCHEMA_VERSION: u32 = 1;
-pub const BUILTIN_PROBES: &[&str] = &["cpu-features", "clock", "keyboard-aids"];
+pub const BUILTIN_PROBES: &[&str] = &["cpu-features", "clock", "keyboard-aids", "winsock"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -229,9 +229,10 @@ const DENIED_SERVICES: &[(&str, &str)] = &[
     ("mrxsmb10", "不开 SMB1（第五节第 22 条）"),
 ];
 
-/// 这些脚本类功能的「制造故障」要做的事正是第五节不许做的（禁用 Windows 更新服务），
-/// 这种脚本不放进安装包：故障由 tests/windows.rs 里的专门测试直接制造，通用的往返测试跳过它们。
-pub const BREAK_IN_TESTS: &[&str] = &["update.enable-services"];
+/// 这些脚本类功能不写「制造故障」的脚本，通用的往返测试跳过它们，由 tests/windows.rs 里的专门测试来测：
+/// - 要做的事正是第五节不许做的（禁用 Windows 更新服务），这种脚本不放进安装包；
+/// - 没法安全地制造故障（重置 Winsock：得往测试机的 Winsock 里装一个 LSP）。
+pub const BREAK_IN_TESTS: &[&str] = &["update.enable-services", "network.winsock-reset"];
 
 static CONTROL_SET_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^hklm\\system\\controlset\d+\\").unwrap());
 
@@ -534,12 +535,14 @@ impl Validator<'_> {
                     (Some(_), false) => self.err(&file, "不能撤销的脚本类功能不要写 prepare".into()),
                     (None, false) => {}
                 }
+                // detect 用在两处：没有 verify 时判断状态，撤销前核对修改还在不在。有 verify、又撤销不了的用不着它
                 match &f.detect {
                     Some(d) => {
                         let d = d.script.clone();
                         self.script_ref(&file, &d, "detect");
                     }
-                    None => self.err(&file, "脚本类功能必须写 detect".into()),
+                    None if f.verify.is_some() && !f.reversible() => {}
+                    None => self.err(&file, "脚本类功能必须写 detect（撤销不了、写了 verify 的除外）".into()),
                 }
                 match &f.undo {
                     Undo::Script(s) => {

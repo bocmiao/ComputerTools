@@ -501,17 +501,17 @@ const FEATURE_LIST: MockFeature[] = [
   defineFeature(
     {
       id: 'network.winsock-reset',
-      title: '重置 Winsock 网络组件',
-      description: '把网络组件恢复成系统默认，清除被加速器、老版本安全软件插进去的组件（常说的 LSP 断网）。',
+      title: '重置 Winsock（网络组件）',
+      description: '把所有联网程序都要经过的 Winsock 恢复干净（netsh winsock reset）：去掉加速器、老版本安全软件、上网管理软件插进去的网络组件（LSP），和文件已经不在的组件。修「LSP 损坏」引起的上不了网，要重启电脑。',
       category: 'network',
       risk: 'caution',
       level: 'medium',
       reboot: 'reboot',
       reversible: false,
-      irreversibleReason: 'Winsock 重置以后没法退回原来的状态。它本身没有坏处，但个别依赖网络组件的软件（例如某些加速器）需要重新安装。',
+      irreversibleReason: '没有办法把原来的 Winsock 装回去。被去掉的网络组件属于哪个软件，那个软件的网络功能（加速器、某些 VPN、上网管理软件）要重新安装才能用。',
     },
     {
-      changes: [{ target: T.winsock, initial: '含 1 个第三方组件', planned: '系统默认' }],
+      changes: [{ target: T.winsock, initial: '有 1 个软件插进去的网络组件', planned: '恢复干净' }],
       notes: ['360、腾讯电脑管家可能会弹窗询问，请选择「允许」。'],
     },
   ),
@@ -794,20 +794,33 @@ const CHECKS: Record<string, MockCheck> = {
     },
   },
   'network.winsock': {
-    title: 'Winsock 网络组件',
+    title: '网络组件（Winsock）有没有被改坏',
     evaluate: () => {
-      if (valueOf(T.winsock) === '系统默认') {
-        return { status: 'ok', message: 'Winsock 网络组件已经恢复成系统默认，重启电脑后生效。', facts: { third_party_providers: 0 } }
+      if (valueOf(T.winsock) === '恢复干净') {
+        return {
+          status: 'ok',
+          resultCode: 'ok',
+          message: 'Winsock 正常：26 项都是 Windows 自己的，没有别的软件插进去的网络组件。',
+          facts: { entries: 26, lsp_count: 0, missing_count: 0 },
+        }
       }
       if (DEMO_ALL_OK) {
-        return { status: 'ok', message: 'Winsock 网络组件正常，没有第三方组件。', facts: { third_party_providers: 0 } }
+        return {
+          status: 'ok',
+          resultCode: 'ok',
+          message: 'Winsock 正常：26 项都是 Windows 自己的，没有别的软件插进去的网络组件。',
+          facts: { entries: 26, lsp_count: 0, missing_count: 0 },
+        }
       }
       return {
-        status: 'unknown',
-        resultCode: null,
-        message: '没查出 Winsock 网络组件的状态。',
-        next: '前面几步都正常、却还是上不了网时，可以试试重置它。',
-        error: '读取 Winsock 目录超时（15 秒），可能被安全软件拦住了。',
+        status: 'advice',
+        resultCode: 'lsp',
+        message:
+          '有 1 个软件往 Winsock 里插了网络组件（LSP）：某网游加速器（xxlsp.dll）。所有联网的程序都要经过它，它出问题时，常见的样子是 QQ、微信能用、网页打不开，或者所有软件都上不了网。',
+        fixer: 'medkit',
+        next: '先退出、卸载这个软件（常见的是老版本的加速器、上网管理、安全软件），重启电脑再试。还是上不了网，再点下面的「重置 Winsock」：要重启电脑，撤销不了，这个软件的网络功能要重新安装才能用。',
+        links: ['feature:network.winsock-reset', 'tool:system.installed-programs'],
+        facts: { entries: 31, lsp: '某网游加速器（xxlsp.dll）', lsp_count: 1, missing_count: 0 },
       }
     },
   },
@@ -1112,6 +1125,8 @@ const SYMPTOMS: MockSymptom[] = [
       '3. 如果是校园网、酒店或机场的 Wi-Fi，打开浏览器随便访问一个网址，看会不会跳出登录页面。',
     ].join('\n'),
     steps: [
+      // Winsock 放在最前面、查出问题也不停（和真实数据一样）
+      { check: 'network.winsock', fixes: ['network.winsock-reset'] },
       { check: 'network.adapter', stopOn: ['manual'], fixes: [] },
       { check: 'network.ip-address', fixes: [] },
       { check: 'network.gateway', fixes: [] },
@@ -1119,7 +1134,6 @@ const SYMPTOMS: MockSymptom[] = [
       // 刷新 DNS 缓存现在是小工具，从检测结果里的 tool: 链接过去（docs/architecture.md 第 11 节）
       { check: 'network.dns', fixes: ['network.dns-public'] },
       { check: 'network.proxy-dead', fixes: ['network.proxy-off'] },
-      { check: 'network.winsock', fixes: ['network.winsock-reset'] },
       { check: 'network.time', fixes: [] },
     ],
   },

@@ -15,6 +15,7 @@
 //! - [`lockers`]：文件删不掉时，看是哪些程序在用它（只读）
 //! - [`disk_speed`]：硬盘测速（只写一个关掉就删的临时文件）
 //! - [`window_owner`]：弹窗是哪个软件的：鼠标指着的窗口是哪个程序的（只读）
+//! - [`winsock`]：Winsock 目录里有没有第三方的网络组件（LSP）、文件已经不在的组件（内置检测 `winsock`）
 
 pub mod builtin;
 pub mod bundle;
@@ -41,6 +42,7 @@ pub mod startup;
 pub mod tools;
 pub mod views;
 pub mod window_owner;
+pub mod winsock;
 mod yaml;
 
 pub use engine::Engine;

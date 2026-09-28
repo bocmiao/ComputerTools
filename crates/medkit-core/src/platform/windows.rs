@@ -681,6 +681,10 @@ impl Platform for WindowsPlatform {
         let sid = self.interactive_user().map(|u| u.sid).filter(|s| crate::registry::is_sid(s));
         Ok(super::window_info::installed_programs(sid.as_deref()))
     }
+
+    fn winsock_catalog(&self) -> PResult<Vec<super::WinsockEntry>> {
+        super::winsock::catalog()
+    }
 }
 
 // ───────────── 打开系统工具 ─────────────

@@ -107,6 +107,9 @@ references:
 | `cpu-features` | `popcnt`、`sse42`、`windows11`（布尔值） | `ok`（都支持）、`missing`（缺任意一项，而且装的是 Windows 11）、`missing-win10`（缺，但装的是 Windows 10 或服务器版，只做提示） |
 | `clock` | `today`（电脑上的日期）、`build_date`（这个版本的构建日期），都是 `YYYY-MM-DD` | `ok`、`behind`（电脑上的日期比构建日期早一天以上，时间肯定错了） |
 | `keyboard-aids` | `filter_keys`、`sticky_keys`、`mouse_keys`（布尔值：这次登录里实际开没开，用 SystemParametersInfo 读，不读注册表） | `ok`、`filter-keys`、`sticky-keys`、`mouse-keys`（几项都开着时按这个顺序报一项） |
+| `winsock` | `entries`（一共几项）、`missing` / `missing_count`、`lsp` / `lsp_count`、`others` / `others_count`（名字是「产品名（文件名）」，用「、」隔开，没有路径） | `missing-file`（有组件的 DLL 不在了）、`no-tcpip`（64 位或者 32 位的目录里没有 IPv4 的 TCP 基础提供程序）、`lsp`（有第三方的分层服务提供程序）、`ok-others`（没有 LSP，有第三方的基础协议）、`ok`；先满足哪个算哪个 |
+
+`winsock` 用微软公开的服务提供程序接口读 Winsock 目录（`crates/medkit-core/src/platform/winsock.rs`）：`WSCEnumProtocols` 列出每一项（包括隐藏的项和分层协议本身），`WSCGetProviderPath` 读 DLL 的路径；64 位 Windows 上 32 位程序用的那一份用 `WSCEnumProtocols32`、`WSCGetProviderPath32` 读（很多国产软件是 32 位的），路径里的 `%ProgramFiles%` 按 `Program Files (x86)`、System32 按 SysWOW64 解释。协议链长度不是 1 的是 LSP（微软 WSAPROTOCOLCHAIN 文档：0 是分层协议本身，大于 1 是经过它的协议链）；DLL 在 Windows 文件夹里、版本信息里的公司是 Microsoft 的算 Windows 自己的（放在 System32 里冒充系统文件的老式 LSP 照样算第三方）。结论在 `crates/medkit-core/src/winsock.rs`，路径只用来看文件在不在、读版本信息。
 
 `clock` 的构建日期：编译时的环境变量 `SOURCE_DATE_EPOCH`（CI 构建安装包时设成提交时间），没有时用 `builtin.rs` 里写死的日期（发版前顺手改成最近的日期）。这个日期只能早不能晚，晚于真实日期会让所有人都被误报；单元测试会拦住写成将来日期的情况。
 
@@ -206,11 +209,11 @@ break:   { script: features/disk/reduce-hiberfile-break.ps1 }   # 只在测试�
 verify:  disk.hiberfile                                         # 能不能执行、改好没有，看这个检测
 ```
 
-`break` 脚本也会打进安装包。制造故障本身是第五节不许做的事时（比如禁用 Windows 更新服务），不写 `break`，把功能的 ID 加进 `catalog.rs` 的 `BREAK_IN_TESTS`：校验不再提示缺 `break`，通用的往返测试跳过它，由 `tests/windows.rs` 里的专门测试直接制造故障。
+`break` 脚本也会打进安装包。制造故障本身是第五节不许做的事时（比如禁用 Windows 更新服务），或者没法安全地制造故障时（重置 Winsock：得往测试机的 Winsock 里装一个 LSP），不写 `break`，把功能的 ID 加进 `catalog.rs` 的 `BREAK_IN_TESTS`：校验不再提示缺 `break`，通用的往返测试跳过它，由 `tests/windows.rs` 里的专门测试来测。
 
 - 检测脚本的 `state` 取值：`applied` / `not-applied` / `partial` / `unknown`。
 - 可撤销脚本必须先用 `prepare` 读取原状态。引擎先把 `before` 写进修改日志，再把它以 `-Before` 传给执行脚本。执行脚本应在写入前核对快照仍然有效；撤销时，引擎把同一快照传给撤销脚本。
-- 不可撤销的功能写 `undo: none`，同时必须写 `irreversible_reason`。
+- 不可撤销的功能写 `undo: none`，同时必须写 `irreversible_reason`。`detect` 只用在两处：没有 `verify` 时判断状态、撤销前核对修改还在不在，所以写了 `verify`、又撤销不了的可以不写 `detect`（比如 `network.winsock-reset`：状态看检测 `network.winsock`）。
 
 ### 4.3 可选字段
 

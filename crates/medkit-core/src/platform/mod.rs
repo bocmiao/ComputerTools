@@ -17,6 +17,8 @@ pub mod shutdown;
 mod window_info;
 #[cfg(windows)]
 pub mod windows;
+#[cfg(windows)]
+mod winsock;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum PlatformError {
@@ -133,6 +135,30 @@ pub struct FileStrings {
     pub product: Option<String>,
 }
 
+/// Winsock 目录里的一项（协议提供程序）。怎么看结论见 [`crate::winsock`]。只有文件名，没有路径。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WinsockEntry {
+    /// 协议的名字（`szProtocol`），比如「MSAFD Tcpip [TCP/IP]」
+    pub protocol: String,
+    /// 提供程序 DLL 的文件名（不含文件夹）
+    pub file: String,
+    /// DLL 在 Windows 文件夹里
+    pub in_windows: bool,
+    /// DLL 还在
+    pub exists: bool,
+    /// DLL 版本信息里的公司、产品名称
+    pub company: Option<String>,
+    pub product: Option<String>,
+    /// 协议链长度：1 是基础提供程序，0 是分层协议（LSP）本身，大于 1 是经过 LSP 的协议链
+    pub chain_len: i32,
+    /// 地址族（2 = IPv4，23 = IPv6）
+    pub family: i32,
+    /// 套接字类型（1 = 流，TCP 用的）
+    pub socket_type: i32,
+    /// 64 位 Windows 上给 32 位程序用的那一份目录里的
+    pub wow64: bool,
+}
+
 /// 「应用和功能」里的一项：卸载信息里的原文，还没整理（整理见 [`crate::window_owner`]）。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InstalledProgram {
@@ -223,6 +249,11 @@ pub trait Platform: Send + Sync {
     /// 「应用和功能」里的程序：这台电脑的（64 位和 32 位的）加上登录用户自己装的。
     fn installed_programs(&self) -> PResult<Vec<InstalledProgram>> {
         Err(PlatformError::Unsupported("列出装了哪些程序".into()))
+    }
+
+    /// Winsock 目录：64 位程序用的一份，64 位 Windows 上再加 32 位程序用的一份。只读。
+    fn winsock_catalog(&self) -> PResult<Vec<WinsockEntry>> {
+        Err(PlatformError::Unsupported("读 Winsock 目录".into()))
     }
 }
 
