@@ -1,0 +1,40 @@
+# 中文系统上，非 Unicode 程序用的代码页有没有被改掉。脚本：scripts/checks/system/code-page.ps1（共享块 code-page）。
+# Nls\CodePage 的 ACP、OEMCP、MACCP：中文（简体）系统默认 936、936、10008，繁体 950、950、10002。勾上「Beta 版：使用 Unicode
+# UTF-8 提供全球语言支持」会把三个都改成 65001：老一点的中文软件、游戏，和在 Windows 上打包的压缩包里的中文文件名会变成乱码
+# （有的游戏、开发工具教程让勾它）。它也是修复 system.utf8-beta-off 的 verify。
+# 结果：ok、utf8（ACP 是 65001，advice）、mismatch（别的值，advice）、not-chinese（系统区域不是中文，na：由 system.system-locale 报）。
+# 事实：locale、acp、oemcp、maccp。
+id: system.code-page
+schema_version: 1
+title: { zh-CN: 中文代码页（UTF-8 Beta） }
+description:
+  zh-CN: 看看中文系统上是不是勾上了「Beta 版：使用 Unicode UTF-8 提供全球语言支持」。勾上以后，老一点的中文软件、游戏和压缩包里的中文文件名会变成乱码。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/code-page.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: 非 Unicode 程序用的是中文的默认代码页，没有被改过。 }
+  utf8:
+    status: advice
+    message:
+      zh-CN: 勾上了「Beta 版：使用 Unicode UTF-8 提供全球语言支持」，所以老一点的中文软件、游戏，和压缩包里的中文文件名会显示乱码。有的游戏、开发工具的教程会让人勾它。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回中文的默认设置（和取消这个勾一样），改完重启电脑。当初是为了某个软件特意勾的，改回以后那个软件可能又要出问题，自己权衡。
+    links: ["feature:system.utf8-beta-off"]
+  mismatch:
+    status: advice
+    message:
+      zh-CN: "非 Unicode 程序用的代码页被改过了（现在是 {acp}），和中文系统的默认值不一样，中文软件可能显示乱码。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回中文的默认设置，改完重启电脑。
+    links: ["feature:system.utf8-beta-off"]
+  not-chinese:
+    status: na
+    message: { zh-CN: 「非 Unicode 程序的语言」不是中文，这一项不用查（上一步说了怎么改）。 }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page

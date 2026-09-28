@@ -49,6 +49,8 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     ),
     // 「高级安全 Windows Defender 防火墙」：看入站规则（小药箱只查不改）
     ("firewall-advanced", Program { exe: "mmc.exe", args: &["wf.msc"], console: &[] }),
+    // 控制面板的「区域」：「管理」页里改「非 Unicode 程序的语言」和 UTF-8（Beta）
+    ("region", Program { exe: "control.exe", args: &["intl.cpl"], console: &[] }),
     // 微软《使用系统文件检查器工具修复丢失或损坏的系统文件》：先用 DISM 修复映像，再运行 sfc
     (
         "system-file-repair",

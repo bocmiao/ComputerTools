@@ -1,0 +1,35 @@
+# 取消「Beta 版：使用 Unicode UTF-8 提供全球语言支持」（脚本类功能）：中文系统区域时，把 HKLM\SYSTEM\CurrentControlSet\Control\
+# Nls\CodePage 的 ACP、OEMCP、MACCP 改回这个区域的默认值（简体 936、936、10008，繁体 950、950、10002），和在「区域 → 管理 →
+# 更改系统区域设置」里取消这个勾一样。重启以后生效。脚本在 scripts/features/system/ 下，和两个检测共用共享块 code-page。
+#   utf8-beta-detect.ps1  撤销前核对：是默认值 → applied；不是 → not-applied；系统区域不是中文 → unknown
+#   utf8-beta-run.ps1     -Prepare：before = { acp, oemcp, maccp }；执行：值变了、系统区域不是中文就跳过；写入默认值、读回来确认，
+#                         失败时写回原来的值再报错
+#   utf8-beta-undo.ps1    写回原来的值（原来没有的删掉）
+#   utf8-beta-break.ps1   只在测试中使用：三个都改成 65001
+# verify 用 system.code-page：系统区域不是中文（na，CI 的英文系统就是）时不给执行。
+id: system.utf8-beta-off
+schema_version: 1
+title: { zh-CN: 取消「使用 Unicode UTF-8」（Beta） }
+description:
+  zh-CN: 把非 Unicode 程序用的代码页改回中文系统的默认设置，和在「区域」设置里取消「Beta 版：使用 Unicode UTF-8 提供全球语言支持」一样。老一点的中文软件、游戏和压缩包里的中文文件名就不会乱码了。重启电脑以后生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+detect:
+  script: features/system/utf8-beta-detect.ps1
+prepare:
+  script: features/system/utf8-beta-run.ps1
+run:
+  script: features/system/utf8-beta-run.ps1
+undo:
+  script: features/system/utf8-beta-undo.ps1
+break:
+  script: features/system/utf8-beta-break.ps1
+verify: system.code-page
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page

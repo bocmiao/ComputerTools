@@ -1,0 +1,32 @@
+# 「非 Unicode 程序的语言」（系统区域设置）是不是中文。脚本：scripts/checks/system/system-locale.ps1（和
+# system.code-page、修复 system.utf8-beta-off 共用共享块 code-page）。读 HKLM\SYSTEM\CurrentControlSet\Control\Nls\Locale 的默认值
+# （LCID，十六进制）。不是中文时，老一点的、不用 Unicode 的中文软件和游戏显示乱码：常见于国外买的电脑、装的英文版 Windows。
+# 只查不改：系统区域影响所有非 Unicode 程序，由用户在「区域 → 管理 → 更改系统区域设置」里自己改。
+# 结果：chinese（ok：简体、繁体中文都算）、other（advice）、unknown（读不到）。事实：locale（LCID）、locale_name（像 en-US）。
+id: system.system-locale
+schema_version: 1
+title: { zh-CN: 非 Unicode 程序的语言 }
+description:
+  zh-CN: 看看 Windows 的「非 Unicode 程序的语言」（系统区域设置）是不是中文。不是中文时，老一点的中文软件、游戏会显示乱码。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/system-locale.ps1
+results:
+  chinese:
+    status: ok
+    message:
+      zh-CN: "「非 Unicode 程序的语言」是中文（{locale_name}）。"
+  other:
+    status: advice
+    message:
+      zh-CN: "「非 Unicode 程序的语言」是 {locale_name}，不是中文，所以老一点的中文软件、游戏会显示乱码。在国外买的电脑、装的英文版 Windows 常这样。"
+    fixer: user
+    next:
+      zh-CN: 点「区域和系统区域设置」，在「管理」页点「更改系统区域设置」，「当前系统区域设置」选「中文(简体，中国)」，下面的「Beta 版：使用 Unicode UTF-8 提供全球语言支持」不要勾，点「确定」以后重启电脑。
+    links: ["tool:open.region"]
+  unknown:
+    status: unknown
+    message: { zh-CN: 读不到「非 Unicode 程序的语言」。 }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page

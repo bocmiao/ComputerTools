@@ -1,0 +1,13 @@
+# 打开控制面板的「区域」（open：control.exe intl.cpl）。「管理」页里的「更改系统区域设置」改「非 Unicode 程序的语言」，
+# 那个对话框里还有「Beta 版：使用 Unicode UTF-8 提供全球语言支持」的勾选框。改完要重启。检测 system.system-locale 报
+# 不是中文时给这个按钮（小药箱不替用户改系统区域：它影响所有非 Unicode 程序）。
+id: open.region
+schema_version: 1
+group: open
+title: { zh-CN: 区域和系统区域设置 }
+description:
+  zh-CN: 打开控制面板的「区域」：点「管理」页的「更改系统区域设置」，在「当前系统区域设置」里选「中文(简体，中国)」，老的中文软件、游戏就不会乱码；同一个对话框里的「Beta 版：使用 Unicode UTF-8 提供全球语言支持」一般不要勾。改完要重启电脑。
+category: system
+open: { program: region }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page
