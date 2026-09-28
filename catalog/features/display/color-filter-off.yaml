@@ -1,0 +1,42 @@
+# 关掉颜色滤镜：HKCU\Software\Microsoft\ColorFiltering 的 Active 改成 0（Windows 默认是关着的）。注册表改了以后，下次登录时
+# 才生效（快捷键 Win + Ctrl + C 和「设置」里的开关马上生效，检测 display.colors 的说明里先教这两个）。能撤销。
+# 检测 display.colors 报 grayscale、inverted、color-filter 时给这个按钮。break_actions（测试用）：Active 设成 1、灰度。
+id: display.color-filter-off
+schema_version: 1
+title: { zh-CN: 关掉颜色滤镜 }
+description:
+  zh-CN: 关掉让屏幕变成黑白、反色的「颜色滤镜」。改完注销再登录以后生效；想马上关，按 Win + Ctrl + C，或者在「设置 → 辅助功能 → 颜色滤镜」里关。能撤销。
+category: display
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: logoff
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\ColorFiltering
+      name: Active
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\ColorFiltering
+      name: Active
+      type: dword
+      value: 0
+break_actions:
+  - registry:
+      key: HKCU\Software\Microsoft\ColorFiltering
+      name: Active
+      type: dword
+      value: 1
+  - registry:
+      key: HKCU\Software\Microsoft\ColorFiltering
+      name: FilterType
+      type: dword
+      value: 0
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/accessibility/windows/use-color-filters-in-windows

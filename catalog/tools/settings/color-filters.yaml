@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:easeofaccess-colorfilter（辅助功能 → 颜色滤镜），由系统打开。
+# 「颜色滤镜」开着时屏幕会变成黑白（灰度）、反色，或者用色弱滤镜；「颜色滤镜的键盘快捷方式」开着时 Win + Ctrl + C 能开关它。
+id: settings.color-filters
+schema_version: 1
+group: open
+title: { zh-CN: 颜色滤镜 }
+description:
+  zh-CN: 打开「设置」里的辅助功能 → 颜色滤镜：屏幕变成黑白、颜色反了，在这里把「颜色滤镜」关掉；不想再被 Win + Ctrl + C 误开，关掉下面的「键盘快捷方式」。
+category: settings
+open: { settings: easeofaccess-colorfilter }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/accessibility/windows/use-color-filters-in-windows

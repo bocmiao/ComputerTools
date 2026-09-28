@@ -1,0 +1,12 @@
+# 打开「设置」里的一页（open）：ms-settings:easeofaccess-highcontrast（辅助功能 → 对比度主题 / 高对比度），由系统打开。
+id: settings.contrast-themes
+schema_version: 1
+group: open
+title: { zh-CN: 对比度主题 }
+description:
+  zh-CN: 打开「设置」里的辅助功能 → 对比度主题（Win10 叫「高对比度」）：窗口变成黑底、亮色的字，在这里把对比度主题选成「无」，再点「应用」。
+category: settings
+open: { settings: easeofaccess-highcontrast }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/accessibility/windows/change-color-contrast-in-windows

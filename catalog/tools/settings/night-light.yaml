@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:nightlight（系统 → 屏幕 → 夜间模式），由系统打开。
+# 夜间模式开着时屏幕发黄（减少蓝光），可以设成按时间自动开关。
+id: settings.night-light
+schema_version: 1
+group: open
+title: { zh-CN: 夜间模式 }
+description:
+  zh-CN: 打开「设置」里的夜间模式：屏幕发黄、偏暖，多半是它开着（或者到了它自动打开的时间）。在这里关掉，或者调整强度、自动打开的时间。
+category: settings
+open: { settings: nightlight }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/windows/hardware/display-graphics/change-display-brightness-and-color-in-windows

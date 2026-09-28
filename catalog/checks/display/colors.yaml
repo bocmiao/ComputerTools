@@ -1,0 +1,56 @@
+# 屏幕是不是被辅助功能变成了黑白、反色、怪颜色。脚本：scripts/checks/display/colors.ps1（读登录用户的注册表）
+# 颜色滤镜：HKCU\Software\Microsoft\ColorFiltering 的 Active（1 = 开）、FilterType（0 灰度、1 反色、2 灰度反色、3 绿色弱、
+# 4 红色弱、5 蓝色弱）、HotkeyEnabled（1 = Win + Ctrl + C 能开关）。改注册表要重新登录才生效，快捷键和「设置」马上生效。
+# 对比度主题（高对比度）：HKCU\Control Panel\Accessibility\HighContrast 的 Flags（文字形式的数字）第 0x1 位是开着，
+# 第 0x4 位是左 Alt + 左 Shift + Print Screen 快捷键能用。对比度主题只能在「设置」里关（没有注册表修复）。
+# 结果（按这个顺序）：grayscale、inverted、color-filter、high-contrast（advice）、ok。
+# 事实：filter_on、filter_type、filter_hotkey、high_contrast、contrast_hotkey（没设为空）。
+id: display.colors
+schema_version: 1
+title: { zh-CN: 颜色滤镜和对比度主题 }
+description:
+  zh-CN: 看看屏幕变成黑白、颜色反了，是不是不小心打开了 Windows 的「颜色滤镜」或者「对比度主题」。
+category: display
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/display/colors.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: 颜色滤镜和对比度主题都没有开。 }
+  grayscale:
+    status: advice
+    message:
+      zh-CN: Windows 的「颜色滤镜」开着，设成了「灰度」，所以屏幕变成了黑白。常是不小心按到了快捷键 Win + Ctrl + C。
+    fixer: user
+    next:
+      zh-CN: 马上关：按 Win + Ctrl + C（Win 是键盘上画着 Windows 标志的键）。没反应的话，点「颜色滤镜」把它关掉；或者点下面的修复，注销再登录以后生效。以后不想再误按，在同一页关掉「颜色滤镜的键盘快捷方式」。
+    links: ["tool:settings.color-filters", "feature:display.color-filter-off"]
+  inverted:
+    status: advice
+    message:
+      zh-CN: Windows 的「颜色滤镜」开着，设成了「反色」，所以屏幕像底片一样，白的变黑、黑的变白。常是不小心按到了快捷键 Win + Ctrl + C。
+    fixer: user
+    next:
+      zh-CN: 马上关：按 Win + Ctrl + C。没反应的话，点「颜色滤镜」把它关掉；或者点下面的修复，注销再登录以后生效。
+    links: ["tool:settings.color-filters", "feature:display.color-filter-off"]
+  color-filter:
+    status: advice
+    message:
+      zh-CN: Windows 的「颜色滤镜」开着，用的是给色弱的人准备的滤镜（红绿色弱或者蓝黄色弱），所以颜色看起来不对。
+    fixer: user
+    next:
+      zh-CN: 不是特意打开的话，按 Win + Ctrl + C 关掉；没反应的话，点「颜色滤镜」把它关掉，或者点下面的修复，注销再登录以后生效。
+    links: ["tool:settings.color-filters", "feature:display.color-filter-off"]
+  high-contrast:
+    status: advice
+    message:
+      zh-CN: Windows 的「对比度主题」（高对比度）开着，所以窗口变成了黑底、亮色的字，图片、按钮看起来也不一样了。常是不小心按到了左 Alt + 左 Shift + Print Screen。
+    fixer: user
+    next:
+      zh-CN: 马上关：同时按左边的 Alt、左边的 Shift 和 Print Screen（有的键盘上写 PrtSc）。没反应的话，点「对比度主题」，在「对比度主题」里选「无」，再点「应用」。
+    links: ["tool:settings.contrast-themes"]
+references:
+  - https://support.microsoft.com/en-us/accessibility/windows/use-color-filters-in-windows
+  - https://support.microsoft.com/en-us/accessibility/windows/change-color-contrast-in-windows
