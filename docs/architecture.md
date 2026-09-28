@@ -379,6 +379,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `image_select_folder` | — | `string \| null`（系统对话框选定的保存目录；取消返回 null） |
 | `image_save` | 请求体是图片内容（二进制，不是 JSON）；请求头 `x-medkit-name`（URL 编码的文件名）、`x-medkit-modified`（原图修改时间，毫秒） | `string`（实际用的文件名。只新建、不覆盖，重名加「 (2)」；只收 JPG、PNG、WebP，内容开头要和扩展名对得上） |
 | `image_open_folder` | — | `null`（按「文件夹」类型交给资源管理器打开选定的保存目录） |
+| `ocr_recognize` | 请求体是界面转好的 PNG（二进制，最大 64 MB） | `OcrView`（`status`：ok / no-language / unsupported / bad-image；认出来的文字一行一行，中文的字之间没有空格；用的识别语言、装了哪些、有没有中文、长图是不是只认了一部分。图片存成 `%ProgramData%\Medkit\ocr` 里的临时文件交给脚本，认完就删，同一时间只认一张） |
 | `pdf_save` | 请求体是界面拼好的 PDF（二进制）；请求头 `x-medkit-name`（URL 编码的建议文件名） | `string \| null`（弹出系统的「另存为」对话框，存到用户选的地方，返回完整路径；点了取消返回 null。只收开头是 `%PDF-`、最后有 `%%EOF` 的内容；先写临时文件再换名，写失败时原来的同名文件不受影响；选的名字不是 .pdf 结尾的补上 .pdf，补出来的名字已经有文件时不存） |
 | `pdf_reveal` | — | `null`（在资源管理器里打开刚存好的 PDF 所在的文件夹并选中它） |
 | `long_image_save` | 请求体是界面拼好的长图（JPG 或 PNG，二进制）；请求头 `x-medkit-name`（URL 编码的建议文件名） | `string \| null`（弹出系统的「另存为」对话框，只列这一种图片，建议的名字换成它的扩展名；存到用户选的地方，返回完整路径；点了取消返回 null。只收完整的 JPG（FF D8 FF 开头、FF D9 结尾）和 PNG（签名开头、IEND 结尾），最大 300 MB；存法和 `pdf_save` 一样：先写临时文件再换名，选的名字没有扩展名时补上，补出来的名字已经有文件时不存） |
@@ -403,6 +404,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `space_reveal` | `id` | `null`（在资源管理器里打开所在文件夹并选中结果里的这个文件；只接受最近一次结果里的编号） |
 | `popup_find` | `seconds`（最多 10） | `WindowOwnerReport`（等这么多秒，让用户把鼠标移到弹窗上，看鼠标指着的窗口是哪个程序的；只读） |
 | `popup_reveal` | — | `null`（在资源管理器里打开 `popup_find` 最近一次找到的程序所在的文件夹并选中它；界面传不了路径） |
+
+图片转文字（`app/src/components/OcrTool.vue`、`crates/medkit-core/src/ocr.rs`、`scripts/ocr/recognize.ps1`）：用 Windows 自带的文字识别 Windows.Media.Ocr（Windows 10 起都有），只能在 Windows PowerShell 5.1 里用（微软 PowerToys「文本提取器」的文档也这么说），正好是脚本宿主。图片在界面里转正、画到白底的画布上存成 PNG（透明的截图也认得出），后端存成只有管理员能写的临时文件交给脚本，认完就删；不联网、不上传。脚本优先用简体中文的识别，没有就用别的中文、用户的语言、装了的第一种；`MaxImageDimension` 以内的整张认，更宽的按比例缩到这个宽度，更高的（长截图）分成几块、块和块之间重叠一段来认：一行字算在它的中间所在的那一块，每一行只认一次、不会被切成两半（Windows 上的测试在交界附近放字核对）。最多认 30 块。Windows 把中文的每个字当成一个词，引擎接起来时只在两边都不是中文（汉字、假名、中文标点、全角字符）时加空格。没有中文识别时界面给小工具「安装中文文字识别」（`Dism.exe /Online /Add-Capability` 装 `Language.OCR~~~zh-CN~0.0.1.0`，缺同一语言的 `Language.Basic` 时先装它；下载不了的原因和「安装 .NET Framework 3.5」一样只检测、不改）。
 
 图片批量处理（`app/src/components/BatchImageTool.vue`、`src-tauri/src/images.rs`）：解码、缩放、裁剪、编码都在界面里用 WebView2 自带的解码器和画布做（不加新的依赖，能打开 JPG、PNG、WebP、GIF、BMP、ICO、AVIF，打不开 HEIC 和 TIFF；只能存成 JPG、PNG、WebP）；后端只负责把结果存进用户选的文件夹。原图从不改动。重新编码不带原图的拍摄信息；「压完反而更大时存原图」的那几张原样复制。
 

@@ -35,6 +35,7 @@ const COMMANDS: &[&str] = &[
     "image_select_folder",
     "image_save",
     "image_open_folder",
+    "ocr_recognize",
     "pdf_save",
     "pdf_reveal",
     "long_image_save",

@@ -14,6 +14,7 @@ import type {
   KeyMappingInput,
   KeyRemapView,
   NewMenuItem,
+  OcrView,
   Preview,
   RenamePreview,
   RenameRules,
@@ -71,6 +72,7 @@ export type CommandMap = {
   image_select_folder: { args: NoArgs; result: string | null }
   image_save: { args: { name: string; modified: number; bytes: Uint8Array }; result: string }
   image_open_folder: { args: NoArgs; result: null }
+  ocr_recognize: { args: { bytes: Uint8Array }; result: OcrView }
   pdf_save: { args: { name: string; bytes: Uint8Array }; result: string | null }
   pdf_reveal: { args: NoArgs; result: null }
   long_image_save: { args: { name: string; bytes: Uint8Array }; result: string | null }

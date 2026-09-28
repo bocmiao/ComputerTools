@@ -7,6 +7,7 @@ import BatchRenameTool from './BatchRenameTool.vue'
 import BatchImageTool from './BatchImageTool.vue'
 import ImagesToPdfTool from './ImagesToPdfTool.vue'
 import LongImageTool from './LongImageTool.vue'
+import OcrTool from './OcrTool.vue'
 import FileLockers from './FileLockers.vue'
 import PopupOwner from './PopupOwner.vue'
 import SpaceFinder from './SpaceFinder.vue'
@@ -258,6 +259,7 @@ async function copy(value: string): Promise<void> {
       <BatchImageTool />
       <ImagesToPdfTool />
       <LongImageTool />
+      <OcrTool />
       <ImagePrivacyTool />
       <BatchRenameTool />
       <FileLockers />

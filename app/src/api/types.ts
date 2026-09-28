@@ -124,6 +124,19 @@ export interface ShellPlaceItem {
   note: string                 // 要特别说明的，多数是空的
 }
 
+/** 图片转文字：ok 认完了（可能一个字也没有）；no-language 一种识别都没装；unsupported 没有 Windows 的文字识别；bad-image 读不了图片 */
+export type OcrStatus = 'ok' | 'no-language' | 'unsupported' | 'bad-image'
+export interface OcrView {
+  status: OcrStatus
+  text: string                 // 一行一行，中文的字之间没有空格
+  lines: number
+  language: string | null      // 用的识别语言，说成人话（「中文（简体）」）
+  languages: string[]          // 这台电脑装了的识别语言
+  chinese: boolean             // 装了中文的识别
+  truncated: boolean           // 图片太长，只认了前面一部分
+  detail: string | null        // 读不了图片、没有文字识别时 Windows 自己的说法
+}
+
 /** 改键能选的一个键：id 和浏览器 KeyboardEvent.code 的名字一样 */
 export interface KeyOption {
   id: string

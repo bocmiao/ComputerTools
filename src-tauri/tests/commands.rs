@@ -349,6 +349,23 @@ fn image_commands_pass_the_permission_check_and_save_raw_bodies() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 图片转文字：图片（PNG）走二进制请求体，存成临时文件交给认字的脚本（这里是假的），认完删掉。
+#[test]
+fn ocr_command_passes_the_permission_check_and_leaves_no_file() {
+    let win = app();
+    let png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+    let r = invoke_body(&win, "ocr_recognize", InvokeBody::Raw(png), Default::default()).unwrap();
+    has_keys(&r, &["status", "text", "lines", "language", "languages", "chinese", "truncated", "detail"]);
+    assert_eq!(r["status"], "ok", "{r}");
+    assert_eq!(r["text"], "演示文字", "{r}");
+    let e = invoke_body(&win, "ocr_recognize", InvokeBody::Raw(b"GIF89a".to_vec()), Default::default()).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("PNG")), "{e}");
+    let e = invoke(&win, "ocr_recognize", json!({ "bytes": [137, 80, 78, 71] })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("二进制")), "{e}");
+    let dir = medkit_lib::setup::scratch_dir("ocr").unwrap();
+    assert_eq!(std::fs::read_dir(dir).unwrap().count(), 0, "认完就删");
+}
+
 /// 图片合成 PDF 的命令也要登记进权限清单；PDF 内容走二进制请求体，存到哪里只能在系统的「另存为」对话框里选。
 #[test]
 fn pdf_commands_pass_the_permission_check() {

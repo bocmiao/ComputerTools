@@ -1,0 +1,86 @@
+# 安装中文文字识别（「图片转文字」要用）。脚本：scripts/tools/system/install-ocr-chinese.ps1
+# 「图片转文字」用的是 Windows 自带的文字识别（Windows.Media.Ocr），认中文要装简体中文的识别：Windows 的可选功能（按需功能）
+# Language.OCR~~~zh-CN~0.0.1.0，它要先有同一种语言的基本组件 Language.Basic~~~zh-CN~0.0.1.0（微软《Language and region
+# Features on Demand (FOD)》：OCR 依赖同一语言的 Basic），没有就先装它。微软 PowerToys「文本提取器」的文档也是这样装识别语言的。
+# Dism.exe /Online /Add-Capability 隐藏窗口运行，文件从 Windows 更新下载，最多等 9 分钟，还没装完的让它自己装完（slow）。
+# 中文版 Windows 一般自带，精简过的系统和英文版 Windows 常常没有。服务器版不管。
+# 下载不了的原因只检测、不改，和「安装 .NET Framework 3.5」一样：「关更新」软件留下的 UseWUServer（除非 Servicing 策略的
+# RepairContentServerSource = 2）；「Windows 更新」服务被禁用时不运行 Dism.exe，直接给「恢复更新用到的服务」。
+# 错误代码也按微软《.NET Framework 3.5 installation errors》的分法：下载不到文件、组策略不许下载、组件存储坏了。
+id: system.install-ocr-chinese
+schema_version: 1
+group: action
+title: { zh-CN: 安装中文文字识别 }
+description:
+  zh-CN: 「图片转文字」认不出中文、提示没有中文识别时用：给 Windows 装上简体中文的文字识别，和装语言包里的「光学字符识别」是一回事，文件从 Windows 更新下载。要联网，一般几分钟。中文版 Windows 一般自带，不用装。
+category: system
+requires_admin: true
+timeout_sec: 600
+run:
+  script: tools/system/install-ocr-chinese.ps1
+confirm:
+  zh-CN: 要从 Windows 更新下载中文文字识别的文件，一般几分钟（网速慢的更久），期间可以照常用电脑。现在安装吗？
+results:
+  installed:
+    status: ok
+    message: { zh-CN: 装好了中文文字识别。 }
+    next: { zh-CN: 回到「图片转文字」，再认一次试试。 }
+  restart:
+    status: ok
+    message: { zh-CN: 装好了中文文字识别，要重启电脑以后才能用。 }
+    next: { zh-CN: 重启电脑以后再用「图片转文字」。 }
+  already:
+    status: ok
+    message: { zh-CN: 这台电脑已经装着中文文字识别了，不用再装。 }
+    next: { zh-CN: 「图片转文字」还是认不出中文的，把图片放大一点、截得清楚一点再试（字太小、太模糊、太斜都认不准）。 }
+  service-disabled:
+    status: advice
+    message: { zh-CN: 「Windows 更新」服务被禁用了（多半是「关更新」软件干的）。中文文字识别的文件要从 Windows 更新下载，服务关着就装不上，所以这次没有安装。 }
+    fixer: medkit
+    next: { zh-CN: 点下面的按钮恢复更新用到的服务，再点一次这个小工具。 }
+    links: ["feature:update.enable-services"]
+  update-server:
+    status: manual
+    message: { zh-CN: "没能下载中文文字识别的文件（错误 {code}）：这台电脑被设置成从「单位的更新服务器」下载更新，个人电脑上这多半是「关更新」软件留下的，那里没有这些文件。电脑上什么都没改。" }
+    fixer: user
+    next: { zh-CN: 用当初那个「关更新」软件把更新恢复（一般叫「恢复更新」「开启更新」）以后再点一次这个小工具；单位的电脑请找网管。专业版也可以在组策略编辑器（gpedit.msc）的「计算机配置 → 管理模板 → 系统」里打开「指定可选组件安装和组件修复的设置」，选「已启用」，勾上「直接从 Windows 更新下载修复内容和可选功能」那一项。小药箱不改组策略。 }
+    links: ["symptom:update-failed"]
+  download-failed:
+    status: advice
+    message: { zh-CN: "没能从 Windows 更新下载中文文字识别的文件（错误 {code}）：多半是没联网、网络不稳，或者开着代理、加速器。电脑上什么都没改。" }
+    fixer: user
+    next: { zh-CN: 联网以后再试一次；开着「梯子」、加速器的先关掉。还不行，运行「系统更新失败」里的检查（更新服务、hosts 文件、系统时间这些都会挡住下载）。 }
+    links: ["symptom:update-failed"]
+  policy:
+    status: manual
+    message: { zh-CN: 组策略设成了「从不从 Windows 更新下载可选功能」（错误 0x800F0907），装不了。 }
+    fixer: helper
+    next: { zh-CN: 单位的电脑请找网管；自己的电脑，在组策略编辑器（gpedit.msc）的「计算机配置 → 管理模板 → 系统」里把「指定可选组件安装和组件修复的设置」改回「未配置」，再点一次这个小工具。小药箱不改组策略。 }
+  corrupt:
+    status: advice
+    message: { zh-CN: "Windows 的组件存储坏了（错误 {code}），装不了新的功能。" }
+    fixer: medkit
+    next: { zh-CN: 点下面的按钮检查并修复系统文件，修完重启，再点一次这个小工具。 }
+    links: ["tool:open.system-file-repair"]
+  missing:
+    status: manual
+    message: { zh-CN: 这个 Windows 里找不到中文文字识别这个功能，可能是被精简过的系统。 }
+    fixer: helper
+    next: { zh-CN: 请懂哥看看；精简版的系统常常少东西，最好换成微软官方的 Windows。 }
+  failed:
+    status: manual
+    message: { zh-CN: "安装出错了（错误 {code}）。" }
+    fixer: helper
+    next: { zh-CN: 重启电脑以后再试一次。还不行，把错误代码发给懂哥。 }
+  slow:
+    status: advice
+    message: { zh-CN: 过了九分钟还没装完（多半还在下载，网速比较慢），它会在后台接着装。 }
+    fixer: user
+    next: { zh-CN: 过十几分钟再用「图片转文字」；还是认不出中文，重启电脑以后再点一次这个小工具。 }
+  unsupported:
+    status: na
+    message: { zh-CN: 这是服务器版的 Windows，小药箱不在这里装语言功能。 }
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/features-on-demand-language-fod
+  - https://learn.microsoft.com/en-us/windows/powertoys/text-extractor
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/application-management/dotnet-framework-35-installation-error

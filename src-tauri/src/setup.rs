@@ -3,6 +3,7 @@
 //! 数据目录（Windows）：
 //! - `%ProgramData%\Medkit\runtime\<数据哈希>\`：运行时的脚本，每次执行前校验哈希
 //! - `%ProgramData%\Medkit\journal\journal.jsonl`：修改日志
+//! - `%ProgramData%\Medkit\ocr\`：图片转文字时交给 Windows 认的图片，认完就删
 //!
 //! 在其他系统上（只用于开发界面）改用假的系统和脚本执行器，数据放在临时目录里。
 
@@ -243,6 +244,12 @@ mod os {
         runner.returns(medkit_core::context_menu::LIST_SCRIPT, serde_json::json!({ "result": "ok", "items": [] }));
         runner.returns(medkit_core::new_menu::LIST_SCRIPT, serde_json::json!({ "result": "ok", "items": [] }));
         runner.returns(medkit_core::shell_places::LIST_SCRIPT, serde_json::json!({ "result": "ok", "items": [] }));
+        // 图片转文字：演示用的一行字
+        runner.returns(
+            medkit_core::ocr::SCRIPT,
+            serde_json::json!({ "result": "ok", "language": "zh-Hans-CN", "languages": ["zh-Hans-CN", "en-US"],
+                                "lines": [ { "words": ["演", "示", "文", "字"] } ], "pieces": 1, "truncated": false }),
+        );
         (Arc::new(MockPlatform::new()), Arc::new(runner))
     }
 
@@ -253,6 +260,13 @@ mod os {
 
 use os::{backend, data_root, secure_dir};
 pub use os::{claim_single_instance, fatal, harden_environment, preflight, webview2_hint};
+
+/// 小药箱自己的临时文件夹 `<数据目录>\<name>`（只有管理员能写）：放要交给脚本读的文件，用完就删。
+pub fn scratch_dir(name: &str) -> Result<std::path::PathBuf, String> {
+    let dir = data_root().join(name);
+    secure_dir(&dir).map_err(|e| format!("准备临时文件夹 {} 失败：{e}", dir.display()))?;
+    Ok(dir)
+}
 
 /// 测试用：用假系统和真实的内嵌数据造一个 AppState，不碰真实系统、不落盘到固定位置。
 #[cfg(any(test, feature = "test-helpers"))]

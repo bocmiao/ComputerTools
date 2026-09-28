@@ -36,6 +36,7 @@
     "allow-image-select-folder",
     "allow-image-save",
     "allow-image-open-folder",
+    "allow-ocr-recognize",
     "allow-pdf-save",
     "allow-pdf-reveal",
     "allow-long-image-save",

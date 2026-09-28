@@ -7,8 +7,8 @@ use medkit_core::keymap::MappingInput;
 use medkit_core::lockers::LockTarget;
 use medkit_core::views::{
     ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, FeatureState, FileLockReport, JournalSession,
-    KeyRemapView, NewMenuItem, Preview, ShellPlaceItem, StartupItem, SymptomDetail, SystemInfo, ToolResult, UndoResult,
-    WindowOwnerReport,
+    KeyRemapView, NewMenuItem, OcrView, Preview, ShellPlaceItem, StartupItem, SymptomDetail, SystemInfo, ToolResult,
+    UndoResult, WindowOwnerReport,
 };
 use tauri::State;
 
@@ -258,6 +258,46 @@ pub async fn image_save(state: State<'_, AppState>, request: tauri::ipc::Request
     tauri::async_runtime::spawn_blocking(move || images::save(&folder, &name, &bytes, modified))
         .await
         .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// 图片转文字最多收这么大的图片（界面先转成 PNG；很长的截图也就几十 MB）。
+const OCR_MAX_BYTES: usize = 64 * 1024 * 1024;
+const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+/// 同一时间只认一张（临时文件夹里剩下的文件要清掉，不能清掉正在认的那张）
+static OCR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// 图片转文字：图片（界面转好的 PNG）就是请求体。存成 `%ProgramData%\Medkit\ocr` 里的临时文件交给 Windows 自带的
+/// 文字识别，认完马上删掉（上次没来得及删的也一起删）。只读：不改设置，不记修改日志。
+#[tauri::command]
+pub async fn ocr_recognize(state: State<'_, AppState>, request: tauri::ipc::Request<'_>) -> CmdResult<OcrView> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("图片内容的格式不对（要直接传二进制）。".into());
+    };
+    if bytes.len() > OCR_MAX_BYTES {
+        return Err("图片太大了（超过 64 MB），先裁小一点再试。".into());
+    }
+    if !bytes.starts_with(PNG_SIGNATURE) {
+        return Err("图片要先转成 PNG 才能认字。".into());
+    }
+    let bytes = bytes.clone();
+    with_engine(state, move |e| {
+        let _guard = OCR_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let dir = crate::setup::scratch_dir("ocr").map_err(medkit_core::Error::Invalid)?;
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                if entry.file_type().is_ok_and(|t| t.is_file()) {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+        let path = dir.join(format!("{}.png", medkit_core::journal::new_id()));
+        std::fs::write(&path, &bytes)
+            .map_err(|err| medkit_core::Error::Invalid(format!("没能把图片交给 Windows：{err}")))?;
+        let result = e.ocr_recognize(&path);
+        let _ = std::fs::remove_file(&path);
+        result
+    })
+    .await
 }
 
 /// 图片批量处理：在资源管理器里打开选好的保存文件夹。

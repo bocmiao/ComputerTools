@@ -24,6 +24,7 @@ use crate::model::{
     Action, Check, Feature, RegType, RegistryAction, Risk, StartType, Status, Symptom, Target, Tool, ToolGroup, Undo,
 };
 use crate::new_menu;
+use crate::ocr;
 use crate::platform::{OpenRequest, Platform, PlatformError};
 use crate::registry::{RegRoot, RegValue, SpecRoot, display_opt, is_sid, key_ancestors, split_key};
 use crate::render::{label_fact, render};
@@ -1368,6 +1369,20 @@ impl Engine {
             State::Registry { value: None, .. } => keymap::describe_value(None),
             other => Self::state_label(other),
         }
+    }
+
+    // ───────────── 图片转文字 ─────────────
+
+    /// 用 Windows 自带的文字识别认出图片（PNG）里的字。只读：不改设置，不记修改日志。
+    /// `image` 由调用的一方准备（小药箱数据文件夹里的临时文件），认完由它删掉。
+    pub fn ocr_recognize(&self, image: &std::path::Path) -> Result<crate::views::OcrView> {
+        let mut args = Map::new();
+        args.insert("Path".into(), Value::String(image.to_string_lossy().into_owned()));
+        let v = self
+            .runner
+            .run(ocr::SCRIPT, &args, ocr::TIMEOUT)
+            .map_err(|e| Error::Invalid(format!("没能认出图片里的字：{e}")))?;
+        ocr::parse(&v).map_err(Error::Invalid)
     }
 
     // ───────────── 文件删不掉：是谁占着 ─────────────

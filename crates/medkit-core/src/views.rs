@@ -257,6 +257,41 @@ pub struct KeyRemapView {
     pub foreign_text: Option<String>,
 }
 
+/// 图片转文字的结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OcrStatus {
+    /// 认完了（可能一个字也没认出来）
+    Ok,
+    /// 这台电脑一种文字识别都没装
+    NoLanguage,
+    /// 这台电脑上没有 Windows 的文字识别（很老或者精简过的系统）
+    Unsupported,
+    /// Windows 读不了这张图片
+    BadImage,
+}
+
+/// 图片转文字：认出来的文字和用的识别语言。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrView {
+    pub status: OcrStatus,
+    /// 认出来的文字，一行一行（中文的字之间没有空格）
+    pub text: String,
+    /// 几行
+    pub lines: usize,
+    /// 用的识别语言，说成人话（「中文（简体）」）
+    pub language: Option<String>,
+    /// 这台电脑装了的识别语言
+    pub languages: Vec<String>,
+    /// 装了中文的识别
+    pub chinese: bool,
+    /// 图片太长，只认了前面一部分
+    pub truncated: bool,
+    /// 读不了图片、没有文字识别时 Windows 自己的说法（给懂哥看）
+    pub detail: Option<String>,
+}
+
 /// 开机启动项的程序签名（Get-AuthenticodeSignature 的结论）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

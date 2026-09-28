@@ -23,7 +23,7 @@ use medkit_core::registry::{RegRoot, RegValue, SpecRoot, is_sid, split_key};
 use medkit_core::render::unresolved;
 use medkit_core::script::{HostConfig, PowerShellHost};
 use medkit_core::tools;
-use medkit_core::views::FeatureStateKind;
+use medkit_core::views::{FeatureStateKind, OcrStatus};
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -1525,6 +1525,97 @@ fn powershell(script: &str) -> String {
     let out =
         Command::new("powershell.exe").args(["-NoProfile", "-NonInteractive", "-Command", script]).output().unwrap();
     String::from_utf8_lossy(&out.stdout).trim().to_owned()
+}
+
+/// 用 System.Drawing 画一张白底黑字的 PNG：每一项是（字，离上边多少像素），Arial 40 磅。
+fn draw_text_picture(path: &Path, width: u32, height: u32, lines: &[(&str, u32)]) {
+    let draw: String = lines
+        .iter()
+        .map(|(text, top)| format!("$g.DrawString('{text}', $font, [System.Drawing.Brushes]::Black, 30, {top})\n"))
+        .collect();
+    let out = powershell(&format!(
+        "Add-Type -AssemblyName System.Drawing
+$bmp = New-Object System.Drawing.Bitmap {width}, {height}
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.Clear([System.Drawing.Color]::White)
+$g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
+$font = New-Object System.Drawing.Font('Arial', 40)
+{draw}$g.Dispose()
+$bmp.Save('{}', [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+'ok'",
+        path.display()
+    ));
+    assert_eq!(out, "ok", "没能画测试图片");
+}
+
+/// 这台机器上 Windows 的文字识别能认多大的图片（每边多少像素）；没有文字识别时是 None。
+fn ocr_max_dimension() -> Option<u32> {
+    powershell(
+        "try { [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]::MaxImageDimension } catch { '' }",
+    )
+    .parse()
+    .ok()
+}
+
+/// 图片转文字：画一张有英文和数字的图片（CI 机器上不一定有中文识别），交给真的脚本认，认出来的字里要有画上去的词。
+/// 这台机器一种识别都没装、或者没有 Windows 的文字识别时，只提示。
+#[test]
+fn ocr_reads_the_text_in_a_picture() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+    let picture = dir.path().join("ocr-test.png");
+    draw_text_picture(&picture, 900, 260, &[("MEDKIT OCR 2468", 40), ("Hello World", 140)]);
+    let r = engine.ocr_recognize(&picture).unwrap();
+    eprintln!("图片转文字：{r:?}；每边最多 {:?} 像素", ocr_max_dimension());
+    match r.status {
+        OcrStatus::Ok => {
+            let text = r.text.to_uppercase();
+            assert!(text.contains("MEDKIT") && text.contains("2468") && text.contains("HELLO"), "{r:?}");
+            assert_eq!(r.lines, 2, "{r:?}");
+        }
+        OcrStatus::NoLanguage | OcrStatus::Unsupported => {
+            println!("::notice title=ocr::这台 CI 机器上认不了字：{:?}（装了的识别：{:?}）", r.status, r.languages);
+        }
+        OcrStatus::BadImage => panic!("Windows 读不了测试图片：{r:?}"),
+    }
+}
+
+/// 长图分块认：图片比文字识别能认的高，脚本分成几块、块和块之间重叠一段来认。在第一块和第二块的交界附近放几行字
+/// （只在第一块里的、在重叠的那段里的、跨过分给哪一块的那条线的、被第一块的下边切开的、只在第二块里的），
+/// 每一行都要认出来、而且只出现一次。这台机器认不了字时只提示。
+#[test]
+fn ocr_reads_tall_pictures_in_pieces_without_losing_or_repeating_lines() {
+    let Some(max) = ocr_max_dimension().filter(|m| *m >= 2000) else {
+        println!("::notice title=ocr::这台 CI 机器上没有 Windows 的文字识别，跳过长图测试");
+        return;
+    };
+    // 和脚本一样：重叠 min(400, max / 4)，一行字的中间在「第二块的上边 + 重叠的一半」以上的算第一块
+    let overlap = 400.min(max / 4);
+    let words = [
+        ("ALPHA", max - overlap - 150),
+        ("BRAVO", max - overlap + 20),
+        ("CHARLIE", max - overlap / 2 - 30),
+        ("DELTA", max - 40),
+        ("ECHO", max + 120),
+        // 第二块和第三块之间分给哪一块的那条线
+        ("FOXTROT", 2 * max - overlap - overlap / 2 - 30),
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+    let picture = dir.path().join("ocr-tall.png");
+    draw_text_picture(&picture, 700, 2 * max + 300, &words);
+    let r = engine.ocr_recognize(&picture).unwrap();
+    eprintln!("长图转文字（每边最多 {max} 像素）：{r:?}");
+    if r.status != OcrStatus::Ok {
+        println!("::notice title=ocr::这台 CI 机器上认不了字：{:?}", r.status);
+        return;
+    }
+    let text = r.text.to_uppercase();
+    for (word, _) in words {
+        assert_eq!(text.matches(word).count(), 1, "{word} 应该正好出现一次：{text}");
+    }
+    assert!(!r.truncated);
 }
 
 /// 打印机脱机：在一台虚拟打印机（Microsoft Print to PDF 这类，CI 机器上没有真的打印机）上勾上「脱机使用打印机」、

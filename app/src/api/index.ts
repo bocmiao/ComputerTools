@@ -16,6 +16,7 @@ import type {
   KeyMappingInput,
   KeyRemapView,
   NewMenuItem,
+  OcrView,
   Preview,
   RenamePreview,
   RenameRules,
@@ -218,6 +219,17 @@ export function imageSave(name: string, modified: number, bytes: Uint8Array): Pr
     })
   }
   return callMock('image_save', { name, modified, bytes })
+}
+
+/**
+ * 图片转文字：图片（转好的 PNG）直接作为二进制请求体传给后端，交给 Windows 自带的文字识别。
+ * 后端存成临时文件，认完就删；不联网、不上传。
+ */
+export function ocrRecognize(bytes: Uint8Array): Promise<OcrView> {
+  if (isTauri()) {
+    return invoke<OcrView>('ocr_recognize', bytes)
+  }
+  return callMock('ocr_recognize', { bytes })
 }
 
 /** 图片批量处理：在资源管理器里打开选好的保存文件夹 */
