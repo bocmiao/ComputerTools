@@ -2,7 +2,8 @@
 # 让认识的人看到你的屏幕、经你同意后操作，帮你解决问题。远程控制是电信诈骗最常用的手段，所以确认框里放醒目的反诈提示
 # （微软《Use Quick Assist to help users》：只有你自己主动联系了对方，才让对方连进来）。
 # 快速助手是 Microsoft Store 的应用（MicrosoftCorporationII.QuickAssist，产品 9P7BP5VNWKX5）：登录用户装了的用
-# ms-quick-assist: 打开，没装的打开商店里它的页面。都交给系统的外壳打开（商店应用以用户身份运行，不带管理员权限）。
+# ms-quick-assist: 打开，没装的在装着 Microsoft Store 时打开商店里它的页面；都交给系统的外壳打开（商店应用以用户身份运行，
+# 不带管理员权限）。对应的应用没装时什么都不打开（否则 Windows 会弹出「选择一个应用」的对话框）。
 # 结果：opened、store（打开了商店页面去装）、no-store（都打不开：没有商店，比如服务器版、精简版）、failed（装了但打不开）。
 id: system.remote-help
 schema_version: 1

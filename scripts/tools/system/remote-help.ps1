@@ -9,8 +9,11 @@
 # installed for the logged-in user (the SID in -UserHive; the current user
 # when that cannot be read) it is started through its protocol
 # ms-quick-assist:, otherwise its Store page is opened
-# (ms-windows-store://pdp/?ProductId=9P7BP5VNWKX5). Both go through the
-# shell, which starts Store apps as the user, not elevated.
+# (ms-windows-store://pdp/?ProductId=9P7BP5VNWKX5) when the Microsoft Store
+# (Microsoft.WindowsStore) is installed. Both go through the shell, which
+# starts Store apps as the user, not elevated. Nothing is opened for a
+# protocol whose app is not installed: Windows would show its "Pick an app"
+# dialog instead.
 # Result codes: opened / store (the Store page was opened to install it) /
 # no-store (neither could be opened: no Microsoft Store, as on Windows
 # Server or a stripped-down Windows) / failed (installed, but it did not
@@ -24,6 +27,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $packageName = 'MicrosoftCorporationII.QuickAssist'
+$storePackage = 'Microsoft.WindowsStore'
 $appUri = 'ms-quick-assist:'
 $storeUri = 'ms-windows-store://pdp/?ProductId=9P7BP5VNWKX5'
 
@@ -32,22 +36,23 @@ if ($UserHive -match '(?i)HKEY_USERS\\(S-1-[0-9-]+)$') {
     $userSid = $Matches[1]
 }
 
-# Quick Assist is installed for the logged-in user (asking for another user
+# A Store app is installed for the logged-in user (asking for another user
 # needs administrator rights; without them the current user is asked).
-function Test-QuickAssist {
+function Test-Package {
+    param([string]$Name)
     $packages = @()
     try {
         if ($userSid.Length -gt 0) {
-            $packages = @(Get-AppxPackage -User $userSid -Name $packageName -ErrorAction Stop)
+            $packages = @(Get-AppxPackage -User $userSid -Name $Name -ErrorAction Stop)
         }
         else {
-            $packages = @(Get-AppxPackage -Name $packageName -ErrorAction Stop)
+            $packages = @(Get-AppxPackage -Name $Name -ErrorAction Stop)
         }
     }
     catch {
         Write-Verbose ('Get-AppxPackage failed: {0}' -f $_.Exception.Message)
         try {
-            $packages = @(Get-AppxPackage -Name $packageName -ErrorAction Stop)
+            $packages = @(Get-AppxPackage -Name $Name -ErrorAction Stop)
         }
         catch {
             Write-Verbose ('Get-AppxPackage failed: {0}' -f $_.Exception.Message)
@@ -58,7 +63,7 @@ function Test-QuickAssist {
 
 $facts = [ordered]@{ error = '' }
 $result = ''
-if (Test-QuickAssist) {
+if (Test-Package $packageName) {
     try {
         Start-Process -FilePath $appUri -ErrorAction Stop
         $result = 'opened'
@@ -68,7 +73,7 @@ if (Test-QuickAssist) {
         $facts.error = ([string]$_.Exception.Message).Trim()
     }
 }
-else {
+elseif (Test-Package $storePackage) {
     try {
         Start-Process -FilePath $storeUri -ErrorAction Stop
         $result = 'store'
@@ -77,6 +82,9 @@ else {
         $result = 'no-store'
         $facts.error = ([string]$_.Exception.Message).Trim()
     }
+}
+else {
+    $result = 'no-store'
 }
 
 [pscustomobject]@{
