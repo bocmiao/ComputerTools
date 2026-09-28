@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
 use super::{
-    FileStrings, FileUser, InstalledProgram, KeyboardAids, OpenRequest, OsInfo, PResult, Platform, PlatformError,
-    PointedWindow, UserIdentity, WinsockEntry,
+    Display, Displays, FileStrings, FileUser, InstalledProgram, KeyboardAids, OpenRequest, OsInfo, PResult, Platform,
+    PlatformError, PointedWindow, UserIdentity, WinsockEntry,
 };
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue, key_ancestors};
@@ -44,6 +44,8 @@ struct State {
     programs: Vec<InstalledProgram>,
     /// Winsock 目录；没设过时是 Windows 刚装好的样子（64 位、32 位各一项 TCP/IP）
     winsock: Option<Vec<WinsockEntry>>,
+    /// 显示器；没设过时是一块笔记本屏幕，用的就是推荐分辨率
+    displays: Option<Displays>,
     /// 没有「获取帮助」应用
     no_get_help: bool,
     /// 桌面（资源管理器）没在运行，网页打不开
@@ -170,6 +172,25 @@ impl MockPlatform {
     /// 测试用：Winsock 目录。
     pub fn set_winsock(&self, entries: Vec<WinsockEntry>) {
         self.state.lock().unwrap().winsock = Some(entries);
+    }
+
+    pub fn set_displays(&self, displays: Displays) {
+        self.state.lock().unwrap().displays = Some(displays);
+    }
+
+    /// 一块笔记本屏幕，1920×1080，用的就是推荐分辨率。
+    pub fn laptop_display() -> Displays {
+        Displays {
+            remote: false,
+            list: vec![Display {
+                name: None,
+                internal: true,
+                width: 1920,
+                height: 1080,
+                preferred: Some((1920, 1080)),
+                cloned: false,
+            }],
+        }
     }
 
     /// Windows 刚装好时的 Winsock 目录（简化成 64 位、32 位各一项 TCP/IP）。
@@ -347,5 +368,9 @@ impl Platform for MockPlatform {
 
     fn winsock_catalog(&self) -> PResult<Vec<WinsockEntry>> {
         Ok(self.state.lock().unwrap().winsock.clone().unwrap_or_else(Self::clean_winsock))
+    }
+
+    fn displays(&self) -> PResult<Displays> {
+        Ok(self.state.lock().unwrap().displays.clone().unwrap_or_else(Self::laptop_display))
     }
 }

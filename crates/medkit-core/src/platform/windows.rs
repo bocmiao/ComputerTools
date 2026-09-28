@@ -688,6 +688,10 @@ impl Platform for WindowsPlatform {
     fn winsock_catalog(&self) -> PResult<Vec<super::WinsockEntry>> {
         super::winsock::catalog()
     }
+
+    fn displays(&self) -> PResult<super::Displays> {
+        super::displays::displays()
+    }
 }
 
 // ───────────── 打开系统工具 ─────────────

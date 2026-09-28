@@ -108,8 +108,11 @@ references:
 | `clock` | `today`（电脑上的日期）、`build_date`（这个版本的构建日期），都是 `YYYY-MM-DD` | `ok`、`behind`（电脑上的日期比构建日期早一天以上，时间肯定错了） |
 | `keyboard-aids` | `filter_keys`、`sticky_keys`、`mouse_keys`（布尔值：这次登录里实际开没开，用 SystemParametersInfo 读，不读注册表） | `ok`、`filter-keys`、`sticky-keys`、`mouse-keys`（几项都开着时按这个顺序报一项） |
 | `winsock` | `entries`（一共几项）、`missing` / `missing_count`、`lsp` / `lsp_count`、`others` / `others_count`（名字是「产品名（文件名）」，用「、」隔开，没有路径） | `missing-file`（有组件的 DLL 不在了）、`no-tcpip`（64 位或者 32 位的目录里没有 IPv4 的 TCP 基础提供程序）、`lsp`（有第三方的分层服务提供程序）、`ok-others`（没有 LSP，有第三方的基础协议）、`ok`；先满足哪个算哪个 |
+| `display-resolution` | `count`（正在用的显示器个数）、`summary`（每个显示器现在的分辨率，用「、」隔开）、`displays`（每个显示器一行：名字、现在的分辨率、推荐的分辨率、是不是在「复制」）；有显示器低于推荐的分辨率时，还有第一个这样的显示器的 `name`、`current`、`recommended` | `remote`（远程桌面里）、`no-display`、`not-recommended`（有显示器比推荐的分辨率低：宽或者高小一些，宽高比不一样的也算）、`cloned`（低于推荐的是在「复制」模式下）、`ok`（有显示器读得到推荐的分辨率，都不低于它）、`unknown`（都读不到）；先满足哪个算哪个 |
 
 `winsock` 用微软公开的服务提供程序接口读 Winsock 目录（`crates/medkit-core/src/platform/winsock.rs`）：`WSCEnumProtocols` 列出每一项（包括隐藏的项和分层协议本身），`WSCGetProviderPath` 读 DLL 的路径；64 位 Windows 上 32 位程序用的那一份用 `WSCEnumProtocols32`、`WSCGetProviderPath32` 读（很多国产软件是 32 位的），路径里的 `%ProgramFiles%` 按 `Program Files (x86)`、System32 按 SysWOW64 解释。协议链长度不是 1 的是 LSP（微软 WSAPROTOCOLCHAIN 文档：0 是分层协议本身，大于 1 是经过它的协议链）；DLL 在 Windows 文件夹里、版本信息里的公司是 Microsoft 的算 Windows 自己的（放在 System32 里冒充系统文件的老式 LSP 照样算第三方）。结论在 `crates/medkit-core/src/winsock.rs`，路径只用来看文件在不在、读版本信息。
+
+`display-resolution` 用微软的「连接和配置显示器」接口（`crates/medkit-core/src/platform/displays.rs`，做法照 MartinGC94/DisplayConfig，MIT）：`QueryDisplayConfig`（`QDC_ONLY_ACTIVE_PATHS`）读每个显示器现在的桌面大小（源模式）和显示方向，竖着放的把宽高换回来；`DisplayConfigGetDeviceInfo` 读推荐的分辨率（`DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_PREFERRED_MODE`，「设置」里标着「推荐」的就是它）和型号名、接口类型（`GET_TARGET_NAME`：EDID 里写的名字，不含序列号；接在内部接口上的是笔记本、一体机自带的屏幕）；几条路径用同一个源就是「复制」。比推荐的高（显卡的「超级分辨率」）不算问题。只检测、不改分辨率：改分辨率由用户在「设置」里点，Windows 会问要不要保留，不点自动改回去。结论在 `builtin.rs`。
 
 `clock` 的构建日期：编译时的环境变量 `SOURCE_DATE_EPOCH`（CI 构建安装包时设成提交时间），没有时用 `builtin.rs` 里写死的日期（发版前顺手改成最近的日期）。这个日期只能早不能晚，晚于真实日期会让所有人都被误报；单元测试会拦住写成将来日期的情况。
 
@@ -676,6 +679,7 @@ open: { website: oem-drivers }                # 网页：只能写名单里的�
 | `system-protection` | `SystemPropertiesProtection.exe`（「系统属性」的「系统保护」页：开关系统保护、创建还原点） |
 | `environment-variables` | `SystemPropertiesAdvanced.exe`（「系统属性」的「高级」页：下面的「环境变量」按钮改 Path、PATHEXT） |
 | `task-scheduler` | `mmc.exe taskschd.msc`（「任务计划程序」：禁用、启用计划任务） |
+| `cleartype` | `cttune.exe`（「ClearType 文本调谐器」：控制面板里「调整 ClearType 文本」打开的就是它） |
 | `store-reset` | `WSReset.exe`（重置 Microsoft Store 的缓存：空白窗口自己关掉、商店自动打开，不删应用） |
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 

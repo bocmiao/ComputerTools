@@ -60,6 +60,9 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     // 控制面板的「网络连接」（微软《Executing Control Panel Items》里的 control.exe netconnections）：网卡的禁用、启用
     // 和属性（「配置」里有「电源管理」「高级」两页）
     ("network-connections", Program { exe: "control.exe", args: &["netconnections"], console: &[] }),
+    // 「ClearType 文本调谐器」：控制面板里「调整 ClearType 文本」打开的就是它。勾上「启用 ClearType」，每一页点看着最清楚的
+    // 那段字，最后点「完成」（微软问答里调谐器的用法）。字发虚、字的边上带彩边时用
+    ("cleartype", Program { exe: "cttune.exe", args: &[], console: &[] }),
     // 重置 Microsoft Store 的缓存（微软《Microsoft Store 应用疑难解答》里的 wsreset）：先出现一个空白的命令行窗口，
     // 十几秒后自己关掉、商店自动打开；不删已经装的应用
     ("store-reset", Program { exe: "WSReset.exe", args: &[], console: &[] }),

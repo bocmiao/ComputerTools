@@ -239,8 +239,8 @@ fn round_trip_lock() -> MutexGuard<'static, ()> {
     ROUND_TRIP.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// 开关窗口、重启资源管理器的测试，和要看「鼠标下面是哪个窗口」的测试不能同时跑：打开系统工具的测试打开的控制面板
-/// 窗口在 explorer.exe 里，按 control.exe 关不掉，会盖住记事本（CI 139 就是这样失败的）。
+/// 开关窗口、重启资源管理器的测试，和要看「鼠标下面是哪个窗口」的测试不能同时跑：打开系统工具的测试刚打开的窗口
+/// 会盖住记事本（CI 139 就是这样失败的）。
 /// 要和 update_lock 一起拿的，先拿 update_lock，再拿这个。
 static DESKTOP: Mutex<()> = Mutex::new(());
 
@@ -508,9 +508,9 @@ fn folder_windows() -> Vec<isize> {
     top_windows().into_iter().filter(|&w| visible(w) && window_class(w) == "CabinetWClass").collect()
 }
 
-/// 关掉测试打开的资源管理器窗口：控制面板的「高级共享设置」「网络连接」「防火墙」这些页面显示在 explorer.exe 里，
-/// control.exe 交代完就退出了，按它关不掉，会一直留在屏幕上（CI 139、145 里盖住了看「鼠标指着的窗口」的测试的记事本）。
-/// 只关打开之前还没有的，和点右上角的叉一样；等它们真的关掉，最多 5 秒。返回关了几个。
+/// 关掉测试打开的资源管理器窗口：有的系统工具是控制面板里的一页，显示在 explorer.exe 里，打开它的程序交代完就退出了，
+/// 按程序关不掉，会一直留在屏幕上（CI 145 里是「可靠性监视器」，perfmon.exe /rel 打开的，盖住了看「鼠标指着的窗口」的
+/// 测试的记事本）。只关打开之前还没有的，和点右上角的叉一样；等它们真的关掉，最多 5 秒。返回关了几个。
 fn close_new_folder_windows(before: &[isize]) -> usize {
     use windows_sys::Win32::UI::WindowsAndMessaging::{IsWindow, PostMessageW, WM_CLOSE};
     let new: Vec<isize> = folder_windows().into_iter().filter(|w| !before.contains(w)).collect();
@@ -1304,6 +1304,30 @@ fn real_program_headers_are_read() {
     let cut = &notepad[..4096.min(notepad.len() / 2)];
     let f = exe_info::parse(cut, cut.len() as u64);
     assert_eq!(exe_info::verdict(&f, native, build), "truncated", "{f:?}");
+}
+
+/// 正在用的显示器：用「连接和配置显示器」接口真的读一次（只读），打印每个显示器的型号名、现在的分辨率、推荐的分辨率，
+/// 核对内置检测「屏幕分辨率」在这台机器上给的结论（CI 机器是虚拟机，显示器是虚拟的）。
+#[test]
+fn displays_are_read_with_their_recommended_resolution() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    let displays = platform.displays().unwrap_or_else(|e| panic!("读显示器失败：{e}"));
+    eprintln!("远程桌面：{}，{} 个显示器", displays.remote, displays.list.len());
+    for d in &displays.list {
+        eprintln!(
+            "  {:?} 自带的屏幕：{} 现在 {}×{} 推荐 {:?} 复制：{}",
+            d.name, d.internal, d.width, d.height, d.preferred, d.cloned
+        );
+        assert!(d.width > 0 && d.height > 0, "{d:?}");
+    }
+    if displays.list.is_empty() {
+        println!("::notice title=displays::这台 CI 机器上没有正在用的显示器");
+    }
+    let r = engine.run_check("display.resolution").unwrap();
+    eprintln!("检测：{:?} {:?} {}", r.status, r.result_code, r.message);
+    assert!(r.error.is_none(), "{r:?}");
+    assert!(unresolved(&r.message).is_empty(), "{}", r.message);
 }
 
 /// Winsock 目录：真的读一次（只读）。64 位的目录里要有 Windows 自己的 TCP/IP（mswsock.dll，文件在），64 位 Windows 上

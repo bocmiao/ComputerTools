@@ -2,8 +2,12 @@
 
 use std::path::Path;
 
+use medkit_core::builtin;
 use medkit_core::bundle::Bundle;
 use medkit_core::catalog::Severity;
+use medkit_core::platform::mock::MockPlatform;
+use medkit_core::platform::{Display, Displays, Platform};
+use medkit_core::render::{render, unresolved};
 
 #[test]
 fn repository_catalog_is_valid() {
@@ -133,6 +137,8 @@ fn common_error_messages_find_their_symptom() {
         ("照片打不开，点开以后一直转圈", "builtin-app-broken"),
         ("截图工具打不开，按 Win+Shift+S 没反应", "builtin-app-broken"),
         ("看视频全屏的时候下面的任务栏还在，挡住字幕", "fullscreen-taskbar"),
+        ("电脑上的字体模糊不清，看久了眼睛累", "blurry-text"),
+        ("有个软件界面模糊，字有重影", "blurry-text"),
     ];
     let wrong: Vec<String> = cases
         .iter()
@@ -142,4 +148,56 @@ fn common_error_messages_find_their_symptom() {
         })
         .collect();
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// 内置检测「屏幕分辨率」的每一种结果都有数据里写好的话，话里的 {占位符} 都能用它给的事实填上。
+#[test]
+fn every_display_resolution_result_has_its_words_filled_in() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let (bundle, _) = Bundle::from_repo(&root);
+    let bundle = bundle.expect("数据要能打包");
+    let check = bundle.catalog.checks.iter().find(|c| c.id == "display.resolution").expect("有这个检测");
+    let screen = |name: Option<&str>, internal, now: (u32, u32), preferred, cloned| Display {
+        name: name.map(str::to_owned),
+        internal,
+        width: now.0,
+        height: now.1,
+        preferred,
+        cloned,
+    };
+    let cases = [
+        ("ok", vec![screen(None, true, (1920, 1080), Some((1920, 1080)), false)], false),
+        ("not-recommended", vec![screen(Some("DELL U2415"), false, (1280, 720), Some((1920, 1200)), false)], false),
+        (
+            "cloned",
+            vec![
+                screen(None, true, (1920, 1080), Some((1920, 1080)), true),
+                screen(None, false, (1920, 1080), Some((3840, 2160)), true),
+            ],
+            false,
+        ),
+        ("remote", vec![screen(None, false, (1280, 720), Some((1920, 1080)), false)], true),
+        ("no-display", Vec::new(), false),
+        ("unknown", vec![screen(None, false, (1024, 768), None, false)], false),
+    ];
+    let mut seen = Vec::new();
+    for (want, list, remote) in cases {
+        let platform = MockPlatform::new();
+        platform.set_displays(Displays { remote, list });
+        let os = platform.os_info();
+        let env = builtin::Env { os: &os, now: time::OffsetDateTime::now_utc(), platform: &platform };
+        let v = builtin::run("display-resolution", &env).expect("模拟的平台读得到显示器");
+        assert_eq!(v["result"], want, "{v}");
+        let facts = v["facts"].as_object().expect("事实是一个对象");
+        let spec = check.results.get(want).unwrap_or_else(|| panic!("数据里没有结果 {want}"));
+        for text in std::iter::once(&spec.message).chain(spec.next.as_ref()) {
+            let filled = render(text.get("zh-CN"), facts);
+            assert!(unresolved(&filled).is_empty(), "{want}：有没填上的占位符：{filled}");
+        }
+        seen.push(want);
+    }
+    let mut defined: Vec<&str> = check.results.keys().map(String::as_str).collect();
+    defined.sort_unstable();
+    seen.sort_unstable();
+    assert_eq!(defined, seen, "数据里的结果和这里试过的对不上");
 }

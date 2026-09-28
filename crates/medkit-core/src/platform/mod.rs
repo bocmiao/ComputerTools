@@ -9,6 +9,8 @@ use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue};
 
 #[cfg(windows)]
+mod displays;
+#[cfg(windows)]
 pub mod explorer_exec;
 pub mod mock;
 #[cfg(windows)]
@@ -46,6 +48,31 @@ pub struct KeyboardAids {
     pub sticky_keys: bool,
     /// 鼠标键：小键盘用来移动鼠标指针，按了不出数字（左 Alt + 左 Shift + Num Lock 会打开）
     pub mouse_keys: bool,
+}
+
+/// 正在用的一个显示器（「设置 → 屏幕」里列出来的一个）。怎么看结论见 [`crate::builtin`] 里的 display-resolution。
+/// 只有型号名和分辨率，没有序列号。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Display {
+    /// 显示器自己报的型号名（EDID 里写的，比如「DELL U2414H」）；笔记本的屏幕、虚拟机里常常没有
+    pub name: Option<String>,
+    /// 笔记本、一体机、平板自带的屏幕（接在内部接口上）
+    pub internal: bool,
+    /// 现在的分辨率：桌面的宽和高。竖着放（转了 90 度、270 度）的已经换回横着的方向，好和推荐的比
+    pub width: u32,
+    pub height: u32,
+    /// 显示器推荐的分辨率（「设置」里标着「推荐」的那一项，一般就是屏幕本身的像素）；读不到时是 `None`
+    pub preferred: Option<(u32, u32)>,
+    /// 和别的显示器显示同一个画面（Win + P 选了「复制」）：分辨率只能选几个屏幕都支持的
+    pub cloned: bool,
+}
+
+/// 正在用的显示器。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Displays {
+    /// 现在是远程桌面连着这台电脑：分辨率由连过来的那台电脑决定
+    pub remote: bool,
+    pub list: Vec<Display>,
 }
 
 /// 在用文件的是什么样的程序（重启管理器报的类型），决定界面上怎么说。
@@ -262,6 +289,11 @@ pub trait Platform: Send + Sync {
     /// Winsock 目录：64 位程序用的一份，64 位 Windows 上再加 32 位程序用的一份。只读。
     fn winsock_catalog(&self) -> PResult<Vec<WinsockEntry>> {
         Err(PlatformError::Unsupported("读 Winsock 目录".into()))
+    }
+
+    /// 正在用的显示器，现在的分辨率和推荐的分辨率。只读。
+    fn displays(&self) -> PResult<Displays> {
+        Err(PlatformError::Unsupported("读显示器的分辨率".into()))
     }
 }
 

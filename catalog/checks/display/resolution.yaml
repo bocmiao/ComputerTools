@@ -1,0 +1,58 @@
+# 分辨率是不是显示器推荐的那一项。内置检测（Rust 实现，见 crates/medkit-core/src/builtin.rs 的 display_resolution 和
+# crates/medkit-core/src/platform/displays.rs），没有脚本。用微软的「连接和配置显示器」接口：QueryDisplayConfig 读每个
+# 显示器现在的桌面大小和显示方向，DisplayConfigGetDeviceInfo（DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_PREFERRED_MODE）读显示器
+# 推荐的分辨率（「设置 → 屏幕 → 显示分辨率」里标着「推荐」的那一项）。做法照 MartinGC94/DisplayConfig（MIT）。
+# 微软《更改 Windows 中的屏幕分辨率和布局》：分辨率最好用标着「推荐」的那一项，比屏幕本身低的分辨率字不清楚，画面可能
+# 变小、有黑边或者被拉伸；字太小要改「缩放」。常见的是嫌字小把分辨率调低了，或者显卡驱动没装好、分辨率只有几档。
+# 比推荐的低（宽或者高小一些，宽高比不一样的也算）才报；比推荐的高（显卡的「超级分辨率」）不算。几个屏幕显示同一个画面
+# （Win + P 选了「复制」）时分辨率只能选大家都支持的，单独报 cloned。只检测、不改：改分辨率由用户在「设置」里点，
+# Windows 会问要不要保留，不点会自动改回去。
+# 结果：ok / not-recommended、cloned（advice）/ remote、no-display、unknown（na）。
+# 事实：count、summary、displays；有显示器不是推荐的分辨率时还有 name、current、recommended。只有型号名和分辨率。
+id: display.resolution
+schema_version: 1
+title: { zh-CN: 屏幕分辨率 }
+description:
+  zh-CN: 看看每个显示器用的是不是它推荐的分辨率。不是推荐的分辨率时画面要拉伸，字和图标会发虚。
+category: display
+requires_admin: false
+probe:
+  builtin: display-resolution
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 显示器用的都是推荐的分辨率（{summary}），字不会因为分辨率发虚。
+  not-recommended:
+    status: advice
+    message:
+      zh-CN: "{name}现在的分辨率是 {current}，它推荐的是 {recommended}。比推荐的低时画面要拉伸，字和图标会发虚、变形，也可能缩在中间、四周有黑边。"
+    fixer: user
+    next:
+      zh-CN: 点下面的「屏幕」按钮，在「显示分辨率」里选后面写着「推荐」的那一项（{recommended}）。屏幕会黑一下，然后问要不要保留，点「保留更改」；不点的话过一会儿会自动改回原来的。嫌字小才调低分辨率的，改回推荐的以后，在同一页的「缩放」里选大一档（比如 125%、150%），字就变大了，也不发虚。列表里没有 {recommended}、最高只有很低的几档的，多半是显卡驱动没装好，先装好显卡驱动。
+    links: ["tool:settings.display", "tool:settings.optional-updates", "tool:web.oem-drivers"]
+  cloned:
+    status: advice
+    message:
+      zh-CN: "{name}和别的屏幕显示同一个画面（复制），分辨率只能用几个屏幕都支持的 {current}，不是它推荐的 {recommended}，所以字会发虚。"
+    fixer: user
+    next:
+      zh-CN: 按 Win + P（Win 是画着 Windows 标志的键），选「扩展」，每个屏幕就能各用各的推荐分辨率；只想用一个屏幕的，选「仅电脑屏幕」或者「仅第二屏幕」。投影讲课这类一定要两个屏幕显示一样的画面时，字有点虚是正常的。
+    links: ["tool:settings.display"]
+  remote:
+    status: na
+    message:
+      zh-CN: 现在是远程桌面连着这台电脑，分辨率由连过来的那台电脑决定，这里不看。
+  no-display:
+    status: na
+    message:
+      zh-CN: 没找到正在用的显示器。
+  unknown:
+    status: na
+    message:
+      zh-CN: 读不到显示器推荐的分辨率（虚拟机、无线投屏、有的转接头常常这样），这里不下结论。现在的分辨率是 {summary}。
+references:
+  - https://support.microsoft.com/en-us/windows/hardware/display-graphics/change-your-screen-resolution-and-layout-in-windows
+  - https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-querydisplayconfig
+  - https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-displayconfig_target_preferred_mode
+  - https://github.com/MartinGC94/DisplayConfig

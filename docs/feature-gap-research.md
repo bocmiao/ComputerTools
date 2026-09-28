@@ -167,7 +167,7 @@
 | IP / DNS / Winsock 重置 | 14 万 | ◐ → P1 |
 | 网络图标丢失修复 | 13 万 | ✗ → P1 |
 | 软件卸载 | 11 万 | ◐（能打开「已安装的应用」） |
-| DPI 修复 | 10 万 | ✗ → P2 |
+| DPI 修复 | 10 万 | ◐（查分辨率是不是推荐的，给个别软件发虚的步骤；不改注册表） |
 | **一键创建还原点** | 6.6 万 | ◐（修复前自动建）→ P1 小工具 |
 | **网络图标叹号修复** | 6.5 万 | ◐ → P0 |
 | **恢复默认文件夹路径** | 6.4 万 | ✗ → P1 |
@@ -799,7 +799,7 @@ d3dx9_43.dll 丢失（✅ 指引 DirectX 运行库，数据待补全，见 7.5�
 - 被禁用的系统开关：检测「被停用的系统工具」「程序被「劫持」（映像劫持）」和新症状「任务管理器、注册表打不开」，都只检测（策略、IFEO 在禁改名单里）。
 - 半夜被自动维护叫醒、VT 没开、恢复默认文件夹路径、一键创建还原点（加了打开「系统保护」页的小工具）。
 - .NET 3.5 装不上：小工具「安装 .NET Framework 3.5」（Dism.exe，错误代码按微软文档分类，「关更新」留下的更新服务器只检测、说明）；DirectPlay 做成同一段脚本的小工具；检测「老软件、老游戏要用的 Windows 组件」放进「缺少 dll」。
-- 屏幕显示不对：新症状「屏幕模糊、分辨率不对、外接显示器没画面」，显卡驱动用已有的「设备和驱动」查（它本来就认得基本显示适配器）；分辨率是不是「推荐」值还没做（要读显示器的首选分辨率，考虑做成引擎内置检测）。
+- 屏幕显示不对：新症状「屏幕模糊、分辨率不对、外接显示器没画面」，显卡驱动用已有的「设备和驱动」查（它本来就认得基本显示适配器）；分辨率是不是「推荐」值后来做成了引擎内置检测「屏幕分辨率」（见下面「字发虚」一条）。
 - 键盘错误代码 19：做成检测「键盘、鼠标、光驱这些设备的驱动登记」+ 修复「删掉失效的设备过滤驱动」，范围扩到鼠标、光驱、USB、摄像头；只删服务不在或者驱动文件不在的名字，键盘、鼠标缺的类驱动加回去，能撤销，执行前建还原点。
 - WinHTTP 代理残留：检测「Windows 更新用的系统代理（WinHTTP）」+ 修复「关掉失效的 WinHTTP 代理」。和浏览器代理的修复一样只清标志位（按位撤销），只处理指向本机、没有程序在听的；别的机器上的代理只说明、不改（原计划的 `netsh winhttp reset proxy` 会清掉地址，撤销要整段写回，不如按位改）。放进「系统更新失败」。
 - 远程求助：做成 action 小工具（引擎不用加「打开应用」的新类型）：登录用户装了快速助手就用 ms-quick-assist: 打开，没装的打开商店页面；醒目的反诈提示放在确认框里，结果里写清楚输代码、「允许」、随时断开。
@@ -837,6 +837,7 @@ d3dx9_43.dll 丢失（✅ 指引 DirectX 运行库，数据待补全，见 7.5�
 - 资源管理器左边的 U 盘显示两次：照「先找能复用的」查了 Win11Debloat（Raphire，MIT）和 winutil（ChrisTitusTech，MIT），Win11Debloat 有 `Hide_duplicate_removable_drives_from_navigation_pane_of_File_Explorer.reg`：删掉 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\DelegateFolders\{F5FB2C77-0E2F-4A16-A381-3E560C68BC83}`，撤销文件把这个键建回去、默认值 `Removable Drives`（它的 .reg 是 UTF-16 编码，直接 grep 搜不到）。键在就会登记这个委托文件夹，只删默认值没用，而引擎的注册表原语只删值，所以做成脚本类修复「资源管理器左边的 U 盘只显示一次」；比 Win11Debloat 多处理了 32 位视图（WOW6432Node，32 位程序的「打开」「另存为」对话框用它），键里除了默认值还有别的东西时不动，撤销按原样建回。对照它的清单，打开「此电脑」、显示扩展名、隐藏文件、任务栏不合并和靠左、关快速启动、关鼠标加速、盘符在前这些我们都已经有了。
 - 全屏游戏时任务栏不隐藏（P2）：原因和办法照微软问答里的几个帖子和国内的排障文章：有程序在任务栏上闪烁提醒时任务栏一直显示、资源管理器卡住、任务栏上挂着温控软件的温度和网速插件、网页视频双击只是放大，最后才是「自动隐藏任务栏」。Windows 11 22H2 起「任务栏行为」里有「在任务栏应用上显示闪烁」：照「先找能复用的」在 Sophia Script、Win11Debloat、winutil 里都没找到，用的是 ElevenForum 教程作者 Shawn Brink 的注册表文件（slpcat/NT6xTweaking 收的那份，MIT）：`HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced` 的 `TaskbarFlashing`（0 关，1 或者没有是开）；它还改了 `HKU\.DEFAULT`（新用户的默认值），我们只改登录用户自己的。做成检测「任务栏闪烁提醒」（Win11 22H2 以前是「没有这个开关」，不进体检）和常用设置「任务栏上的程序不闪烁提醒」（注册表原语，能撤销），挂在新症状「全屏看视频、玩游戏时任务栏不隐藏」上，另给「重启资源管理器」「任务栏设置」按钮。
 - 默认应用被改的提示（P2，先做浏览器）：默认应用只能由用户在「设置」里改（UserChoice 有哈希，还有 UCPD 驱动保护），SetUserFTA、SetDefaultBrowser（Christoph Kolbicz）这类改默认应用的工具不用，只读。照 Kolbicz 的博客《UserChoiceLatest – Microsoft's new protection for file type associations》：新版 Windows 11 把选择写到 `UserChoiceLatest\ProgId`（子键 ProgId 里的值 ProgId，哈希是 UserChoiceLatest 的值），一个开源项目的修复说明也写着 25H2（26200）的「设置」不再同步旧的 `UserChoice`，所以检测「默认浏览器」先读 UserChoiceLatest 再读 UserChoice（https 再 http）。名字从 ProgId 的 `Application\ApplicationName`、`shell\open\command` 里程序的产品名或文件名来，只报名字和文件名，不报路径；程序已经不在了（多半是卸载了，点链接会打不开）报 advice。接到症状「浏览器主页被改了」，给「默认应用」按钮。
+- 字发虚、软件界面模糊（P2「DPI 修复」）：先找能复用的，读显示器推荐分辨率照 MartinGC94/DisplayConfig（MIT，PowerShell 模块，包装微软的「连接和配置显示器」接口）的 GetPreferredMode：`QueryDisplayConfig` 读每个显示器现在的桌面大小，`DisplayConfigGetDeviceInfo`（`GET_TARGET_PREFERRED_MODE`）读推荐的分辨率。做成引擎内置检测「屏幕分辨率」（进体检）：比推荐的低就提醒，嫌字小调低分辨率的教你改用「缩放」（微软《更改 Windows 中的屏幕分辨率和布局》的原话：比屏幕本身低的分辨率字不清楚）；「复制」模式单独说。新症状「字发虚、软件界面模糊」：个别老软件糊的照 Windows 开发者博客（2017，GDI 缩放）设「替代高 DPI 缩放行为 → 系统（增强）」，接扩展坞、改显示设置以后变糊的照 Windows Insider 博客 Build 17063 注销再登录、打开「让 Windows 尝试修复应用，使其不模糊」，字边上带彩边的打开 ClearType 文本调谐器（新小工具 open.cleartype，cttune.exe）。「XPEXPLORER 的 Windows 10 DPI Fix」这类改回 Windows 8.1 缩放方式的工具（闭源，改 LogPixels）不借鉴；「修复应用中的缩放」的注册表值（EnablePerProcessSystemDPI）没有官方说明，不做一键开关。PowerToys 的「Windows 设置」对照表里没有 ClearType，cttune.exe 在 Windows 测试里核对。
 - Winsock 检查和重置：检测「网络组件（Winsock）有没有被改坏」做成引擎内置检测（脚本里不能 Add-Type，读不了 Winsock 目录），用微软公开的 WSCEnumProtocols、WSCGetProviderPath 读 64 位和 32 位程序用的两份目录，查第三方 LSP（协议链长度不是 1）、文件已经不在的组件、有没有 TCP/IP；修复「重置 Winsock」就是 `netsh winsock reset`（微软说它不动名称空间提供程序，所以检测也只看协议目录），撤销不了、要重启，执行前建还原点。放进「上不了网」的第一步（查出问题也不停：LSP 坏了时后面几步会被连累）和体检。原计划先看 `netsh winsock show catalog`：它的输出按系统语言翻译过，不好解析，改用 API。TCP/IP 重置（`netsh int ip reset`）还没做。
 - 回收站已损坏：做成新症状「提示『回收站已损坏』」+ 页面上的「清空并重建回收站」卡片（不是小工具：要选盘，小工具不带参数）。办法照微软《The Recycle Bin is corrupted》：删掉那个盘的 `$Recycle.Bin`，重启以后 Windows 重新建。先列出各个盘的回收站里有多少个文件、多大，确认框里写清楚这台电脑上所有账户的都会永久删除；只删这一个文件夹，链接只删链接本身。关键词是提示框的原话（中文、英文都有）；手动步骤先让用户点提示框里的「是」，一再提示才用卡片；一再损坏的多半是盘有问题，检查步骤查硬盘读写错误（含文件系统损坏）和硬盘健康。
 

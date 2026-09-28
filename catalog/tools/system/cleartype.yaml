@@ -1,0 +1,15 @@
+# 打开「ClearType 文本调谐器」（open：System32 下的 cttune.exe，控制面板里「调整 ClearType 文本」打开的就是它；
+# Windows 测试里核对它在不在、能不能打开）。ClearType 是 Windows 让屏幕上的字边缘更平滑、更清楚的技术（微软 Learn
+# 《ClearType Antialiasing》），被「优化」软件关掉或者没调好时，字看起来发虚、边上带彩色毛边。用法照微软问答里的回答：
+# 勾上「启用 ClearType」，每一页点看着最清楚的那段字，最后点「完成」。症状「字发虚、软件界面模糊」里用。
+id: open.cleartype
+schema_version: 1
+group: open
+title: { zh-CN: ClearType 文本调谐器 }
+description:
+  zh-CN: 打开 Windows 的「ClearType 文本调谐器」：勾上「启用 ClearType」，一页一页点看着最清楚的那段字，最后点「完成」。字发虚、字的边上有彩色毛边时用它调一调。
+category: system
+open: { program: cleartype }
+references:
+  - https://learn.microsoft.com/en-us/answers/questions/2430673/text-not-clear
+  - https://learn.microsoft.com/en-us/windows/win32/gdi/cleartype-antialiasing

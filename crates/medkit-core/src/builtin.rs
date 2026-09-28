@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 use time::{Date, OffsetDateTime};
 
-use crate::platform::{KeyboardAids, OsInfo, Platform};
+use crate::platform::{Display, Displays, KeyboardAids, OsInfo, Platform};
 
 /// 内置检测能用到的信息。
 pub struct Env<'a> {
@@ -20,6 +20,7 @@ pub fn run(name: &str, env: &Env<'_>) -> Result<Value, String> {
         "clock" => Ok(clock(env.now.date(), build_date())),
         "keyboard-aids" => env.platform.keyboard_aids().map(keyboard_aids).map_err(|e| e.to_string()),
         "winsock" => env.platform.winsock_catalog().map(|c| crate::winsock::verdict(&c)).map_err(|e| e.to_string()),
+        "display-resolution" => env.platform.displays().map(|d| display_resolution(&d)).map_err(|e| e.to_string()),
         _ => Err(format!("不认识的内置检测：{name}")),
     }
 }
@@ -40,6 +41,63 @@ fn keyboard_aids(aids: KeyboardAids) -> Value {
         "result": result,
         "facts": { "filter_keys": aids.filter_keys, "sticky_keys": aids.sticky_keys, "mouse_keys": aids.mouse_keys }
     })
+}
+
+/// 分辨率是不是显示器推荐的那一项。比推荐的低（宽或者高小一些，宽高比不一样的也算）时画面要拉伸，字和图标会发虚、
+/// 变形，常见的是嫌字小把分辨率调低了、显卡驱动没装好；比推荐的高（显卡的「超级分辨率」）不算。几个屏幕显示同一个
+/// 画面（复制）时分辨率只能选大家都支持的，另报一种结果；几个显示器都低于推荐的时，先报不在「复制」里的那个（改得了）。
+/// 远程桌面里、读不到推荐的分辨率时不下结论。
+/// 事实：count（显示器个数）、summary（每个显示器现在的分辨率）、displays（每个显示器一行）；
+/// 有显示器不是推荐的分辨率时，还有第一个这样的显示器的 name、current、recommended。
+fn display_resolution(d: &Displays) -> Value {
+    let count = d.list.len();
+    let low = d.list.iter().enumerate().filter(|(_, x)| below_preferred(x)).min_by_key(|(_, x)| x.cloned);
+    let result = if d.remote {
+        "remote"
+    } else if count == 0 {
+        "no-display"
+    } else if let Some((_, x)) = low {
+        if x.cloned { "cloned" } else { "not-recommended" }
+    } else if d.list.iter().any(|x| x.preferred.is_some()) {
+        "ok"
+    } else {
+        "unknown"
+    };
+    let size = |(w, h): (u32, u32)| format!("{w}×{h}");
+    let rows: Vec<String> = d
+        .list
+        .iter()
+        .enumerate()
+        .map(|(i, x)| {
+            let recommended =
+                x.preferred.map_or_else(|| "读不到推荐的分辨率".to_owned(), |p| format!("推荐 {}", size(p)));
+            let cloned = if x.cloned { "，和别的屏幕显示同一个画面" } else { "" };
+            format!("{}：{}（{recommended}{cloned}）", display_name(i, x, count), size((x.width, x.height)))
+        })
+        .collect();
+    let summary: Vec<String> = d.list.iter().map(|x| size((x.width, x.height))).collect();
+    let mut facts = json!({ "count": count, "summary": summary.join("、"), "displays": rows });
+    if let Some((i, x)) = low {
+        facts["name"] = json!(display_name(i, x, count));
+        facts["current"] = json!(size((x.width, x.height)));
+        facts["recommended"] = json!(x.preferred.map(size));
+    }
+    json!({ "result": result, "facts": facts })
+}
+
+/// 比推荐的分辨率低：宽或者高比推荐的小。
+fn below_preferred(d: &Display) -> bool {
+    d.preferred.is_some_and(|(w, h)| d.width < w || d.height < h)
+}
+
+/// 说给用户听的显示器名字：有型号名的用型号名，笔记本自带的屏幕说「电脑自带的屏幕」，都没有时按顺序叫。
+fn display_name(index: usize, d: &Display, count: usize) -> String {
+    match &d.name {
+        Some(name) => format!("显示器「{name}」"),
+        None if d.internal => "电脑自带的屏幕".to_owned(),
+        None if count > 1 => format!("第 {} 个显示器", index + 1),
+        None => "显示器".to_owned(),
+    }
 }
 
 /// 已经装了 Windows 11（版本号 22000 起；服务器版不算）。
@@ -161,6 +219,87 @@ mod tests {
         let v = keyboard_aids(aids(false, false, true));
         assert_eq!(v["result"], "mouse-keys");
         assert_eq!(v["facts"], json!({ "filter_keys": false, "sticky_keys": false, "mouse_keys": true }));
+    }
+
+    fn display(name: Option<&str>, internal: bool, now: (u32, u32), preferred: Option<(u32, u32)>) -> Display {
+        Display { name: name.map(str::to_owned), internal, width: now.0, height: now.1, preferred, cloned: false }
+    }
+
+    fn displays(list: Vec<Display>) -> Displays {
+        Displays { remote: false, list }
+    }
+
+    #[test]
+    fn a_resolution_below_the_recommended_one_is_reported() {
+        // 嫌字小把笔记本屏幕调到了 1366×768
+        let v = display_resolution(&displays(vec![display(None, true, (1366, 768), Some((1920, 1080)))]));
+        assert_eq!(v["result"], "not-recommended");
+        assert_eq!(v["facts"]["name"], "电脑自带的屏幕");
+        assert_eq!(v["facts"]["current"], "1366×768");
+        assert_eq!(v["facts"]["recommended"], "1920×1080");
+        assert_eq!(v["facts"]["count"], 1);
+        assert_eq!(v["facts"]["displays"], json!(["电脑自带的屏幕：1366×768（推荐 1920×1080）"]));
+        // 宽高比不一样（16:10 的屏幕用了 16:9 的分辨率）也算
+        let v =
+            display_resolution(&displays(vec![display(Some("DELL U2415"), false, (1920, 1080), Some((1920, 1200)))]));
+        assert_eq!(v["result"], "not-recommended");
+        assert_eq!(v["facts"]["name"], "显示器「DELL U2415」");
+    }
+
+    #[test]
+    fn the_recommended_or_a_higher_resolution_is_fine() {
+        let v = display_resolution(&displays(vec![
+            display(None, true, (1920, 1080), Some((1920, 1080))),
+            // 显卡的「超级分辨率」：比推荐的还高，不算问题
+            display(Some("LG ULTRAGEAR"), false, (3840, 2160), Some((2560, 1440))),
+        ]));
+        assert_eq!(v["result"], "ok");
+        assert_eq!(v["facts"]["summary"], "1920×1080、3840×2160");
+        assert_eq!(v["facts"].get("name"), None);
+        // 推荐的读不到的显示器不算，只要有一个读得到
+        let v = display_resolution(&displays(vec![
+            display(None, false, (1024, 768), None),
+            display(None, false, (1920, 1080), Some((1920, 1080))),
+        ]));
+        assert_eq!(v["result"], "ok");
+        assert_eq!(
+            v["facts"]["displays"],
+            json!(["第 1 个显示器：1024×768（读不到推荐的分辨率）", "第 2 个显示器：1920×1080（推荐 1920×1080）"])
+        );
+    }
+
+    #[test]
+    fn cloned_screens_remote_sessions_and_unknown_screens_are_told_apart() {
+        // 笔记本接投影仪选了「复制」：投影仪推荐的分辨率更高，但只能用两个都支持的
+        let mut laptop = display(None, true, (1920, 1080), Some((1920, 1080)));
+        let mut projector = display(None, false, (1920, 1080), Some((3840, 2160)));
+        laptop.cloned = true;
+        projector.cloned = true;
+        let v = display_resolution(&displays(vec![laptop, projector]));
+        assert_eq!(v["result"], "cloned");
+        assert_eq!(v["facts"]["name"], "第 2 个显示器");
+        assert_eq!(v["facts"]["displays"][1], "第 2 个显示器：1920×1080（推荐 3840×2160，和别的屏幕显示同一个画面）");
+
+        // 复制着的两个屏幕之外还有一个扩展出去的屏幕也低于推荐：先报这个能直接改好的
+        let mut a = display(None, true, (1920, 1080), Some((1920, 1080)));
+        let mut b = display(None, false, (1920, 1080), Some((3840, 2160)));
+        a.cloned = true;
+        b.cloned = true;
+        let v = display_resolution(&displays(vec![
+            a,
+            b,
+            display(Some("AOC 24G2"), false, (1280, 720), Some((1920, 1080))),
+        ]));
+        assert_eq!(v["result"], "not-recommended");
+        assert_eq!(v["facts"]["name"], "显示器「AOC 24G2」");
+
+        let mut remote = displays(vec![display(None, false, (1280, 720), Some((1920, 1080)))]);
+        remote.remote = true;
+        assert_eq!(display_resolution(&remote)["result"], "remote");
+        assert_eq!(display_resolution(&displays(Vec::new()))["result"], "no-display");
+        let v = display_resolution(&displays(vec![display(None, false, (1024, 768), None)]));
+        assert_eq!(v["result"], "unknown");
+        assert_eq!(v["facts"]["displays"], json!(["显示器：1024×768（读不到推荐的分辨率）"]));
     }
 
     #[test]

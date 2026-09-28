@@ -34,6 +34,7 @@ checks:
   - security.tpm
   # 硬件
   - hardware.device-problems
+  - display.resolution
   - hardware.class-filters
   - hardware.system-disk-type
   - hardware.memory-size

@@ -1120,6 +1120,30 @@ const CHECKS: Record<string, MockCheck> = {
       facts: { count: 2, desktop: false, display_on: 'integrated' },
     }),
   },
+  'display.resolution': {
+    title: '屏幕分辨率',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          resultCode: 'ok',
+          message: '显示器用的都是推荐的分辨率（1920×1080），字不会因为分辨率发虚。',
+          facts: { count: 1, summary: '1920×1080' },
+        }
+      }
+      // 默认场景里显卡驱动没装好（和「设备和驱动」对得上），分辨率只能用基本显示适配器给的几档
+      return {
+        status: 'advice',
+        resultCode: 'not-recommended',
+        message:
+          '电脑自带的屏幕现在的分辨率是 1024×768，它推荐的是 1920×1080。比推荐的低时画面要拉伸，字和图标会发虚、变形，也可能缩在中间、四周有黑边。',
+        fixer: 'user',
+        next: '点下面的「屏幕」按钮，在「显示分辨率」里选后面写着「推荐」的那一项（1920×1080）。屏幕会黑一下，然后问要不要保留，点「保留更改」；不点的话过一会儿会自动改回原来的。嫌字小才调低分辨率的，改回推荐的以后，在同一页的「缩放」里选大一档（比如 125%、150%），字就变大了，也不发虚。列表里没有 1920×1080、最高只有很低的几档的，多半是显卡驱动没装好，先装好显卡驱动。',
+        links: ['tool:settings.display', 'tool:web.oem-drivers'],
+        facts: { count: 1, summary: '1024×768', name: '电脑自带的屏幕', current: '1024×768', recommended: '1920×1080' },
+      }
+    },
+  },
   'system.jpeg-extension': {
     title: '网页上保存的图片的扩展名',
     evaluate: () => {
@@ -1259,6 +1283,7 @@ const PROFILES: Record<string, { title: string; checks: string[] }> = {
       'boot.secure-boot-cert',
       'system.device-problems',
       'display.gpus',
+      'display.resolution',
       'system.winre',
       'system.managed',
       'security.win10-esu',
@@ -1479,6 +1504,18 @@ const SYMPTOMS: MockSymptom[] = [
     guide: '先看任务栏上有没有在闪、变成橙色的按钮，点一下它再回到全屏的画面；还不行就点「重启资源管理器」，最后才是在「任务栏设置」里勾上「自动隐藏任务栏」。',
     steps: [{ check: 'system.taskbar-flashing', fixes: ['taskbar.no-flashing'] }],
     links: ['tool:system.restart-explorer', 'tool:settings.taskbar'],
+  },
+  {
+    id: 'blurry-text', title: '字发虚、软件界面模糊',
+    summary: '屏幕上的字看着发虚、有重影、边上带彩边；有的软件整个界面都是糊的，别的软件却很清楚；接了外接显示器、改了缩放以后变糊了。',
+    keywords: ['字发虚', '字体模糊', '屏幕模糊', '软件界面模糊', '字有重影'], maturity: 'semi',
+    causes: ['分辨率不是显示器推荐的那一项（常见的是嫌字小把分辨率调低了），画面被拉伸', '显卡驱动没装好，分辨率只有几档，选不到推荐的', '老软件不支持高分辨率屏幕的缩放，Windows 只能把它整个拉大', 'ClearType（让字的边缘平滑的设置）被关掉了，或者没调好'],
+    guide: '先把分辨率改回推荐的那一项，嫌字小就改「缩放」。只有个别软件糊的，右键它 →「属性」→「兼容性」→「更改高 DPI 设置」，勾上「替代高 DPI 缩放行为」选「系统（增强）」。字的边上有彩色毛边的，点「ClearType 文本调谐器」调一调。',
+    steps: [
+      { check: 'display.resolution', fixes: [] },
+      { check: 'system.device-problems', fixes: [] },
+    ],
+    links: ['tool:settings.display', 'tool:open.cleartype', 'tool:web.oem-drivers'],
   },
   {
     id: 'builtin-app-broken', title: '照片、计算器这些自带的应用打不开',
@@ -2320,6 +2357,22 @@ const TOOL_LIST: MockTool[] = [
     'settings',
     'settings',
     'ms-settings:signinoptions',
+  ),
+  openTool(
+    'settings.display',
+    '屏幕（分辨率、缩放、多显示器）',
+    '打开「设置」里的「屏幕」（Windows 10 叫「显示」）：调分辨率、缩放（字和图标的大小）、屏幕方向，接了第二个显示器、投影仪时在这里选「复制」还是「扩展」、点「检测」；刷新率在「高级显示设置」里。',
+    'settings',
+    'settings',
+    'ms-settings:display',
+  ),
+  openTool(
+    'open.cleartype',
+    'ClearType 文本调谐器',
+    '打开 Windows 的「ClearType 文本调谐器」：勾上「启用 ClearType」，一页一页点看着最清楚的那段字，最后点「完成」。字发虚、字的边上有彩色毛边时用它调一调。',
+    'system',
+    'program',
+    'cttune.exe',
   ),
   openTool(
     'settings.lock-screen',
