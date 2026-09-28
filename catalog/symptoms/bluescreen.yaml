@@ -42,6 +42,9 @@ keywords:
   - WHEA_UNCORRECTABLE_ERROR
   - DRIVER_POWER_STATE_FAILURE
   - INACCESSIBLE_BOOT_DEVICE
+  - 蓝屏一闪就重启
+  - 蓝屏看不清
+  - 蓝屏太快看不清代码
 causes:
   - zh-CN: 驱动程序出错（最常见）：新装或者更新了显卡、网卡驱动；安全软件、游戏加速器、反作弊程序也会装驱动
   - zh-CN: 内存条有问题、接触不好，或者超频不稳定
@@ -58,6 +61,7 @@ steps:
   - check: hardware.battery-health
   - check: system.pagefile
     fixes: [system.pagefile-auto]
+  - check: system.crash-restart
 guide:
   zh-CN: |
     先看上面的检查结果，再打开小工具里的「最近的蓝屏」：它列出最近 30 天每一种蓝屏的终止代码（蓝屏时屏幕上那串大写英文，比如 CRITICAL_PROCESS_DIED），说清楚多半是什么原因、该怎么办；电脑自己重启、关机的，也能看出是蓝屏、意外关机，还是 Windows 更新重启的。

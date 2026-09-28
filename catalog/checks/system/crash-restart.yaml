@@ -1,0 +1,25 @@
+# 蓝屏以后会不会马上自己重启。脚本：scripts/checks/system/crash-restart.ps1
+# HKLM\SYSTEM\CurrentControlSet\Control\CrashControl 的 AutoReboot（微软《Memory dump file options》：默认 1，蓝屏以后自动重启，
+# 蓝屏一闪而过、看不清终止代码；改了要重启才生效）。两种都不算问题：小工具「最近的蓝屏」能从日志里读出终止代码。
+# 结果：auto-restart（ok，附提示和修复 system.bluescreen-stay）、stays（ok）。事实：auto_reboot。
+id: system.crash-restart
+schema_version: 1
+title: { zh-CN: 蓝屏以后自动重启 }
+description:
+  zh-CN: 看看蓝屏以后电脑会不会马上自己重启。自动重启时蓝屏一闪而过，来不及看清屏幕上的终止代码。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/crash-restart.ps1
+results:
+  auto-restart:
+    status: ok
+    message: { zh-CN: 蓝屏以后电脑会马上自己重启（Windows 默认这样），蓝屏一闪而过。 }
+    next:
+      zh-CN: 蓝屏的终止代码可以用小工具「最近的蓝屏」从日志里读出来。想在蓝屏时看清屏幕上的代码、拍照发给懂哥，点下面的按钮关掉自动重启，蓝屏以后会一直停在蓝屏画面，按电源键重启。
+    links: ["tool:system.bluescreens", "feature:system.bluescreen-stay"]
+  stays:
+    status: ok
+    message: { zh-CN: 蓝屏以后电脑会停在蓝屏画面，能看清终止代码，按电源键重启。 }
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/memory-dump-file-options

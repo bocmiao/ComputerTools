@@ -1,0 +1,31 @@
+# 不让 Windows 自己换默认打印机：关掉「让 Windows 管理默认打印机」（HKCU\Software\Microsoft\Windows NT\CurrentVersion\Windows
+# 的 LegacyDefaultPrinterMode = 1，和「设置 → 打印机和扫描仪」里关掉这个开关一样）。Windows 默认是开着（0）。马上生效，能撤销。
+# 检测 printer.default-managed 报 managed 时作为提示给这个按钮（个人选择：recommend optional）。
+id: printer.keep-default
+schema_version: 1
+title: { zh-CN: 默认打印机不再自动换 }
+description:
+  zh-CN: 关掉「让 Windows 管理默认打印机」，默认打印机就固定用你选的那台，不会再被换成最近用过的打印机或者「Microsoft Print to PDF」。关掉以后在「打印机和扫描仪」里把常用的那台设成默认。能撤销。
+category: printer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: none
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows NT\CurrentVersion\Windows
+      name: LegacyDefaultPrinterMode
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows NT\CurrentVersion\Windows
+      name: LegacyDefaultPrinterMode
+      type: dword
+      value: 0
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/set-a-default-printer-in-windows-e10cf8b8-e596-b102-bf84-c41022b5036f

@@ -1,0 +1,31 @@
+# 蓝屏以后停在蓝屏画面，不马上重启：CrashControl 的 AutoReboot 改成 0（微软《Memory dump file options》：默认 1，改了要重启才生效）。
+# 方便看清、拍下蓝屏上的终止代码。能撤销。
+# 检测 system.crash-restart 报 auto-restart 时作为提示给这个按钮（它不是问题，是个人选择：recommend optional）。
+id: system.bluescreen-stay
+schema_version: 1
+title: { zh-CN: 蓝屏以后不自动重启 }
+description:
+  zh-CN: 蓝屏以后停在蓝屏画面，不马上自己重启，方便看清、拍下屏幕上的终止代码发给懂哥；蓝屏以后要自己按电源键重启。重启电脑以后生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: true
+reboot: reboot
+target: machine
+actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\CrashControl
+      name: AutoReboot
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\CrashControl
+      name: AutoReboot
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/memory-dump-file-options

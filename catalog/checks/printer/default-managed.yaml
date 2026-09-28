@@ -1,0 +1,28 @@
+# 默认打印机是不是由 Windows 自己选。脚本：scripts/checks/printer/default-managed.ps1（读登录用户的注册表）
+# 「让 Windows 管理默认打印机」开着时（Win10 1511 起默认开），默认打印机是在当前网络上最近用过的那台，打印时可能突然跑到
+# 「Microsoft Print to PDF」或者别的打印机上。对应 HKCU\Software\Microsoft\Windows NT\CurrentVersion\Windows 的
+# LegacyDefaultPrinterMode：1 = 关（默认打印机固定用你选的那台），0 或者没有 = 开。两种都不算问题。
+# 结果：managed（ok，附提示和修复 printer.keep-default）、fixed（ok）。事实：legacy_mode。
+id: printer.default-managed
+schema_version: 1
+title: { zh-CN: 默认打印机由谁来选 }
+description:
+  zh-CN: 看看默认打印机是不是由 Windows 自己选（它会换成最近用过的那台）。默认打印机老被换掉时，把这个关掉就好。
+category: printer
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/printer/default-managed.ps1
+results:
+  managed:
+    status: ok
+    message: { zh-CN: 「让 Windows 管理默认打印机」开着（Windows 默认这样）：默认打印机会换成最近用过的那台。 }
+    next:
+      zh-CN: 默认打印机老被换成「Microsoft Print to PDF」或者别的打印机的，点下面的按钮关掉它，再在「打印机和扫描仪」里把常用的那台设成默认，以后就不会变了。
+    links: ["feature:printer.keep-default", "tool:settings.printers"]
+  fixed:
+    status: ok
+    message: { zh-CN: 默认打印机固定用你选的那台，Windows 不会自己换。 }
+references:
+  - https://support.microsoft.com/en-us/windows/set-a-default-printer-in-windows-e10cf8b8-e596-b102-bf84-c41022b5036f
+  - https://learn.microsoft.com/en-ca/answers/questions/1120236/windows-keeps-changing-default-printers
