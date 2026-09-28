@@ -38,6 +38,9 @@ function Get-Frequency {
     catch {
         return @{ Present = $false; Value = $null }
     }
+    if ($null -eq $item) {
+        return @{ Present = $false; Value = $null }
+    }
     $prop = $item.PSObject.Properties[$frequencyName]
     if ($null -eq $prop) {
         return @{ Present = $false; Value = $null }

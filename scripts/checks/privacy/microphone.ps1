@@ -30,6 +30,9 @@ function Get-ConsentValue {
         return ''
     }
     $item = Get-ItemProperty -LiteralPath $Path
+    if ($null -eq $item) {
+        return ''
+    }
     $property = $item.PSObject.Properties['Value']
     if (($null -eq $property) -or ($null -eq $property.Value)) {
         return ''
@@ -42,7 +45,12 @@ function Get-ConsentState {
     $policy = 0
     $policyKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy'
     if (Test-Path -LiteralPath $policyKey) {
-        $property = (Get-ItemProperty -LiteralPath $policyKey).PSObject.Properties[$PolicyName]
+        # A key without values (a policy set and cleared again) gives nothing.
+        $values = Get-ItemProperty -LiteralPath $policyKey
+        $property = $null
+        if ($null -ne $values) {
+            $property = $values.PSObject.Properties[$PolicyName]
+        }
         if ($null -ne $property) {
             $policy = [int]$property.Value
         }

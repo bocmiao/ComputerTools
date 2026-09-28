@@ -167,6 +167,10 @@ function Get-Value {
     catch {
         return $null
     }
+    # A key without any values (an empty policy key) gives nothing.
+    if ($null -eq $item) {
+        return $null
+    }
     $property = $item.PSObject.Properties[$Name]
     if ($null -eq $property) {
         return $null

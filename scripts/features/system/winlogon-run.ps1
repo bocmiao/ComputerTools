@@ -45,6 +45,11 @@ function Get-WinlogonValue {
     catch {
         return $null
     }
+    # A key without any values (the user's Winlogon key can be empty) gives
+    # nothing.
+    if ($null -eq $item) {
+        return $null
+    }
     $prop = $item.PSObject.Properties[$Name]
     if ($null -eq $prop) {
         return $null

@@ -41,6 +41,9 @@ function Get-FilterList {
     catch {
         return $null
     }
+    if ($null -eq $item) {
+        return $null
+    }
     $property = $item.PSObject.Properties[$Name]
     if ($null -eq $property) {
         return $null
@@ -75,8 +78,8 @@ function Get-DriverFile {
     return $path
 }
 
-# A filter is left behind when its service is gone, or it is a kernel driver
-# (Type 1) whose file is not there.
+# A filter is left behind when its service is gone (no key, or a key without
+# any values), or it is a kernel driver (Type 1) whose file is not there.
 function Test-FilterGone {
     param([string]$Name)
     $key = $serviceRoot + $Name
@@ -84,6 +87,10 @@ function Test-FilterGone {
         return $true
     }
     $service = Get-ItemProperty -LiteralPath $key
+    if ($null -eq $service) {
+        # A service key without any values: what an uninstaller left behind.
+        return $true
+    }
     $type = $service.PSObject.Properties['Type']
     if (($null -eq $type) -or ([int64]$type.Value -ne 1)) {
         return $false

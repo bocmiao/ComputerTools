@@ -84,6 +84,9 @@ function Get-ServiceStart {
         return 'missing'
     }
     $properties = Get-ItemProperty -LiteralPath $key
+    if ($null -eq $properties) {
+        return 'other'
+    }
     $start = $properties.PSObject.Properties['Start']
     if ($null -eq $start) {
         return 'other'
@@ -117,7 +120,13 @@ function Get-Value {
     if (-not (Test-Path -LiteralPath $Path)) {
         return $null
     }
-    $property = (Get-ItemProperty -LiteralPath $Path).PSObject.Properties[$Name]
+    # A key without values (a policy key left empty when its values were
+    # cleared) gives nothing.
+    $values = Get-ItemProperty -LiteralPath $Path
+    if ($null -eq $values) {
+        return $null
+    }
+    $property = $values.PSObject.Properties[$Name]
     if ($null -eq $property) {
         return $null
     }

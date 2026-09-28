@@ -23,6 +23,9 @@ $key = $UserHive.TrimEnd('\') + '\Software\Microsoft\InputMethod\Settings\CHS'
 
 function Get-Number {
     param($Item, [string]$Name)
+    if ($null -eq $Item) {
+        return $null
+    }
     $property = $Item.PSObject.Properties[$Name]
     if ($null -eq $property) {
         return $null
@@ -39,6 +42,7 @@ if (-not (Test-Path -LiteralPath $key)) {
     [pscustomobject]@{ result = 'not-used'; facts = [ordered]@{ shortcut = $true } }
     return
 }
+# A key without any values gives nothing here: everything is the default.
 $item = Get-ItemProperty -LiteralPath $key
 $charset = Get-Number $item 'Output CharSet'
 $switch = Get-Number $item 'EnableSimplifiedTraditionalOutputSwitch'

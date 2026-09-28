@@ -37,6 +37,9 @@ function Get-ServiceStart {
         return 'missing'
     }
     $properties = Get-ItemProperty -LiteralPath $key
+    if ($null -eq $properties) {
+        return 'other'
+    }
     $start = $properties.PSObject.Properties['Start']
     if ($null -eq $start) {
         return 'other'

@@ -11,8 +11,8 @@
 # working. The keyboard and mouse classes also need their class drivers
 # kbdclass and mouclass in UpperFilters (Microsoft: "Device Manager error
 # codes"; "Your CD or DVD drive isn't recognized by Windows").
-# A listed filter is left behind when its service key is gone, or when it is
-# a kernel driver whose file is not there. ImagePath forms: \SystemRoot\...,
+# A listed filter is left behind when its service key is gone (or has no
+# values at all), or when it is a kernel driver whose file is not there. ImagePath forms: \SystemRoot\...,
 # System32\... (under the Windows folder), \??\C:\..., C:\...; without an
 # ImagePath the file is System32\drivers\<name>.sys. Other filters, which
 # work, are not touched and not reported.
@@ -63,6 +63,9 @@ function Get-FilterList {
     catch {
         return $null
     }
+    if ($null -eq $item) {
+        return $null
+    }
     $property = $item.PSObject.Properties[$Name]
     if ($null -eq $property) {
         return $null
@@ -97,8 +100,8 @@ function Get-DriverFile {
     return $path
 }
 
-# A filter is left behind when its service is gone, or it is a kernel driver
-# (Type 1) whose file is not there.
+# A filter is left behind when its service is gone (no key, or a key without
+# any values), or it is a kernel driver (Type 1) whose file is not there.
 function Test-FilterGone {
     param([string]$Name)
     $key = $serviceRoot + $Name
@@ -106,6 +109,10 @@ function Test-FilterGone {
         return $true
     }
     $service = Get-ItemProperty -LiteralPath $key
+    if ($null -eq $service) {
+        # A service key without any values: what an uninstaller left behind.
+        return $true
+    }
     $type = $service.PSObject.Properties['Type']
     if (($null -eq $type) -or ([int64]$type.Value -ne 1)) {
         return $false
