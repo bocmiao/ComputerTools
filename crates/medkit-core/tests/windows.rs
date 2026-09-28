@@ -1581,40 +1581,52 @@ fn ocr_reads_the_text_in_a_picture() {
     }
 }
 
-/// 长图分块认：图片比文字识别能认的高，脚本分成几块、块和块之间重叠一段来认。在第一块和第二块的交界附近放几行字
-/// （只在第一块里的、在重叠的那段里的、跨过分给哪一块的那条线的、被第一块的下边切开的、只在第二块里的），
-/// 每一行都要认出来、而且只出现一次。这台机器认不了字时只提示。
+/// 长图分块认：比一块高的图片，脚本分成几块（每块最多 4000 像素，也不超过文字识别能认的大小）、块和块之间重叠一段来认。
+/// 在第一块和第二块、第二块和第三块的交界附近放几行字（只在第一块里的、在重叠的那段里的、跨过分给哪一块的那条线的、
+/// 被第一块的下边切开的、只在第二块里的），每一行都要认出来、而且只出现一次。这台机器认不了字时只提示。
+/// 没通过时打出脚本的分块记录（每一块认出来的每一行、在哪、算不算这一块的），再用 10000 像素一块认一次对照。
 #[test]
 fn ocr_reads_tall_pictures_in_pieces_without_losing_or_repeating_lines() {
     let Some(max) = ocr_max_dimension().filter(|m| *m >= 2000) else {
         println!("::notice title=ocr::这台 CI 机器上没有 Windows 的文字识别，跳过长图测试");
         return;
     };
-    // 和脚本一样：重叠 min(400, max / 4)，一行字的中间在「第二块的上边 + 重叠的一半」以上的算第一块
-    let overlap = 400.min(max / 4);
+    // 和脚本一样：一块最多 min(max, 4000)，重叠 min(400, 一块 / 4)；一行字的中间在「下一块的上边 + 重叠的一半」以上的算上一块
+    let piece = max.min(4000);
+    let overlap = 400.min(piece / 4);
     let words = [
-        ("ALPHA", max - overlap - 150),
-        ("BRAVO", max - overlap + 20),
-        ("CHARLIE", max - overlap / 2 - 30),
-        ("DELTA", max - 40),
-        ("ECHO", max + 120),
+        ("ALPHA", piece - overlap - 150),
+        ("BRAVO", piece - overlap + 20),
+        ("CHARLIE", piece - overlap / 2 - 30),
+        ("DELTA", piece - 40),
+        ("ECHO", piece + 120),
         // 第二块和第三块之间分给哪一块的那条线
-        ("FOXTROT", 2 * max - overlap - overlap / 2 - 30),
+        ("FOXTROT", 2 * piece - overlap - overlap / 2 - 30),
     ];
     let dir = tempfile::tempdir().unwrap();
     let (engine, _bundle, _platform) = real_engine(dir.path());
     let picture = dir.path().join("ocr-tall.png");
-    draw_text_picture(&picture, 700, 2 * max + 300, &words);
+    draw_text_picture(&picture, 700, 2 * piece + 300, &words);
     let r = engine.ocr_recognize(&picture).unwrap();
-    eprintln!("长图转文字（每边最多 {max} 像素）：{r:?}");
+    eprintln!("长图转文字（每边最多 {max} 像素，一块 {piece} 像素）：{r:?}");
     if r.status != OcrStatus::Ok {
         println!("::notice title=ocr::这台 CI 机器上认不了字：{:?}", r.status);
         return;
     }
     let text = r.text.to_uppercase();
-    for (word, _) in words {
-        assert_eq!(text.matches(word).count(), 1, "{word} 应该正好出现一次：{text}");
+    let wrong: Vec<&str> = words.iter().map(|(w, _)| *w).filter(|w| text.matches(w).count() != 1).collect();
+    if !wrong.is_empty() {
+        let script = repo_root().join("scripts/ocr/recognize.ps1");
+        for height in [piece, 10000] {
+            let trace = powershell(&format!(
+                "& '{}' -Path '{}' -PieceHeight {height} -Trace | ConvertTo-Json -Depth 8 -Compress",
+                script.display(),
+                picture.display()
+            ));
+            eprintln!("一块 {height} 像素时的分块记录：{trace}");
+        }
     }
+    assert!(wrong.is_empty(), "这些字应该正好出现一次：{wrong:?}；认出来的是：{text}");
     assert!(!r.truncated);
 }
 

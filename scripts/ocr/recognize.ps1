@@ -8,11 +8,14 @@
 #   Chinese, then the user's own languages, then whatever is installed.
 #   Recognizers are the Windows capabilities Language.OCR~~~<tag>~0.0.1.0;
 #   AvailableRecognizerLanguages lists the installed ones.
-# The recognizer takes pictures up to MaxImageDimension pixels on a side.
-# Wider pictures are scaled down to that width; taller ones (long
-# screenshots) are read in pieces that overlap by a strip. A line belongs to
-# the piece where its middle lies outside the overlap, so every line is read
-# once and none is cut in half. At most 30 pieces are read (truncated).
+# The recognizer takes pictures up to MaxImageDimension pixels on a side
+# (10000 on Windows Server 2025). Wider pictures are scaled down to that
+# width. Taller ones (long screenshots) are read in pieces of at most 4000
+# pixels that overlap by a strip: in 10000-pixel pieces the recognizer lost
+# the first letters of words and whole words (a test on Windows found it). A
+# line belongs to the piece where its middle lies outside the overlap, so
+# every line is read once and none is cut in half. At most 30 pieces are read
+# (truncated).
 # Output: result = ok / no-language (no recognizer installed) / unsupported
 #   (no Windows OCR here) / bad-image (Windows cannot read the picture);
 #   language (the tag used), languages (every installed tag), lines (top to
@@ -22,7 +25,11 @@
 
 [CmdletBinding()]
 param(
-    [string]$Path = ''
+    [string]$Path = '',
+    # Pieces are at most this tall (and never taller than MaxImageDimension).
+    [int]$PieceHeight = 4000,
+    # Adds trace: every piece and every line it read, kept or not (tests).
+    [switch]$Trace
 )
 
 $ErrorActionPreference = 'Stop'
@@ -154,14 +161,16 @@ try {
     }
     $scaledWidth = [int][Math]::Max(1, [Math]::Floor($width * $scale))
     $scaledHeight = [int][Math]::Max(1, [Math]::Floor($height * $scale))
-    $overlap = [int][Math]::Min(400, [Math]::Floor($max / 4))
+    $pieceMax = [int][Math]::Max(1000, [Math]::Min($max, $PieceHeight))
+    $overlap = [int][Math]::Min(400, [Math]::Floor($pieceMax / 4))
 
     $lines = New-Object System.Collections.Generic.List[object]
+    $traced = New-Object System.Collections.Generic.List[object]
     $top = 0
     $pieces = 0
     $truncated = $false
     while ($true) {
-        $pieceHeight = [int][Math]::Min($max, $scaledHeight - $top)
+        $pieceHeight = [int][Math]::Min($pieceMax, $scaledHeight - $top)
         $last = (($top + $pieceHeight) -ge $scaledHeight)
         $transform = New-Object Windows.Graphics.Imaging.BitmapTransform
         if ($scale -lt 1.0) {
@@ -184,6 +193,16 @@ try {
             [Windows.Graphics.Imaging.ExifOrientationMode]::IgnoreExifOrientation,
             [Windows.Graphics.Imaging.ColorManagementMode]::DoNotColorManage)
         $bitmap = Wait-Operation $operation ([Windows.Graphics.Imaging.SoftwareBitmap])
+        $pieceTrace = $null
+        if ($Trace) {
+            $pieceTrace = [pscustomobject]@{
+                top    = $top
+                width  = [int]$bitmap.PixelWidth
+                height = [int]$bitmap.PixelHeight
+                lines  = New-Object System.Collections.Generic.List[object]
+            }
+            $traced.Add($pieceTrace)
+        }
         try {
             $recognized = Wait-Operation ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
         }
@@ -206,6 +225,7 @@ try {
             $words = New-Object System.Collections.Generic.List[string]
             $lineTop = [double]::MaxValue
             $lineBottom = [double]::MinValue
+            $lineLeft = [double]::MaxValue
             foreach ($word in $line.Words) {
                 $text = [string]$word.Text
                 if ($text.Length -eq 0) {
@@ -215,12 +235,23 @@ try {
                 $rect = $word.BoundingRect
                 $lineTop = [Math]::Min($lineTop, [double]$rect.Y)
                 $lineBottom = [Math]::Max($lineBottom, [double]$rect.Y + [double]$rect.Height)
+                $lineLeft = [Math]::Min($lineLeft, [double]$rect.X)
             }
             if ($words.Count -eq 0) {
                 continue
             }
             $middle = ($lineTop + $lineBottom) / 2
-            if (($middle -lt $keepFrom) -or ($middle -ge $keepTo)) {
+            $keep = (($middle -ge $keepFrom) -and ($middle -lt $keepTo))
+            if ($null -ne $pieceTrace) {
+                $pieceTrace.lines.Add([pscustomobject]@{
+                        text   = ($words.ToArray() -join ' ')
+                        left   = [int]$lineLeft
+                        top    = [int]$lineTop
+                        bottom = [int]$lineBottom
+                        kept   = $keep
+                    })
+            }
+            if (-not $keep) {
                 continue
             }
             $lines.Add([pscustomobject]@{ words = [string[]]$words.ToArray() })
@@ -252,4 +283,5 @@ finally {
     pieces    = $pieces
     truncated = $truncated
     detail    = ''
+    trace     = $traced.ToArray()
 }
