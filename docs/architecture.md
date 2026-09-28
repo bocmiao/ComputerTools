@@ -341,8 +341,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `context_menu_set` | `id`、`visible` | `ApplyResult`（拿掉或恢复；只接受最近一次列表里的 ID，记进修改日志；外壳扩展和应用的项目 `reboot` 为 `explorer`） |
 | `new_menu_list` | — | `NewMenuItem[]`（右键「新建」菜单里的项：扩展名下的 ShellNew 键，机器的和登录用户的；文件夹、快捷方式、库不列；显示不显示由引擎按注册表里现在的值读） |
 | `new_menu_set` | `id`（扩展名）、`visible` | `ApplyResult`（关掉：把 FileName、Command、Data、NullFile、Handler 这几个值改名成 `MedkitHidden.<原名>`，类型和数据不变；恢复：改回来。扩展名下所有 ShellNew 键一起改，每个值写新名字、删旧名字两条修改日志；只接受最近一次列表里的 ID；改完删掉资源管理器的「新建」菜单缓存，不记进日志） |
-| `shell_places_list` | — | `ShellPlaceItem[]`（软件加在资源管理器导航栏最上面一层和「此电脑」里的图标：`Explorer\Desktop\NameSpace`、`Explorer\MyComputer\NameSpace` 下登记的 CLSID，机器的和登录用户的；Windows 自己的基本位置不列；显示不显示由引擎按注册表里现在的值读） |
-| `shell_places_set` | `id`（`nav:{CLSID}` 或 `pc:{CLSID}`）、`visible` | `ApplyResult`（导航栏的：隐藏时在登录用户的那份 CLSID 键里把 `System.IsPinnedToNameSpaceTree` 写成 0，32 位程序看的 WOW6432Node 那一份也一样；「此电脑」的：写 `HideMyComputerIcons`。恢复见下面。只接受最近一次列表里的 ID，记进修改日志，`reboot` 为 `explorer`） |
+| `shell_places_list` | — | `ShellPlaceItem[]`（软件加在资源管理器导航栏最上面一层和「此电脑」里的图标：`Explorer\Desktop\NameSpace`、`Explorer\MyComputer\NameSpace` 下登记的 CLSID，机器的和登录用户的，同一个 CLSID 算一项；Windows 自己的基本位置不列；显示不显示由引擎按注册表里现在的值读） |
+| `shell_places_set` | `id`（CLSID）、`visible` | `ApplyResult`（「此电脑」里有的：隐藏时在登录用户的 `Policies\NonEnum` 里写 `{CLSID}` = 1；只在导航栏里的：在登录用户的那份 CLSID 键里把 `System.IsPinnedToNameSpaceTree` 写成 0，32 位程序看的 WOW6432Node 那一份也一样。恢复见下面。只接受最近一次列表里的 ID，记进修改日志，`reboot` 为 `explorer`） |
 | `rename_select_folder` | — | `string \| null`（系统对话框选定的目录；取消返回 null） |
 | `rename_preview` | `rules` | `RenamePreview`（最多 500 个直属普通文件的原名、新名、名字变不变；不处理的文件数） |
 | `rename_apply` | — | `number`（执行已预览、文件夹没有变化的改名，返回改了几个） |
@@ -392,10 +392,10 @@ checks: [disk.system-free-space, system.pending-reboot]
 
 资源管理器里多出来的图标（`crates/medkit-core/src/shell_places.rs`）：
 
-- **列出**：脚本 `scripts/shell/shell-places-list.ps1`（只读）查 HKLM 和登录用户的 `Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{CLSID}`（导航栏最上面一层，网盘、OneDrive 在这里）和 `…\MyComputer\NameSpace\{CLSID}`（「此电脑」里，WPS 云文档、百度网盘在这里），再看每个 CLSID 键：用户的和机器的那份在不在、`System.IsPinnedToNameSpaceTree` 是多少、里面还有没有别的值，程序（InProcServer32）在不在 Windows 目录里，指不指向一个文件夹（`Instance\InitPropertyBag` 里的 `TargetFolderPath`，网盘的做法）。
-- **只列软件加的**：此电脑、网络、回收站、主文件夹、快速访问、库、控制面板、用户文件夹这些写死的 CLSID 不列；程序在 Windows 目录里、又不指向文件夹的（Windows 自己实现的）不列；OneDrive、图库、3D 对象、Linux 这几个 Windows 自带的列出来，标「Windows 自带」。没有 CLSID 键的（显示不出来）不列；导航栏里没有 `System.IsPinnedToNameSpaceTree` 的（本来就不在导航栏里显示）不列。
-- **导航栏的开关**：资源管理器读合并视图 HKEY_CLASSES_ROOT，用户的 `Software\Classes\CLSID\{CLSID}` 在就只看它里面的值（机器那份里的值看不到了，微软《Merged View of HKEY_CLASSES_ROOT》），不在才看机器的；1 显示、0 不显示（微软《Integrate a Cloud Storage Provider》）。隐藏：在用户的那份里写 0，没有这份键就新建一个、只放这一个值（和资源管理器「显示库」选项的做法一样），只影响当前用户。恢复：用户那份只放了这一个值、机器那份是显示的，就删掉这个值和空键，回到软件自己登记的样子；不然写 1；只有机器那份、是 0 的（别的工具在所有用户的设置里隐藏的），写在机器那份里（界面上说明恢复以后所有用户都能看到）。32 位程序（它们的打开、保存对话框）看的 `WOW6432Node\CLSID` 那一份有这个值的，一样改。
-- **「此电脑」的开关**：登录用户的 `…\Explorer\HideMyComputerIcons` 里写一个名字是 `{CLSID}`、值是 1 的 DWORD；恢复时删掉这个值。
+- **列出**：脚本 `scripts/shell/shell-places-list.ps1`（只读）查 HKLM 和登录用户的 `Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{CLSID}`（导航栏最上面一层，网盘、OneDrive 在这里）和 `…\MyComputer\NameSpace\{CLSID}`（「此电脑」里，WPS 云文档、百度网盘在这里），再看每个 CLSID 键：用户的和机器的那份在不在、`System.IsPinnedToNameSpaceTree` 是多少，程序（InProcServer32）在不在 Windows 目录里，指不指向一个文件夹（`Instance\InitPropertyBag` 里的 `TargetFolderPath`，网盘的做法）。同一个 CLSID 在两处、在机器的和用户的注册表里登记的算一项。
+- **只列软件加的**：此电脑、网络、回收站、主文件夹、快速访问、库、控制面板、用户文件夹这些写死的 CLSID 不列；程序在 Windows 目录里、又不指向文件夹的（Windows 自己实现的）不列；OneDrive、图库、3D 对象、Linux 这几个 Windows 自带的列出来，标「Windows 自带」。没有 CLSID 键的（显示不出来）不列；只在导航栏里登记、又没有 `System.IsPinnedToNameSpaceTree` 的（本来就不在导航栏里显示）不列。
+- **导航栏的开关**：资源管理器读合并视图 HKEY_CLASSES_ROOT：用户的 `Software\Classes\CLSID\{CLSID}` 里有这个值就用它的，没有用机器的（一个值一个值地合并，Windows 上的测试里核对过）；1 显示、0 不显示（微软《Integrate a Cloud Storage Provider》）。只在导航栏里的图标，隐藏时在用户那份里写 0（没有这份键就新建一个，和资源管理器「显示库」选项的做法一样），只影响当前用户；恢复时用户那份是 0、机器那份是显示的，就删掉用户的值（键空了一起删），回到软件自己登记的样子，不然写 1；只有机器那份、是 0 的（别的工具在所有用户的设置里隐藏的），写在机器那份里（界面上说明恢复以后所有用户都能看到）。32 位程序（它们的打开、保存对话框）看的 `WOW6432Node\CLSID` 那一份有这个值的，一样改。
+- **「此电脑」里的**：隐藏时在登录用户的 `Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum` 里写一个名字是 `{CLSID}`、值是 1 的 DWORD：外壳哪里都不列它（「此电脑」、导航栏、桌面、打开和保存对话框），组策略「删除桌面上的回收站图标」就是这么做的（微软《ADMX_Desktop Policy CSP》）。网上常说的 `HideMyComputerIcons` 没用：Windows 上的测试里外壳照样列出来。恢复时删掉这个值（所有用户的 NonEnum 里有的也删）。
 - **修改日志**：功能 ID 是 `shell-places`，标题用图标的名字（程序重启以后没有列表时，用 CLSID 键里登记的名字），状态说「显示 / 不显示（已隐藏）」，用户那份里原来没有这个值的说「没有单独设置」。一次开关的几处改动当成一个整体，中途失败按倒序退回。Windows 上的测试照网盘的做法登记三个测试用的图标，另起进程用 Shell.Application 核对「此电脑」里还列不列、外壳读到的导航栏开关是多少。
 
 文件删不掉：是谁占着（`crates/medkit-core/src/lockers.rs`、`crates/medkit-core/src/platform/restart_manager.rs`）：

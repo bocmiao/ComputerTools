@@ -34,8 +34,8 @@ use crate::tools;
 use crate::views::{
     ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, ContextMenuKind, FeatureState, FeatureStateKind,
     FeatureSummary, FileLockReport, JournalEntryView, JournalSession, NewMenuItem, Preview, PreviewChange,
-    ProfileSummary, ShellPlace, ShellPlaceItem, StartupItem, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo,
-    ToolOpens, ToolResult, ToolSummary, UndoResult,
+    ProfileSummary, ShellPlaceItem, StartupItem, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo, ToolOpens,
+    ToolResult, ToolSummary, UndoResult,
 };
 
 const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -51,6 +51,36 @@ const STARTUP_LIST_TIMEOUT: Duration = Duration::from_secs(90);
 const CONTEXT_MENU_LIST_TIMEOUT: Duration = Duration::from_secs(120);
 const NEW_MENU_LIST_TIMEOUT: Duration = Duration::from_secs(60);
 const SHELL_PLACES_LIST_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// 资源管理器里一个图标现在的开关。
+struct ShellPlaceState {
+    /// 登录用户的 NonEnum 里有它（外壳哪里都不列）
+    non_enum_user: bool,
+    /// 所有用户的 NonEnum 里有它
+    non_enum_machine: bool,
+    /// 导航栏的开关（只在导航栏里登记了的才读）
+    pinned: shell_places::Pinned,
+}
+
+impl ShellPlaceState {
+    fn non_enum(&self, hive: shell_places::Hive) -> bool {
+        match hive {
+            shell_places::Hive::User => self.non_enum_user,
+            shell_places::Hive::Machine => self.non_enum_machine,
+        }
+    }
+
+    /// 现在显示不显示：NonEnum 里有的哪里都不显示；「此电脑」里登记了的显示；只在导航栏里的看开关
+    fn visible(&self, g: &shell_places::Group) -> bool {
+        !self.non_enum_user && !self.non_enum_machine && (g.in_pc || self.pinned.shown())
+    }
+
+    /// 是在所有用户的设置里隐藏的（恢复时要改所有用户的那份）
+    fn hidden_for_everyone(&self, g: &shell_places::Group) -> bool {
+        let pinned_off = !g.in_pc && self.pinned.user.is_none() && self.pinned.machine == Some(0);
+        !self.visible(g) && ((self.non_enum_machine && !self.non_enum_user) || pinned_off)
+    }
+}
 
 /// 一个原语没改成功。
 struct StepError {
@@ -1604,7 +1634,7 @@ impl Engine {
 
     // ───────────── 资源管理器里多出来的图标 ─────────────
 
-    /// 软件加在资源管理器导航栏和「此电脑」里的图标（Windows 自己的基本位置不列），导航栏的在前，按名字排好。
+    /// 软件加在资源管理器导航栏和「此电脑」里的图标（Windows 自己的基本位置不列），按名字排好。
     pub fn shell_places_list(&self) -> Result<Vec<ShellPlaceItem>> {
         let mut args = Map::new();
         args.insert("UserHive".into(), Value::String(self.user_hive()));
@@ -1616,22 +1646,22 @@ impl Engine {
         let mut items = Vec::with_capacity(groups.len());
         for g in &groups {
             // 按注册表里现在的值（和改开关时用的是同一个判断）
-            let visible = self.shell_place_visible(g)?;
-            let machine_hidden = g.place == ShellPlace::Nav && !visible && !g.user.exists;
+            let state = self.shell_place_state(g)?;
+            let note = if state.hidden_for_everyone(g) {
+                "是在所有用户的设置里隐藏的，恢复以后这台电脑上的所有用户都能看到。"
+            } else {
+                ""
+            };
             items.push(ShellPlaceItem {
-                id: g.id(),
+                id: g.clsid.clone(),
                 title: self.shell_place_title(g),
-                place: g.place,
+                places: g.places(),
                 windows_own: g.windows_own(),
-                visible,
-                note: if machine_hidden {
-                    "是在所有用户的设置里隐藏的，恢复以后这台电脑上的所有用户都能看到。".to_owned()
-                } else {
-                    String::new()
-                },
+                visible: state.visible(g),
+                note: note.to_owned(),
             });
         }
-        items.sort_by(|a, b| (a.place, a.title.to_lowercase()).cmp(&(b.place, b.title.to_lowercase())));
+        items.sort_by_key(|i| i.title.to_lowercase());
         *self.shell_places.lock().unwrap() = groups;
         Ok(items)
     }
@@ -1644,7 +1674,7 @@ impl Engine {
             .lock()
             .unwrap()
             .iter()
-            .find(|g| g.id() == id)
+            .find(|g| g.clsid == id)
             .cloned()
             .ok_or_else(|| Error::Invalid("这一项不在刚才的列表里了，请刷新一下再试。".to_owned()))?;
         let mut r = ApplyResult {
@@ -1658,23 +1688,32 @@ impl Engine {
             notes: Vec::new(),
             error: None,
         };
-        if self.shell_place_visible(&group)? == visible {
+        let state = self.shell_place_state(&group)?;
+        if state.visible(&group) == visible {
             return Ok(r);
         }
         let mut actions = Vec::new();
         // 删掉值以后空了就删掉的键（隐藏时新建的那份用户的键）：不记进修改日志，撤销时写回值会把键建回来
         let mut drop_keys = Vec::new();
-        match group.place {
-            ShellPlace::Pc => {
-                let key = format!(r"HKCU\{}", shell_places::HIDE_PC_KEY);
-                let hide = (!visible).then_some(RegValue::Dword(1));
-                actions.push(Self::value_action(&key, &group.clsid, hide.as_ref()));
+        let non_enum = [shell_places::Hive::User, shell_places::Hive::Machine]
+            .map(|hive| (shell_places::non_enum_key(hive), hive));
+        if !visible && group.in_pc {
+            // 「此电脑」里有的：外壳哪里都不列它（导航栏里也登记了的一起隐藏）
+            let hide = RegValue::Dword(1);
+            actions.push(Self::value_action(&non_enum[0].0, &group.clsid, Some(&hide)));
+        } else {
+            if visible {
+                for (key, hive) in &non_enum {
+                    if state.non_enum(*hive) {
+                        actions.push(Self::value_action(key, &group.clsid, None));
+                    }
+                }
             }
-            ShellPlace::Nav => {
+            // 导航栏的开关：「此电脑」里也有的，恢复时只去掉 NonEnum，不动它（那是软件自己的设置）
+            if group.in_nav && !(visible && group.in_pc) {
                 // 64 位程序（资源管理器）看的那一份，和 32 位程序看的那一份；按注册表里现在的值来
-                for (wow, listed) in [(false, group.user), (true, group.wow_user)] {
-                    let only_pinned = listed.exists && listed.only_pinned && listed.pinned == 0;
-                    match shell_places::plan(self.shell_place_pinned(&group.clsid, wow)?, only_pinned, visible) {
+                for wow in [false, true] {
+                    match shell_places::plan(self.shell_place_pinned(&group.clsid, wow)?, visible) {
                         Some(shell_places::Change::Write(hive, value)) => actions.push(Self::value_action(
                             &shell_places::class_key(hive, wow, &group.clsid),
                             shell_places::PINNED_VALUE,
@@ -1716,7 +1755,7 @@ impl Engine {
                 let _ = self.platform.reg_delete_key_if_empty(&root, &sub);
             }
         }
-        if self.shell_place_visible(&group)? != visible {
+        if self.shell_place_state(&group)?.visible(&group) != visible {
             r.verified = FeatureStateKind::NotApplied;
         }
         // 已经开着的资源管理器窗口不一定马上变，给「现在重启资源管理器」
@@ -1744,13 +1783,15 @@ impl Engine {
             .unwrap_or_else(|| g.clsid.clone())
     }
 
-    fn shell_place_visible(&self, g: &shell_places::Group) -> Result<bool> {
-        Ok(match g.place {
-            ShellPlace::Pc => {
-                let key = format!(r"HKCU\{}", shell_places::HIDE_PC_KEY);
-                !matches!(self.registry_value(&key, &g.clsid)?, Some(RegValue::Dword(v)) if v != 0)
-            }
-            ShellPlace::Nav => self.shell_place_pinned(&g.clsid, false)?.shown(),
+    /// 一个图标现在的开关（按注册表里现在的值）。
+    fn shell_place_state(&self, g: &shell_places::Group) -> Result<ShellPlaceState> {
+        let on = |key: &str| -> Result<bool> {
+            Ok(matches!(self.registry_value(key, &g.clsid)?, Some(RegValue::Dword(v)) if v != 0))
+        };
+        Ok(ShellPlaceState {
+            non_enum_user: on(&shell_places::non_enum_key(shell_places::Hive::User))?,
+            non_enum_machine: on(&shell_places::non_enum_key(shell_places::Hive::Machine))?,
+            pinned: if g.in_nav { self.shell_place_pinned(&g.clsid, false)? } else { shell_places::Pinned::default() },
         })
     }
 
@@ -1761,13 +1802,12 @@ impl Engine {
             Some(RegValue::Qword(n)) => Some(n),
             _ => None,
         };
-        let user_key = shell_places::class_key(shell_places::Hive::User, wow, clsid);
-        let machine_key = shell_places::class_key(shell_places::Hive::Machine, wow, clsid);
-        let (root, sub) = self.resolve_key(&user_key)?;
+        let value = |hive| {
+            self.registry_value(&shell_places::class_key(hive, wow, clsid), shell_places::PINNED_VALUE).map(number)
+        };
         Ok(shell_places::Pinned {
-            user_exists: self.platform.reg_key_exists(&root, &sub)?,
-            user: number(self.registry_value(&user_key, shell_places::PINNED_VALUE)?),
-            machine: number(self.registry_value(&machine_key, shell_places::PINNED_VALUE)?),
+            user: value(shell_places::Hive::User)?,
+            machine: value(shell_places::Hive::Machine)?,
         })
     }
 
@@ -1796,7 +1836,7 @@ impl Engine {
         clsid.to_owned()
     }
 
-    /// 修改日志里图标开关的状态，说人话。`pinned`：是导航栏的 System.IsPinnedToNameSpaceTree（不然是「此电脑」的）。
+    /// 修改日志里图标开关的状态，说人话。`pinned`：是导航栏的 System.IsPinnedToNameSpaceTree（不然是 NonEnum 的）。
     fn shell_place_state_label(state: &State, pinned: bool) -> String {
         match state {
             State::Registry { value: Some(RegValue::Dword(0)), .. } if pinned => "不显示（已隐藏）".to_owned(),

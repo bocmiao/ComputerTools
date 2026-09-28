@@ -273,12 +273,9 @@ fn new_menu_commands_pass_the_permission_check() {
 fn shell_places_commands_pass_the_permission_check() {
     let win = app();
     assert!(ok(&win, "shell_places_list", json!({})).is_array());
-    let e = invoke(
-        &win,
-        "shell_places_set",
-        json!({ "id": "pc:{00000000-0000-0000-0000-000000000000}", "visible": false }),
-    )
-    .unwrap_err();
+    let e =
+        invoke(&win, "shell_places_set", json!({ "id": "{00000000-0000-0000-0000-000000000000}", "visible": false }))
+            .unwrap_err();
     assert!(e.as_str().is_some_and(|m| m.contains("不在刚才的列表里")), "{e}");
 }
 

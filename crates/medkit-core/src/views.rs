@@ -348,11 +348,12 @@ pub enum ShellPlace {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShellPlaceItem {
-    /// `nav:{CLSID}` 或者 `pc:{CLSID}`，改开关时原样传回来
+    /// 大写的 CLSID（带花括号），改开关时原样传回来
     pub id: String,
     /// 资源管理器里显示的名字
     pub title: String,
-    pub place: ShellPlace,
+    /// 在哪（导航栏的在前）；两处都有的一起隐藏
+    pub places: Vec<ShellPlace>,
     /// Windows 自带的（OneDrive、图库、3D 对象这些）
     pub windows_own: bool,
     /// 现在显示不显示

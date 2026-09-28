@@ -4,17 +4,19 @@
 //! 在哪登记（见 scripts/shell/shell-places-list.ps1）：
 //! - 导航栏：`…\Explorer\Desktop\NameSpace\{CLSID}`（所有用户的在 HKLM，当前用户的在 HKCU）。显示不显示看这个
 //!   CLSID 键里的 [`PINNED_VALUE`]：1 显示，0 不显示（微软《Integrate a Cloud Storage Provider》：设成 0 不会删掉
-//!   扩展，只是不显示）。资源管理器读的是合并视图 HKEY_CLASSES_ROOT：用户的 `Software\Classes\CLSID\{CLSID}`
-//!   在，就用它里面的值（机器的那份键里的值看不到了），不在才用机器的（微软《Merged View of HKEY_CLASSES_ROOT》）。
-//!   32 位程序（它们的打开、保存对话框）读的是 `WOW6432Node\CLSID` 下的那一份。
-//! - 「此电脑」：`…\Explorer\MyComputer\NameSpace\{CLSID}`；登录用户的 [`HIDE_PC_KEY`] 里有一个名字是 `{CLSID}`、
-//!   值是 1 的 DWORD，就不显示。
+//!   扩展，只是不显示）。资源管理器读的是合并视图 HKEY_CLASSES_ROOT：用户的 `Software\Classes\CLSID\{CLSID}` 里
+//!   有这个值就用它的，没有才用机器的（一个值一个值地合并：Windows 上的测试里，用户的键里只放这一个值，机器那份的
+//!   名字照样读得到）。32 位程序（它们的打开、保存对话框）读的是 `WOW6432Node\CLSID` 下的那一份。
+//! - 「此电脑」：`…\Explorer\MyComputer\NameSpace\{CLSID}`。
 //!
-//! 隐藏：导航栏的，在用户的那份 CLSID 键里写 0（没有这个键就新建一个、只放这一个值，和资源管理器「显示库」选项的
-//! 做法一样），只影响当前用户；32 位程序看到的那一份也一样改。「此电脑」的，写 HideMyComputerIcons。
-//! 恢复：导航栏的，用户那份键是只放了这一个值的（多半是隐藏时新建的）、机器的那份是显示的，就删掉这个值和空键，
-//! 回到软件自己登记的样子；不然写 1（只有机器的那份、是 0 的，写在机器的那份里）。「此电脑」的删掉那个值。
-//! 每一处都记进修改日志，能撤销。
+//! 隐藏：「此电脑」里有的，在登录用户的 [`NON_ENUM_KEY`] 里写一个名字是 `{CLSID}`、值是 1 的 DWORD：外壳列哪里都
+//! 不列它（「此电脑」、导航栏、桌面、打开和保存对话框），组策略「删除桌面上的回收站图标」就是这么做的（微软
+//! 《ADMX_Desktop Policy CSP》）。`HideMyComputerIcons` 没用：Windows 上的测试里外壳照样列出来。只在导航栏里的，
+//! 在用户那份 CLSID 键里把 [`PINNED_VALUE`] 写成 0（没有这个键就新建一个，只放这一个值，和资源管理器「显示库」
+//! 选项的做法一样），32 位程序看的那一份也一样改；都只影响当前用户。
+//! 恢复：删掉 NonEnum 里的值（所有用户的那份里有也删）；导航栏的，用户那份里是 0、机器那份是显示的，就删掉用户的
+//! 值（键空了一起删），回到软件自己登记的样子，不然写 1（只有机器那份是 0 的，写在机器那份里）。每一处都记进
+//! 修改日志，能撤销。
 //!
 //! 只列软件加的：Windows 自己的基本位置（[`PROTECTED`]，还有程序在 Windows 目录里、又不是指向一个文件夹的）不列；
 //! [`WINDOWS_HIDEABLE`] 里的几个 Windows 自带的列出来（界面上标明），也能隐藏。
@@ -32,8 +34,8 @@ pub const LIST_SCRIPT: &str = "shell/shell-places-list.ps1";
 pub const FEATURE_ID: &str = "shell-places";
 /// CLSID 键里决定导航栏显示不显示的值（DWORD）
 pub const PINNED_VALUE: &str = "System.IsPinnedToNameSpaceTree";
-/// 「此电脑」里不显示的图标（登录用户的注册表里；值的名字是 CLSID，DWORD 1）
-pub const HIDE_PC_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer\HideMyComputerIcons";
+/// 外壳不列的图标（HKCU 和 HKLM 下都是这个路径；值的名字是 CLSID，DWORD 1）
+pub const NON_ENUM_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum";
 
 /// Windows 自带、列出来也能隐藏的（界面上标出来）
 const WINDOWS_HIDEABLE: &[&str] = &[
@@ -75,14 +77,17 @@ pub struct ClassKey {
     pub exists: bool,
     /// [`PINNED_VALUE`]，没有是 -1
     pub pinned: i64,
-    /// 键里只有这一个值，没有别的值和子键
-    pub only_pinned: bool,
 }
 
 impl Default for ClassKey {
     fn default() -> Self {
-        Self { exists: false, pinned: -1, only_pinned: false }
+        Self { exists: false, pinned: -1 }
     }
+}
+
+/// 资源管理器看到的 [`PINNED_VALUE`]：用户那份里有就用它的，没有用机器的；都没有是 -1。
+fn effective_pinned(user: ClassKey, machine: ClassKey) -> i64 {
+    if user.pinned >= 0 { user.pinned } else { machine.pinned }
 }
 
 /// 脚本列出的一处登记。
@@ -104,10 +109,6 @@ pub struct RawPlace {
     pub user: ClassKey,
     #[serde(default)]
     pub machine: ClassKey,
-    #[serde(default)]
-    pub wow_user: ClassKey,
-    #[serde(default)]
-    pub wow_machine: ClassKey,
     /// 程序（InProcServer32）在 Windows 目录里
     #[serde(default)]
     pub system_server: bool,
@@ -151,39 +152,42 @@ pub fn normalize_clsid(s: &str) -> Option<String> {
     ok.then(|| format!("{{{}}}", inner.to_ascii_uppercase()))
 }
 
-/// 一个图标（同一个 CLSID 在机器的和用户的注册表里都登记了，算一个）。
+/// 一个图标：同一个 CLSID 在导航栏和「此电脑」里、在机器的和用户的注册表里登记的，都算一个（隐藏也是一起）。
 #[derive(Debug, Clone)]
 pub struct Group {
-    pub place: ShellPlace,
-    /// 大写的 CLSID（带花括号）
+    /// 大写的 CLSID（带花括号），改开关时原样传回来
     pub clsid: String,
+    /// 在「此电脑」里登记了
+    pub in_pc: bool,
+    /// 在导航栏里登记了、CLSID 键里有 [`PINNED_VALUE`]
+    pub in_nav: bool,
     pub name: String,
     pub title: String,
     pub localized: String,
     pub user: ClassKey,
     pub machine: ClassKey,
-    pub wow_user: ClassKey,
-    pub wow_machine: ClassKey,
 }
 
 impl Group {
-    pub fn id(&self) -> String {
-        let place = match self.place {
-            ShellPlace::Nav => "nav",
-            ShellPlace::Pc => "pc",
-        };
-        format!("{place}:{}", self.clsid)
-    }
-
     pub fn windows_own(&self) -> bool {
         WINDOWS_HIDEABLE.contains(&self.clsid.as_str())
     }
+
+    /// 在哪：导航栏的在前。「此电脑」里有、导航栏的开关是关着的，就不算在导航栏里（本来就不在那里显示）。
+    pub fn places(&self) -> Vec<ShellPlace> {
+        let nav = self.in_nav && !(self.in_pc && effective_pinned(self.user, self.machine) == 0);
+        [(nav, ShellPlace::Nav), (self.in_pc, ShellPlace::Pc)]
+            .into_iter()
+            .filter(|(on, _)| *on)
+            .map(|(_, p)| p)
+            .collect()
+    }
 }
 
-/// 按位置和 CLSID 合起来，只留软件加的（和 [`WINDOWS_HIDEABLE`] 里的）。不列：没有 CLSID 键的（资源管理器显示
-/// 不出来）；导航栏里没有 [`PINNED_VALUE`] 的（本来就不在导航栏里显示）。
+/// 按 CLSID 合起来，只留软件加的（和 [`WINDOWS_HIDEABLE`] 里的）。不列：没有 CLSID 键的（资源管理器显示不出来）；
+/// 只在导航栏里登记、又没有 [`PINNED_VALUE`] 的（本来就不在导航栏里显示）。
 pub fn group(raw: Vec<RawPlace>) -> Vec<Group> {
-    let mut groups: BTreeMap<(ShellPlace, String), Group> = BTreeMap::new();
+    let mut groups: BTreeMap<String, Group> = BTreeMap::new();
     for r in raw {
         let hideable = WINDOWS_HIDEABLE.contains(&r.clsid.as_str());
         let windows_core = r.system_server && !r.folder_target;
@@ -193,21 +197,24 @@ pub fn group(raw: Vec<RawPlace>) -> Vec<Group> {
         if !r.user.exists && !r.machine.exists {
             continue;
         }
-        let effective = if r.user.exists { r.user } else { r.machine };
-        if r.place == ShellPlace::Nav && effective.pinned < 0 {
+        let pinned = effective_pinned(r.user, r.machine) >= 0;
+        if r.place == ShellPlace::Nav && !pinned {
             continue;
         }
-        let g = groups.entry((r.place, r.clsid.clone())).or_insert_with(|| Group {
-            place: r.place,
+        let g = groups.entry(r.clsid.clone()).or_insert_with(|| Group {
             clsid: r.clsid.clone(),
+            in_pc: false,
+            in_nav: false,
             name: String::new(),
             title: r.title.clone(),
             localized: r.localized.clone(),
             user: r.user,
             machine: r.machine,
-            wow_user: r.wow_user,
-            wow_machine: r.wow_machine,
         });
+        match r.place {
+            ShellPlace::Nav => g.in_nav = true,
+            ShellPlace::Pc => g.in_pc = true,
+        }
         // 名字取用户登记的那个（和资源管理器一样，用户的优先）
         if g.name.is_empty() || r.hive == Hive::User {
             g.name = r.name;
@@ -226,19 +233,25 @@ pub fn class_key(hive: Hive, wow: bool, clsid: &str) -> String {
     format!(r"{root}{wow}\CLSID\{clsid}")
 }
 
+/// NonEnum 键的完整路径（HKCU 由引擎换成登录用户的）。
+pub fn non_enum_key(hive: Hive) -> String {
+    match hive {
+        Hive::Machine => format!(r"HKLM\{NON_ENUM_KEY}"),
+        Hive::User => format!(r"HKCU\{NON_ENUM_KEY}"),
+    }
+}
+
 /// 一处（64 位的或者 32 位程序看的）[`PINNED_VALUE`] 现在的样子，引擎按注册表里现在的值读。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Pinned {
-    /// 用户的那份 CLSID 键在不在（在的话资源管理器只看它里面的值）
-    pub user_exists: bool,
     pub user: Option<u64>,
     pub machine: Option<u64>,
 }
 
 impl Pinned {
-    /// 资源管理器看到的值
+    /// 资源管理器看到的值：用户那份里有就用它的
     pub fn effective(&self) -> Option<u64> {
-        if self.user_exists { self.user } else { self.machine }
+        self.user.or(self.machine)
     }
 
     pub fn shown(&self) -> bool {
@@ -255,26 +268,22 @@ pub enum Change {
     DropUser,
 }
 
-/// 要让这一处显示（`show`）或者不显示，怎么改；已经是那样了（或者这一处根本没有这个值）返回 `None`。
-/// `only_pinned`：用户的那份键里只有这一个值（列表时读的）。
-pub fn plan(p: Pinned, only_pinned: bool, show: bool) -> Option<Change> {
+/// 要让导航栏里这一处显示（`show`）或者不显示，怎么改；已经是那样了（或者这一处根本没有这个值）返回 `None`。
+pub fn plan(p: Pinned, show: bool) -> Option<Change> {
     match (show, p.effective()) {
         (false, Some(v)) if v != 0 => Some(Change::Write(Hive::User, 0)),
-        (true, Some(0)) if p.user_exists => {
-            if only_pinned && p.machine.is_some_and(|m| m != 0) {
-                Some(Change::DropUser)
-            } else {
-                Some(Change::Write(Hive::User, 1))
-            }
-        }
-        (true, Some(0)) => Some(Change::Write(Hive::Machine, 1)),
+        (true, Some(0)) => Some(match p.user {
+            Some(_) if p.machine.is_some_and(|m| m != 0) => Change::DropUser,
+            Some(_) => Change::Write(Hive::User, 1),
+            None => Change::Write(Hive::Machine, 1),
+        }),
         _ => None,
     }
 }
 
 /// 修改日志里的一条记录是不是这里的开关（键是去掉根的部分）；是的话返回 CLSID（大写）。
 pub fn target_clsid(key: &str, name: &str) -> Option<String> {
-    if key.eq_ignore_ascii_case(HIDE_PC_KEY) {
+    if key.eq_ignore_ascii_case(NON_ENUM_KEY) {
         return normalize_clsid(name);
     }
     if !name.eq_ignore_ascii_case(PINNED_VALUE) {
@@ -292,6 +301,7 @@ mod tests {
     use serde_json::json;
 
     const WPS: &str = "{5FCD4425-CA3A-48F4-A57C-B8A75C32ACB1}";
+    const CLOUD: &str = "{11111111-2222-3333-4444-555555555555}";
 
     fn raw(place: &str, clsid: &str, hive: &str, extra: Value) -> Value {
         let mut v = json!({ "place": place, "clsid": clsid, "hive": hive, "name": "", "title": "", "localized": "",
@@ -300,19 +310,20 @@ mod tests {
         v
     }
 
-    fn key(pinned: i64, only_pinned: bool) -> Value {
-        json!({ "exists": true, "pinned": pinned, "only_pinned": only_pinned })
+    fn key(pinned: i64) -> Value {
+        json!({ "exists": true, "pinned": pinned })
     }
 
     #[test]
     fn a_single_item_is_accepted_and_bad_clsids_are_dropped() {
-        let v = json!({ "result": "ok", "items": raw("pc", &WPS.to_lowercase(), "user", json!({ "machine": key(-1, false) })) });
+        let v =
+            json!({ "result": "ok", "items": raw("pc", &WPS.to_lowercase(), "user", json!({ "machine": key(-1) })) });
         let list = parse_list(&v).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].clsid, WPS, "CLSID 换成大写");
         assert!(list[0].machine.exists && !list[0].user.exists, "没给的键算不在");
         assert_eq!(list[0].user.pinned, -1);
-        let bad = json!({ "result": "ok", "items": [raw("pc", r"{5FCD4425-CA3A-48F4-A57C-B8A75C32ACB1}\x", "user", json!({}))] });
+        let bad = json!({ "result": "ok", "items": [raw("pc", &format!(r"{WPS}\x"), "user", json!({}))] });
         assert!(parse_list(&bad).unwrap().is_empty());
         assert!(parse_list(&json!({ "result": "nope" })).is_err());
         assert_eq!(
@@ -327,76 +338,80 @@ mod tests {
     fn only_items_programs_added_are_listed() {
         let list = parse_list(&json!({ "result": "ok", "items": [
             // 网盘：程序是 shell32，指向一个文件夹
-            raw("nav", "{11111111-2222-3333-4444-555555555555}", "user",
-                json!({ "user": key(1, false), "system_server": true, "folder_target": true, "name": "某网盘" })),
+            raw("nav", CLOUD, "user",
+                json!({ "user": key(1), "system_server": true, "folder_target": true, "name": "某网盘" })),
             // 同一个也登记在所有用户的注册表里：算一个，名字用用户的
-            raw("nav", "{11111111-2222-3333-4444-555555555555}", "machine", json!({ "user": key(1, false), "name": "旧名字" })),
+            raw("nav", CLOUD, "machine", json!({ "user": key(1), "name": "旧名字" })),
             // 没有 System.IsPinnedToNameSpaceTree：本来就不在导航栏里
-            raw("nav", "{22222222-2222-3333-4444-555555555555}", "machine", json!({ "machine": key(-1, false) })),
-            // 用户的那份键在但是没有这个值：机器的那份里的值资源管理器看不到
+            raw("nav", "{22222222-2222-3333-4444-555555555555}", "machine", json!({ "machine": key(-1) })),
+            // 用户的那份键在、没有这个值：看机器的（一个值一个值地合并）
             raw("nav", "{33333333-2222-3333-4444-555555555555}", "machine",
-                json!({ "user": { "exists": true, "pinned": -1 }, "machine": key(1, false) })),
+                json!({ "user": { "exists": true, "pinned": -1 }, "machine": key(1) })),
             // Windows 自己的：程序在 Windows 目录里，不指向文件夹
-            raw("nav", "{44444444-2222-3333-4444-555555555555}", "machine", json!({ "machine": key(1, false), "system_server": true })),
+            raw("nav", "{44444444-2222-3333-4444-555555555555}", "machine", json!({ "machine": key(1), "system_server": true })),
             // 保护的
-            raw("nav", "{F874310E-B6B7-47DC-BC84-B9E6B38F5903}", "machine", json!({ "machine": key(1, false) })),
-            raw("pc", "{D3162B92-9365-467A-956B-92703ACA08AF}", "machine", json!({ "machine": key(-1, false) })),
+            raw("nav", "{F874310E-B6B7-47DC-BC84-B9E6B38F5903}", "machine", json!({ "machine": key(1) })),
+            raw("pc", "{D3162B92-9365-467A-956B-92703ACA08AF}", "machine", json!({ "machine": key(-1) })),
             // Windows 自带、能隐藏的
-            raw("nav", "{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}", "machine", json!({ "machine": key(1, false), "system_server": true })),
-            raw("pc", "{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}", "machine", json!({ "machine": key(-1, false), "system_server": true })),
-            // 「此电脑」里的不看 System.IsPinnedToNameSpaceTree
-            raw("pc", WPS, "user", json!({ "user": key(-1, false) })),
+            raw("nav", "{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}", "machine", json!({ "machine": key(1), "system_server": true })),
+            raw("pc", "{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}", "machine", json!({ "machine": key(-1), "system_server": true })),
+            // 「此电脑」里的不看 System.IsPinnedToNameSpaceTree；导航栏里也登记了、开关关着：只算在「此电脑」里
+            raw("pc", WPS, "user", json!({ "user": key(0) })),
+            raw("nav", WPS, "user", json!({ "user": key(0) })),
             // 没有 CLSID 键：显示不出来
             raw("pc", "{55555555-2222-3333-4444-555555555555}", "user", json!({})),
         ] }))
         .unwrap();
         let groups = group(list);
-        let ids: Vec<String> = groups.iter().map(Group::id).collect();
+        let rows: Vec<(&str, Vec<ShellPlace>)> = groups.iter().map(|g| (g.clsid.as_str(), g.places())).collect();
         assert_eq!(
-            ids,
+            rows,
             vec![
-                "nav:{11111111-2222-3333-4444-555555555555}",
-                "nav:{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}",
-                "pc:{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}",
-                format!("pc:{WPS}").as_str(),
+                ("{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}", vec![ShellPlace::Pc]),
+                (CLOUD, vec![ShellPlace::Nav]),
+                ("{33333333-2222-3333-4444-555555555555}", vec![ShellPlace::Nav]),
+                (WPS, vec![ShellPlace::Pc]),
+                ("{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}", vec![ShellPlace::Nav]),
             ]
         );
-        assert_eq!(groups[0].name, "某网盘");
-        assert!(!groups[0].windows_own() && groups[1].windows_own() && groups[2].windows_own());
+        assert_eq!(groups[1].name, "某网盘");
+        assert!(groups[0].windows_own() && !groups[1].windows_own() && groups[4].windows_own());
+        assert!(groups[3].in_nav && groups[3].in_pc, "导航栏里也登记了，隐藏时一起算");
     }
 
     #[test]
     fn keys() {
         assert_eq!(class_key(Hive::User, false, WPS), format!(r"HKCU\Software\Classes\CLSID\{WPS}"));
         assert_eq!(class_key(Hive::Machine, true, WPS), format!(r"HKLM\SOFTWARE\Classes\WOW6432Node\CLSID\{WPS}"));
+        assert_eq!(non_enum_key(Hive::User), r"HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum");
     }
 
     #[test]
-    fn hiding_writes_the_users_copy_and_showing_goes_back_to_what_the_program_registered() {
-        let p = |user_exists, user, machine| Pinned { user_exists, user, machine };
-        // 只有机器的那份：隐藏时新建用户的那份
-        assert_eq!(plan(p(false, None, Some(1)), false, false), Some(Change::Write(Hive::User, 0)));
+    fn hiding_writes_the_users_value_and_showing_goes_back_to_what_the_program_registered() {
+        let p = |user, machine| Pinned { user, machine };
+        // 只有机器的那份：隐藏时写在用户的那份里（没有这个键就新建）
+        assert_eq!(plan(p(None, Some(1)), false), Some(Change::Write(Hive::User, 0)));
         // 用户的那份（OneDrive）：改它
-        assert_eq!(plan(p(true, Some(1), None), false, false), Some(Change::Write(Hive::User, 0)));
-        // 隐藏时新建的：恢复时删掉
-        assert_eq!(plan(p(true, Some(0), Some(1)), true, true), Some(Change::DropUser));
-        // 用户的那份里还有别的东西，或者机器的那份也是 0：写 1
-        assert_eq!(plan(p(true, Some(0), Some(1)), false, true), Some(Change::Write(Hive::User, 1)));
-        assert_eq!(plan(p(true, Some(0), Some(0)), true, true), Some(Change::Write(Hive::User, 1)));
+        assert_eq!(plan(p(Some(1), None), false), Some(Change::Write(Hive::User, 0)));
+        // 机器那份是显示的：恢复时删掉用户的值
+        assert_eq!(plan(p(Some(0), Some(1)), true), Some(Change::DropUser));
+        // 机器那份也是 0，或者没有：写 1
+        assert_eq!(plan(p(Some(0), Some(0)), true), Some(Change::Write(Hive::User, 1)));
+        assert_eq!(plan(p(Some(0), None), true), Some(Change::Write(Hive::User, 1)));
         // 只有机器的那份、是 0：写在机器的那份里
-        assert_eq!(plan(p(false, None, Some(0)), false, true), Some(Change::Write(Hive::Machine, 1)));
+        assert_eq!(plan(p(None, Some(0)), true), Some(Change::Write(Hive::Machine, 1)));
         // 已经是那样了、这一处没有这个值：不改
-        assert_eq!(plan(p(true, Some(0), None), false, false), None);
-        assert_eq!(plan(p(false, None, Some(1)), false, true), None);
-        assert_eq!(plan(p(true, None, Some(1)), false, false), None, "用户的那份在、没有这个值：本来就不显示");
-        assert_eq!(plan(p(false, None, None), false, true), None);
-        assert!(p(false, None, Some(2)).shown() && !p(true, None, Some(1)).shown());
+        assert_eq!(plan(p(Some(0), Some(1)), false), None);
+        assert_eq!(plan(p(None, Some(1)), true), None);
+        assert_eq!(plan(p(None, None), true), None);
+        assert!(p(None, Some(2)).shown() && !p(Some(0), Some(1)).shown() && p(Some(1), Some(0)).shown());
     }
 
     #[test]
     fn journal_entries_are_recognized() {
         let clsid = Some(WPS.to_owned());
-        assert_eq!(target_clsid(HIDE_PC_KEY, &WPS.to_lowercase()), clsid);
+        assert_eq!(target_clsid(NON_ENUM_KEY, &WPS.to_lowercase()), clsid);
+        assert_eq!(target_clsid(r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\NonEnum", WPS), clsid);
         assert_eq!(target_clsid(&format!(r"SOFTWARE\Classes\CLSID\{WPS}"), PINNED_VALUE), clsid);
         assert_eq!(
             target_clsid(&format!(r"Software\Classes\WOW6432Node\CLSID\{WPS}"), "system.ispinnedtonamespacetree"),
@@ -404,6 +419,6 @@ mod tests {
         );
         assert_eq!(target_clsid(&format!(r"Software\Classes\CLSID\{WPS}"), "SortOrderIndex"), None);
         assert_eq!(target_clsid(&format!(r"Software\Classes\CLSID\{WPS}\ShellFolder"), PINNED_VALUE), None);
-        assert_eq!(target_clsid(HIDE_PC_KEY, "NotAClsid"), None);
+        assert_eq!(target_clsid(NON_ENUM_KEY, "NotAClsid"), None);
     }
 }

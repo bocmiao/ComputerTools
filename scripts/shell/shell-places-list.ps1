@@ -4,14 +4,10 @@
 #   Navigation pane: <hive>\Software\Microsoft\Windows\CurrentVersion\Explorer\
 #     Desktop\NameSpace\{CLSID}; it is shown when the CLSID key has
 #     System.IsPinnedToNameSpaceTree = 1 (Microsoft, "Integrate a Cloud
-#     Storage Provider"). Explorer reads HKEY_CLASSES_ROOT: when the user's
-#     Software\Classes\CLSID\{CLSID} key is there, its values are used and the
-#     machine's key's values are not ("Merged View of HKEY_CLASSES_ROOT");
-#     32-bit programs (their open and save dialogs) read the key under
-#     WOW6432Node.
-#   This PC: <hive>\...\Explorer\MyComputer\NameSpace\{CLSID}; the logged-in
-#     user hides one with a DWORD {CLSID} = 1 under
-#     ...\Explorer\HideMyComputerIcons (the engine reads that itself).
+#     Storage Provider"). Explorer reads HKEY_CLASSES_ROOT, where a value in
+#     the user's Software\Classes\CLSID\{CLSID} key wins over the same value
+#     in the machine's.
+#   This PC: <hive>\...\Explorer\MyComputer\NameSpace\{CLSID}.
 # <hive> is the machine (all users) or the logged-in user (-UserHive).
 # Output: result = 'ok', items = one per registration:
 #   place (nav / pc), clsid, hive (machine / user: where it is registered),
@@ -19,15 +15,14 @@
 #   title and localized (the default value and LocalizedString of the CLSID
 #     key, the user's first; they can be "@file,-id", the engine resolves
 #     them),
-#   user, machine, wow_user, wow_machine: that CLSID key in the user's and the
-#     machine's classes, and under WOW6432Node: exists, pinned
-#     (System.IsPinnedToNameSpaceTree, -1 when it is missing), only_pinned
-#     (the key holds that value and nothing else: no other value, no subkey),
+#   user, machine: that CLSID key in the user's and the machine's classes:
+#     exists, pinned (System.IsPinnedToNameSpaceTree, -1 when it is missing),
 #   system_server (its InProcServer32 is in the Windows folder, or a bare file
 #     name found there), folder_target (Instance\InitPropertyBag names a
 #     folder: TargetFolderPath or Target, the way cloud drives register).
 # The engine decides what is listed (Windows' own items are left out) and what
-# to change.
+# to change; the switches it changes (NonEnum, System.IsPinnedToNameSpaceTree
+# and its WOW6432Node copy) it reads itself.
 
 [CmdletBinding()]
 param(
@@ -95,10 +90,10 @@ function Get-Number {
     return [int64]-1
 }
 
-# One CLSID key: is it there, its pinned value, does it hold nothing else.
+# One CLSID key: is it there, and its pinned value.
 function Get-KeyInfo {
     param($Root, [string]$Path)
-    $info = [ordered]@{ exists = $false; pinned = [int64]-1; only_pinned = $false }
+    $info = [ordered]@{ exists = $false; pinned = [int64]-1 }
     $key = Open-Key $Root $Path
     if ($null -eq $key) {
         return $info
@@ -106,8 +101,6 @@ function Get-KeyInfo {
     try {
         $info.exists = $true
         $info.pinned = Get-Number $key $pinnedName
-        $others = @($key.GetValueNames() | Where-Object { $_ -ne $pinnedName })
-        $info.only_pinned = ($info.pinned -ge 0) -and ($others.Count -eq 0) -and ($key.SubKeyCount -eq 0)
     }
     finally {
         $key.Close()
@@ -184,7 +177,6 @@ foreach ($place in @(@('nav', ($explorer + '\Desktop\NameSpace')), @('pc', ($exp
                     }
                 }
                 $class = 'Software\Classes\CLSID\' + $clsid
-                $wow = 'Software\Classes\WOW6432Node\CLSID\' + $clsid
                 $items.Add([ordered]@{
                         place         = $place[0]
                         clsid         = $clsid
@@ -194,8 +186,6 @@ foreach ($place in @(@('nav', ($explorer + '\Desktop\NameSpace')), @('pc', ($exp
                         localized     = Get-ClassText $class 'LocalizedString'
                         user          = Get-KeyInfo $roots.user $class
                         machine       = Get-KeyInfo $roots.machine $class
-                        wow_user      = Get-KeyInfo $roots.user $wow
-                        wow_machine   = Get-KeyInfo $roots.machine $wow
                         system_server = Test-SystemServer $clsid
                         folder_target = Test-FolderTarget $clsid
                     })

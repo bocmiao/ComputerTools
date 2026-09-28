@@ -1095,8 +1095,8 @@ fn new_menu_entries_are_listed_hidden_and_restored() {
 /// 资源管理器里多出来的图标：照网盘的做法（微软《Integrate a Cloud Storage Provider》）登记三个测试用的图标，都指向
 /// 一个临时文件夹——导航栏里一个登记在当前用户的注册表里（像 OneDrive）、一个的 CLSID 只在所有用户的注册表里（像
 /// 图库），「此电脑」里一个（像 WPS 云文档）。用真的脚本列出来，隐藏、恢复、在修改日志里撤销，逐个核对注册表；
-/// 再另起进程用 Windows 自己的外壳（Shell.Application）看「此电脑」里还有没有、导航栏的开关外壳读出来是多少。
-/// 结束时（包括断言失败时）删掉测试用的键。
+/// 再另起进程用 Windows 自己的外壳（Shell.Application）看「此电脑」里还有没有（NonEnum）、导航栏的开关外壳读出来
+/// 是多少。结束时（包括断言失败时）删掉测试用的键。
 #[test]
 #[ignore = "会临时往资源管理器里加三个测试用的图标（结束时删掉）；需要管理员权限"]
 fn shell_places_are_listed_hidden_and_restored() {
@@ -1107,7 +1107,7 @@ fn shell_places_are_listed_hidden_and_restored() {
     const EXPLORER: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer";
     let clsid = || format!("{{{}}}", new_id().to_uppercase());
     let (cloud, machine, pc) = (clsid(), clsid(), clsid());
-    let hide_pc = format!(r"{EXPLORER}\HideMyComputerIcons");
+    let non_enum = r"Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum";
     struct Cleanup(Vec<String>, String, String);
     impl Drop for Cleanup {
         fn drop(&mut self) {
@@ -1128,7 +1128,7 @@ fn shell_places_are_listed_hidden_and_restored() {
             format!(r"HKCU\{EXPLORER}\Desktop\NameSpace\{machine}"),
             format!(r"HKCU\{EXPLORER}\MyComputer\NameSpace\{pc}"),
         ],
-        format!(r"HKCU\{hide_pc}"),
+        format!(r"HKCU\{non_enum}"),
         pc.clone(),
     );
 
@@ -1210,8 +1210,8 @@ fn shell_places_are_listed_hidden_and_restored() {
     eprintln!("列资源管理器里的图标用了 {} 毫秒：", started.elapsed().as_millis());
     for i in &items {
         eprintln!(
-            "  {:?} {:<28} {} {}",
-            i.place,
+            "  {:<12} {:<28} {} {}",
+            format!("{:?}", i.places),
             i.title,
             if i.visible { "显示" } else { "不显示" },
             if i.windows_own { "Windows 自带" } else { "" }
@@ -1228,8 +1228,9 @@ fn shell_places_are_listed_hidden_and_restored() {
             i.id
         })
         .collect();
-    assert_eq!(find(&items, "MedkitTest PC").place, ShellPlace::Pc);
-    assert_eq!(find(&items, "MedkitTest Machine").place, ShellPlace::Nav);
+    assert_eq!(find(&items, "MedkitTest PC").places, [ShellPlace::Pc]);
+    assert_eq!(find(&items, "MedkitTest Machine").places, [ShellPlace::Nav]);
+    assert_eq!(ids[2], pc);
     // Windows 自己的基本位置一个都不能列：此电脑、网络、回收站、库、主文件夹
     for own in [
         "{20D04FE0-3AEA-1069-A2D8-08002B30309D}",
@@ -1258,11 +1259,12 @@ fn shell_places_are_listed_hidden_and_restored() {
         Some(RegValue::Dword(1)),
         "所有用户的那份不动，只在当前用户这里隐藏"
     );
-    assert_eq!(platform.reg_get(&root, &hide_pc, &pc).unwrap(), Some(RegValue::Dword(1)));
+    assert_eq!(platform.reg_get(&root, non_enum, &pc).unwrap(), Some(RegValue::Dword(1)));
+    assert_eq!(platform.reg_get(&root, non_enum, &cloud).unwrap(), None, "只在导航栏里的用导航栏的开关");
     let hidden = probe();
     report("隐藏后", &hidden);
     if in_pc(&before, "pc") {
-        assert!(!in_pc(&hidden, "pc"), "外壳列「此电脑」时还有测试图标：HideMyComputerIcons 没起作用");
+        assert!(!in_pc(&hidden, "pc"), "外壳列「此电脑」时还有测试图标：NonEnum 没起作用");
     } else {
         eprintln!("注意：隐藏前外壳列「此电脑」时就没有测试图标，核对不了「此电脑」里的显示");
     }
@@ -1283,7 +1285,7 @@ fn shell_places_are_listed_hidden_and_restored() {
     assert_eq!(platform.reg_get(&root, &class(&cloud), PINNED).unwrap(), Some(RegValue::Dword(1)));
     assert_eq!(platform.reg_get(&root, &wow, PINNED).unwrap(), Some(RegValue::Dword(1)));
     assert!(!platform.reg_key_exists(&root, &class(&machine)).unwrap(), "隐藏时新建的键删掉了，回到登记时的样子");
-    assert_eq!(platform.reg_get(&root, &hide_pc, &pc).unwrap(), None);
+    assert_eq!(platform.reg_get(&root, non_enum, &pc).unwrap(), None);
     let shown = probe();
     report("恢复后", &shown);
     if in_pc(&before, "pc") {

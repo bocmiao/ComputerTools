@@ -56,9 +56,10 @@ async function toggle(item: ShellPlaceItem): Promise<void> {
   }
 }
 
-const placeLabel: Record<ShellPlaceItem['place'], string> = {
-  nav: '在左边的导航栏里',
-  pc: '在「此电脑」里',
+/** 在哪：「在左边的导航栏和「此电脑」里」这样 */
+function placeText(item: ShellPlaceItem): string {
+  const names = item.places.map((p) => (p === 'nav' ? '左边的导航栏' : '「此电脑」'))
+  return `在${names.join('和')}里`
 }
 </script>
 
@@ -90,7 +91,7 @@ const placeLabel: Record<ShellPlaceItem['place'], string> = {
               <TagPill :tone="item.visible ? 'info' : 'neutral'">{{ item.visible ? '显示' : '已隐藏' }}</TagPill>
               <TagPill v-if="item.windowsOwn" tone="neutral">Windows 自带</TagPill>
             </p>
-            <p class="muted small">{{ placeLabel[item.place] }}</p>
+            <p class="muted small">{{ placeText(item) }}</p>
             <p v-if="item.note" class="small">{{ item.note }}</p>
           </div>
           <button type="button" class="btn btn-secondary btn-small" :disabled="!!busy || loading" @click="toggle(item)">

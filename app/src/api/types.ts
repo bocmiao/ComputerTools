@@ -110,9 +110,9 @@ export type ShellPlace = 'nav' | 'pc'
 
 /** 软件加在资源管理器导航栏或者「此电脑」里的一个图标（网盘、WPS 云文档这些） */
 export interface ShellPlaceItem {
-  id: string                   // `nav:{CLSID}` 或 `pc:{CLSID}`，改开关时原样传回
+  id: string                   // CLSID（大写、带花括号），改开关时原样传回
   title: string                // 资源管理器里显示的名字
-  place: ShellPlace
+  places: ShellPlace[]         // 在哪（导航栏的在前）；两处都有的一起隐藏
   windowsOwn: boolean          // Windows 自带的（OneDrive、图库、3D 对象这些）
   visible: boolean             // 现在显示不显示
   note: string                 // 要特别说明的，多数是空的

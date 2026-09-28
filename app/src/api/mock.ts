@@ -1999,13 +1999,13 @@ const PLACE_SHOWN = '显示'
 const PLACE_HIDDEN = '不显示（已隐藏）'
 const shellPlacesMock: ShellPlaceItem[] = (
   [
-    { id: 'nav:{018D5C66-4533-4307-9B53-224DE2ED1FE6}', title: 'OneDrive - Personal', place: 'nav', windowsOwn: true, visible: true, note: '' },
-    { id: 'nav:{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}', title: '图库', place: 'nav', windowsOwn: true, visible: true, note: '' },
-    { id: 'nav:{6D5C1F2A-0B1E-4C5A-9F3E-2A7B8C9D0E1F}', title: '坚果云', place: 'nav', windowsOwn: false, visible: true, note: '' },
-    { id: 'pc:{5FCD4425-CA3A-48F4-A57C-B8A75C32ACB1}', title: 'WPS云文档', place: 'pc', windowsOwn: false, visible: true, note: '' },
-    { id: 'pc:{679F137C-3162-45DA-BE3C-2F9C3D093F64}', title: '百度网盘', place: 'pc', windowsOwn: false, visible: true, note: '' },
+    { id: '{018D5C66-4533-4307-9B53-224DE2ED1FE6}', title: 'OneDrive - Personal', places: ['nav'], windowsOwn: true, visible: true, note: '' },
+    { id: '{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}', title: '图库', places: ['nav'], windowsOwn: true, visible: true, note: '' },
+    { id: '{6D5C1F2A-0B1E-4C5A-9F3E-2A7B8C9D0E1F}', title: '坚果云', places: ['nav'], windowsOwn: false, visible: true, note: '' },
+    { id: '{5FCD4425-CA3A-48F4-A57C-B8A75C32ACB1}', title: 'WPS云文档', places: ['nav', 'pc'], windowsOwn: false, visible: true, note: '' },
+    { id: '{679F137C-3162-45DA-BE3C-2F9C3D093F64}', title: '百度网盘', places: ['pc'], windowsOwn: false, visible: true, note: '' },
   ] satisfies ShellPlaceItem[]
-).sort((a, b) => a.place.localeCompare(b.place) || (a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1)) // 和引擎一样：导航栏的在前，按名字排
+).sort((a, b) => (a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1)) // 和引擎一样按名字排
 const contextMenuMock: ContextMenuItem[] = [
   {
     id: 'menu-rar', kind: 'extension', title: 'WinRAR shell extension', program: 'rarext.dll',
