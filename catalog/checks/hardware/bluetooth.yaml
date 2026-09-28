@@ -1,0 +1,54 @@
+# 这台电脑有没有蓝牙、蓝牙适配器能不能用。脚本：scripts/checks/hardware/bluetooth.ps1
+# 蓝牙适配器：接在 USB、PCI、ACPI、SD 上、类别是蓝牙（PNPClass 或者类别 GUID）的设备；配对过的手机、耳机和 Windows 的蓝牙
+# 组件（BTH\MS_…）不是适配器。没装驱动的适配器在「其他设备」里（代码 28 或 1），名字里有 Bluetooth、蓝牙，或者兼容 ID 是
+# USB 蓝牙类（Class_E0&SubClass_01&Prot_01）。按这个顺序判断：ok（有一个能用）、disabled（在设备管理器里被禁用，代码 22）、
+# error（别的问题代码）、no-driver（没装驱动）、no-adapter（没有蓝牙，很多台式机就没有）。
+# 适配器的名字来自驱动（如「Intel(R) Wireless Bluetooth(R)」），照常显示。事实：name、code。
+id: hardware.bluetooth
+schema_version: 1
+title: { zh-CN: 蓝牙适配器 }
+description:
+  zh-CN: 看看这台电脑有没有蓝牙，蓝牙有没有被禁用、驱动装没装。
+category: hardware
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/hardware/bluetooth.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: "这台电脑有蓝牙，工作正常（{name}）。"
+  disabled:
+    status: advice
+    message:
+      zh-CN: "蓝牙在设备管理器里被禁用了（{name}），所以设置里找不到蓝牙开关。"
+    fixer: user
+    next:
+      zh-CN: 打开「设备管理器」，展开「蓝牙」，在这个设备上点右键 →「启用设备」。
+    links: ["tool:open.device-manager"]
+  error:
+    status: advice
+    message:
+      zh-CN: "蓝牙适配器出问题了（{name}，设备管理器里的代码 {code}），所以蓝牙用不了。"
+    fixer: vendor
+    next:
+      zh-CN: 先重启电脑（关机以后再开机，笔记本最好拔掉电源等一会儿）；还不行，到电脑品牌的官网按型号下载蓝牙驱动重新装。
+    links: ["tool:open.device-manager"]
+  no-driver:
+    status: advice
+    message:
+      zh-CN: 蓝牙适配器没装驱动（在设备管理器的「其他设备」里），所以蓝牙用不了。刚重装完系统时很常见。
+    fixer: vendor
+    next:
+      zh-CN: 打开「Windows 更新」检查更新，再看看「可选更新」里有没有蓝牙驱动；没有的话，到电脑品牌的官网按型号下载蓝牙驱动（常和无线网卡驱动放在一起）。
+    links: ["tool:settings.windows-update", "tool:open.device-manager"]
+  no-adapter:
+    status: advice
+    message:
+      zh-CN: 这台电脑上没找到蓝牙。很多台式机本来就没有蓝牙；笔记本本来有的，可能是在 BIOS 里关掉了，或者无线网卡（蓝牙常和它做在一起）坏了。
+    fixer: hardware
+    next:
+      zh-CN: 台式机可以买一个 USB 蓝牙适配器（几十块钱，选写着「免驱」的，插上就能用）。笔记本本来有蓝牙的，请懂哥看看 BIOS 设置和无线网卡。
+references:
+  - https://support.microsoft.com/en-us/windows/fix-bluetooth-problems-in-windows-723e092f-03fa-858b-5c80-131ec3fba75c

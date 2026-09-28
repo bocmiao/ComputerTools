@@ -1,0 +1,40 @@
+# 蓝牙服务有没有被关掉。脚本：scripts/checks/hardware/bluetooth-services.ps1
+# 蓝牙支持服务（bthserv）和蓝牙音频网关服务（BTAGService）在 Windows 里都是「手动（触发启动）」（微软《Guidance on
+# disabling system services on Windows Server》），常被「优化」软件禁用：前一个没了搜不到、连不上蓝牙设备，连过的也可能
+# 用不了；后一个没了蓝牙耳机的麦克风、打电话用不了。有一个不在（服务器版、很老的 Windows 10）就是 missing（na）。
+# 修复 hardware.enable-bluetooth-services 两个一起改回「手动」，它的 verify 用这个检测。
+# 结果：disabled（bthserv 被禁用）、audio-disabled（只有 BTAGService 被禁用）、ok、missing。事实：bthserv、btag（Start 值）。
+id: hardware.bluetooth-services
+schema_version: 1
+title: { zh-CN: 蓝牙服务 }
+description:
+  zh-CN: 看看 Windows 的蓝牙服务有没有被「优化」软件关掉。关掉以后搜不到、连不上蓝牙耳机和鼠标，或者耳机的麦克风用不了。
+category: hardware
+requires_admin: false
+probe:
+  script: checks/hardware/bluetooth-services.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: 蓝牙服务没有被关掉。 }
+  disabled:
+    status: advice
+    message:
+      zh-CN: 蓝牙支持服务被禁用了：搜不到、连不上蓝牙耳机、鼠标和键盘，以前连过的也可能用不了。多半是「优化」类软件关的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后重启电脑（或者把蓝牙关掉再打开）。
+    links: ["feature:hardware.enable-bluetooth-services"]
+  audio-disabled:
+    status: advice
+    message:
+      zh-CN: 蓝牙音频网关服务被禁用了：蓝牙耳机能听歌，可是麦克风、打电话、微信语音用不了。多半是「优化」类软件关的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后把耳机断开再连上。
+    links: ["feature:hardware.enable-bluetooth-services"]
+  missing:
+    status: na
+    message: { zh-CN: 这个版本的 Windows 没有蓝牙服务。 }
+references:
+  - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server

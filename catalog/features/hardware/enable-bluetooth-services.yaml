@@ -1,0 +1,29 @@
+# 恢复蓝牙服务：把蓝牙支持服务（bthserv）和蓝牙音频网关服务（BTAGService）的启动类型改回 Windows 默认的「手动」
+# （触发启动，用到蓝牙时 Windows 自己启动它们）。只改启动类型。检测 hardware.bluetooth-services 报 disabled、audio-disabled
+# 时给这个按钮；verify 用这个检测：有一个服务不在（na）时不给执行，改好没有也看它。break_actions（测试用）：两个都设成禁用。
+id: hardware.enable-bluetooth-services
+schema_version: 1
+title: { zh-CN: 恢复蓝牙服务 }
+description:
+  zh-CN: 把被「优化」软件关掉的两个蓝牙服务改回 Windows 默认的「手动」：关掉以后搜不到、连不上蓝牙耳机和鼠标，或者耳机的麦克风用不了。改完重启电脑（或者把蓝牙关掉再打开）就好，能撤销。
+category: hardware
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+verify: hardware.bluetooth-services
+actions:
+  - service: { name: bthserv, start_type: manual }
+  - service: { name: BTAGService, start_type: manual }
+windows_default:
+  - service: { name: bthserv, start_type: manual }
+  - service: { name: BTAGService, start_type: manual }
+break_actions:
+  - service: { name: bthserv, start_type: disabled }
+  - service: { name: BTAGService, start_type: disabled }
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server
