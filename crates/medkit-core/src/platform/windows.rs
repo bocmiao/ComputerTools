@@ -700,6 +700,10 @@ impl Platform for WindowsPlatform {
     fn set_monitor_brightness(&self, id: &str, percent: u8) -> PResult<u8> {
         super::brightness::set(id, percent)
     }
+
+    fn wifi_status(&self) -> PResult<super::WifiStatus> {
+        super::wifi::status()
+    }
 }
 
 // ───────────── 打开系统工具 ─────────────

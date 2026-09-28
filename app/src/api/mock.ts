@@ -1169,6 +1169,28 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'network.wifi-link': {
+    title: 'WiFi 连接情况',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          resultCode: 'ok',
+          message: '现在连着的 WiFi：信号 88%（很好，-56 dBm），5 GHz 第 149 信道，WiFi 6，连接速率 1201 Mbps，加密方式 WPA2 个人版（AES）。',
+          facts: { signal: 88, band: '5 GHz', channel: 149, standard: 'WiFi 6', security: 'WPA2 个人版（AES）' },
+        }
+      }
+      // 说法和 catalog/checks/network/wifi-link.yaml 一样
+      return {
+        status: 'advice',
+        resultCode: 'weak',
+        message: 'WiFi 信号弱：信号 32%（弱，-84 dBm），2.4 GHz 第 6 信道，WiFi 4，连接速率 72 Mbps，加密方式 WPA2 个人版（AES）。信号弱的时候网速慢、容易断，视频通话、打游戏会卡。',
+        fixer: 'user',
+        next: '离路由器近一点，少隔几堵墙；路由器放在屋子中间、高一点的地方，别塞在柜子里、电视后面。离得远时，2.4 GHz 的 WiFi 比 5 GHz 的穿墙好（WiFi 名称后面带「5G」的一般是 5 GHz）。房子大、房间多的，加一个 Mesh 路由器或者无线扩展器。',
+        facts: { signal: 32, band: '2.4 GHz', channel: 6, standard: 'WiFi 4', security: 'WPA2 个人版（AES）' },
+      }
+    },
+  },
   'network.remote-desktop': {
     title: '别的电脑能不能用远程桌面连进来',
     evaluate: () => {
@@ -1573,6 +1595,15 @@ const SYMPTOMS: MockSymptom[] = [
     guide: '先重启一次电脑。再点「修复 Office」，先选「快速修复」，不行再选「联机修复」。只有 Word 一打开就闪退的，按住 Ctrl 双击它用安全模式打开，能打开就是加载项的问题。装不上、卸不干净的，用「微软官方的 Office 卸载工具」卸干净再装。提示要激活的，用买 Office 的微软账户登录，别用「激活工具」。',
     steps: [{ check: 'system.office-installs', fixes: [] }],
     links: ['tool:system.office-repair', 'tool:web.office-uninstall', 'tool:web.office-install', 'tool:settings.apps'],
+  },
+  {
+    id: 'wifi-slow', title: 'WiFi 信号差、网速慢',
+    summary: 'WiFi 只有一两格信号，网页打开慢、视频卡、下载慢；离路由器远一点就不行；Windows 提示这个 WiFi「不安全」「使用较旧的安全标准」。',
+    keywords: ['wifi信号差', 'wifi网速慢', '信号只有一格', 'wifi不安全'], maturity: 'semi',
+    causes: ['离路由器太远、隔着好几堵墙，或者路由器塞在柜子里、电视后面', '连的是 2.4 GHz 的 WiFi，周围邻居的 WiFi 多、互相干扰', '路由器用的是老的加密方式（WEP、TKIP），不安全，连接速率还会被限制在 54 Mbps 以内', '网卡勾着省电，或者无线网卡驱动太老'],
+    guide: '先用手机在路由器旁边测一下网速，分清是 WiFi 慢还是宽带慢。离路由器近一点、少隔几堵墙；离得近连 5 GHz 的，隔墙多连 2.4 GHz 的。加密方式老的，在路由器里改成 WPA2-PSK（AES）或者 WPA3。',
+    steps: [{ check: 'network.wifi-link', fixes: [] }],
+    links: ['tool:settings.network', 'tool:open.network-connections', 'tool:web.oem-drivers'],
   },
   {
     id: 'remote-desktop', title: '远程桌面连不上',

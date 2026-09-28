@@ -1,0 +1,64 @@
+# WiFi 连接情况：信号、频段和信道、WiFi 几代、连接速率、加密方式。内置检测（Rust 实现，见 crates/medkit-core/src/builtin.rs 的
+# wifi_link 和 platform/wifi.rs）：照 emoacht/ManagedNativeWifi（MIT）用微软的 Native WiFi 接口（wlanapi）读现在连着的 WiFi，
+# 按 BSSID 在扫描结果里找到连着的接入点读中心频率，换算频段和信道（范围照它的 TryDetectBandChannel）。不读、不输出 WiFi 名称
+# 和接入点的 MAC 地址。wlanapi.dll 按需加载，没有 WiFi 组件的系统上说读不了。只读。
+# 判断（按这个顺序）：信号质量低于 40（相当于 -80 dBm：微软 WLAN_ASSOCIATION_ATTRIBUTES，0 是 -100 dBm、100 是 -50 dBm）→ weak；
+# WEP、TKIP、第一代 WPA → old-security（微软《Wi-Fi network not secure in Windows》：有已知的漏洞；Intel《Data Rate Won't
+# Exceed 54 Mbps When WEP or TKIP Encryption is Configured》：速率最多 54 Mbps）；没有密码 → open；都没有 → ok。
+# 没有 WiFi 的：no-service（读不了）、no-adapter（没有无线网卡）、disconnected（没连）都是 na。
+# 事实：summary（一句话）、signal、signal_text、rssi、band、channel、standard、rx_mbps、tx_mbps、security、adapters。
+id: network.wifi-link
+schema_version: 1
+title: { zh-CN: WiFi 连接情况 }
+description:
+  zh-CN: 看看现在连着的 WiFi 信号好不好、是 2.4 GHz 还是 5 GHz、第几代 WiFi、连接速率多少、用的什么加密方式。不看 WiFi 名称。
+category: network
+requires_admin: false
+probe:
+  builtin: wifi-link
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 现在连着的 WiFi：{summary}。
+  weak:
+    status: advice
+    message:
+      zh-CN: WiFi 信号弱：{summary}。信号弱的时候网速慢、容易断，视频通话、打游戏会卡。
+    fixer: user
+    next:
+      zh-CN: 离路由器近一点，少隔几堵墙；路由器放在屋子中间、高一点的地方，别塞在柜子里、电视后面。离得远时，2.4 GHz 的 WiFi 比 5 GHz 的穿墙好（WiFi 名称后面带「5G」的一般是 5 GHz）。房子大、房间多的，加一个 Mesh 路由器或者无线扩展器。
+  old-security:
+    status: advice
+    message:
+      zh-CN: 这个 WiFi 用的是老的加密方式（{security}）：微软说 WEP、TKIP 有已知的漏洞，Windows 会提示「不安全」；用它们时连接速率最多只有 54 Mbps，网速也上不去。现在：{summary}。
+    fixer: user
+    next:
+      zh-CN: 登录路由器的管理页面（地址和密码一般印在路由器背面的标签上），在「无线设置」里把安全模式改成「WPA2-PSK」、加密算法选「AES」（新路由器选「WPA3」或者「WPA2/WPA3」），保存以后手机、电脑要重新输一次 WiFi 密码。路由器太老、没有这些选项的，换一个新的。单位的 WiFi 找网管。
+  open:
+    status: advice
+    message:
+      zh-CN: 这个 WiFi 没有密码：谁都能连，传的内容在空中没有加密。现在：{summary}。
+    fixer: user
+    next:
+      zh-CN: 自己家的，登录路由器的管理页面设上密码（安全模式选「WPA2-PSK」加「AES」，或者「WPA3」）。在外面用咖啡店、商场的免费 WiFi 时，别登录网银、别输支付密码，重要的事用手机流量办。
+  disconnected:
+    status: na
+    message:
+      zh-CN: 这台电脑有无线网卡，但现在没连 WiFi（可能用的是网线）。
+  no-adapter:
+    status: na
+    message:
+      zh-CN: 这台电脑没找到能用的无线网卡，用的是网线；笔记本找不到 WiFi 的，看「WiFi 不见了、飞行模式关不掉」。
+    links: ["symptom:wifi-missing"]
+  no-service:
+    status: na
+    message:
+      zh-CN: 读不到 WiFi：这台电脑的「WLAN AutoConfig」服务没在运行，或者系统里没有 WiFi 组件（台式机、服务器版常这样）。笔记本找不到 WiFi 的，看「WiFi 不见了、飞行模式关不掉」。
+    links: ["symptom:wifi-missing"]
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/ns-wlanapi-wlan_association_attributes
+  - https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlangetnetworkbsslist
+  - https://support.microsoft.com/en-us/windows/wi-fi-network-not-secure-in-windows-9170b675-921b-3aa5-7e43-fcb2059d159c
+  - https://www.intel.com/content/www/us/en/support/articles/000006697/wireless.html
+  - https://github.com/emoacht/ManagedNativeWifi

@@ -6,7 +6,7 @@ use medkit_core::builtin;
 use medkit_core::bundle::Bundle;
 use medkit_core::catalog::Severity;
 use medkit_core::platform::mock::MockPlatform;
-use medkit_core::platform::{Display, Displays, Platform};
+use medkit_core::platform::{Display, Displays, Platform, WifiLink, WifiStatus};
 use medkit_core::render::{render, unresolved};
 
 #[test]
@@ -150,6 +150,9 @@ fn common_error_messages_find_their_symptom() {
             "remote-desktop",
         ),
         ("你的凭据不工作，用于连接的凭据无效", "remote-desktop"),
+        ("家里的wifi信号很差，网页打开特别慢", "wifi-slow"),
+        ("WiFi 网速很慢，只有一格信号", "wifi-slow"),
+        ("此 Wi-Fi 网络使用较旧的安全标准，该标准正在逐步淘汰", "wifi-slow"),
     ];
     let wrong: Vec<String> = cases
         .iter()
@@ -198,6 +201,56 @@ fn every_display_resolution_result_has_its_words_filled_in() {
         let os = platform.os_info();
         let env = builtin::Env { os: &os, now: time::OffsetDateTime::now_utc(), platform: &platform };
         let v = builtin::run("display-resolution", &env).expect("模拟的平台读得到显示器");
+        assert_eq!(v["result"], want, "{v}");
+        let facts = v["facts"].as_object().expect("事实是一个对象");
+        let spec = check.results.get(want).unwrap_or_else(|| panic!("数据里没有结果 {want}"));
+        for text in std::iter::once(&spec.message).chain(spec.next.as_ref()) {
+            let filled = render(text.get("zh-CN"), facts);
+            assert!(unresolved(&filled).is_empty(), "{want}：有没填上的占位符：{filled}");
+        }
+        seen.push(want);
+    }
+    let mut defined: Vec<&str> = check.results.keys().map(String::as_str).collect();
+    defined.sort_unstable();
+    seen.sort_unstable();
+    assert_eq!(defined, seen, "数据里的结果和这里试过的对不上");
+}
+
+/// WiFi 连接情况：每一种结果都真的跑一遍内置检测（模拟的平台），说法里的占位符都要填得上。
+#[test]
+fn every_wifi_link_result_has_its_words_filled_in() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let (bundle, _) = Bundle::from_repo(&root);
+    let bundle = bundle.expect("数据要能打包");
+    let check = bundle.catalog.checks.iter().find(|c| c.id == "network.wifi-link").expect("有这个检测");
+    let link = |signal, auth, cipher| WifiLink {
+        signal,
+        rssi: Some(-60),
+        frequency_mhz: Some(2437),
+        channel: Some(6),
+        phy: 7,
+        rx_kbps: 144_400,
+        tx_kbps: 144_400,
+        auth,
+        cipher,
+    };
+    let connected = |l| WifiStatus { service: true, adapters: 1, link: Some(l) };
+    let cases = [
+        ("ok", connected(link(80, 7, 4))),
+        ("weak", connected(link(25, 7, 4))),
+        ("old-security", connected(link(80, 7, 2))),
+        ("open", connected(link(80, 1, 0))),
+        ("disconnected", WifiStatus { service: true, adapters: 1, link: None }),
+        ("no-adapter", WifiStatus { service: true, adapters: 0, link: None }),
+        ("no-service", WifiStatus { service: false, adapters: 0, link: None }),
+    ];
+    let mut seen = Vec::new();
+    for (want, wifi) in cases {
+        let platform = MockPlatform::new();
+        platform.set_wifi(wifi);
+        let os = platform.os_info();
+        let env = builtin::Env { os: &os, now: time::OffsetDateTime::now_utc(), platform: &platform };
+        let v = builtin::run("wifi-link", &env).expect("模拟的平台读得到 WiFi");
         assert_eq!(v["result"], want, "{v}");
         let facts = v["facts"].as_object().expect("事实是一个对象");
         let spec = check.results.get(want).unwrap_or_else(|| panic!("数据里没有结果 {want}"));

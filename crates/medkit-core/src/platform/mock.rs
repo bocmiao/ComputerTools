@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use super::{
     Display, Displays, FileStrings, FileUser, InstalledProgram, KeyboardAids, MonitorBrightness, OpenRequest, OsInfo,
-    PResult, Platform, PlatformError, PointedWindow, UserIdentity, WinsockEntry,
+    PResult, Platform, PlatformError, PointedWindow, UserIdentity, WifiLink, WifiStatus, WinsockEntry,
 };
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue, key_ancestors};
@@ -48,6 +48,8 @@ struct State {
     displays: Option<Displays>,
     /// 显示器亮度；没设过时见 [`MockPlatform::demo_brightness`]
     brightness: Option<Vec<MonitorBrightness>>,
+    /// WiFi；没设过时见 [`MockPlatform::good_wifi`]
+    wifi: Option<WifiStatus>,
     /// 没有「获取帮助」应用
     no_get_help: bool,
     /// 桌面（资源管理器）没在运行，网页打不开
@@ -182,6 +184,29 @@ impl MockPlatform {
 
     pub fn set_brightness(&self, monitors: Vec<MonitorBrightness>) {
         self.state.lock().unwrap().brightness = Some(monitors);
+    }
+
+    pub fn set_wifi(&self, wifi: WifiStatus) {
+        self.state.lock().unwrap().wifi = Some(wifi);
+    }
+
+    /// 连着一个信号很好的 WiFi：5 GHz 第 149 信道、WiFi 6、WPA2 个人版（AES）。
+    pub fn good_wifi() -> WifiStatus {
+        WifiStatus {
+            service: true,
+            adapters: 1,
+            link: Some(WifiLink {
+                signal: 88,
+                rssi: Some(-56),
+                frequency_mhz: Some(5745),
+                channel: Some(149),
+                phy: 10,
+                rx_kbps: 1_201_000,
+                tx_kbps: 864_000,
+                auth: 7,
+                cipher: 4,
+            }),
+        }
     }
 
     /// 一台能用电脑调亮度的外接显示器（70%）和一块调不了的笔记本屏幕。
@@ -391,6 +416,10 @@ impl Platform for MockPlatform {
 
     fn displays(&self) -> PResult<Displays> {
         Ok(self.state.lock().unwrap().displays.clone().unwrap_or_else(Self::laptop_display))
+    }
+
+    fn wifi_status(&self) -> PResult<WifiStatus> {
+        Ok(self.state.lock().unwrap().wifi.unwrap_or_else(Self::good_wifi))
     }
 
     fn monitor_brightness(&self) -> PResult<Vec<MonitorBrightness>> {

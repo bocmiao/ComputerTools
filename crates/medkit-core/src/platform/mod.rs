@@ -20,6 +20,8 @@ mod restart_manager;
 #[cfg(windows)]
 pub mod shutdown;
 #[cfg(windows)]
+mod wifi;
+#[cfg(windows)]
 mod window_info;
 #[cfg(windows)]
 pub mod windows;
@@ -90,6 +92,62 @@ pub struct MonitorBrightness {
     pub internal: bool,
     /// 现在的亮度（0–100，按显示器报的最小、最大值换算）；`None` 是电脑调不了
     pub percent: Option<u8>,
+}
+
+/// 现在连着的 WiFi（内置检测「WiFi 连接情况」）。没有 WiFi 名称，也没有接入点的 MAC 地址（BSSID 只在读的时候用来对上频率）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WifiLink {
+    /// 信号质量 0–100：0 相当于 -100 dBm，100 相当于 -50 dBm，中间按直线换算（微软 WLAN_ASSOCIATION_ATTRIBUTES）
+    pub signal: u8,
+    /// 接入点的信号强度（dBm）；扫描结果里没找到它时是 `None`
+    pub rssi: Option<i32>,
+    /// 中心频率（MHz），分得清 2.4、5、6 GHz；读不到时是 `None`
+    pub frequency_mhz: Option<u32>,
+    /// 信道；读不到时是 `None`
+    pub channel: Option<u32>,
+    /// 物理层类型（DOT11_PHY_TYPE：7 是 802.11n，8 是 802.11ac，10 是 802.11ax，11 是 802.11be）
+    pub phy: i32,
+    /// 收、发的连接速率（kbps）
+    pub rx_kbps: u32,
+    pub tx_kbps: u32,
+    /// 身份验证（DOT11_AUTH_ALGORITHM）
+    pub auth: i32,
+    /// 加密（DOT11_CIPHER_ALGORITHM）
+    pub cipher: i32,
+}
+
+/// WiFi 的情况。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WifiStatus {
+    /// 读得了 WiFi：`false` 是系统里没有 WiFi 组件，或者「WLAN AutoConfig」服务没在运行（台式机、服务器版常这样）
+    pub service: bool,
+    /// 无线网卡有几块
+    pub adapters: usize,
+    /// 连着 WiFi 的那一块的连接；都没连时是 `None`
+    pub link: Option<WifiLink>,
+}
+
+/// 中心频率（MHz）→ 频段。范围照 emoacht/ManagedNativeWifi（MIT）的 TryDetectBandChannel，5 GHz 放宽到 177 信道（5885 MHz）。
+pub fn wifi_band(mhz: u32) -> Option<&'static str> {
+    match mhz {
+        2412..=2484 => Some("2.4 GHz"),
+        5150..=5895 => Some("5 GHz"),
+        5925..=7125 => Some("6 GHz"),
+        _ => None,
+    }
+}
+
+/// 中心频率（MHz）→ 信道：2.4 GHz 是 2407 + 5×信道（14 信道是 2484），5 GHz 是 5000 + 5×信道，6 GHz 是 5950 + 5×信道
+/// （2 信道是 5935）。对不上整数信道的是 `None`。
+pub fn wifi_channel(mhz: u32) -> Option<u32> {
+    let step = |base: u32| (mhz > base && (mhz - base).is_multiple_of(5)).then(|| (mhz - base) / 5);
+    match wifi_band(mhz)? {
+        "2.4 GHz" if mhz == 2484 => Some(14),
+        "2.4 GHz" => step(2407),
+        "5 GHz" => step(5000),
+        _ if mhz == 5935 => Some(2),
+        _ => step(5950),
+    }
 }
 
 /// 显示器报的原始亮度换成百分比。显示器报的最小、最大值不一定是 0 和 100（Monitorian 的注释）；最大值不比最小值大的
@@ -336,6 +394,11 @@ pub trait Platform: Send + Sync {
         Err(PlatformError::Unsupported("读显示器的亮度".into()))
     }
 
+    /// 现在连着的 WiFi（见 [`WifiStatus`]）。只读。
+    fn wifi_status(&self) -> PResult<WifiStatus> {
+        Err(PlatformError::Unsupported("读 WiFi 的连接情况".into()))
+    }
+
     /// 把 `id` 这个显示器的亮度调成 `percent`（0–100），返回调完以后读回来的亮度。显示器已经不在时返回
     /// [`PlatformError::NotFound`]，电脑调不了时返回 [`PlatformError::Unsupported`]。
     fn set_monitor_brightness(&self, id: &str, percent: u8) -> PResult<u8> {
@@ -363,6 +426,24 @@ pub fn edition_from_id(id: &str) -> Option<Edition> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wifi_band_and_channel_come_from_the_frequency() {
+        assert_eq!((wifi_band(2412), wifi_channel(2412)), (Some("2.4 GHz"), Some(1)));
+        assert_eq!((wifi_band(2437), wifi_channel(2437)), (Some("2.4 GHz"), Some(6)));
+        assert_eq!((wifi_band(2484), wifi_channel(2484)), (Some("2.4 GHz"), Some(14)));
+        assert_eq!((wifi_band(5180), wifi_channel(5180)), (Some("5 GHz"), Some(36)));
+        assert_eq!((wifi_band(5745), wifi_channel(5745)), (Some("5 GHz"), Some(149)));
+        assert_eq!((wifi_band(5885), wifi_channel(5885)), (Some("5 GHz"), Some(177)));
+        assert_eq!((wifi_band(5955), wifi_channel(5955)), (Some("6 GHz"), Some(1)));
+        assert_eq!((wifi_band(5935), wifi_channel(5935)), (Some("6 GHz"), Some(2)));
+        assert_eq!((wifi_band(6115), wifi_channel(6115)), (Some("6 GHz"), Some(33)));
+        assert_eq!((wifi_band(7115), wifi_channel(7115)), (Some("6 GHz"), Some(233)));
+        // 对不上整数信道的、不在 WiFi 频段里的
+        assert_eq!(wifi_channel(2413), None);
+        assert_eq!((wifi_band(3000), wifi_channel(3000)), (None, None));
+        assert_eq!((wifi_band(0), wifi_channel(0)), (None, None));
+    }
 
     #[test]
     fn brightness_is_scaled_by_what_the_monitor_reports() {

@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 use time::{Date, OffsetDateTime};
 
-use crate::platform::{Display, Displays, KeyboardAids, OsInfo, Platform};
+use crate::platform::{Display, Displays, KeyboardAids, OsInfo, Platform, WifiStatus, wifi_band, wifi_channel};
 
 /// 内置检测能用到的信息。
 pub struct Env<'a> {
@@ -21,6 +21,7 @@ pub fn run(name: &str, env: &Env<'_>) -> Result<Value, String> {
         "keyboard-aids" => env.platform.keyboard_aids().map(keyboard_aids).map_err(|e| e.to_string()),
         "winsock" => env.platform.winsock_catalog().map(|c| crate::winsock::verdict(&c)).map_err(|e| e.to_string()),
         "display-resolution" => env.platform.displays().map(|d| display_resolution(&d)).map_err(|e| e.to_string()),
+        "wifi-link" => env.platform.wifi_status().map(|w| wifi_link(&w)).map_err(|e| e.to_string()),
         _ => Err(format!("不认识的内置检测：{name}")),
     }
 }
@@ -98,6 +99,122 @@ fn display_name(index: usize, d: &Display, count: usize) -> String {
         None if count > 1 => format!("第 {} 个显示器", index + 1),
         None => "显示器".to_owned(),
     }
+}
+
+/// 信号质量低于这个就算弱：40 相当于 -80 dBm（0 是 -100 dBm，100 是 -50 dBm，按直线换算）。
+const WEAK_SIGNAL: u8 = 40;
+
+/// WiFi 连接情况。没有 WiFi 的（读不了、没有无线网卡、没连）是 na；连着的按「信号弱 → 老的加密方式 → 没有密码」的顺序报，
+/// 都没有是 ok。事实里的 summary 是一句话（信号、频段和信道、WiFi 几代、连接速率、加密），没有 WiFi 名称。
+fn wifi_link(w: &WifiStatus) -> Value {
+    let Some(link) = w.link else {
+        let result = if !w.service {
+            "no-service"
+        } else if w.adapters == 0 {
+            "no-adapter"
+        } else {
+            "disconnected"
+        };
+        return json!({ "result": result, "facts": { "adapters": w.adapters } });
+    };
+    let band = link.frequency_mhz.and_then(wifi_band);
+    let channel = link.channel.or_else(|| link.frequency_mhz.and_then(wifi_channel));
+    let standard = wifi_standard(link.phy, band == Some("6 GHz"));
+    let security = wifi_security(link.auth, link.cipher);
+    let rate = link.rx_kbps.max(link.tx_kbps) / 1000;
+    let result = if link.signal < WEAK_SIGNAL {
+        "weak"
+    } else if wifi_old_security(link.auth, link.cipher) {
+        "old-security"
+    } else if link.auth == 1 && link.cipher == 0 {
+        "open"
+    } else {
+        "ok"
+    };
+    let signal_text = match link.signal {
+        80.. => "很好",
+        60..=79 => "好",
+        40..=59 => "一般",
+        _ => "弱",
+    };
+    let mut parts = vec![match link.rssi {
+        Some(rssi) => format!("信号 {}%（{signal_text}，{rssi} dBm）", link.signal),
+        None => format!("信号 {}%（{signal_text}）", link.signal),
+    }];
+    match (band, channel) {
+        (Some(b), Some(c)) => parts.push(format!("{b} 第 {c} 信道")),
+        (Some(b), None) => parts.push(b.to_owned()),
+        (None, Some(c)) => parts.push(format!("第 {c} 信道")),
+        (None, None) => {}
+    }
+    parts.extend(standard.map(str::to_owned));
+    if rate > 0 {
+        parts.push(format!("连接速率 {rate} Mbps"));
+    }
+    parts.push(format!("加密方式 {security}"));
+    json!({
+        "result": result,
+        "facts": {
+            "adapters": w.adapters,
+            "signal": link.signal,
+            "signal_text": signal_text,
+            "rssi": link.rssi,
+            "band": band.unwrap_or(""),
+            "channel": channel,
+            "standard": standard.unwrap_or(""),
+            "rx_mbps": link.rx_kbps / 1000,
+            "tx_mbps": link.tx_kbps / 1000,
+            "security": security,
+            "summary": parts.join("，"),
+        }
+    })
+}
+
+/// 物理层类型（DOT11_PHY_TYPE）→ 说给用户听的「WiFi 几代」。802.11ax 在 6 GHz 上是 WiFi 6E。
+fn wifi_standard(phy: i32, six_ghz: bool) -> Option<&'static str> {
+    match phy {
+        11 => Some("WiFi 7"),
+        10 if six_ghz => Some("WiFi 6E"),
+        10 => Some("WiFi 6"),
+        8 => Some("WiFi 5"),
+        7 => Some("WiFi 4"),
+        9 => Some("802.11ad"),
+        6 => Some("802.11g"),
+        5 => Some("802.11b"),
+        4 => Some("802.11a"),
+        _ => None,
+    }
+}
+
+/// 身份验证（DOT11_AUTH_ALGORITHM）和加密（DOT11_CIPHER_ALGORITHM）→ 说给用户听的加密方式。
+fn wifi_security(auth: i32, cipher: i32) -> String {
+    let wep = matches!(cipher, 1 | 5 | 257);
+    let name = match auth {
+        1 if cipher == 0 => "没有密码",
+        1 | 2 if wep => "WEP",
+        2 => "WEP",
+        10 => "增强型开放 OWE",
+        3 => "WPA 企业版",
+        4 => "WPA 个人版",
+        6 => "WPA2 企业版",
+        7 => "WPA2 个人版",
+        9 => "WPA3 个人版",
+        8 | 11 => "WPA3 企业版",
+        _ => "其他",
+    };
+    let cipher_name = match cipher {
+        4 | 10 => "（AES）",
+        8 | 9 => "（GCMP）",
+        2 => "（TKIP）",
+        _ => "",
+    };
+    format!("{name}{cipher_name}")
+}
+
+/// 老的加密方式：WEP、TKIP、第一代 WPA。微软《Wi-Fi network not secure in Windows》说 WEP、TKIP 有已知的漏洞；
+/// Intel《Data Rate Won't Exceed 54 Mbps When WEP or TKIP Encryption is Configured》：用它们时 802.11n 起的高速率用不了。
+fn wifi_old_security(auth: i32, cipher: i32) -> bool {
+    matches!(cipher, 1 | 2 | 5 | 257) || matches!(auth, 2..=4)
 }
 
 /// 已经装了 Windows 11（版本号 22000 起；服务器版不算）。
@@ -300,6 +417,85 @@ mod tests {
         let v = display_resolution(&displays(vec![display(None, false, (1024, 768), None)]));
         assert_eq!(v["result"], "unknown");
         assert_eq!(v["facts"]["displays"], json!(["显示器：1024×768（读不到推荐的分辨率）"]));
+    }
+
+    fn wifi(signal: u8, mhz: Option<u32>, channel: Option<u32>, phy: i32, auth: i32, cipher: i32) -> WifiStatus {
+        WifiStatus {
+            service: true,
+            adapters: 1,
+            link: Some(crate::platform::WifiLink {
+                signal,
+                rssi: Some(-56),
+                frequency_mhz: mhz,
+                channel,
+                phy,
+                rx_kbps: 1_201_000,
+                tx_kbps: 864_000,
+                auth,
+                cipher,
+            }),
+        }
+    }
+
+    #[test]
+    fn wifi_link_is_told_in_one_sentence_without_the_network_name() {
+        // WPA2 个人版（AES），5 GHz、WiFi 6、信号很好
+        let v = wifi_link(&wifi(88, Some(5745), Some(149), 10, 7, 4));
+        assert_eq!(v["result"], "ok");
+        assert_eq!(
+            v["facts"]["summary"],
+            "信号 88%（很好，-56 dBm），5 GHz 第 149 信道，WiFi 6，连接速率 1201 Mbps，加密方式 WPA2 个人版（AES）"
+        );
+        assert_eq!(v["facts"]["rx_mbps"], 1201);
+        assert_eq!(v["facts"]["tx_mbps"], 864);
+
+        // 6 GHz 上的 802.11ax 是 WiFi 6E；网卡没报信道时按频率算
+        let v = wifi_link(&wifi(70, Some(6115), None, 10, 9, 4));
+        assert_eq!(v["result"], "ok");
+        assert_eq!(v["facts"]["band"], "6 GHz");
+        assert_eq!(v["facts"]["channel"], 33);
+        assert_eq!(v["facts"]["standard"], "WiFi 6E");
+        assert_eq!(v["facts"]["security"], "WPA3 个人版（AES）");
+
+        // 信号弱先报（哪怕加密也老）；40 以下算弱
+        let weak = wifi_link(&wifi(39, Some(2437), Some(6), 7, 7, 2));
+        assert_eq!(weak["result"], "weak");
+        assert_eq!(weak["facts"]["signal_text"], "弱");
+        assert_eq!(wifi_link(&wifi(40, Some(2437), Some(6), 7, 7, 4))["result"], "ok");
+
+        // WPA2 + TKIP、第一代 WPA、WEP 都算老的加密方式
+        let tkip = wifi_link(&wifi(80, Some(2437), Some(6), 6, 7, 2));
+        assert_eq!(tkip["result"], "old-security");
+        assert_eq!(tkip["facts"]["security"], "WPA2 个人版（TKIP）");
+        assert_eq!(tkip["facts"]["standard"], "802.11g");
+        assert_eq!(wifi_link(&wifi(80, None, Some(6), 7, 4, 4))["result"], "old-security");
+        let wep = wifi_link(&wifi(80, None, Some(6), 7, 1, 5));
+        assert_eq!(wep["result"], "old-security");
+        assert_eq!(wep["facts"]["security"], "WEP");
+
+        // 没有密码的开放网络；增强型开放（OWE）有加密，不算
+        let open = wifi_link(&wifi(80, Some(2412), Some(1), 7, 1, 0));
+        assert_eq!(open["result"], "open");
+        assert_eq!(open["facts"]["security"], "没有密码");
+        assert_eq!(wifi_link(&wifi(80, Some(2412), Some(1), 7, 10, 4))["result"], "ok");
+
+        // 读不到频率、信道、物理层类型、速率时，这几段不说
+        let mut bare = wifi(65, None, None, 0, 7, 4);
+        if let Some(link) = bare.link.as_mut() {
+            link.rssi = None;
+            link.rx_kbps = 0;
+            link.tx_kbps = 0;
+        }
+        let v = wifi_link(&bare);
+        assert_eq!(v["facts"]["summary"], "信号 65%（好），加密方式 WPA2 个人版（AES）");
+        assert_eq!(v["facts"]["channel"], Value::Null);
+        assert_eq!(v["facts"]["band"], "");
+
+        // 没有 WiFi 的三种情况
+        let none = |service, adapters| WifiStatus { service, adapters, link: None };
+        assert_eq!(wifi_link(&none(false, 0))["result"], "no-service");
+        assert_eq!(wifi_link(&none(true, 0))["result"], "no-adapter");
+        assert_eq!(wifi_link(&none(true, 2))["result"], "disconnected");
     }
 
     #[test]

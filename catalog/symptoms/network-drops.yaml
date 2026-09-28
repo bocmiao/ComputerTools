@@ -1,4 +1,5 @@
 # 症状：WiFi、网线用着用着就断，或者睡眠醒来以后连不上网。先看网卡的省电设置（network.adapter-power → 修复 network.adapter-power-off），
+# 连着 WiFi 的看信号、频段和加密方式（network.wifi-link），
 # 再看现在网络通不通（network.connectivity），最后看设备和驱动（hardware.device-problems）。
 # 别的情况给图文指引：路由器和光猫（重启、离得远、2.4G 和 5G）、网线和水晶头、睡眠醒来以后把网卡禁用再启用（小工具
 # open.network-connections）、关机再开机以后没网的「快速启动」、驱动、网卡高级属性里的节能项。
@@ -34,6 +35,7 @@ maturity: semi
 steps:
   - check: network.adapter-power
     fixes: [network.adapter-power-off]
+  - check: network.wifi-link
   - check: network.connectivity
   - check: hardware.device-problems
 guide:

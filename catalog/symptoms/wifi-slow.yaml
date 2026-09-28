@@ -1,0 +1,63 @@
+# 症状：WiFi 信号差、网速慢、Windows 提示这个 WiFi「不安全」。先看现在连着的 WiFi 怎么样（network.wifi-link：信号、频段、
+# 第几代 WiFi、连接速率、加密方式，不看 WiFi 名称），再看网卡的省电设置（network.adapter-power → 修复 network.adapter-power-off）
+# 和设备、驱动（hardware.device-problems）。指引：先分清是 WiFi 慢还是宽带慢（手机、网线对比），离路由器的距离和摆放、2.4 GHz 和
+# 5 GHz 的区别、2.4 GHz 换信道（1、6、11）、重启路由器和光猫、老的加密方式（微软《Wi-Fi network not secure in Windows》、
+# Intel《Data Rate Won't Exceed 54 Mbps When WEP or TKIP Encryption is Configured》）、网卡驱动。
+id: wifi-slow
+schema_version: 1
+title: { zh-CN: WiFi 信号差、网速慢 }
+summary:
+  zh-CN: WiFi 只有一两格信号，网页打开慢、视频卡、下载慢；离路由器远一点就不行；Windows 提示这个 WiFi「不安全」「使用较旧的安全标准」。
+keywords:
+  - wifi信号差
+  - wifi信号弱
+  - wifi信号很差
+  - wifi信号很弱
+  - wifi信号不好
+  - 信号很差
+  - 信号很弱
+  - 无线信号差
+  - 无线信号弱
+  - 信号只有一格
+  - wifi只有一格
+  - wifi网速慢
+  - wifi网速很慢
+  - wifi很慢
+  - wifi太慢
+  - wifi很卡
+  - 无线网速慢
+  - 无线网很慢
+  - 网速上不去
+  - 5g信号
+  - 2.4g和5g
+  - 路由器信号
+  - 路由器穿墙
+  - wifi不安全
+  - 较旧的安全标准
+  - 不安全的网络
+  - tkip
+causes:
+  - zh-CN: 离路由器太远、隔着好几堵墙，或者路由器塞在柜子里、电视后面
+  - zh-CN: 连的是 2.4 GHz 的 WiFi，周围邻居的 WiFi 多、互相干扰；或者连的是 5 GHz 的，但离得远、穿墙以后信号掉得快
+  - zh-CN: 路由器、光猫用久了发热、要重启，或者宽带本身就慢（手机连同一个 WiFi 也慢）
+  - zh-CN: 路由器用的是老的加密方式（WEP、TKIP），不安全，连接速率还会被限制在 54 Mbps 以内
+  - zh-CN: 网卡勾着省电，或者无线网卡驱动太老
+maturity: semi
+steps:
+  - check: network.wifi-link
+  - check: network.adapter-power
+    fixes: [network.adapter-power-off]
+  - check: hardware.device-problems
+guide:
+  zh-CN: |
+    先看上面的检查：信号弱、加密方式老、网卡省电的，照提示处理。
+
+    1. 先分清是 WiFi 慢还是宽带慢：手机连同一个 WiFi、站在路由器旁边测一下网速。手机在路由器旁边也慢，或者电脑插网线也慢，是宽带或者路由器的问题：把路由器、光猫断电 30 秒再插上；还慢，打运营商客服电话。
+    2. 离路由器近一点，少隔几堵墙；路由器放在屋子中间、高一点的地方，别塞在柜子里、电视后面，天线竖起来。
+    3. 路由器同时有两个 WiFi 的（名字后面带「5G」的是 5 GHz）：离得近时连 5 GHz 的，更快、干扰更少；隔了好几堵墙时连 2.4 GHz 的，穿墙更好。
+    4. 周围 WiFi 很多（小区、写字楼）时，2.4 GHz 容易互相干扰：登录路由器的管理页面（地址和密码一般印在路由器背面），把 2.4 GHz 的「信道」从「自动」改成 1、6、11 里的一个试试。
+    5. 上面的检查说加密方式老（WEP、TKIP），或者 Windows 提示这个 WiFi「不安全」：在路由器的「无线设置」里把安全模式改成「WPA2-PSK」、加密算法选「AES」（新路由器选「WPA3」），保存以后重新输一次 WiFi 密码。改完速度也会快起来。
+    6. 只有这台电脑慢、别的设备都快：到电脑品牌的官网按型号下载最新的无线网卡驱动装上。房子大、有几个房间信号都差的，加一个 Mesh 路由器或者无线扩展器。
+
+    都试过还是慢，把上面「WiFi 连接情况」的结果发给懂哥或者运营商的客服。
+links: ["tool:settings.network", "tool:open.network-connections", "tool:web.oem-drivers", "symptom:network-drops", "symptom:network"]

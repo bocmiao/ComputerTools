@@ -1377,6 +1377,37 @@ fn monitor_brightness_is_read_and_unsupported_monitors_say_so() {
     }
 }
 
+/// WiFi 连接情况：真的读一次（只读，wlanapi.dll 按需加载）。CI 机器是虚拟机，一般没有无线网卡、也没有「WLAN AutoConfig」
+/// 服务，要如实说读不了；有 WiFi 的机器上打印信号、频段、速率和加密方式（没有 WiFi 名称）。
+#[test]
+fn wifi_status_is_read_without_the_network_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    let w = platform.wifi_status().unwrap_or_else(|e| panic!("读 WiFi 失败：{e}"));
+    eprintln!("读得了：{}，无线网卡 {} 块，连着：{}", w.service, w.adapters, w.link.is_some());
+    if let Some(link) = w.link {
+        eprintln!(
+            "  信号 {}%（{:?} dBm）频率 {:?} MHz 信道 {:?} 物理层 {} 收 {} kbps 发 {} kbps 身份验证 {} 加密 {}",
+            link.signal,
+            link.rssi,
+            link.frequency_mhz,
+            link.channel,
+            link.phy,
+            link.rx_kbps,
+            link.tx_kbps,
+            link.auth,
+            link.cipher
+        );
+        assert!(link.signal <= 100);
+    } else {
+        println!("::notice title=wifi::这台机器上没有连着的 WiFi（读得了：{}，无线网卡 {} 块）", w.service, w.adapters);
+    }
+    let r = engine.run_check("network.wifi-link").unwrap();
+    eprintln!("检测：{:?} {:?} {}", r.status, r.result_code, r.message);
+    assert!(r.error.is_none(), "{r:?}");
+    assert!(unresolved(&r.message).is_empty(), "{}", r.message);
+}
+
 /// Winsock 目录：真的读一次（只读）。64 位的目录里要有 Windows 自己的 TCP/IP（mswsock.dll，文件在），64 位 Windows 上
 /// 还要读到 32 位程序用的那一份；检测要给出结论（CI 机器上一般是 ok）。只打印文件名和版本信息，没有路径。
 #[test]
