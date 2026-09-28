@@ -22,12 +22,14 @@ results:
     status: ok
     message:
       zh-CN: "电池健康度 {health_pct}%，状态良好。"
+    links: ["tool:settings.battery-usage"]
   worn:
     status: ok
     message:
       zh-CN: "电池健康度 {health_pct}%，已经有些老化，充满电后能用的时间比新的时候短。"
     next:
       zh-CN: 这是正常损耗，不影响使用。如果续航已经不够用了，可以找品牌售后换电池。
+    links: ["tool:settings.battery-usage"]
   poor:
     status: advice
     message:

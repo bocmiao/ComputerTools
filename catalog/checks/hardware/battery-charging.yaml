@@ -1,0 +1,59 @@
+# 笔记本接着电源时有没有在充电。脚本：scripts/checks/hardware/battery-charging.ps1
+# 没有 Win32_Battery 实例 → no-battery（台式机，状态 na）。否则读电池驱动报的状态（root\wmi 的 BatteryStatus，每块电池一个）：
+# PowerOnline（接着电源）、Charging（在充电）、Discharging（在放电）、RemainingCapacity；电量 = 各块电池的剩余容量之和 ÷
+# 满电容量之和（root\wmi 的 BatteryFullChargedCapacity，和右下角显示的一样），电池不报容量时用 Win32_Battery 的
+# EstimatedChargeRemaining。电池驱动不报状态的，报「没查出来」。
+# 结果：on-battery（在用电池）、charging（在充电）、full（接着电源、不在充电，95% 以上：电池掉下去一些才会接着充，正常）、
+# not-charging（接着电源、不在充电，不到 95%：右下角写着「已接通电源，未充电」，多半是厂商的电池养护功能充到 60%、80%
+# 就停，也可能是充电器功率不够、电池坏了）、draining（接着电源还在放电：充电器功率不够）、no-battery。
+# 不在体检里：只在症状「笔记本电池不耐用、充不进电」里查（体检时用户不一定接着电源）；not-charging 的提示说各品牌的开关
+# 「写在下面的手动步骤里」，放进别的症状时要改。
+# 待真机验证：养护模式开着、充到 80% 停住的笔记本是不是 not-charging；小功率充电器（手机充电器）是不是 draining。
+id: hardware.battery-charging
+schema_version: 1
+title: { zh-CN: 充电状态 }
+description:
+  zh-CN: 看看笔记本接着电源时有没有在充电：充到一半就不充了（「已接通电源，未充电」）、接着电源电量还往下掉的，说清楚多半是什么原因。
+category: hardware
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/hardware/battery-charging.ps1
+results:
+  charging:
+    status: ok
+    message:
+      zh-CN: "接着电源，正在充电，现在电量 {charge_pct}%。"
+  full:
+    status: ok
+    message:
+      zh-CN: "接着电源，电量 {charge_pct}%，已经充满了。"
+    next:
+      zh-CN: 电量在 95% 以上时，右下角显示「已接通电源，未充电」是正常的：电池要掉下去一些才会接着充，这样更耐用。
+  not-charging:
+    status: advice
+    message:
+      zh-CN: "接着电源，但是没在充电，电量停在 {charge_pct}%（右下角写着「已接通电源，未充电」）。"
+    fixer: user
+    next:
+      zh-CN: 电量停在 60%、80% 左右不动的，多半是电脑厂商的「电池养护」功能：为了让电池更耐用，充到这里就不充了，不是坏了，经常插着电源用的电脑开着它更好。想充满的话，在厂商自带的软件里关掉（出门前临时关掉也行），各品牌的开关在哪，写在下面的手动步骤里。电量一直是 0%、一点也充不进的，多半是电池坏了，找售后换；用的不是原装充电器的（比如手机充电器），换回原装的试试。
+  draining:
+    status: advice
+    message:
+      zh-CN: "接着电源，电量却还在往下掉（现在 {charge_pct}%）：充电器的功率不够这台电脑用。"
+    fixer: user
+    next:
+      zh-CN: 换回电脑原装的充电器，或者功率够大的（看充电器上写的瓦数，比如 65W、100W）。用 Type-C 充电的，要用支持 PD 快充的充电器和线；插在扩展坞、显示器上充电的，功率也可能不够。玩大型游戏这种特别耗电的时候偶尔掉一点是正常的。
+  on-battery:
+    status: ok
+    message:
+      zh-CN: "现在用的是电池，没接电源，电量 {charge_pct}%。"
+    next:
+      zh-CN: 要是充电器明明插着，说明电脑没认出充电器：两头都拔下来重新插紧，换个插座，看看充电器上的指示灯亮不亮；用 Type-C 充电的，要插在旁边有闪电或者电源标志的那个口。还是不行的，多半是充电器、线或者充电口坏了，找售后看看。
+  no-battery:
+    status: na
+    message:
+      zh-CN: 这台电脑没有电池（台式机），不用检查。
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/battery/battery-miniclass-drivers
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-battery

@@ -61,6 +61,7 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "printers",
     "sound",
     "powersleep",
+    "batterysaver-usagedetails",
     "display",
     "bluetooth",
     "recovery",

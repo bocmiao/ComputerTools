@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:batterysaver-usagedetails，由系统打开。Windows 11 是「电源和电池」里的
+# 「电池使用情况」，Windows 10 是「按应用查看电池使用情况」：最近 24 小时（或 7 天）每个软件用掉了多少电。
+# 只有笔记本、平板这些有电池的电脑有这一页。
+id: settings.battery-usage
+schema_version: 1
+group: open
+title: { zh-CN: 电池使用情况 }
+description:
+  zh-CN: 笔记本电池掉电快的时候，打开「设置」里的电池使用情况，看看最近一天、一周里哪个软件最费电，用不上的就关掉或者卸载。只有带电池的笔记本、平板有这一页。
+category: settings
+open: { settings: batterysaver-usagedetails }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
