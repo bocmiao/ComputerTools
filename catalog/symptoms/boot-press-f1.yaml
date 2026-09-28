@@ -1,0 +1,45 @@
+# 症状：开机时黑屏上一行英文，要按 F1 才能继续。常见的三种：主板上的纽扣电池没电了（CMOS checksum error、CMOS battery low，
+# 时间每次断电后都跳回过去）、主板没测到 CPU 风扇的转速（CPU Fan Error：风扇线插错口、水冷、低转速风扇）、BIOS 设置恢复成了
+# 默认（Press F1 to Run SETUP、Defaults Loaded）。查系统时间（system.clock：电池没电时时间会跳回过去）；换电池、改插风扇线要
+# 动手，只给指引；BIOS 里只说改报警那一项，写明别动硬盘模式。
+id: boot-press-f1
+schema_version: 1
+title: { zh-CN: 开机要按 F1 才能进系统 }
+summary:
+  zh-CN: 开机时黑屏上出现一行英文，比如「CMOS checksum error」「CPU Fan Error!」「Press F1 to continue」，每次都要按 F1 才能进 Windows，有的时间也老是不对。
+keywords:
+  - 开机要按f1
+  - 开机按f1
+  - 按f1才能进系统
+  - 每次开机都要按f1
+  - press f1 to continue
+  - press f1 to resume
+  - press f1 to run setup
+  - cmos checksum error
+  - cmos checksum bad
+  - cmos battery low
+  - cmos date/time not set
+  - defaults loaded
+  - cpu fan error
+  - 主板电池没电
+  - 主板纽扣电池
+  - cr2032
+  - 每次开机时间都不对
+causes:
+  - zh-CN: 主板上的纽扣电池（多数是 CR2032）没电了：BIOS 设置和时间保存不住，每次断电以后都恢复默认
+  - zh-CN: 主板没测到 CPU 风扇的转速：风扇线插在了别的风扇口上，或者用的是水冷、转速很低的风扇
+  - zh-CN: BIOS 设置被恢复成了默认值，或者刚换过硬件
+maturity: semi
+steps:
+  - check: system.clock
+guide:
+  zh-CN: |
+    先看开机时屏幕上那行英文写的是什么（可以用手机拍下来）：
+
+    1. 「CMOS checksum error」「CMOS battery low」「CMOS Date/Time Not Set」，或者每次关机断电以后时间都跳回过去（上面的检查看得出来）：主板上的纽扣电池没电了。台式机先关机、拔掉电源线，打开机箱，把主板上那颗硬币大小的电池（多数是 CR2032，几块钱）换成新的；再开机按提示进 BIOS，把日期和时间改对，按 F10 保存退出。笔记本、一体机的电池在里面，请找售后或者懂哥。
+    2. 「CPU Fan Error」：主板没测到 CPU 风扇的转速。先打开机箱看 CPU 风扇转不转：不转的别再开机用，处理器会过热，要修或者换风扇。风扇在转的，多半是风扇线插在了写着 SYS_FAN、CHA_FAN 的口上，关机拔掉电源线以后改插到写着 CPU_FAN 的口；用水冷、转速很低的风扇的，进 BIOS 在硬件监控（Hardware Monitor、PC Health Status）里把 CPU 风扇的低转速报警（CPU Fan Speed Low Limit、CPU Fan Fail Warning 这类名字）调低或者关掉。
+    3. 「Press F1 to Run SETUP」「Defaults Loaded」「Load default settings」这类只出现一次的：BIOS 设置恢复成了默认，按 F1 进 BIOS，直接按 F10 保存退出就好。每次开机都这样的，还是看第 1 条换电池。
+    4. 按 F1 能进 Windows 的，进去以后用「同步时间」把时间对好；一关机时间又不对，就是电池没电了。
+
+    进了 BIOS 只改上面说的那一项，别动别的设置：尤其是硬盘模式（SATA Mode、AHCI、RAID），改了开机会蓝屏、进不了系统。
+links: ["tool:system.sync-time"]

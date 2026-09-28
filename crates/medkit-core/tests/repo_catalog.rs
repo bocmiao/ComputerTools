@@ -126,6 +126,8 @@ fn common_error_messages_find_their_symptom() {
             "你已使用临时配置文件登录。你无法访问你的文件，并且在此配置文件中创建的文件将在你注销时删除。若要解决此问题，请注销并稍后尝试登录。",
             "temp-profile",
         ),
+        ("CMOS checksum error - Defaults loaded Press F1 to continue, DEL to enter SETUP", "boot-press-f1"),
+        ("CPU Fan Error! Press F1 to Run SETUP", "boot-press-f1"),
     ];
     let wrong: Vec<String> = cases
         .iter()

@@ -1,0 +1,33 @@
+# 微软拼音一切过来先是英文模式，要打中文再按一下切换键。HKCU\Software\Microsoft\InputMethod\Settings\CHS 的「Default Mode」
+# （DWORD）：0 = 中文（系统默认；没有这个值时也是中文）、1 = 英文（ContextMenuManager 的作者整理的微软拼音注册表清单；
+# 无忧启动论坛的 PE 教程也是写这个值，「打开新程序都是默认英文输入，按 SHIFT 切换到中文」）。
+# 常在命令行、游戏、表格里打英文的人用得上：不用每次先把输入法切成英文。
+# 只管微软拼音：搜狗、QQ、百度这些输入法有自己的设置。直接改注册表，按注销再登录生效来说。
+id: input.pinyin-english-default
+schema_version: 1
+title: { zh-CN: 微软拼音默认是英文 }
+description:
+  zh-CN: 切到微软拼音、打开新的程序时，先是英文模式，要打中文再按一下 Shift（改成了按 Ctrl 切换的就按 Ctrl）。常在命令行、游戏、表格里打英文的人，不用每次先切成英文。只对微软拼音有效，改完注销再登录生效。
+category: input
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: logoff
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\InputMethod\Settings\CHS
+      name: Default Mode
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\InputMethod\Settings\CHS
+      name: Default Mode
+      delete: true
+undo: auto
+references:
+  - https://www.cnblogs.com/BluePointLilac/p/11688166.html
+  - https://wuyou.net/forum.php?mod=viewthread&tid=427132
