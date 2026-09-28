@@ -1,0 +1,35 @@
+# 新建的快捷方式不再带「- 快捷方式」几个字（右键「发送到 → 桌面快捷方式」、拖着 Alt 建的快捷方式，名字后面都会加上它）。
+# 做法来自 Sophia Script for Windows（MIT）的 ShortcutsSuffix -Disable：HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\
+# NamingTemplates 的 ShortcutNameTemplate（字符串）是新建快捷方式的名字模板，%s 换成原来的名字。值的写法照 Winaero、MakeUseOf 的
+# 教程，连双引号一起写成 "%s.lnk"（它们都说引号要留着，和 Windows 自带的模板一个格式）；Sophia 写的是不带引号的，真机验证清单
+# 里核对。Sophia 还会顺手删掉老办法留下的 Explorer 里的 link 值，那是用户以前自己改的，小药箱不去动它。恢复默认（windows_default）
+# 删掉这个值；撤销时引擎连同新建的空键一起删掉。
+# 只影响以后新建的快捷方式，已经建好的不会改名。
+id: explorer.no-shortcut-suffix
+schema_version: 1
+title: { zh-CN: 新建的快捷方式不带「- 快捷方式」 }
+description:
+  zh-CN: 发送到桌面、按住 Alt 拖出来的快捷方式，名字后面不再多出「- 快捷方式」几个字，不用每次手动改名。只管以后新建的，已经建好的不会改名。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\NamingTemplates
+      name: ShortcutNameTemplate
+      type: string
+      value: '"%s.lnk"'
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\NamingTemplates
+      name: ShortcutNameTemplate
+      delete: true
+undo: auto
+references:
+  - https://github.com/farag2/Sophia-Script-for-Windows/blob/main/src/Sophia_Script_for_Windows_11/Module/Sophia.psm1
+  - https://winaero.com/disable-the-shortcut-text-addition-for-shortcuts-in-windows-11/
+  - https://www.makeuseof.com/windows-disable-shortcut-suffix/

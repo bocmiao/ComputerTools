@@ -1,0 +1,38 @@
+# 删除文件前先问一下（脚本类功能）：和在回收站的「属性」里勾上「显示删除确认对话框」一样。Windows 8 起默认不问，按一下 Delete
+# 文件就进了回收站，清空过回收站的就找不回来了（见症状「误删了文件」）。脚本在 scripts/features/explorer/ 下，共享块 shell-state。
+# 设置存在登录用户的 Software\Microsoft\Windows\CurrentVersion\Explorer 的二进制值 ShellState 里：它就是微软《SHELLSTATEA
+# structure》的结构（前 4 个字节是长度），第 5 个字节（偏移 4）的 0x04 位是 fNoConfirmRecycle——「删到回收站时不弹确认框」。
+# 做法照 Sophia Script for Windows（MIT）的 RecycleBinDeleteConfirmation：只改这一位，其余字节原样写回。Sophia 还会删掉
+# ConfirmFileDelete 策略，小药箱不碰策略：策略管着的电脑上改了也看不出效果。
+#   delete-confirm-detect.ps1  这一位清着（会问）→ applied；设着 → not-applied；没有 ShellState → unknown
+#   delete-confirm-run.ps1     -Prepare：before = { exists, no_confirm }；执行：状态变了、没有 ShellState、本来就会问 → 跳过；
+#                              清掉这一位、读回来确认，失败时把这一位设回去再报错
+#   delete-confirm-undo.ps1    只把这一位改回原来的样子，别的字节保留现在的值
+#   delete-confirm-break.ps1   只在测试中使用：设上这一位（不问）
+# 资源管理器启动时读它，改完要重启资源管理器。
+id: explorer.delete-confirm
+schema_version: 1
+title: { zh-CN: 删除文件前先问一下 }
+description:
+  zh-CN: 按 Delete 删文件时，先弹出「确实要把此文件放入回收站吗？」，点「是」才删，不小心按到了也来得及反悔。和在回收站的「属性」里勾上「显示删除确认对话框」一样，重启资源管理器以后生效，能撤销。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+detect:
+  script: features/explorer/delete-confirm-detect.ps1
+prepare:
+  script: features/explorer/delete-confirm-run.ps1
+run:
+  script: features/explorer/delete-confirm-run.ps1
+undo:
+  script: features/explorer/delete-confirm-undo.ps1
+break:
+  script: features/explorer/delete-confirm-break.ps1
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/ns-shlobj_core-shellstatea
+  - https://github.com/farag2/Sophia-Script-for-Windows/blob/main/src/Sophia_Script_for_Windows_11/Module/Sophia.psm1
