@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use medkit_core::Engine;
 use medkit_core::bundle::Bundle;
@@ -458,6 +458,23 @@ fn close_new(exe: &str, before: &[u32]) {
     }
 }
 
+/// 查打开某种链接的应用（「获取帮助」的疑难解答先用它看有没有这个应用）：瞎编的一定没有，常见的几种总有能查到的；
+/// 每种在这台机器上是什么，打印出来看。
+#[test]
+fn protocol_handlers_are_found() {
+    use medkit_core::platform::windows::protocol_handler;
+    assert_eq!(protocol_handler("medkit-no-such-scheme"), None);
+    let mut found = Vec::new();
+    for scheme in ["https", "http", "mailto", "ms-settings", "ms-contact-support", "ms-windows-store"] {
+        let handler = protocol_handler(scheme);
+        eprintln!("{scheme}：{handler:?}");
+        if handler.is_some() {
+            found.push(scheme);
+        }
+    }
+    assert!(!found.is_empty(), "常见的链接一种都查不到打开它的应用");
+}
+
 /// 每个打开类小工具真打开一次：程序在的要能打开；不在的（服务器版可能没装）要如实说「这台电脑上没有」。
 /// 打开的窗口随后关掉。「设置」页面在服务器版上可能打不开，只提示、不算失败。
 #[test]
@@ -467,6 +484,7 @@ fn open_tools_launch_or_explain_why_not() {
     let (engine, bundle, _) = real_engine(dir.path());
     let system32 = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join("System32");
     let mut failures = Vec::new();
+    let mut get_help_missing = false;
     for t in bundle.catalog.tools.iter().filter(|t| t.group == ToolGroup::Open) {
         let open = t.open.as_ref().expect("open 小工具有 open");
         match (&open.program, &open.settings, &open.troubleshooter) {
@@ -520,17 +538,29 @@ fn open_tools_launch_or_explain_why_not() {
                 std::thread::sleep(Duration::from_secs(2));
                 close_new("SystemSettings.exe", &before);
             }
-            // 「获取帮助」是应用商店的应用，服务器版上多半没有：没有时要说清楚，有的话打开再关掉
+            // 「获取帮助」是应用商店的应用，服务器版上多半没有：没有时要说清楚，有的话打开再关掉。
+            // 10 个疑难解答走同一条路：有一个打不开，剩下的就不再试了（每个都可能要等到超时）
+            (None, None, Some(_)) if get_help_missing => {}
             (None, None, Some(name)) => {
                 let before = pids_of("GetHelp.exe");
                 // 没有处理这种链接的应用时，有的系统会弹「需要使用新应用以打开此链接」（OpenWith.exe）
                 let before_open_with = pids_of("OpenWith.exe");
+                let started = Instant::now();
                 match engine.tool_open(&t.id) {
                     Ok(()) => eprintln!("打开了 {:<28} 「获取帮助」的 {name}", t.id),
                     Err(e) if e.to_string().contains("没有「获取帮助」应用") => {
                         println!("::notice title={}::这台 CI 机器上没有「获取帮助」：{e}", t.id);
+                        get_help_missing = true;
                     }
-                    Err(e) => println!("::warning title={}::「获取帮助」的 {name} 打不开：{e}", t.id),
+                    Err(e) => {
+                        println!("::warning title={}::「获取帮助」的 {name} 打不开：{e}", t.id);
+                        get_help_missing = true;
+                    }
+                }
+                let took = started.elapsed();
+                eprintln!("  用了 {:.1} 秒", took.as_secs_f64());
+                if took > Duration::from_secs(40) {
+                    failures.push(format!("{}：等了 {:.0} 秒才返回，超过了 30 秒的上限", t.id, took.as_secs_f64()));
                 }
                 std::thread::sleep(Duration::from_secs(2));
                 close_new("GetHelp.exe", &before);

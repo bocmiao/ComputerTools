@@ -749,9 +749,48 @@ fn open_get_help(name: &str) -> PResult<()> {
     const ERROR_FILE_NOT_FOUND: u32 = 2;
     const SE_ERR_NOASSOC: u32 = 31;
     const ERROR_NO_ASSOCIATION: u32 = 1155;
+    // 没有能打开这种链接的应用就不去打开：系统会弹「需要使用新应用以打开此链接」，有的系统上 ShellExecuteExW
+    // 还会一直等着这个没人点的对话框
+    if protocol_handler("ms-contact-support").is_none() {
+        return Err(PlatformError::NotFound("获取帮助".into()));
+    }
     shell_open(OsStr::new(&format!("ms-contact-support://smc-to-emerald/{name}")), None).map_err(|code| match code {
         ERROR_FILE_NOT_FOUND | SE_ERR_NOASSOC | ERROR_NO_ASSOCIATION => PlatformError::NotFound("获取帮助".into()),
+        SHELL_TIMED_OUT => PlatformError::Other(format!(
+            "等了 {} 秒「获取帮助」还没有打开，可能还在启动：稍等一会儿；一直没出来的，到「设置」的「疑难解答」页里找",
+            SHELL_TIMEOUT.as_secs()
+        )),
         code => PlatformError::Other(format!("系统没有响应（错误代码 {code}）")),
+    })
+}
+
+/// 这台电脑上打开 `scheme:` 这种链接的应用：AssocQueryStringW 查到的应用（AppUserModelID），桌面程序查不到
+/// AppUserModelID 时给打开它的命令行。都查不到就是没有能打开这种链接的应用。只查不打开。
+pub fn protocol_handler(scheme: &str) -> Option<String> {
+    use windows_sys::Win32::UI::Shell::{
+        ASSOCF_IS_PROTOCOL, ASSOCF_NOTRUNCATE, ASSOCSTR_APPID, ASSOCSTR_COMMAND, AssocQueryStringW,
+    };
+    let scheme = wide(scheme);
+    [ASSOCSTR_APPID, ASSOCSTR_COMMAND].into_iter().find_map(|kind| {
+        let mut buf = vec![0u16; 2048];
+        let mut len = buf.len() as u32;
+        // SAFETY: scheme 以 NUL 结尾；buf 有 len 个字符；pszExtra 为空表示默认的动作
+        let hr = unsafe {
+            AssocQueryStringW(
+                ASSOCF_IS_PROTOCOL | ASSOCF_NOTRUNCATE,
+                kind,
+                scheme.as_ptr(),
+                null(),
+                buf.as_mut_ptr(),
+                &mut len,
+            )
+        };
+        if hr != 0 {
+            return None;
+        }
+        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        let found = String::from_utf16_lossy(&buf[..end]);
+        (!found.trim().is_empty()).then_some(found)
     })
 }
 
@@ -915,13 +954,37 @@ pub fn set_file_attributes(path: &Path, value: u32) -> std::io::Result<()> {
     Ok(())
 }
 
+/// ShellExecuteExW 最多等多久。个别系统上它会一直不返回（比如在等一个没人点的「需要使用新应用以打开此链接」），
+/// 小药箱的按钮不能跟着一直转圈。
+const SHELL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+/// 等超时了，shell_execute 返回的错误代码（就是系统的 WAIT_TIMEOUT）。
+const SHELL_TIMED_OUT: u32 = 258;
+
 /// ShellExecuteExW 的 open；`class` 给了就按这个文件类型打开，不看目标本身是什么。失败时返回 GetLastError 的代码。
 fn shell_open(target: &OsStr, class: Option<&str>) -> Result<(), u32> {
     shell_execute(target, class, None, None)
 }
 
-/// ShellExecuteExW（open）。`params`、`dir`：程序的参数和当前文件夹。
+/// ShellExecuteExW（open），在单独的线程上调用，最多等 SHELL_TIMEOUT：超时返回 SHELL_TIMED_OUT，那个线程留着
+/// 等系统返回，返回以后自己结束。`params`、`dir`：程序的参数和当前文件夹。
 fn shell_execute(target: &OsStr, class: Option<&str>, params: Option<&str>, dir: Option<&Path>) -> Result<(), u32> {
+    const ERROR_NOT_ENOUGH_MEMORY: u32 = 8;
+    let target = target.to_owned();
+    let class = class.map(str::to_owned);
+    let params = params.map(str::to_owned);
+    let dir = dir.map(Path::to_path_buf);
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("shell-execute".into())
+        .spawn(move || {
+            let _ = tx.send(shell_execute_now(&target, class.as_deref(), params.as_deref(), dir.as_deref()));
+        })
+        .map_err(|_| ERROR_NOT_ENOUGH_MEMORY)?;
+    rx.recv_timeout(SHELL_TIMEOUT).unwrap_or(Err(SHELL_TIMED_OUT))
+}
+
+/// 在当前线程上调用 ShellExecuteExW（open），等它返回。
+fn shell_execute_now(target: &OsStr, class: Option<&str>, params: Option<&str>, dir: Option<&Path>) -> Result<(), u32> {
     use windows_sys::Win32::Foundation::GetLastError;
     use windows_sys::Win32::System::Com::{
         COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
