@@ -239,6 +239,15 @@ fn round_trip_lock() -> MutexGuard<'static, ()> {
     ROUND_TRIP.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// 开关窗口、重启资源管理器的测试，和要看「鼠标下面是哪个窗口」的测试不能同时跑：打开系统工具的测试打开的控制面板
+/// 窗口在 explorer.exe 里，按 control.exe 关不掉，会盖住记事本（CI 139 就是这样失败的）。
+/// 要和 update_lock 一起拿的，先拿 update_lock，再拿这个。
+static DESKTOP: Mutex<()> = Mutex::new(());
+
+fn desktop_lock() -> MutexGuard<'static, ()> {
+    DESKTOP.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[test]
 fn every_check_runs_cleanly_on_windows_powershell() {
     let _update = update_lock();
@@ -400,6 +409,7 @@ fn every_feature_breaks_fixes_and_undoes() {
 #[ignore = "会重启资源管理器、刷新 DNS 缓存"]
 fn every_tool_runs_cleanly_on_windows_powershell() {
     let _update = update_lock();
+    let _desktop = desktop_lock();
     let dir = tempfile::tempdir().unwrap();
     let (engine, bundle, platform) = real_engine(dir.path());
     let computer = std::env::var("COMPUTERNAME").unwrap_or_default().to_lowercase();
@@ -484,6 +494,7 @@ fn protocol_handlers_are_found() {
 #[test]
 #[ignore = "会打开再关掉系统工具的窗口"]
 fn open_tools_launch_or_explain_why_not() {
+    let _desktop = desktop_lock();
     let dir = tempfile::tempdir().unwrap();
     let (engine, bundle, _) = real_engine(dir.path());
     let system32 = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join("System32");
@@ -1874,9 +1885,10 @@ fn window_owner_names_the_program_under_the_mouse() {
     use medkit_core::window_owner::{self, is_generic, owning_program, program_folders};
     use windows_sys::Win32::Foundation::{POINT, RECT};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, GetCursorPos, GetWindowRect, GetWindowThreadProcessId, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE,
-        SWP_SHOWWINDOW, SetCursorPos, SetWindowPos,
+        FindWindowW, GA_ROOT, GetAncestor, GetClassNameW, GetCursorPos, GetWindowRect, GetWindowThreadProcessId,
+        HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SetCursorPos, SetWindowPos, WindowFromPoint,
     };
+    let _desktop = desktop_lock();
 
     struct Kill(std::process::Child);
     impl Drop for Kill {
@@ -1970,7 +1982,19 @@ fn window_owner_names_the_program_under_the_mouse() {
             return;
         }
         last = Some(r);
+        // 还有别的窗口盖在记事本上面（比如刚打开的窗口）：再把记事本放到最上面
+        // SAFETY: window 是记事本的窗口；只改前后顺序，不移动、不改大小
+        unsafe { SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW) };
         std::thread::sleep(Duration::from_millis(100));
     }
-    panic!("鼠标在记事本的窗口上，认出来的却是：{last:?}");
+    // 盖住记事本的是哪一类窗口，出问题时好查
+    let mut name = [0u16; 256];
+    // SAFETY: 只是查询；name 的长度如实传入
+    let len = unsafe {
+        let hit = WindowFromPoint(at);
+        let root = if hit.is_null() { hit } else { GetAncestor(hit, GA_ROOT) };
+        if root.is_null() { 0 } else { GetClassNameW(root, name.as_mut_ptr(), name.len() as i32) }
+    };
+    let class = String::from_utf16_lossy(&name[..usize::try_from(len).unwrap_or(0).min(name.len())]);
+    panic!("鼠标在记事本的窗口上，认出来的却是：{last:?}（鼠标下面的窗口的类名：{class}）");
 }
