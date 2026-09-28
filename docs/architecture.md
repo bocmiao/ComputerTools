@@ -636,6 +636,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `network-connections` | `control.exe netconnections`（控制面板的「网络连接」：网卡的禁用、启用和属性） |
 | `system-protection` | `SystemPropertiesProtection.exe`（「系统属性」的「系统保护」页：开关系统保护、创建还原点） |
 | `environment-variables` | `SystemPropertiesAdvanced.exe`（「系统属性」的「高级」页：下面的「环境变量」按钮改 Path、PATHEXT） |
+| `task-scheduler` | `mmc.exe taskschd.msc`（「任务计划程序」：禁用、启用计划任务） |
 | `store-reset` | `WSReset.exe`（重置 Microsoft Store 的缓存：空白窗口自己关掉、商店自动打开，不删应用） |
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 

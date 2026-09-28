@@ -1,0 +1,12 @@
+# 打开「任务计划程序」（open：mmc.exe taskschd.msc）。在「任务计划程序库」里右键一个任务能「禁用」「启用」；
+# 隐藏的任务要先在「查看」菜单里勾上「显示隐藏的任务」。小工具「计划任务里的第三方任务」查出可疑的任务时给这个按钮。
+id: open.task-scheduler
+schema_version: 1
+group: open
+title: { zh-CN: 任务计划程序 }
+description:
+  zh-CN: 打开 Windows 的「任务计划程序」：左边点「任务计划程序库」，中间是所有计划任务，右键一个任务可以「禁用」，以后想用再「启用」。
+category: system
+open: { program: task-scheduler }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-start-page

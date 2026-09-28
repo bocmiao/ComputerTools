@@ -1,0 +1,75 @@
+# 计划任务里的第三方任务（info）。脚本：scripts/tools/system/scheduled-tasks.ps1，只读（共享块 program-info，和开机启动项、
+# 右键菜单共用：从命令行找出运行的是哪个文件、它的公司和数字签名）。
+# \Microsoft\ 下面的是 Windows 自己的，不列。别的任务列出：运行的程序（只有文件名；脚本宿主、rundll32 列它运行的那个文件）、公司、
+# 什么时候运行（每种触发器一行，最多三行）、启用没有、上次运行的时间，和值得注意的地方：hidden（隐藏的任务）、wake（会叫醒电脑）、
+# missing（程序已经不在了）、script（通过脚本宿主、命令行、rundll32 运行）、user-dir（程序在用户文件夹里、又没有有效签名；有签名的
+# OneDrive、Teams 这类不算）、unsigned（别处的程序没有有效签名）。
+# 有标记的排在前面，最多列 25 个。任务名里的 SID、用户文件夹名都换成 *。
+# 结果：flagged（有值得注意的）、found、none。事实：tasks、flagged。
+id: system.scheduled-tasks
+schema_version: 1
+group: info
+title: { zh-CN: 计划任务里的第三方任务 }
+description:
+  zh-CN: 列出不是 Windows 自带的计划任务：大多是软件的自动更新，也有在后台弹广告、把关掉的开机启动项又拉起来、半夜把电脑叫醒的。隐藏的、会叫醒电脑的、程序已经不在了的、用脚本运行的排在最前面。只看不改。
+category: system
+requires_admin: true
+user_hive: true
+timeout_sec: 120
+run:
+  script: tools/system/scheduled-tasks.ps1
+results:
+  flagged:
+    status: advice
+    message:
+      zh-CN: "有 {tasks} 个不是 Windows 自带的计划任务，其中 {flagged} 个值得看一看（排在最前面，「值得注意」一行写了原因）。"
+    next:
+      zh-CN: 不认识、又带着这些标记的任务，可以先禁用：点「任务计划程序」，左边选「任务计划程序库」，在中间找到同名的任务（隐藏的任务要先在「查看」菜单里勾上「显示隐藏的任务」），右键选「禁用」。禁用以后随时能再「启用」，先别删除，用几天没问题再说。名字里带 Update、Updater 的多半是软件的自动更新，禁用了软件就不会自己更新。程序已经不在了的任务，是卸载了的软件留下的，删掉也没关系。
+    links: ["tool:open.task-scheduler", "symptom:popup-ads", "symptom:wakes-up"]
+  found:
+    status: ok
+    message:
+      zh-CN: "有 {tasks} 个不是 Windows 自带的计划任务，没看出可疑的地方（多半是软件的自动更新）。"
+    next:
+      zh-CN: 想关掉某个软件的自动更新、后台任务，可以在「任务计划程序」里找到同名的任务，右键「禁用」，以后随时能再「启用」。
+    links: ["tool:open.task-scheduler"]
+  none:
+    status: ok
+    message:
+      zh-CN: 除了 Windows 自带的，没有别的计划任务。
+labels:
+  sections:
+    task: { zh-CN: 计划任务 }
+  rows:
+    program: { zh-CN: 运行的程序 }
+    company: { zh-CN: 公司 }
+    when: { zh-CN: 什么时候运行 }
+    state: { zh-CN: 状态 }
+    last: { zh-CN: 上次运行 }
+    flag: { zh-CN: 值得注意 }
+  values:
+    none: { zh-CN: 没有要运行的程序 }
+    com: { zh-CN: Windows 组件 }
+    logon: { zh-CN: 登录的时候 }
+    startup: { zh-CN: 开机的时候 }
+    repeat: { zh-CN: 隔一会儿就运行一次 }
+    daily: { zh-CN: 每天 }
+    weekly: { zh-CN: 每周 }
+    once: { zh-CN: 到了设定的时间 }
+    idle: { zh-CN: 电脑空闲的时候 }
+    event: { zh-CN: 发生某个系统事件的时候 }
+    session: { zh-CN: 锁屏、解锁、远程连接的时候 }
+    registration: { zh-CN: 任务刚建好的时候 }
+    other: { zh-CN: 其他时候 }
+    on: { zh-CN: 启用 }
+    off: { zh-CN: 已禁用 }
+    hidden: { zh-CN: 隐藏的任务（任务计划程序里默认看不到） }
+    wake: { zh-CN: 会把睡着的电脑叫醒 }
+    missing: { zh-CN: 要运行的程序已经不在了（卸载了的软件留下的） }
+    script: { zh-CN: 通过脚本、命令行或 rundll32 运行（弹广告的程序常这样藏） }
+    user-dir: { zh-CN: 程序放在用户文件夹里（AppData、临时文件夹），又没有有效的数字签名 }
+    unsigned: { zh-CN: 程序没有有效的数字签名 }
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/get-scheduledtask
+  - https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-hidden
+  - https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-waketorun

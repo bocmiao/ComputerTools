@@ -1,24 +1,27 @@
-# Startup items: the programs that start when the user signs in.
-# Read-only. The places Task Manager's "Startup apps" page lists (apart from
-# packaged Store apps, which have their own switch in Settings):
-#   user-run       <UserHive>\Software\Microsoft\Windows\CurrentVersion\Run
-#   machine-run    HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
-#   machine-run32  HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run
-#   user-folder    the user's Startup folder (User Shell Folders\Startup)
-#   common-folder  the Startup folder of all users (Common Startup)
-# Whether an item is switched off (the StartupApproved values, the switch Task
-# Manager uses) is read by the engine itself, from the same place it writes.
-# For every item: the program it starts (a quoted path, or the text up to the
-# first .exe; shortcuts are resolved; for rundll32, wscript and other hosts the
-# file they run), whether that file exists, its description and company (what
-# Task Manager shows) and its Authenticode signature. Checking a signature
-# reads the whole file, so the checks stop after $signatureBudgetMs and the
-# rest are reported as skipped.
-# Paths stay on this PC: the engine shows them in the list, never in the
-# report.
-# Output: result = 'ok', items = one object per item: source, name, path,
-# exists, description, company, signature (valid / unsigned / invalid /
-# unknown / skipped), signer, system (the program is under the Windows folder).
+# Tool: system.scheduled-tasks (info)
+# The scheduled tasks that did not come with Windows: mostly software
+# updaters, but also what pops up ads, starts a program again after it was
+# taken out of startup, or wakes the PC at night. Read-only.
+# Tasks under \Microsoft\ are Windows' own and left out. For each other task
+# (Get-ScheduledTask; its exec actions, see the shared block for how a
+# command line is read): the program it runs (file name only; for script
+# hosts and rundll32 the file they run), the company in the file, when it
+# runs (one row per kind of trigger, at most three), whether it is on, when
+# it last ran, and what makes it worth a look:
+#   hidden     Settings.Hidden: Task Scheduler does not show it unless "Show
+#              Hidden Tasks" is on
+#   wake       Settings.WakeToRun: wakes the PC from sleep to run
+#   missing    the program is not there (left behind by removed software)
+#   script     runs through a script host or rundll32 ($hostPrograms)
+#   user-dir   the program is in the user's folder (AppData, Temp) and has
+#              no valid digital signature
+#   unsigned   the program (elsewhere) has no valid digital signature
+# The tasks worth a look come first; at most $maxTasks are listed.
+# Privacy: task names can hold the user's SID (Google, Edge and OneDrive add
+# it) and user folder names; both are replaced. Of paths only file names are
+# kept.
+# Result codes: flagged / found / none. Facts: tasks (tasks not from
+# Windows), flagged (the ones worth a look).
 
 [CmdletBinding()]
 param(
@@ -27,10 +30,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$signatureBudgetMs = 30000
-$maxItems = 200
-$runKey = 'Software\Microsoft\Windows\CurrentVersion\Run'
-$shellFolders = 'Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
+if ([string]::IsNullOrWhiteSpace($UserHive)) {
+    $UserHive = 'HKCU:'
+}
+
+$signatureBudgetMs = 20000
+$maxTasks = 25
+$maxRead = 80
+
 # ---- shared block program-info: identical in startup/list.ps1, shell/context-menu-list.ps1 and tools/system/scheduled-tasks.ps1 (medkit-data check compares them) ----
 # Which program a command line starts, and what that file says about itself.
 # Uses $UserHive (the logged-in user's hive, or HKCU:) and $signatureBudgetMs.
@@ -275,127 +282,187 @@ function Get-FileFacts {
 }
 # ---- end of shared block program-info ----
 
-function New-ItemInfo {
-    param([string]$Source, [string]$Name, [string]$Path, [bool]$Hosted)
-    $info = [ordered]@{
-        source = $Source
-        name   = $Name
-        path   = $Path
-    }
-    $facts = Get-FileFacts -Path $Path -Hosted $Hosted
-    foreach ($key in @($facts.Keys)) {
-        $info[$key] = $facts[$key]
-    }
-    return $info
+$profileLeaf = ''
+if ($profileDir.Length -gt 0) {
+    $profileLeaf = Get-Leaf $profileDir.TrimEnd('\')
 }
 
-$items = New-Object System.Collections.Generic.List[object]
+# A task name to show: no SID, no user folder name, at most 80 characters.
+function Get-TaskLabel {
+    param([string]$Path, [string]$Name)
+    $text = Get-Text ($Path.TrimStart('\') + $Name)
+    $text = $text -replace '(?i)S-1-5-21(-\d+)+', '*'
+    $text = $text -replace '(?i)(\\(Users|Documents and Settings)\\)[^\\]+', '$1*'
+    if (($profileLeaf.Length -ge 2) -and ($text.IndexOf($profileLeaf, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)) {
+        $text = [regex]::Replace($text, [regex]::Escape($profileLeaf), '*', 'IgnoreCase')
+    }
+    if ($text.Length -gt 80) {
+        $text = $text.Substring(0, 80)
+    }
+    return $text
+}
 
-function Add-RunItems {
-    param([string]$Source, [string]$KeyPath)
-    try {
-        $key = Get-Item -LiteralPath $KeyPath -ErrorAction Stop
+# The kinds of a task's triggers, in a fixed order.
+function Get-TriggerKinds {
+    param($Task)
+    $kinds = New-Object System.Collections.Generic.List[string]
+    foreach ($trigger in @($Task.Triggers)) {
+        if ($null -eq $trigger) {
+            continue
+        }
+        $class = [string]$trigger.CimClass.CimClassName
+        $kind = 'other'
+        switch ($class) {
+            'MSFT_TaskLogonTrigger' { $kind = 'logon' }
+            'MSFT_TaskBootTrigger' { $kind = 'startup' }
+            'MSFT_TaskDailyTrigger' { $kind = 'daily' }
+            'MSFT_TaskWeeklyTrigger' { $kind = 'weekly' }
+            'MSFT_TaskTimeTrigger' { $kind = 'once' }
+            'MSFT_TaskIdleTrigger' { $kind = 'idle' }
+            'MSFT_TaskEventTrigger' { $kind = 'event' }
+            'MSFT_TaskSessionStateChangeTrigger' { $kind = 'session' }
+            'MSFT_TaskRegistrationTrigger' { $kind = 'registration' }
+        }
+        $interval = ''
+        if ($null -ne $trigger.Repetition) {
+            $interval = [string]$trigger.Repetition.Interval
+        }
+        if ($interval.Length -gt 0) {
+            $kind = 'repeat'
+        }
+        if (-not $kinds.Contains($kind)) {
+            $kinds.Add($kind)
+        }
     }
-    catch {
-        return
+    $order = @('logon', 'startup', 'repeat', 'daily', 'weekly', 'once', 'idle', 'event', 'session', 'registration', 'other')
+    return , @($order | Where-Object { $kinds.Contains($_) } | Select-Object -First 3)
+}
+
+$tasks = @()
+try {
+    $tasks = @(Get-ScheduledTask -ErrorAction Stop | Where-Object { -not ([string]$_.TaskPath).StartsWith('\Microsoft\', [System.StringComparison]::OrdinalIgnoreCase) })
+}
+catch {
+    Write-Verbose ('The scheduled tasks could not be listed: ' + $_.Exception.Message)
+}
+
+$entries = New-Object System.Collections.Generic.List[object]
+foreach ($task in @($tasks | Select-Object -First $maxRead)) {
+    $flags = New-Object System.Collections.Generic.List[string]
+    if ($task.Settings.Hidden -eq $true) {
+        $flags.Add('hidden')
     }
-    foreach ($name in @($key.GetValueNames())) {
-        if (($items.Count -ge $maxItems) -or ([string]::IsNullOrEmpty($name))) {
+    if ($task.Settings.WakeToRun -eq $true) {
+        $flags.Add('wake')
+    }
+    $programName = ''
+    $programCode = 'none'
+    $company = ''
+    foreach ($action in @($task.Actions)) {
+        if ($null -eq $action) {
             continue
         }
-        $kind = $key.GetValueKind($name)
-        if (($kind -ne [Microsoft.Win32.RegistryValueKind]::String) -and ($kind -ne [Microsoft.Win32.RegistryValueKind]::ExpandString)) {
+        $execute = Get-Text $action.Execute
+        if ($execute.Length -eq 0) {
+            if ([string]$action.CimClass.CimClassName -eq 'MSFT_TaskComHandlerAction') {
+                $programCode = 'com'
+            }
             continue
         }
-        $command = Get-Text $key.GetValue($name, '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
-        if ($command.Length -eq 0) {
-            continue
+        $command = $execute
+        if ((-not $execute.StartsWith('"')) -and $execute.Contains(' ')) {
+            $command = '"' + $execute + '"'
         }
+        $command = ($command + ' ' + (Get-Text $action.Arguments)).Trim()
         $program = Get-Program $command
-        $items.Add((New-ItemInfo -Source $Source -Name $name -Path $program.Path -Hosted $program.Hosted))
-    }
-}
-
-$shell = $null
-function Get-ShortcutTarget {
-    param([string]$Path)
-    if ($null -eq $script:shell) {
-        $script:shell = New-Object -ComObject WScript.Shell
-    }
-    $link = $script:shell.CreateShortcut($Path)
-    $target = Get-Text $link.TargetPath
-    if ($target.Length -eq 0) {
-        return [pscustomobject]@{ Path = ''; Hosted = $false }
-    }
-    if ($hostPrograms -contains (Get-Leaf $target).ToLowerInvariant()) {
-        $hosted = Get-HostedFile (Expand-UserText (Get-Text $link.Arguments))
-        if ($hosted.Length -gt 0) {
-            return [pscustomobject]@{ Path = (Resolve-ProgramPath $hosted); Hosted = $true }
-        }
-        return [pscustomobject]@{ Path = $target; Hosted = $true }
-    }
-    return [pscustomobject]@{ Path = $target; Hosted = $false }
-}
-
-function Add-FolderItems {
-    param([string]$Source, [string]$Folder)
-    if (($Folder.Length -eq 0) -or (-not (Test-Path -LiteralPath $Folder -PathType Container))) {
-        return
-    }
-    foreach ($file in @(Get-ChildItem -LiteralPath $Folder -File -Force -ErrorAction SilentlyContinue)) {
-        if (($items.Count -ge $maxItems) -or ($file.Name -ieq 'desktop.ini')) {
+        if ($program.Path.Length -eq 0) {
             continue
         }
-        $program = [pscustomobject]@{ Path = $file.FullName; Hosted = $false }
-        if ($file.Extension -ieq '.lnk') {
-            try {
-                $program = Get-ShortcutTarget $file.FullName
-            }
-            catch {
-                $program = [pscustomobject]@{ Path = ''; Hosted = $false }
-            }
+        $facts = Get-FileFacts $program.Path $program.Hosted
+        $programName = Get-Leaf $program.Path
+        $programCode = ''
+        $company = $facts.company
+        if (-not $facts.exists) {
+            $flags.Add('missing')
         }
-        elseif ($file.Extension -ieq '.url') {
-            $program = [pscustomobject]@{ Path = ''; Hosted = $false }
+        if ($program.Hosted) {
+            $flags.Add('script')
         }
-        $items.Add((New-ItemInfo -Source $Source -Name $file.Name -Path $program.Path -Hosted $program.Hosted))
+        # Signed programs in the user's folder are common (OneDrive, Teams);
+        # unsigned ones there are what adware looks like.
+        $expanded = Expand-UserText $program.Path
+        $inUserDir = (($profileDir.Length -gt 0) -and $expanded.StartsWith($profileDir + '\', [System.StringComparison]::OrdinalIgnoreCase)) -or ($expanded -match '(?i)\\(Temp|AppData)\\')
+        if ($facts.exists -and ($facts.signature -ne 'valid') -and $inUserDir) {
+            $flags.Add('user-dir')
+        }
+        elseif ($facts.exists -and (@('unsigned', 'invalid') -contains $facts.signature)) {
+            $flags.Add('unsigned')
+        }
+        break
     }
-}
-
-# A folder from User Shell Folders (REG_EXPAND_SZ, not expanded yet).
-function Get-ShellFolder {
-    param([string]$KeyPath, [string]$Name)
+    $last = ''
     try {
-        $key = Get-Item -LiteralPath $KeyPath -ErrorAction Stop
-        $raw = Get-Text $key.GetValue($Name, '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $info = Get-ScheduledTaskInfo -InputObject $task -ErrorAction Stop
+        if (($null -ne $info.LastRunTime) -and ([DateTime]$info.LastRunTime).Year -ge 2001) {
+            $last = ([DateTime]$info.LastRunTime).ToString('yyyy-MM-dd HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+        }
     }
     catch {
-        return ''
+        $last = ''
     }
-    if ($raw.Length -eq 0) {
-        return ''
+    $entries.Add([pscustomobject]@{
+            Label   = Get-TaskLabel ([string]$task.TaskPath) ([string]$task.TaskName)
+            Program = $programName
+            Code    = $programCode
+            Company = $company
+            Kinds   = Get-TriggerKinds $task
+            On      = ([string]$task.State -ne 'Disabled')
+            Last    = $last
+            Flags   = $flags.ToArray()
+        })
+}
+
+$flaggedCount = @($entries | Where-Object { $_.Flags.Count -gt 0 }).Count
+$shown = @($entries | Sort-Object -Property @{ Expression = { $_.Flags.Count }; Descending = $true }, @{ Expression = { $_.Label }; Descending = $false } | Select-Object -First $maxTasks)
+$sections = New-Object System.Collections.Generic.List[object]
+foreach ($entry in $shown) {
+    $rows = New-Object System.Collections.Generic.List[object]
+    if ($entry.Program.Length -gt 0) {
+        $rows.Add([ordered]@{ id = 'program'; value = $entry.Program })
     }
-    return Expand-UserText $raw
+    else {
+        $rows.Add([ordered]@{ id = 'program'; code = $entry.Code })
+    }
+    if ($entry.Company.Length -gt 0) {
+        $rows.Add([ordered]@{ id = 'company'; value = $entry.Company })
+    }
+    foreach ($kind in $entry.Kinds) {
+        $rows.Add([ordered]@{ id = 'when'; code = $kind })
+    }
+    $state = 'off'
+    if ($entry.On) {
+        $state = 'on'
+    }
+    $rows.Add([ordered]@{ id = 'state'; code = $state })
+    if ($entry.Last.Length -gt 0) {
+        $rows.Add([ordered]@{ id = 'last'; value = $entry.Last })
+    }
+    foreach ($flag in $entry.Flags) {
+        $rows.Add([ordered]@{ id = 'flag'; code = $flag })
+    }
+    $sections.Add([ordered]@{ id = 'task'; name = $entry.Label; rows = $rows.ToArray() })
 }
 
-$userRoot = $UserHive.TrimEnd('\')
-Add-RunItems -Source 'user-run' -KeyPath ($userRoot + '\' + $runKey)
-Add-RunItems -Source 'machine-run' -KeyPath ('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run')
-Add-RunItems -Source 'machine-run32' -KeyPath ('HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run')
-
-$userStartup = Get-ShellFolder -KeyPath ($userRoot + '\' + $shellFolders) -Name 'Startup'
-if (($userStartup.Length -eq 0) -and ($profileDir.Length -gt 0)) {
-    $userStartup = $profileDir + '\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup'
+$result = 'none'
+if ($flaggedCount -gt 0) {
+    $result = 'flagged'
 }
-Add-FolderItems -Source 'user-folder' -Folder $userStartup
-
-$commonStartup = Get-ShellFolder -KeyPath ('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders') -Name 'Common Startup'
-if ($commonStartup.Length -eq 0) {
-    $commonStartup = [Environment]::GetFolderPath('CommonApplicationData') + '\Microsoft\Windows\Start Menu\Programs\StartUp'
+elseif ($entries.Count -gt 0) {
+    $result = 'found'
 }
-Add-FolderItems -Source 'common-folder' -Folder $commonStartup
 
 [pscustomobject]@{
-    result = 'ok'
-    items  = $items.ToArray()
+    result   = $result
+    facts    = [ordered]@{ tasks = $entries.Count; flagged = $flaggedCount }
+    sections = $sections.ToArray()
 }

@@ -16,7 +16,7 @@
 # - "Allow wake timers" of the active plan (see the shared block): 0 No,
 #   1 Yes, 2 Important.
 # Privacy: of a program's path only the file name is kept, and a user folder
-# name in any text is replaced.
+# name or a user's SID in any text is replaced.
 # Result codes: found (a wake in the last 14 days) / none.
 # Facts: days, wakes, devices, tasks.
 
@@ -95,8 +95,10 @@ function Get-CleanText {
         return ''
     }
     $text = ((([string]$Value) -replace '[\x00-\x1f]', ' ') -replace '\s+', ' ').Trim()
-    # A user folder name is personal
+    # A user folder name is personal, and so is the user's SID (some task
+    # names end with it)
     $text = $text -replace '(?i)(\\(Users|Documents and Settings)\\)[^\\]+', '$1*'
+    $text = $text -replace '(?i)S-1-5-21(-\d+)+', '*'
     if ($text.Length -gt 160) {
         $text = $text.Substring(0, 160)
     }

@@ -52,7 +52,7 @@ $scopes = @('*', 'AllFilesystemObjects', 'Directory', 'Folder', 'Directory\Backg
 $guidPattern = '^\{?([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\}?$'
 $noExpand = [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
 
-# ---- shared block program-info: identical in startup/list.ps1 and shell/context-menu-list.ps1 (medkit-data check compares them) ----
+# ---- shared block program-info: identical in startup/list.ps1, shell/context-menu-list.ps1 and tools/system/scheduled-tasks.ps1 (medkit-data check compares them) ----
 # Which program a command line starts, and what that file says about itself.
 # Uses $UserHive (the logged-in user's hive, or HKCU:) and $signatureBudgetMs.
 $windowsDir = [Environment]::GetFolderPath('Windows').TrimEnd('\')

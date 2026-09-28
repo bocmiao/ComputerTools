@@ -37,6 +37,8 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     ("system-information", Program { exe: "msinfo32.exe", args: &[], console: &[] }),
     ("services", Program { exe: "mmc.exe", args: &["services.msc"], console: &[] }),
     ("event-viewer", Program { exe: "mmc.exe", args: &["eventvwr.msc"], console: &[] }),
+    // 「任务计划程序」：禁用、启用计划任务（隐藏的要在「查看」菜单里勾上「显示隐藏的任务」）
+    ("task-scheduler", Program { exe: "mmc.exe", args: &["taskschd.msc"], console: &[] }),
     ("control-panel", Program { exe: "control.exe", args: &[], console: &[] }),
     ("uac-settings", Program { exe: "UserAccountControlSettings.exe", args: &[], console: &[] }),
     ("firewall", Program { exe: "control.exe", args: &["firewall.cpl"], console: &[] }),
