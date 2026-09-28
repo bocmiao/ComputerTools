@@ -3,7 +3,7 @@
 > 项目暂定名：**电脑小药箱**（名字待定，见第十三节）
 > 性质：免费、开源的 Windows 电脑维护工具
 > 版本：v1.2，2026-09-27。之前版本见本文件的 git 历史
-> 配套文档：[《竞品调研与取长补短》](competitive-analysis.md)
+> 配套文档：[《竞品调研与取长补短》](competitive-analysis.md)、[《功能缺口与可复用资源调研》](feature-gap-research.md)
 
 ---
 

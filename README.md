@@ -52,8 +52,9 @@
 
 ## 文档
 
-- [执行计划书 v1.1](docs/plan.md)
+- [执行计划书 v1.2](docs/plan.md)
 - [竞品调研与取长补短](docs/competitive-analysis.md)
+- [功能缺口与可复用资源调研](docs/feature-gap-research.md)：国内外竞品逐项对照、能直接复用的开源数据、国内高频问题和官方错误码、按优先级排好的开发计划
 - [架构与数据格式规范](docs/architecture.md)
 - [功能编写指南](docs/feature-authoring.md)：写一个新的检测或修复
 - [真机验证清单](docs/real-machine-checklist.md)：需要在真实电脑上确认的地方
