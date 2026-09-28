@@ -6,6 +6,7 @@
 pub mod awake;
 pub mod commands;
 pub mod disk_speed;
+pub mod exe_check;
 pub mod hidden;
 pub mod images;
 pub mod long_image;
@@ -65,6 +66,7 @@ macro_rules! command_handler {
             $crate::commands::disk_speed_run,
             $crate::commands::recycle_drives,
             $crate::commands::recycle_repair,
+            $crate::commands::exe_check_pick,
             $crate::commands::screen_fullscreen,
             $crate::commands::awake_get,
             $crate::commands::awake_set,

@@ -5,6 +5,8 @@ import type { ApplyResult, CheckResult, StartupItem, SymptomDetail, SymptomSumma
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
 import ErrorShotSearch from '../components/ErrorShotSearch.vue'
+import ExeCheck from '../components/ExeCheck.vue'
+import FileLockers from '../components/FileLockers.vue'
 import PopupOwner from '../components/PopupOwner.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import RecycleBinRepair from '../components/RecycleBinRepair.vue'
@@ -508,6 +510,8 @@ watch(
 
         <PopupOwner v-if="detail.id === 'popup-ads'" class="block" />
         <RecycleBinRepair v-if="detail.id === 'recycle-bin-corrupted'" class="block" />
+        <FileLockers v-if="detail.id === 'file-in-use'" class="block" />
+        <ExeCheck v-if="detail.id === 'app-cannot-run'" class="block" />
 
         <section v-if="showsStartup(detail.id)" class="card block" aria-labelledby="startup-title">
           <div class="steps-head">

@@ -1214,6 +1214,22 @@ const SYMPTOMS: MockSymptom[] = [
     ],
   },
   {
+    id: 'app-cannot-run', title: '双击程序提示「此应用无法在你的电脑上运行」',
+    summary: '打开刚下载的软件、安装包时弹出「此应用无法在你的电脑上运行。若要找到适用于你的电脑的版本，请咨询软件发布者」。',
+    keywords: ['此应用无法在你的电脑上运行', '请咨询软件发布者', '不是有效的 win32 应用程序'], maturity: 'guide',
+    causes: ['下载的版本和电脑对不上：ARM64 版装在普通电脑上，或者 64 位的程序装在 32 位的 Windows 上', '文件没下载完整，或者下载下来的其实是网页、压缩包'],
+    guide: '先用上面的「看看这个程序能不能在这台电脑上运行」选一下那个程序文件，它会说出是哪一种问题、该下载哪个版本。',
+    steps: [],
+  },
+  {
+    id: 'file-in-use', title: '删不掉、改不了名：提示「文件已在另一程序中打开」',
+    summary: '删除、重命名、移动文件时提示「操作无法完成，因为文件已在另一程序中打开」。',
+    keywords: ['文件已在另一程序中打开', '文件被占用', '删不掉文件'], maturity: 'guide',
+    causes: ['文件还开在某个软件里，或者软件关了窗口却还在后台运行', '资源管理器自己在用：缩略图、预览窗格'],
+    guide: '用上面的「文件删不掉：是谁占着」选中删不掉的文件，看是哪个程序在用，再照说明处理。',
+    steps: [],
+  },
+  {
     id: 'recycle-bin-corrupted', title: '提示「回收站已损坏」',
     summary: '删文件、打开回收站或者开机时弹出「C:\\ 上的回收站已损坏。是否清空该驱动器上的回收站?」，点了「是」还是一再弹出来。',
     keywords: ['回收站已损坏', '回收站损坏', '是否清空该驱动器上的回收站', '回收站打不开', '回收站清空不了'], maturity: 'semi',
@@ -2602,6 +2618,11 @@ const handlers: Handlers = {
         exists: !d.removable && !emptied, files, bytes: files ? 1_288_490_188 : 0, complete: true,
       }
     }),
+  // 此应用无法在你的电脑上运行（演示）：选了一个 ARM64 版的安装包
+  exe_check_pick: () => ({
+    name: '某软件安装包_ARM64.exe', size: 86_507_520, verdict: 'wrong-machine', guess: null, machine: 'arm64',
+    pc: 'x64', windows11: true, console: false, dotnet: false,
+  }),
   recycle_repair: ({ letter }) => {
     const drive = DEMO_DRIVES.find((d) => d.letter === letter.toUpperCase())
     if (!drive) throw '这个盘现在不在了，请刷新一下列表。'

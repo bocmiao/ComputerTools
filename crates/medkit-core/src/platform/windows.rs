@@ -820,6 +820,16 @@ pub struct Drive {
 
 /// 本机的硬盘分区和 U 盘（固定的、可移动的有盘的；光驱、网络驱动器、没插卡的读卡器不列）。「硬盘测速」用它。
 /// 查的时候关掉「驱动器中没有磁盘」这类系统对话框（SEM_FAILCRITICALERRORS），空的读卡器只是不列出来。
+/// 这台电脑的处理器（IMAGE_FILE_MACHINE_*：x64 是 0x8664，ARM64 是 0xAA64）。IsWow64Process2 说的是系统本身的，
+/// 不是小药箱这个进程的（ARM 电脑上模拟运行时，进程是 x64，系统是 ARM64）。读不到时返回 `None`。
+pub fn native_machine() -> Option<u16> {
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, IsWow64Process2};
+    let (mut process, mut native) = (0u16, 0u16);
+    // SAFETY: GetCurrentProcess 是伪句柄，不用关；两个输出都是有效的 u16
+    let ok = unsafe { IsWow64Process2(GetCurrentProcess(), &mut process, &mut native) } != 0;
+    (ok && native != 0).then_some(native)
+}
+
 pub fn drives() -> Vec<Drive> {
     use windows_sys::Win32::Storage::FileSystem::{
         GetDiskFreeSpaceExW, GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,

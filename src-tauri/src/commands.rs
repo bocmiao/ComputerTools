@@ -14,6 +14,7 @@ use tauri::State;
 
 use crate::awake::AwakeStatus;
 use crate::disk_speed::DriveView;
+use crate::exe_check::ExeCheckView;
 use crate::hidden::{self, HiddenReport, HiddenRestore, HiddenUndo};
 use crate::images;
 use crate::long_image;
@@ -561,6 +562,32 @@ pub async fn recycle_repair(letter: String) -> CmdResult<RecycleRepairView> {
     tauri::async_runtime::spawn_blocking(move || crate::recycle_bin::repair(&letter))
         .await
         .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// 「此应用无法在你的电脑上运行」：用系统的选择框选一个程序文件，看它本身能不能在这台电脑上运行（只读文件开头，
+/// 不运行它；结果里只有文件名）。没选返回 null。
+#[tauri::command]
+pub async fn exe_check_pick() -> CmdResult<Option<ExeCheckView>> {
+    #[cfg(windows)]
+    let file = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("选择打不开的程序（双击时提示「此应用无法在你的电脑上运行」的那个）")
+            .add_filter("程序", &["exe", "com", "msi"])
+            .add_filter("所有文件", &["*"])
+            .pick_file()
+    })
+    .await
+    .map_err(|e| format!("打开文件选择器失败：{e}"))?;
+    #[cfg(not(windows))]
+    let file: Option<std::path::PathBuf> = None;
+    let Some(file) = file else { return Ok(None) };
+    tauri::async_runtime::spawn_blocking(move || {
+        let (native, build) = crate::exe_check::this_pc();
+        crate::exe_check::check(&file, native, build)
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
+    .map(Some)
 }
 
 /// 硬盘测速：在这个盘的根目录写一个关掉就删的临时文件，测顺序写、顺序读、4 KB 随机读，一共大约 20 秒。

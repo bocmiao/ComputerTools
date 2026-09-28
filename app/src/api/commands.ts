@@ -5,6 +5,7 @@ import type {
   CheckResult,
   ContextMenuItem,
   DriveView,
+  ExeCheckView,
   FeatureState,
   FileLockReport,
   HiddenReport,
@@ -87,6 +88,7 @@ export type CommandMap = {
   disk_speed_run: { args: { letter: string }; result: SpeedResult }
   recycle_drives: { args: NoArgs; result: RecycleDriveView[] }
   recycle_repair: { args: { letter: string }; result: RecycleRepairView }
+  exe_check_pick: { args: NoArgs; result: ExeCheckView | null }
   screen_fullscreen: { args: { on: boolean }; result: null }
   awake_get: { args: NoArgs; result: AwakeStatus }
   awake_set: { args: { on: boolean; display: boolean }; result: AwakeStatus }

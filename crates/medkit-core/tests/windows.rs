@@ -1065,6 +1065,39 @@ fn a_protected_recycle_bin_is_removed_without_following_junctions() {
     assert_eq!(recycle_bin::remove(root.path()).unwrap(), Removed::Absent);
 }
 
+/// 「此应用无法在你的电脑上运行」：拿系统自带的真文件核对文件头的读法：64 位的记事本、32 位的记事本（SysWOW64）、
+/// 命令行的 cmd、DLL；截掉后半截的记事本要算没下载完整。
+#[test]
+fn real_program_headers_are_read() {
+    use medkit_core::exe_info::{self, Format, MACHINE_AMD64, MACHINE_I386};
+    let windows = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()));
+    let read = |bytes: &[u8]| exe_info::parse(&bytes[..bytes.len().min(1 << 20)], bytes.len() as u64);
+    let native = medkit_core::platform::windows::native_machine().expect("读得到这台电脑的处理器");
+    let build = WindowsPlatform::new().os_info().build;
+    eprintln!("这台电脑：处理器 {:#x}，版本号 {build}", native);
+
+    let notepad = std::fs::read(windows.join(r"System32\notepad.exe")).unwrap();
+    let f = read(&notepad);
+    eprintln!("notepad.exe：{f:?}");
+    assert!(matches!(f, Format::Pe(pe) if pe.machine == native && pe.subsystem == 2 && !pe.dll && !pe.truncated));
+    assert_eq!(exe_info::verdict(&f, native, build), "ok");
+
+    if native == MACHINE_AMD64 {
+        let f = read(&std::fs::read(windows.join(r"SysWOW64\notepad.exe")).unwrap());
+        eprintln!("SysWOW64\\notepad.exe：{f:?}");
+        assert!(matches!(f, Format::Pe(pe) if pe.machine == MACHINE_I386));
+        assert_eq!(exe_info::verdict(&f, native, build), "ok", "64 位 Windows 能运行 32 位程序");
+    }
+    let cmd = read(&std::fs::read(windows.join(r"System32\cmd.exe")).unwrap());
+    assert!(matches!(cmd, Format::Pe(pe) if pe.subsystem == 3), "{cmd:?}");
+    let kernel32 = read(&std::fs::read(windows.join(r"System32\kernel32.dll")).unwrap());
+    assert_eq!(exe_info::verdict(&kernel32, native, build), "dll", "{kernel32:?}");
+
+    let cut = &notepad[..4096.min(notepad.len() / 2)];
+    let f = exe_info::parse(cut, cut.len() as u64);
+    assert_eq!(exe_info::verdict(&f, native, build), "truncated", "{f:?}");
+}
+
 /// Winsock 目录：真的读一次（只读）。64 位的目录里要有 Windows 自己的 TCP/IP（mswsock.dll，文件在），64 位 Windows 上
 /// 还要读到 32 位程序用的那一份；检测要给出结论（CI 机器上一般是 ok）。只打印文件名和版本信息，没有路径。
 #[test]

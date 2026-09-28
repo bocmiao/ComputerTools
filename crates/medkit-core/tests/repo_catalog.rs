@@ -118,6 +118,10 @@ fn common_error_messages_find_their_symptom() {
             "The Recycle Bin on D:\\ is corrupted. Do you want to empty the Recycle Bin for this drive?",
             "recycle-bin-corrupted",
         ),
+        ("文件正在使用 操作无法完成，因为文件已在 Microsoft Word 中打开。请关闭该文件并重试。", "file-in-use"),
+        ("进程无法访问此文件，因为另一个程序正在使用此文件。", "file-in-use"),
+        ("此应用无法在你的电脑上运行 若要找到适用于你的电脑的版本，请咨询软件发布者。 关闭", "app-cannot-run"),
+        ("D:\\下载\\setup.exe 不是有效的 Win32 应用程序。", "app-cannot-run"),
     ];
     let wrong: Vec<String> = cases
         .iter()

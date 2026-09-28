@@ -393,6 +393,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `hidden_undo` | — | `HiddenUndo`（把上一次「显示出来」改过的属性都改回去） |
 | `disk_speed_drives` | — | `DriveView[]`（本机固定的和可移动的盘：盘符、卷标、文件系统、大小、剩余空间，剩余不到 2 GB 的 `canTest` 为 false） |
 | `disk_speed_run` | `letter` | `SpeedResult`（在这个盘的根目录写一个关掉就删的临时文件，不经过系统缓存，测顺序写、顺序读、4 KB 随机读，最多写 1 GB、每步限时；只收现在列出来、能测的盘符，同一时间只测一个） |
+| `exe_check_pick` | — | `ExeCheckView \| null`（「此应用无法在你的电脑上运行」：系统的选择框选一个程序文件，只读开头最多 1 MB，看它本身能不能在这台电脑上运行：`verdict` 是 empty / not-exe / truncated / dll / old16 / wrong-machine / not-desktop / ok，`guess`（不是程序时像什么：msi、压缩包、网页、PDF）、`machine`（给哪种处理器的）、`pc`（这台电脑的处理器，IsWow64Process2）、`windows11`、`console`、`dotnet`；只有文件名和大小，没有文件夹；取消返回 null） |
 | `recycle_drives` | — | `RecycleDriveView[]`（本机固定的和可移动的盘上有没有回收站文件夹（`<盘>:\$Recycle.Bin`）、里面有多少个文件、一共多大：只有个数和大小，没有文件名，也没有按账户分的文件夹名（SID）；所有盘一共最多数 8 秒、一个盘最多数 20 万个文件，没数完的 `complete` 为 false；不跟着链接走，链接也不算） |
 | `recycle_repair` | `letter` | `RecycleRepairView`（回收站坏了：删掉这个盘的 `$Recycle.Bin`，重启以后 Windows 重新建一个；里面所有账户的东西都删掉、找不回来，界面先确认。只收现在还在的盘的盘符；`outcome`：absent（本来就没有）/ done / partly（有的删不掉，`left` 是还剩几个文件）） |
 | `screen_fullscreen` | `on` | `null`（屏幕坏点测试：窗口进入、退出全屏） |
@@ -446,7 +447,7 @@ checks: [disk.system-free-space, system.pending-reboot]
 - **别的软件设的**：`Scancode Map` 格式不对、类型不是 REG_BINARY、或者里面有名单外的键（别的改键工具设的）时，界面只列认得出来的那几条，只给「全部恢复」（删掉整个值），不在上面接着改。
 - **修改日志**：功能 ID 是 `key-remap`，标题是「键位重映射（改键）」，状态说成「Caps Lock（大写锁定） → 左 Ctrl；左 Win → 不起作用」这样，没有这个值说「没有改键（Windows 默认）」；撤销把原来的字节原样写回（原来没有就删掉），也是重启以后生效。Windows 上的测试写真的注册表，另起 PowerShell 核对类型和字节，再撤销。
 
-文件删不掉：是谁占着（`crates/medkit-core/src/lockers.rs`、`crates/medkit-core/src/platform/restart_manager.rs`）：
+文件删不掉：是谁占着（`crates/medkit-core/src/lockers.rs`、`crates/medkit-core/src/platform/restart_manager.rs`；工具箱里有，症状「删不掉、改不了名：提示『文件已在另一程序中打开』」的页面上也放了同一张卡片）：
 
 - **查**：用 Windows 的重启管理器（Restart Manager，安装程序替换文件之前就用它找在用这些文件的程序）：把文件登记进一个会话，`RmGetList` 列出打开着这些文件、或者把它们当作程序模块加载了的进程。只查，不调用 `RmShutdown`：不关程序、不动文件，也不记修改日志。进程号和启动时间都对上才算同一个进程（进程已经退出、进程号被别人用上的不列）。
 - **范围**：选了几个文件时一个一个查（最多 100 个），说得出哪个程序在用哪个文件；选了文件夹时把里面的文件（最多 5000 个，不跟着符号链接和目录联接走到外面）一起查一次，有人在用、文件又不超过 100 个时再一个一个查出是哪几个。
@@ -459,6 +460,12 @@ checks: [disk.system-free-space, system.pending-reboot]
 - **认程序**：`OpenProcess`（只查询）+ `QueryFullProcessImageNameW` 得到程序文件；版本信息（`GetFileVersionInfoW`、`VerQueryValueW`，优先简体中文那一份）给说明、公司、产品名，只读资源，不加载、不运行这个程序。任务栏、桌面按窗口类名认；`ShellExperienceHost.exe` 画的是 Windows 通知（别的软件、网站发的通知也是它显示的），Windows 文件夹里的算 Windows 自带的；小药箱自己的窗口单独说。
 - **属于哪个软件**：按程序所在的文件夹对上「应用和功能」里的软件（HKLM 的 64 位、32 位卸载信息，加上登录用户自己的；系统组件、补丁不算）：安装位置、图标、卸载程序所在的文件夹里包含这个程序，有好几个时取最具体的那个。Program Files、ProgramData、用户的 AppData、下载、桌面、Windows 文件夹这些太宽的文件夹不拿来认。
 - **路径**：结果里的文件夹把用户文件夹名换成 `*`；完整路径只留在后端，「打开所在的文件夹」不收界面传来的路径。结果不进诊断报告。
+
+此应用无法在你的电脑上运行（`crates/medkit-core/src/exe_info.rs`、`src-tauri/src/exe_check.rs`、`app/src/components/ExeCheck.vue`、`app/src/utils/exeCheck.ts`，放在同名症状的页面上）：
+
+- **读文件头**：照微软《[PE Format](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format)》：`MZ` 头里 0x3C 处的偏移找到新头；`PE\0\0` 的读 COFF 头的 Machine、Characteristics（DLL 位）、可选头的 Subsystem 和数据目录（第 14 项有值是 .NET 程序），再用节表里每一节在文件里的结束位置和证书表（第 4 项，按文件偏移）算文件至少多长，比实际短就是没下载完整；`NE`、`LE`、`LX` 或者只有 DOS 头的是 16 位老程序；不是 `MZ` 开头的按开头的签名猜是 MSI（OLE 复合文档）、压缩包、PDF 还是网页。只读，不运行、不加载它。
+- **和这台电脑对**：x86 的哪都能跑；x64 的要 x64，或者 Windows 11 的 ARM 电脑（Windows 10 的 ARM 电脑只能模拟 x86）；ARM64 的只能在 ARM 电脑上；32 位 ARM 的只在 24H2 以前的 Windows 11 ARM 电脑上（微软《Update app architecture from Arm32 to Arm64》说新版 Windows 11 不再支持，第三方报道是 24H2 起）；安腾的都不行；子系统不是图形界面、命令行的（驱动、EFI 这些）不是桌面程序。16 位程序：微软说 64 位和 ARM 版的 Windows 没有 NTVDM。
+- **说法**在界面（`exeCheck.ts`，node 测试）：该下载哪个版本、怎么看自己的电脑、命令行程序双击黑框一闪是正常的；文件本身没问题的，给兼容模式和「程序兼容性疑难解答」。Windows 上的测试拿系统自带的记事本（64 位和 SysWOW64 里 32 位的）、cmd、kernel32.dll 和截掉后半截的记事本核对。
 
 回收站坏了（`crates/medkit-core/src/recycle_bin.rs`、`src-tauri/src/recycle_bin.rs`、`app/src/components/RecycleBinRepair.vue`，放在症状「提示『回收站已损坏』」的页面上）：
 

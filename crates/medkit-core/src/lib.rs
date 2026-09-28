@@ -12,6 +12,7 @@
 //! - [`keymap`]：改键（键位重映射）：Windows 自带的扫描码映射，读、写、说成人话
 //! - [`ocr`]：图片转文字（Windows 自带的文字识别）的结果整理
 //! - [`recycle_bin`]：回收站坏了时清空并重建（照微软的办法删掉盘上的 $Recycle.Bin）
+//! - [`exe_info`]：「此应用无法在你的电脑上运行」：程序文件本身能不能在这台电脑上运行（只读文件头）
 //! - [`lockers`]：文件删不掉时，看是哪些程序在用它（只读）
 //! - [`disk_speed`]：硬盘测速（只写一个关掉就删的临时文件）
 //! - [`window_owner`]：弹窗是哪个软件的：鼠标指着的窗口是哪个程序的（只读）
@@ -24,6 +25,7 @@ pub mod context_menu;
 pub mod disk_speed;
 pub mod engine;
 pub mod error;
+pub mod exe_info;
 pub mod journal;
 pub mod keymap;
 pub mod lint;

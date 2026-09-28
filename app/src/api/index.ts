@@ -7,6 +7,7 @@ import type {
   CheckResult,
   ContextMenuItem,
   DriveView,
+  ExeCheckView,
   FeatureState,
   FileLockReport,
   HiddenReport,
@@ -309,6 +310,11 @@ export function recycleDrives(): Promise<RecycleDriveView[]> {
 /** 回收站坏了：清空并重建这个盘的回收站（里面所有账户的东西都会删掉，找不回来） */
 export function recycleRepair(letter: string): Promise<RecycleRepairView> {
   return call('recycle_repair', { letter })
+}
+
+/** 此应用无法在你的电脑上运行：用系统的选择框选一个程序文件，看它本身能不能在这台电脑上运行（没选时是 null） */
+export function exeCheckPick(): Promise<ExeCheckView | null> {
+  return call('exe_check_pick', {})
 }
 
 /** 屏幕坏点测试：小药箱窗口进入、退出全屏 */

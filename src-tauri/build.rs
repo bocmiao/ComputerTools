@@ -48,6 +48,7 @@ const COMMANDS: &[&str] = &[
     "disk_speed_run",
     "recycle_drives",
     "recycle_repair",
+    "exe_check_pick",
     "screen_fullscreen",
     "awake_get",
     "awake_set",

@@ -49,6 +49,7 @@
     "allow-disk-speed-run",
     "allow-recycle-drives",
     "allow-recycle-repair",
+    "allow-exe-check-pick",
     "allow-screen-fullscreen",
     "allow-awake-get",
     "allow-awake-set",

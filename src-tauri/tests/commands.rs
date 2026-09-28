@@ -106,20 +106,17 @@ fn every_command_is_reachable_and_well_shaped() {
     let symptoms = summary["symptoms"].as_array().unwrap();
     has_keys(&symptoms[0], &["id", "title", "summary", "keywords", "maturity"]);
 
-    // symptom_detail：用真实症状 ID
-    let sid = symptoms[0]["id"].as_str().unwrap().to_owned();
-    let detail = ok(&win, "symptom_detail", json!({ "id": sid }));
+    // symptom_detail：用真实症状 ID（只有图文指引的症状没有检查步骤，找一个有的）
+    let detail = symptoms
+        .iter()
+        .map(|s| ok(&win, "symptom_detail", json!({ "id": s["id"] })))
+        .find(|d| d["steps"].as_array().is_some_and(|s| !s.is_empty()))
+        .expect("有带检查步骤的症状");
     has_keys(&detail, &["id", "title", "causes", "guide", "steps"]);
-    if let Some(step) = detail["steps"].as_array().and_then(|s| s.first()) {
-        has_keys(step, &["check", "checkTitle", "stopOn", "fixes"]);
-    }
+    has_keys(&detail["steps"][0], &["check", "checkTitle", "stopOn", "fixes"]);
 
     // run_check / run_profile：脚本在假系统上会失败，但结构必须完整
-    let check_id = summary["symptoms"]
-        .as_array()
-        .and_then(|s| s.iter().find_map(|s| s["id"].as_str()))
-        .map(|_| detail["steps"][0]["check"].as_str().unwrap().to_owned())
-        .unwrap();
+    let check_id = detail["steps"][0]["check"].as_str().unwrap().to_owned();
     has_keys(
         &ok(&win, "run_check", json!({ "id": check_id })),
         &[
@@ -364,6 +361,13 @@ fn ocr_command_passes_the_permission_check_and_leaves_no_file() {
     assert!(e.as_str().is_some_and(|m| m.contains("二进制")), "{e}");
     let dir = medkit_lib::setup::scratch_dir("ocr").unwrap();
     assert_eq!(std::fs::read_dir(dir).unwrap().count(), 0, "认完就删");
+}
+
+/// 「此应用无法在你的电脑上运行」：选文件的命令登记进了权限清单；这里没有选择框，返回 null。
+#[test]
+fn exe_check_command_passes_the_permission_check() {
+    let win = app();
+    assert!(ok(&win, "exe_check_pick", json!({})).is_null());
 }
 
 /// 回收站坏了：列各盘的回收站（只读）、清空重建一个盘的。盘符不对的在碰盘之前就拒绝。

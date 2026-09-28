@@ -197,6 +197,20 @@ export interface SpaceReport {
   comparedAll: boolean
 }
 
+// 此应用无法在你的电脑上运行
+/** 程序文件本身能不能在这台电脑上运行（只有文件名，见 medkit_core::exe_info） */
+export interface ExeCheckView {
+  name: string
+  size: number
+  verdict: 'empty' | 'not-exe' | 'truncated' | 'dll' | 'old16' | 'wrong-machine' | 'not-desktop' | 'ok'
+  guess: 'msi' | 'archive' | 'html' | 'pdf' | 'unknown' | null   // 不是程序时像什么
+  machine: 'x86' | 'x64' | 'arm64' | 'arm32' | 'ia64' | 'other' | null  // 程序是给哪种处理器的
+  pc: 'x86' | 'x64' | 'arm64' | 'arm32' | 'ia64' | 'other'   // 这台电脑的处理器
+  windows11: boolean
+  console: boolean              // 命令行程序
+  dotnet: boolean
+}
+
 // 回收站坏了
 /** 一个盘的回收站里有多少东西（只有个数和大小） */
 export interface RecycleDriveView {
