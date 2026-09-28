@@ -1,0 +1,52 @@
+# 恢复快捷方式的系统标记：HKLM\SOFTWARE\Classes\lnkfile、piffile 下加回空字符串 IsShortcut（Windows 默认就有）。
+# 「去掉快捷方式小箭头」的教程会删掉它，删掉以后「此电脑」右键「管理」、任务栏固定的图标、Win + X 菜单打不开。
+# 恢复以后小箭头会回来。重启资源管理器（或注销）以后生效。检测 system.shortcut-flag 报 missing 时给这个按钮。
+# break_actions（测试用）：删掉两个值。
+id: system.restore-shortcut-flag
+schema_version: 1
+title: { zh-CN: 恢复快捷方式的系统标记 }
+description:
+  zh-CN: 加回被「去掉快捷方式小箭头」教程删掉的系统标记。删掉以后「此电脑」右键「管理」打不开，任务栏上固定的图标、Win + X 菜单也可能打不开。恢复以后快捷方式上的小箭头会回来。能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: explorer
+target: machine
+actions:
+  - registry:
+      key: HKLM\SOFTWARE\Classes\lnkfile
+      name: IsShortcut
+      type: string
+      value: ""
+  - registry:
+      key: HKLM\SOFTWARE\Classes\piffile
+      name: IsShortcut
+      type: string
+      value: ""
+windows_default:
+  - registry:
+      key: HKLM\SOFTWARE\Classes\lnkfile
+      name: IsShortcut
+      type: string
+      value: ""
+  - registry:
+      key: HKLM\SOFTWARE\Classes\piffile
+      name: IsShortcut
+      type: string
+      value: ""
+break_actions:
+  - registry:
+      key: HKLM\SOFTWARE\Classes\lnkfile
+      name: IsShortcut
+      delete: true
+  - registry:
+      key: HKLM\SOFTWARE\Classes\piffile
+      name: IsShortcut
+      delete: true
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/answers/questions/4037705/this-file-does-not-have-an-app-associated-with-it
+  - https://learn.microsoft.com/en-us/answers/questions/2411521/remove-the-shortcut-arrow?page=1

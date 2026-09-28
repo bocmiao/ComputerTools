@@ -1,0 +1,31 @@
+# 快捷方式的「IsShortcut」标记还在不在。脚本：scripts/checks/system/shortcut-flag.ps1（读登录用户的注册表，只作为事实）
+# 网上流传的「去掉快捷方式小箭头」教程会删掉 HKLM\SOFTWARE\Classes\lnkfile（和 piffile）下的 IsShortcut（Windows 默认有，
+# 是个空字符串）。删掉以后 Windows 不再把快捷方式当快捷方式：「此电脑」右键「管理」提示「该文件没有与之关联的应用」，
+# 任务栏上固定的图标、Win + X 菜单打不开，快捷方式固定不到任务栏。
+# 结果：missing（advice，修复 system.restore-shortcut-flag）、ok。事实：lnkfile、piffile、user_lnkfile（登录用户自己的 lnkfile 键，
+# 很少见，只报出来：新建它会盖住整台电脑的设置，所以不替用户建）。
+id: system.shortcut-flag
+schema_version: 1
+title: { zh-CN: 快捷方式的系统标记 }
+description:
+  zh-CN: 看看快捷方式的系统标记（IsShortcut）是不是被「去掉小箭头」的教程删掉了。删掉以后「此电脑」右键「管理」打不开，任务栏上固定的图标也打不开。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/shortcut-flag.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: 快捷方式的系统标记还在。 }
+  missing:
+    status: advice
+    message:
+      zh-CN: 快捷方式的系统标记（IsShortcut）被删掉了，多半是按网上「去掉快捷方式小箭头」的教程改的。所以「此电脑」右键「管理」会提示「该文件没有与之关联的应用」，任务栏上固定的图标、Win + X 菜单也可能打不开。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后快捷方式上的小箭头会回来；重启资源管理器（或者注销）以后生效。
+    links: ["feature:system.restore-shortcut-flag"]
+references:
+  - https://learn.microsoft.com/en-us/answers/questions/4037705/this-file-does-not-have-an-app-associated-with-it
+  - https://learn.microsoft.com/en-us/answers/questions/2411521/remove-the-shortcut-arrow?page=1
