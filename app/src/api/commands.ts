@@ -25,6 +25,7 @@ import type {
   SystemInfo,
   ToolResult,
   UndoResult,
+  WindowOwnerReport,
 } from './types'
 
 type NoArgs = Record<string, never>
@@ -85,6 +86,8 @@ export type CommandMap = {
   lockers_pick_files: { args: NoArgs; result: FileLockReport | null }
   lockers_pick_folder: { args: NoArgs; result: FileLockReport | null }
   lockers_refresh: { args: NoArgs; result: FileLockReport | null }
+  popup_find: { args: { seconds: number }; result: WindowOwnerReport }
+  popup_reveal: { args: NoArgs; result: null }
   space_pick_folder: { args: NoArgs; result: SpaceReport | null }
   space_rescan: { args: NoArgs; result: SpaceReport | null }
   space_reveal: { args: { id: number }; result: null }

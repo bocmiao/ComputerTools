@@ -1524,3 +1524,106 @@ fn offline_and_paused_printers_are_put_back_to_work() {
     let after = code();
     assert!(!["work-offline", "paused"].contains(&after.as_str()), "恢复以后还是：{after}");
 }
+
+#[test]
+fn window_owner_names_the_program_under_the_mouse() {
+    use medkit_core::views::WindowOwnerKind;
+    use medkit_core::window_owner::{self, is_generic, owning_program, program_folders};
+    use windows_sys::Win32::Foundation::{POINT, RECT};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        FindWindowW, GetCursorPos, GetWindowRect, GetWindowThreadProcessId, SetCursorPos,
+    };
+
+    struct Kill(std::process::Child);
+    impl Drop for Kill {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    let p = WindowsPlatform::new();
+
+    // 版本信息：资源管理器是微软的
+    let windir = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    let strings = p.file_strings(&Path::new(&windir).join("explorer.exe"));
+    eprintln!("explorer.exe：{strings:?}");
+    assert!(strings.company.as_deref().is_some_and(|c| c.contains("Microsoft")), "{strings:?}");
+    assert!(strings.description.is_some(), "{strings:?}");
+    assert_eq!(p.file_strings(Path::new(r"C:\medkit-no-such-file.exe")), Default::default());
+
+    // 「应用和功能」里的程序：装在某个文件夹里的程序能对上它自己
+    let programs = p.installed_programs().unwrap();
+    eprintln!("「应用和功能」里有 {} 个程序", programs.len());
+    assert!(!programs.is_empty());
+    let mut matched = 0;
+    for program in &programs {
+        let Some(folder) = program_folders(program).into_iter().find(|f| !is_generic(f)) else { continue };
+        let Ok(entries) = std::fs::read_dir(&folder) else { continue };
+        let Some(exe) =
+            entries.flatten().map(|e| e.path()).find(|x| x.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")))
+        else {
+            continue;
+        };
+        let owner = owning_program(&exe.to_string_lossy(), &programs);
+        eprintln!("{} → {:?}", exe.display(), owner.map(|o| &o.name));
+        assert!(owner.is_some(), "{} 在 {} 的文件夹里，却没对上", exe.display(), program.name);
+        matched += 1;
+        if matched >= 5 {
+            break;
+        }
+    }
+    if matched == 0 {
+        println!("::notice title=window owner::这台 CI 机器上没有能用来核对的程序文件夹");
+    }
+
+    // 鼠标指着的窗口：随便指着什么都不能出错
+    let (report, _) = window_owner::find(&p).unwrap();
+    eprintln!("现在鼠标指着：{report:?}");
+
+    // 打开一个记事本，把鼠标移到它上面，应该认出是 Windows 自带的记事本
+    let child = Kill(Command::new(Path::new(&windir).join(r"System32\notepad.exe")).spawn().unwrap());
+    let class: Vec<u16> = "Notepad".encode_utf16().chain(Some(0)).collect();
+    let mut window = std::ptr::null_mut();
+    for _ in 0..100 {
+        // SAFETY: class 以 NUL 结尾，窗口标题不限
+        let found = unsafe { FindWindowW(class.as_ptr(), std::ptr::null()) };
+        let mut pid = 0u32;
+        // SAFETY: pid 是有效的输出位置
+        if !found.is_null() && unsafe { GetWindowThreadProcessId(found, &mut pid) } != 0 && pid == child.0.id() {
+            window = found;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    if window.is_null() {
+        println!("::notice title=window owner::这台 CI 机器上没等到记事本的窗口，跳过鼠标那一段");
+        return;
+    }
+    let mut rect = RECT::default();
+    // SAFETY: rect 是有效的输出位置
+    assert_ne!(unsafe { GetWindowRect(window, &mut rect) }, 0);
+    let (x, y) = ((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+    let mut at = POINT::default();
+    // SAFETY: 只移动鼠标指针；at 是有效的输出位置
+    let moved = unsafe { SetCursorPos(x, y) } != 0 && unsafe { GetCursorPos(&mut at) } != 0 && (at.x, at.y) == (x, y);
+    if !moved {
+        println!("::notice title=window owner::这台 CI 机器上移不动鼠标指针，跳过鼠标那一段");
+        return;
+    }
+    let mut last = None;
+    for _ in 0..50 {
+        let (r, path) = window_owner::find(&p).unwrap();
+        if r.exe.as_deref().is_some_and(|e| e.eq_ignore_ascii_case("notepad.exe")) {
+            eprintln!("记事本：{r:?}");
+            assert_eq!(r.kind, WindowOwnerKind::System, "{r:?}");
+            assert!(r.description.is_some(), "{r:?}");
+            assert!(r.width > 0 && r.height > 0 && r.position.is_some(), "{r:?}");
+            assert!(path.is_some_and(|x| x.is_file()));
+            return;
+        }
+        last = Some(r);
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    panic!("鼠标在记事本的窗口上，认出来的却是：{last:?}");
+}

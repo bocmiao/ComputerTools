@@ -403,6 +403,63 @@ pub struct UndoResult {
     pub reboot: Reboot,
 }
 
+/// 「弹窗是哪个软件的」：鼠标指着的是什么。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowOwnerKind {
+    /// 装在这台电脑上的软件（不在 Windows 文件夹里）
+    Program,
+    /// Windows 自带的程序
+    System,
+    /// Windows 显示的通知（右下角弹出的那种，别的软件、网站发的通知也是它显示的）
+    Notification,
+    /// 任务栏或者桌面
+    Shell,
+    /// 小药箱自己的窗口
+    Medkit,
+    /// 鼠标下面没有窗口
+    Nothing,
+    /// 有窗口，但读不到是哪个程序的（窗口已经关了，或者是受保护的系统进程）
+    Unreadable,
+}
+
+/// 窗口在屏幕上的哪一块：铺满整个屏幕，或者按中心点落在九宫格的哪一格。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowPosition {
+    Full,
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Center,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+/// 「弹窗是哪个软件的」的结果。路径里的用户文件夹名换成 `*`；完整路径留在后端，只用来「打开所在的文件夹」。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowOwnerReport {
+    pub kind: WindowOwnerKind,
+    /// 程序的文件名
+    pub exe: Option<String>,
+    /// 程序的说明、公司、产品名（程序文件的版本信息里写的）
+    pub description: Option<String>,
+    pub company: Option<String>,
+    pub product: Option<String>,
+    /// 程序所在的文件夹
+    pub folder: Option<String>,
+    /// 它属于「应用和功能」里的哪个软件（能在那里卸载）
+    pub installed: Option<String>,
+    pub publisher: Option<String>,
+    pub position: Option<WindowPosition>,
+    pub width: i32,
+    pub height: i32,
+}
+
 /// 「文件删不掉：是谁占着」查的是选中的几个文件，还是一个文件夹。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]

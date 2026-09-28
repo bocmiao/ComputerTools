@@ -55,6 +55,8 @@
     "allow-lockers-refresh",
     "allow-space-pick-folder",
     "allow-space-rescan",
-    "allow-space-reveal"
+    "allow-space-reveal",
+    "allow-popup-find",
+    "allow-popup-reveal"
   ]
 }

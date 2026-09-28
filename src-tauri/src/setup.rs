@@ -36,6 +36,8 @@ pub struct AppState {
     pub lockers: Arc<Mutex<Option<medkit_core::lockers::LockTarget>>>,
     /// 「找大文件和重复文件」选的文件夹和最近一次结果里的文件
     pub space: Arc<Mutex<crate::space::SpaceState>>,
+    /// 「弹窗是哪个软件的」最近一次找到的程序文件（「打开所在的文件夹」用）
+    pub popup: Arc<Mutex<Option<std::path::PathBuf>>>,
 }
 
 pub fn init() -> AppState {
@@ -51,6 +53,7 @@ pub fn init() -> AppState {
         shutdown: Arc::new(Mutex::new(Default::default())),
         lockers: Arc::new(Mutex::new(None)),
         space: Arc::new(Mutex::new(Default::default())),
+        popup: Arc::new(Mutex::new(None)),
     }
 }
 
@@ -266,5 +269,6 @@ pub fn test_state() -> AppState {
         shutdown: Arc::new(Mutex::new(Default::default())),
         lockers: Arc::new(Mutex::new(None)),
         space: Arc::new(Mutex::new(Default::default())),
+        popup: Arc::new(Mutex::new(None)),
     }
 }

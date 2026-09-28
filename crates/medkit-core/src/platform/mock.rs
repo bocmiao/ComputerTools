@@ -3,7 +3,10 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
-use super::{FileUser, KeyboardAids, OpenRequest, OsInfo, PResult, Platform, PlatformError, UserIdentity};
+use super::{
+    FileStrings, FileUser, InstalledProgram, KeyboardAids, OpenRequest, OsInfo, PResult, Platform, PlatformError,
+    PointedWindow, UserIdentity,
+};
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue, key_ancestors};
 
@@ -33,6 +36,12 @@ struct State {
     file_users: Vec<(String, FileUser)>,
     /// 查这些文件时模拟失败
     fail_file_users: HashSet<String>,
+    /// 鼠标指着的窗口
+    pointed: Option<PointedWindow>,
+    /// 程序文件的版本信息（路径统一转小写）
+    file_strings: HashMap<String, FileStrings>,
+    /// 「应用和功能」里的程序
+    programs: Vec<InstalledProgram>,
 }
 
 pub struct MockPlatform {
@@ -125,6 +134,21 @@ impl MockPlatform {
     /// 测试用：查 `path` 这个文件时失败。
     pub fn fail_file_users(&self, path: &std::path::Path) {
         self.state.lock().unwrap().fail_file_users.insert(norm(&path.to_string_lossy()));
+    }
+
+    /// 测试用：鼠标指着这个窗口（`None`：鼠标下面没有窗口）。
+    pub fn point_at(&self, window: Option<PointedWindow>) {
+        self.state.lock().unwrap().pointed = window;
+    }
+
+    /// 测试用：这个程序文件的版本信息。
+    pub fn set_file_strings(&self, path: &std::path::Path, strings: FileStrings) {
+        self.state.lock().unwrap().file_strings.insert(norm(&path.to_string_lossy()), strings);
+    }
+
+    /// 测试用：「应用和功能」里的程序。
+    pub fn set_programs(&self, programs: Vec<InstalledProgram>) {
+        self.state.lock().unwrap().programs = programs;
     }
 
     /// 测试用：打开过的系统工具。
@@ -261,5 +285,17 @@ impl Platform for MockPlatform {
             }
         }
         Ok(users)
+    }
+
+    fn pointed_window(&self) -> PResult<Option<PointedWindow>> {
+        Ok(self.state.lock().unwrap().pointed.clone())
+    }
+
+    fn file_strings(&self, path: &std::path::Path) -> FileStrings {
+        self.state.lock().unwrap().file_strings.get(&norm(&path.to_string_lossy())).cloned().unwrap_or_default()
+    }
+
+    fn installed_programs(&self) -> PResult<Vec<InstalledProgram>> {
+        Ok(self.state.lock().unwrap().programs.clone())
     }
 }

@@ -497,3 +497,32 @@ fn space_commands_pass_the_permission_check() {
     assert!(e.as_str().is_some_and(|m| !m.contains("不在刚才的结果里")), "{e}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 「弹窗是哪个软件的」的命令也要登记进权限清单；还没找到程序时不能「打开所在的文件夹」。
+#[test]
+fn popup_commands_pass_the_permission_check() {
+    let win = app();
+    let e = invoke(&win, "popup_reveal", json!({})).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("开始找")), "{e}");
+    // 假系统里鼠标下面没有窗口
+    let v = ok(&win, "popup_find", json!({ "seconds": 0 }));
+    has_keys(
+        &v,
+        &[
+            "kind",
+            "exe",
+            "description",
+            "company",
+            "product",
+            "folder",
+            "installed",
+            "publisher",
+            "position",
+            "width",
+            "height",
+        ],
+    );
+    assert_eq!(v["kind"], json!("nothing"));
+    let e = invoke(&win, "popup_reveal", json!({})).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("开始找")), "{e}");
+}

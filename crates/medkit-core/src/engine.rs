@@ -1226,6 +1226,12 @@ impl Engine {
             .map_err(|e| Error::Invalid(format!("没能查出是哪些程序在用：{e}")))
     }
 
+    /// 「弹窗是哪个软件的」：鼠标现在指着的窗口是哪个程序的。第二项是程序的完整路径，只给外壳「打开所在的文件夹」用。
+    pub fn window_owner(&self) -> Result<(crate::views::WindowOwnerReport, Option<std::path::PathBuf>)> {
+        crate::window_owner::find(self.platform.as_ref())
+            .map_err(|e| Error::Invalid(format!("没能看出是哪个程序的窗口：{e}")))
+    }
+
     // ───────────── 右键菜单 ─────────────
 
     /// 列出软件加进右键菜单的项目（Windows 自带的不列）。显示不显示由引擎自己读，和改的时候读写同一个位置。

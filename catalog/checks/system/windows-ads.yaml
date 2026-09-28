@@ -1,0 +1,36 @@
+# Windows 自己的推荐和推广，登录用户还开着哪几样。脚本：scripts/checks/system/windows-ads.ps1（-UserHive）
+# 分成六样，每样对应一个关掉它的设置，读的值和那个设置一样（值没有，或者不是 0，就算开着，Windows 默认都是开着的）：
+#   tips（ads.tips-off：时不时弹的提示和建议、更新后的「欢迎体验」「完成设备设置」）、lockscreen（ads.lockscreen-tips-off：
+#   锁屏上的趣味知识、提示）、settings（ads.settings-suggestions-off：「设置」里推荐的内容）、installs
+#   （ads.silent-app-installs-off：悄悄装推荐的应用）、start（ads.start-recommendations-off：Win11 开始菜单里推荐的提示和
+#   应用，Win10 上不查）、sync（explorer.hide-sync-ads：资源管理器里 OneDrive 这类同步软件的推广）。
+# 结果：on（至少一样开着）、off。事实：count（开着几样）和每一样开没开。
+# 不在体检里（这些都是 Windows 的默认设置，算不上毛病）：只在症状「电脑老弹广告、弹窗」里查；提示里说的「下面的
+# 『弹窗是哪个软件的』」是那个症状页面上的，放进别的症状时要改。
+id: system.windows-ads
+schema_version: 1
+title: { zh-CN: Windows 自带的推荐和广告 }
+description:
+  zh-CN: 看看 Windows 自己的推荐和推广还开着哪几样：时不时弹的提示、锁屏上的趣味知识、开始菜单和「设置」里推荐的应用、资源管理器里的 OneDrive 推广，还有悄悄装上推荐的应用。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/windows-ads.ps1
+results:
+  off:
+    status: ok
+    message:
+      zh-CN: Windows 自带的推荐和广告都关掉了。
+    next:
+      zh-CN: 还在弹的广告是别的软件弹的：用下面的「弹窗是哪个软件的」找出是哪个软件。
+  on:
+    status: advice
+    message:
+      zh-CN: "Windows 自己的推荐和推广还有 {count} 样开着（Windows 默认都开着）。这类推荐包括时不时弹出来的提示，锁屏、开始菜单、「设置」、资源管理器里夹带的推广，还有悄悄装上的推荐应用。"
+    fixer: medkit
+    next:
+      zh-CN: 下面几项能一样一样关掉，点「预览」能看到具体改什么，已经关掉的会写着「已经是这样」；都能撤销。这些只管 Windows 自己的推荐；别的软件弹的广告，用下面的「弹窗是哪个软件的」找出是哪个软件。
+references:
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience
+  - https://github.com/Raphire/Win11Debloat

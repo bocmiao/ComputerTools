@@ -253,6 +253,39 @@ export interface FileLockReport {
   users: FileLockUser[]
 }
 
+/** 「弹窗是哪个软件的」：鼠标指着的是什么 */
+export type WindowOwnerKind = 'program' | 'system' | 'notification' | 'shell' | 'medkit' | 'nothing' | 'unreadable'
+/** 窗口在屏幕的哪一块 */
+export type WindowPosition =
+  | 'full'
+  | 'top-left'
+  | 'top'
+  | 'top-right'
+  | 'left'
+  | 'center'
+  | 'right'
+  | 'bottom-left'
+  | 'bottom'
+  | 'bottom-right'
+/** 「弹窗是哪个软件的」的结果：路径里的用户文件夹名换成了 *，完整路径留在后端 */
+export interface WindowOwnerReport {
+  kind: WindowOwnerKind
+  /** 程序的文件名 */
+  exe: string | null
+  /** 程序文件里写的说明、公司、产品名 */
+  description: string | null
+  company: string | null
+  product: string | null
+  /** 程序所在的文件夹 */
+  folder: string | null
+  /** 属于「应用和功能」里的哪个软件 */
+  installed: string | null
+  publisher: string | null
+  position: WindowPosition | null
+  width: number
+  height: number
+}
+
 // 小工具（第 11 节）
 export type ToolGroup = 'info' | 'action' | 'open'
 export type ToolOpens = 'program' | 'settings'

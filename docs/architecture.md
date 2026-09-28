@@ -381,6 +381,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `space_pick_folder` | — | `SpaceReport \| null`（系统的选择框选文件夹，找最大的文件和内容完全一样的文件；只读） |
 | `space_rescan` | — | `SpaceReport \| null`（把上次选的文件夹再数一遍） |
 | `space_reveal` | `id` | `null`（在资源管理器里打开所在文件夹并选中结果里的这个文件；只接受最近一次结果里的编号） |
+| `popup_find` | `seconds`（最多 10） | `WindowOwnerReport`（等这么多秒，让用户把鼠标移到弹窗上，看鼠标指着的窗口是哪个程序的；只读） |
+| `popup_reveal` | — | `null`（在资源管理器里打开 `popup_find` 最近一次找到的程序所在的文件夹并选中它；界面传不了路径） |
 
 图片批量处理（`app/src/components/BatchImageTool.vue`、`src-tauri/src/images.rs`）：解码、缩放、裁剪、编码都在界面里用 WebView2 自带的解码器和画布做（不加新的依赖，能打开 JPG、PNG、WebP、GIF、BMP、ICO、AVIF，打不开 HEIC 和 TIFF；只能存成 JPG、PNG、WebP）；后端只负责把结果存进用户选的文件夹。原图从不改动。重新编码不带原图的拍摄信息；「压完反而更大时存原图」的那几张原样复制。
 
@@ -413,6 +415,13 @@ checks: [disk.system-free-space, system.pending-reboot]
 - **范围**：选了几个文件时一个一个查（最多 100 个），说得出哪个程序在用哪个文件；选了文件夹时把里面的文件（最多 5000 个，不跟着符号链接和目录联接走到外面）一起查一次，有人在用、文件又不超过 100 个时再一个一个查出是哪几个。
 - **说法**：按重启管理器报的类型（有窗口的程序、命令行、资源管理器、后台程序、系统服务、关键进程）说怎么让它放手（`app/src/utils/fileLocks.ts`）；资源管理器在用时直接给「重启资源管理器」。查不出来的情况（文件夹本身被占着，比如命令行窗口停在里面——重启管理器只收文件；没有权限）在没查到时一并说明。
 - **隐私**：要查的文件只能在后端的系统选择框里选，界面传不了路径；结果里只有文件名（文件夹里的用相对路径）和程序的文件名，没有完整路径（里面常有用户名），也不进诊断报告。
+
+弹窗是哪个软件的（`crates/medkit-core/src/window_owner.rs`、`crates/medkit-core/src/platform/window_info.rs`、`app/src/components/PopupOwner.vue`）：
+
+- **找窗口**：倒数几秒（让用户把鼠标移到弹窗上），`GetCursorPos` + `WindowFromPoint`，再用 `GetAncestor(GA_ROOT)` 找到最外层的窗口：网页、广告内容常在别的进程（浏览器内核、WebView2）的子窗口里，最外层的窗口才是弹出它的那个程序的。看的是鼠标下面的窗口，不是激活的窗口：有的广告弹窗点了也不会被激活。只读：不关窗口、不结束程序，也不记修改日志。
+- **认程序**：`OpenProcess`（只查询）+ `QueryFullProcessImageNameW` 得到程序文件；版本信息（`GetFileVersionInfoW`、`VerQueryValueW`，优先简体中文那一份）给说明、公司、产品名，只读资源，不加载、不运行这个程序。任务栏、桌面按窗口类名认；`ShellExperienceHost.exe` 画的是 Windows 通知（别的软件、网站发的通知也是它显示的），Windows 文件夹里的算 Windows 自带的；小药箱自己的窗口单独说。
+- **属于哪个软件**：按程序所在的文件夹对上「应用和功能」里的软件（HKLM 的 64 位、32 位卸载信息，加上登录用户自己的；系统组件、补丁不算）：安装位置、图标、卸载程序所在的文件夹里包含这个程序，有好几个时取最具体的那个。Program Files、ProgramData、用户的 AppData、下载、桌面、Windows 文件夹这些太宽的文件夹不拿来认。
+- **路径**：结果里的文件夹把用户文件夹名换成 `*`；完整路径只留在后端，「打开所在的文件夹」不收界面传来的路径。结果不进诊断报告。
 
 找大文件和重复文件（`src-tauri/src/space.rs`、`app/src/components/SpaceFinder.vue`）：
 
@@ -610,7 +619,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 
 settings 页面：`windowsupdate`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、
-`sound`、`powersleep`、`batterysaver-usagedetails`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`regionlanguage`、`apps-volume`。
+`sound`、`powersleep`、`batterysaver-usagedetails`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`regionlanguage`、`apps-volume`、`notifications`。
 
 - 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。
 - 命令行窗口里运行的程序都写 System32 下的绝对路径（cmd 找程序时先找当前文件夹，便携版可能放在「下载」里），

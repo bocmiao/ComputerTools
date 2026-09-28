@@ -73,6 +73,7 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "easeofaccess-mouse",
     "regionlanguage",
     "apps-volume",
+    "notifications",
 ];
 
 /// 命令行窗口里要运行的那一串：`/k ""<System32>\Dism.exe" /Online … & "<System32>\sfc.exe" /scannow"`。程序都写

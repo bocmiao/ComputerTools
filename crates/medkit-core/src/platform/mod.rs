@@ -14,6 +14,8 @@ mod restart_manager;
 #[cfg(windows)]
 pub mod shutdown;
 #[cfg(windows)]
+mod window_info;
+#[cfg(windows)]
 pub mod windows;
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -87,6 +89,60 @@ pub enum OpenRequest {
     Settings(&'static str),
 }
 
+/// 屏幕上的一块长方形（像素，和系统的 RECT 一样：右边、下边不算在里面）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ScreenRect {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
+impl ScreenRect {
+    pub fn width(&self) -> i32 {
+        (self.right - self.left).max(0)
+    }
+
+    pub fn height(&self) -> i32 {
+        (self.bottom - self.top).max(0)
+    }
+}
+
+/// 鼠标指着的那个窗口（最外层的那个：网页、按钮这些里面的小窗口算到它们所在的窗口上）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PointedWindow {
+    pub pid: u32,
+    /// 窗口类名，用来认出任务栏、桌面
+    pub class: String,
+    /// 窗口在屏幕上的位置和大小
+    pub rect: ScreenRect,
+    /// 窗口所在的那块屏幕的工作区（不含任务栏）
+    pub screen: ScreenRect,
+    /// 程序的完整路径；读不到（窗口已经关了、受保护的进程）时为 `None`
+    pub path: Option<std::path::PathBuf>,
+}
+
+/// 程序文件的版本信息里写的几项（资源管理器「属性 → 详细信息」里看到的那些）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FileStrings {
+    /// 文件说明（FileDescription）
+    pub description: Option<String>,
+    /// 公司（CompanyName）
+    pub company: Option<String>,
+    /// 产品名称（ProductName）
+    pub product: Option<String>,
+}
+
+/// 「应用和功能」里的一项：卸载信息里的原文，还没整理（整理见 [`crate::window_owner`]）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InstalledProgram {
+    pub name: String,
+    pub publisher: Option<String>,
+    pub install_location: Option<String>,
+    pub display_icon: Option<String>,
+    pub uninstall_string: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UserIdentity {
     pub sid: String,
@@ -151,6 +207,22 @@ pub trait Platform: Send + Sync {
     fn file_users(&self, files: &[std::path::PathBuf]) -> PResult<Vec<FileUser>> {
         let _ = files;
         Err(PlatformError::Unsupported("查文件被哪些程序占着".into()))
+    }
+
+    /// 鼠标现在指着的那个窗口；鼠标下面没有窗口时返回 `Ok(None)`。只读，不动那个窗口。
+    fn pointed_window(&self) -> PResult<Option<PointedWindow>> {
+        Err(PlatformError::Unsupported("看鼠标指着的窗口是哪个程序的".into()))
+    }
+
+    /// 程序文件的版本信息；没有或者读不出来时各项都是 `None`。只读资源，不运行文件。
+    fn file_strings(&self, path: &std::path::Path) -> FileStrings {
+        let _ = path;
+        FileStrings::default()
+    }
+
+    /// 「应用和功能」里的程序：这台电脑的（64 位和 32 位的）加上登录用户自己装的。
+    fn installed_programs(&self) -> PResult<Vec<InstalledProgram>> {
+        Err(PlatformError::Unsupported("列出装了哪些程序".into()))
     }
 }
 

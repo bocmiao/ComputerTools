@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:notifications（「系统 → 通知」），由系统打开。
+# 在这里能看到哪些软件、浏览器能发通知，逐个关掉；最下面还有 Windows 自己的「提示和建议」。
+id: settings.notifications
+schema_version: 1
+group: open
+title: { zh-CN: 通知设置 }
+description:
+  zh-CN: 打开「设置」里的通知页面：右下角老弹通知的，在这里把那个软件（或者浏览器）的通知关掉，也可以打开「勿扰」。
+category: settings
+open: { settings: notifications }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/windows/change-notification-and-quick-settings-in-windows-ddcbbcd4-0a02-f6e4-fe14-6766d850f294

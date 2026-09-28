@@ -71,6 +71,8 @@ macro_rules! command_handler {
             $crate::commands::space_pick_folder,
             $crate::commands::space_rescan,
             $crate::commands::space_reveal,
+            $crate::commands::popup_find,
+            $crate::commands::popup_reveal,
         ]
     };
 }

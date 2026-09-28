@@ -4,6 +4,7 @@ import { runCheck, startupList, startupSet, symptomDetail, toolOpen } from '../a
 import type { ApplyResult, CheckResult, StartupItem, SymptomDetail, SymptomSummary } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
+import PopupOwner from '../components/PopupOwner.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import ResultLinks from '../components/ResultLinks.vue'
 import StatusLamp, { type LampState } from '../components/StatusLamp.vue'
@@ -104,7 +105,7 @@ async function open(id: string): Promise<void> {
     if (token !== runToken) return
     detail.value = d
     runs.value = d.steps.map(() => ({ state: 'pending', result: null, error: null }))
-    if (id === 'slow-boot') void loadStartup()
+    if (showsStartup(id)) void loadStartup()
   } catch (e) {
     if (token !== runToken) return
     detailError.value = errorText(e)
@@ -113,16 +114,22 @@ async function open(id: string): Promise<void> {
   detailHeading.value?.focus()
 }
 
+/** 这几个症状的页面里直接列出开机启动项（开机慢、老弹广告：很多弹窗是开机自己启动的软件弹的） */
+const STARTUP_SYMPTOMS: ReadonlySet<string> = new Set(['slow-boot', 'popup-ads'])
+function showsStartup(id: string | null | undefined): boolean {
+  return !!id && STARTUP_SYMPTOMS.has(id)
+}
+
 async function loadStartup(): Promise<void> {
   startupLoading.value = true
   startupError.value = null
   try {
     const items = await startupList()
-    if (selectedId.value === 'slow-boot') startupItems.value = items
+    if (showsStartup(selectedId.value)) startupItems.value = items
   } catch (e) {
-    if (selectedId.value === 'slow-boot') startupError.value = errorText(e)
+    if (showsStartup(selectedId.value)) startupError.value = errorText(e)
   } finally {
-    if (selectedId.value === 'slow-boot') startupLoading.value = false
+    if (showsStartup(selectedId.value)) startupLoading.value = false
   }
 }
 
@@ -495,7 +502,9 @@ watch(
           </ol>
         </section>
 
-        <section v-if="detail.id === 'slow-boot'" class="card block" aria-labelledby="startup-title">
+        <PopupOwner v-if="detail.id === 'popup-ads'" class="block" />
+
+        <section v-if="showsStartup(detail.id)" class="card block" aria-labelledby="startup-title">
           <div class="steps-head">
             <h2 id="startup-title" class="section-title">管理开机启动项</h2>
             <button type="button" class="btn btn-secondary btn-small" :disabled="startupLoading || !!startupBusy" @click="loadStartup()">刷新列表</button>

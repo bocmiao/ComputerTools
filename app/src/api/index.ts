@@ -27,6 +27,7 @@ import type {
   SystemInfo,
   ToolResult,
   UndoResult,
+  WindowOwnerReport,
 } from './types'
 
 export type * from './types'
@@ -317,6 +318,16 @@ export function lockersPickFolder(): Promise<FileLockReport | null> {
 /** 关掉程序以后，再查一次上次选的文件或文件夹；还没选过返回 null */
 export function lockersRefresh(): Promise<FileLockReport | null> {
   return call('lockers_refresh', {})
+}
+
+/** 弹窗是哪个软件的：等 seconds 秒（用户把鼠标移到弹窗上），看鼠标指着的窗口是哪个程序的（只读） */
+export function popupFind(seconds: number): Promise<WindowOwnerReport> {
+  return call('popup_find', { seconds })
+}
+
+/** 在资源管理器里打开刚才找到的程序所在的文件夹，并选中它 */
+export function popupReveal(): Promise<null> {
+  return call('popup_reveal', {})
 }
 
 /** 找大文件和重复文件：用系统的选择框选文件夹，数一遍（只读）；取消返回 null */

@@ -55,6 +55,8 @@ const COMMANDS: &[&str] = &[
     "space_pick_folder",
     "space_rescan",
     "space_reveal",
+    "popup_find",
+    "popup_reveal",
 ];
 
 fn main() {

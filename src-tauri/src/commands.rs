@@ -7,6 +7,7 @@ use medkit_core::lockers::LockTarget;
 use medkit_core::views::{
     ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, FeatureState, FileLockReport, JournalSession,
     NewMenuItem, Preview, ShellPlaceItem, StartupItem, SymptomDetail, SystemInfo, ToolResult, UndoResult,
+    WindowOwnerReport,
 };
 use tauri::State;
 
@@ -594,6 +595,43 @@ pub async fn lockers_refresh(state: State<'_, AppState>) -> CmdResult<Option<Fil
     match target {
         Some(target) => lockers_check(state, target).await,
         None => Ok(None),
+    }
+}
+
+/// 「弹窗是哪个软件的」最多等几秒
+const POPUP_MAX_WAIT: u32 = 10;
+
+/// 「弹窗是哪个软件的」：等 `seconds` 秒（用户在这段时间里把鼠标移到弹窗上），看鼠标指着的窗口是哪个程序的。
+/// 只读：不关窗口、不结束程序。记下程序文件，给「打开所在的文件夹」用；界面拿不到完整路径。
+#[tauri::command]
+pub async fn popup_find(state: State<'_, AppState>, seconds: u32) -> CmdResult<WindowOwnerReport> {
+    let wait = std::time::Duration::from_secs(u64::from(seconds.min(POPUP_MAX_WAIT)));
+    let slot = state.popup.clone();
+    let (report, path) = with_engine(state, move |e| {
+        std::thread::sleep(wait);
+        e.window_owner()
+    })
+    .await?;
+    *slot.lock().map_err(|_| "状态异常。")? = path;
+    Ok(report)
+}
+
+/// 「弹窗是哪个软件的」：在资源管理器里打开刚才找到的程序所在的文件夹，并选中它。
+#[tauri::command]
+pub async fn popup_reveal(state: State<'_, AppState>) -> CmdResult<()> {
+    let path = state.popup.lock().map_err(|_| "状态异常。")?.clone();
+    let path = path.ok_or("还没有找到是哪个程序，请先点「开始找」。")?;
+    #[cfg(windows)]
+    {
+        tauri::async_runtime::spawn_blocking(move || medkit_core::platform::windows::reveal_file(&path))
+            .await
+            .map_err(|e| format!("内部错误：{e}"))?
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Err("只有在 Windows 上才能打开资源管理器。".into())
     }
 }
 

@@ -11,6 +11,7 @@
 //! - [`shell_places`]：资源管理器导航栏和「此电脑」里软件加的图标，能隐藏、能恢复
 //! - [`lockers`]：文件删不掉时，看是哪些程序在用它（只读）
 //! - [`disk_speed`]：硬盘测速（只写一个关掉就删的临时文件）
+//! - [`window_owner`]：弹窗是哪个软件的：鼠标指着的窗口是哪个程序的（只读）
 
 pub mod builtin;
 pub mod bundle;
@@ -33,6 +34,7 @@ pub mod shell_places;
 pub mod startup;
 pub mod tools;
 pub mod views;
+pub mod window_owner;
 mod yaml;
 
 pub use engine::Engine;

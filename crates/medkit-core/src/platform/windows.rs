@@ -668,6 +668,19 @@ impl Platform for WindowsPlatform {
     fn file_users(&self, files: &[PathBuf]) -> PResult<Vec<super::FileUser>> {
         super::restart_manager::file_users(files)
     }
+
+    fn pointed_window(&self) -> PResult<Option<super::PointedWindow>> {
+        super::window_info::pointed_window()
+    }
+
+    fn file_strings(&self, path: &Path) -> super::FileStrings {
+        super::window_info::file_strings(path)
+    }
+
+    fn installed_programs(&self) -> PResult<Vec<super::InstalledProgram>> {
+        let sid = self.interactive_user().map(|u| u.sid).filter(|s| crate::registry::is_sid(s));
+        Ok(super::window_info::installed_programs(sid.as_deref()))
+    }
 }
 
 // ───────────── 打开系统工具 ─────────────

@@ -52,6 +52,7 @@ import type {
   ToolSection,
   ToolSummary,
   UndoResult,
+  WindowOwnerReport,
 } from './types'
 
 // ─────────────────────────── 演示场景 ───────────────────────────
@@ -2415,6 +2416,16 @@ const handlers: Handlers = {
     demoLockClosed = true
     return demoLockReport()
   },
+  popup_find: () => {
+    const r = DEMO_POPUPS[demoPopupIndex % DEMO_POPUPS.length]!
+    demoPopupIndex++
+    demoPopupFound = r.exe !== null
+    return r
+  },
+  popup_reveal: () => {
+    if (!demoPopupFound) throw '还没有找到是哪个程序，请先点「开始找」。'
+    return null
+  },
   space_pick_folder: () => {
     demoSpace = true
     return demoSpaceReport()
@@ -2535,6 +2546,27 @@ function demoSpaceReport(): SpaceReport {
     comparedAll: true,
   }
 }
+
+// ── 弹窗是哪个软件的（演示）：依次演示软件的弹窗、Windows 的通知、鼠标还在小药箱上 ──
+const DEMO_POPUPS: WindowOwnerReport[] = [
+  {
+    kind: 'program', exe: 'KanTuNews.exe', description: '热点资讯', company: '示例网络科技有限公司', product: '快看图',
+    folder: 'C:\\Program Files (x86)\\KanTu\\News', installed: '快看图', publisher: '示例网络科技有限公司',
+    position: 'bottom-right', width: 360, height: 260,
+  },
+  {
+    kind: 'notification', exe: 'ShellExperienceHost.exe', description: 'Windows Shell Experience Host',
+    company: 'Microsoft Corporation', product: 'Microsoft® Windows® Operating System',
+    folder: 'C:\\Windows\\SystemApps\\ShellExperienceHost_cw5n1h2txyewy', installed: null, publisher: null,
+    position: 'bottom-right', width: 380, height: 150,
+  },
+  {
+    kind: 'medkit', exe: null, description: null, company: null, product: null, folder: null, installed: null,
+    publisher: null, position: 'center', width: 1200, height: 800,
+  },
+]
+let demoPopupIndex = 0
+let demoPopupFound = false
 
 // ── 文件删不掉：是谁占着（演示）──
 let demoLockTarget: 'files' | 'folder' | null = null
