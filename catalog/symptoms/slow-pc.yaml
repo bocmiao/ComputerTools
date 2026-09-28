@@ -68,4 +68,4 @@ guide:
     4. 不要用「一键加速」「内存释放」这类软件：它们结束的程序很快又会自己启动，还可能把系统弄坏。
     5. 用了好几年的老电脑：系统装在机械硬盘上的，换一块固态硬盘（SSD）是最见效的提速办法；内存只有 4 GB 的，加到 8 GB 或者更多。可以请懂哥帮忙看看。
     6. 不认识的程序一直占着处理器，或者什么都没开风扇也狂转，可能中了挖矿、广告类的恶意软件，请懂哥帮忙查一查。
-links: ["tool:open.task-manager", "tool:settings.power", "symptom:slow-boot"]
+links: ["tool:open.task-manager", "tool:settings.power", "symptom:slow-boot", "symptom:gpu-not-used"]

@@ -38,5 +38,7 @@ checks:
   - hardware.system-disk-type
   - hardware.memory-size
   - system.pagefile
+  # 显卡：台式机显示器插在主板上、独立显卡被停用或者没驱动
+  - display.gpus
   - hardware.battery-health
   - hardware.cpu-features

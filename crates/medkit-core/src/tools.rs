@@ -97,6 +97,8 @@ pub const SETTINGS_PAGES: &[&str] = &[
     "powersleep",
     "batterysaver-usagedetails",
     "display",
+    // 「图形设置」（Windows 11：「屏幕 → 显示卡」）：给每个程序选用集成显卡还是独立显卡（微软：只有支持的设备上有）
+    "display-advancedgraphics",
     "bluetooth",
     "recovery",
     "windowsdefender",

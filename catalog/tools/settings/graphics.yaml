@@ -1,0 +1,19 @@
+# 打开「设置」里的一页（open）：ms-settings:display-advancedgraphics（微软《Launch the Windows Settings app》：「Graphics
+# Settings」，只有支持的设备上有）。Windows 11 是「系统 → 屏幕 → 显示卡」，Windows 10 是「系统 → 显示 → 图形设置」。
+# 在这里给某个程序选「节能」（集成显卡）、「高性能」（独立显卡）或者「让 Windows 决定」。NVIDIA 说从 Windows 10 2004
+# 起用哪块显卡由 Windows 决定，这里的设置比 NVIDIA 控制面板里的「首选图形处理器」优先。
+# 设置存在 HKCU\Software\Microsoft\DirectX\UserGpuPreferences 里（值名是程序的完整路径，内容像 GpuPreference=2;，
+# 同一个值里还可能有别的设置）。小药箱不替用户写：要选哪个程序，由用户在这一页里「浏览」找到；照 SetGpuPreference（MIT）、
+# GPUPrefSwitcher（GPL-3.0）这些开源工具的写法记在调研文档里，以后要批量设置再做。
+id: settings.graphics
+schema_version: 1
+group: open
+title: { zh-CN: 图形设置（让游戏用独立显卡） }
+description:
+  zh-CN: 打开「设置」里的图形设置（Windows 11 叫「显示卡」），给游戏、剪辑软件选「高性能」，让它用独立显卡；选「节能」就用集成显卡、更省电。改完要把这个程序关掉重新打开才生效。
+category: settings
+open: { settings: display-advancedgraphics }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://www.nvidia.com/content/Control-Panel-Help/vLatest/en-us/mergedProjects/nv3d/Setting_the_Preferred_Graphics_Processor.htm
+  - https://www.asus.com.cn/support/faq/1044213/

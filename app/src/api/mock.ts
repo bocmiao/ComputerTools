@@ -1022,6 +1022,17 @@ const CHECKS: Record<string, MockCheck> = {
     title: '是不是用临时配置文件登录的',
     evaluate: () => ({ status: 'ok', resultCode: 'ok', message: '这次登录用的是你自己的账户配置，不是临时配置文件。', facts: { bak: false, events: 0 } }),
   },
+  'display.gpus': {
+    title: '显卡：集成显卡和独立显卡',
+    evaluate: () => ({
+      status: 'ok',
+      resultCode: 'hybrid',
+      message:
+        '这台电脑有集成显卡 Intel(R) UHD Graphics 和独立显卡 NVIDIA GeForce RTX 3050 Laptop GPU。平时 Windows 自己决定用哪块；哪个游戏、软件卡，可以在「图形设置」里把它设成「高性能」，让它用独立显卡。',
+      links: ['tool:settings.graphics'],
+      facts: { count: 2, desktop: false, display_on: 'integrated' },
+    }),
+  },
   'system.managed': {
     title: '单位管理',
     evaluate: () => ({ status: 'ok', message: '这台电脑没有被单位管理（没有加入域，也没有设备管理）。', facts: { domain_joined: false, mdm: false } }),
@@ -1078,6 +1089,7 @@ const PROFILES: Record<string, { title: string; checks: string[] }> = {
       'security.bitlocker',
       'boot.secure-boot-cert',
       'system.device-problems',
+      'display.gpus',
       'system.winre',
       'system.managed',
       'security.win10-esu',
@@ -1271,6 +1283,15 @@ const SYMPTOMS: MockSymptom[] = [
     causes: ['删的时候没进回收站：按了 Shift + Delete、在 U 盘和存储卡上删的、文件太大放不进回收站', '回收站被清空了，或者被「清理垃圾」的软件清掉了'],
     guide: '先按 Ctrl + Z 撤销、看回收站、看文件夹属性里的「以前的版本」和网盘的回收站。都找不到的话，别再往那个盘里存东西，用下面的「拼出恢复命令」和微软的 Windows File Recovery 找。',
     steps: [],
+  },
+  {
+    id: 'gpu-not-used', title: '玩游戏卡，没用上独立显卡',
+    summary: '明明有独立显卡，玩游戏还是卡、帧数低；任务管理器里游戏用的是集成显卡；或者打开 NVIDIA 控制面板，提示「您当前未使用连接到 NVIDIA GPU 的显示器」。',
+    keywords: ['独立显卡', '独显', '玩游戏卡', '显卡切换', '独显直连'], maturity: 'semi',
+    causes: ['笔记本在用电池，或者电源模式是「节能」「最佳能效」，独立显卡被限制了', '游戏被分到了集成显卡上，没在「图形设置」里设成「高性能」', '台式机的显示器线插在主板的接口上，画面走的是集成显卡'],
+    guide: '笔记本先插上电源再玩；点下面的「图形设置」，把游戏的程序加进来设成「高性能」，关掉游戏重新打开。台式机的显示器线要插在独立显卡的接口上，不要插在主板上。',
+    steps: [{ check: 'display.gpus', fixes: [] }],
+    links: ['tool:settings.graphics'],
   },
 ]
 
@@ -1995,6 +2016,14 @@ const TOOL_LIST: MockTool[] = [
     'settings',
     'settings',
     'ms-settings:dateandtime',
+  ),
+  openTool(
+    'settings.graphics',
+    '图形设置（让游戏用独立显卡）',
+    '打开「设置」里的图形设置（Windows 11 叫「显示卡」），给游戏、剪辑软件选「高性能」，让它用独立显卡；选「节能」就用集成显卡、更省电。改完要把这个程序关掉重新打开才生效。',
+    'settings',
+    'settings',
+    'ms-settings:display-advancedgraphics',
   ),
 ]
 

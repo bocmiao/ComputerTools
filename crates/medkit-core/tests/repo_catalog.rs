@@ -128,6 +128,7 @@ fn common_error_messages_find_their_symptom() {
         ),
         ("CMOS checksum error - Defaults loaded Press F1 to continue, DEL to enter SETUP", "boot-press-f1"),
         ("CPU Fan Error! Press F1 to Run SETUP", "boot-press-f1"),
+        ("NVIDIA 显示设置不可用。您当前未使用连接到 NVIDIA GPU 的显示器。", "gpu-not-used"),
     ];
     let wrong: Vec<String> = cases
         .iter()

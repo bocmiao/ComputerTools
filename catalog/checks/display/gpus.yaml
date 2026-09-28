@@ -1,0 +1,79 @@
+# 这台电脑的显卡：集成显卡（在处理器里）有哪块、独立显卡有哪块、独立显卡能不能用、台式机的显示器是不是插在主板上。
+# 脚本：scripts/checks/display/gpus.ps1（WMI，只读）。给症状「玩游戏卡，没用上独立显卡」和体检用。
+# 集显还是独显按 PCI 厂商编号和型号名分（Windows 自己靠驱动通过 DXGI 知道，脚本调不了）：NVIDIA、摩尔线程是独显；
+# Intel 除了 Arc A、B 系列（A380、A770M、B580）和 Iris Xe MAX 都是集显；AMD 的 RX 460～RX 9070、RX Vega 56/64、
+# Radeon Pro、FirePro、带型号的 R5/R7/R9 和四位数的 HD 是独显，名字带 Graphics 的、Radeon 610M～890M、8060S 是集显；
+# 高通是集显；别的算「分不清」。独显的状态照 hardware.device-problems 的代码分：22、29 被停用，1、28 或者用着 Windows
+# 自带的基本显示驱动算没驱动，14、21 这些等重启，别的代码算报错。
+# 显示器接在哪块上：Win32_VideoController 里只有正在出画面的显卡有当前分辨率。台式机（不是笔记本、没有电池、机箱是台式
+# 或者塔式的；一体机、迷你主机可能和笔记本一样走集显出画面，不算）上独显好好的却没出画面、画面从集显出来，就是显示器线
+# 插在了主板的接口上。游戏笔记本平时本来就是集显出画面，不算问题。
+# 虚拟机里模拟的显卡（VMware、VirtualBox、QEMU、Hyper-V 等）不算；远程桌面、投屏和虚拟显示器软件的显卡不在 PCI 上，也不算。
+# 只输出显卡的型号名（这台电脑自己的硬件），不输出设备编号。
+# 结果（按这个顺序）：none（没找到显卡硬件，比如虚拟机：不适用）、discrete-problem（独显一块都用不了）、on-integrated
+# （台式机显示器插在主板上）、hybrid（集显 + 独显）、discrete（只有独显）、integrated（只有集显）、other（分不清）。
+# 事实：integrated、discrete、other、names（每类最多 3 个名字）；discrete-problem 时还有 problem（disabled、no-driver、
+# restart、error）和 code；count、desktop、display_on（integrated、discrete、both、other、none）给日志看。
+id: display.gpus
+schema_version: 1
+title: { zh-CN: 显卡：集成显卡和独立显卡 }
+description:
+  zh-CN: 看看这台电脑有没有独立显卡、独立显卡能不能用，台式机的显示器是不是插在了主板上（这样玩游戏用不上独立显卡）。
+category: display
+requires_admin: false
+timeout_sec: 60
+probe:
+  script: checks/display/gpus.ps1
+results:
+  none:
+    status: na
+    message:
+      zh-CN: 没找到显卡硬件（可能是在虚拟机里）。
+  discrete-problem:
+    status: advice
+    message:
+      zh-CN: "独立显卡 {discrete} 现在用不上：{problem_text}"
+    fixer: user
+    next:
+      zh-CN: 说要重启的，先重启电脑。别的情况点下面的按钮打开设备管理器，展开「显示适配器」找到独立显卡：图标上有向下箭头的是被禁用了，右键选「启用设备」；带黄色感叹号或者名字是「Microsoft 基本显示适配器」的，到电脑品牌官网（笔记本）或者显卡官网（NVIDIA、AMD）下载显卡驱动重新装；刚更新驱动就这样的，右键「属性 → 驱动程序 → 回退驱动程序」。设备管理器里根本没有独立显卡的，可能是在 BIOS 里关掉了，请懂哥或者售后看看。
+    links: ["tool:open.device-manager"]
+  on-integrated:
+    status: advice
+    message:
+      zh-CN: 显示器接在主板的接口上了：画面是集成显卡 {integrated} 出的，独立显卡 {discrete} 上没有接显示器。这样玩游戏会卡，显示器的高刷新率也用不上。
+    fixer: user
+    next:
+      zh-CN: 关机，把显示器的线从机箱背面上方的主板接口（和 USB 口挨在一起的那一块）上拔下来，插到下面横着的独立显卡的接口上（HDMI 或者 DP），再开机。要是你故意这样接的（比如独立显卡只用来跑计算），不用管。
+  hybrid:
+    status: ok
+    message:
+      zh-CN: 这台电脑有集成显卡 {integrated} 和独立显卡 {discrete}。平时 Windows 自己决定用哪块；哪个游戏、软件卡，可以在「图形设置」里把它设成「高性能」，让它用独立显卡。
+    links: ["tool:settings.graphics"]
+  discrete:
+    status: ok
+    message:
+      zh-CN: 这台电脑用的是独立显卡 {discrete}，不用切换显卡。
+  integrated:
+    status: ok
+    message:
+      zh-CN: 这台电脑只有集成显卡 {integrated}，没有独立显卡。大型 3D 游戏卡多半是显卡性能不够，把游戏的画质、分辨率调低一些会好些。
+    next:
+      zh-CN: 电脑买的时候说有独立显卡、这里却只有集成显卡的：独立显卡可能在 BIOS 里被关掉了，或者松了、坏了，请懂哥或者售后看看。
+  other:
+    status: ok
+    message:
+      zh-CN: 这台电脑的显卡：{names}。
+fact_labels:
+  problem_text:
+    from: problem
+    values:
+      disabled: { zh-CN: 它被停用了（在设备管理器里被禁用，或者在 BIOS 里被关掉了），玩游戏只能用集成显卡，会很卡。 }
+      no-driver: { zh-CN: 它没装好显卡驱动，现在 Windows 用不了它的 3D 性能，玩游戏会很卡。 }
+      restart: { zh-CN: 它的驱动刚装好或者刚改过，要重启电脑以后才能用。 }
+      error: { zh-CN: 它在设备管理器里报错了（带黄色感叹号），多半是驱动坏了或者不对版本。 }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-videocontroller
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-pnpentity
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/device-manager-error-messages
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-systemenclosure
+  - https://www.nvidia.com/content/Control-Panel-Help/vLatest/en-us/mergedProjects/nv3d/Setting_the_Preferred_Graphics_Processor.htm
