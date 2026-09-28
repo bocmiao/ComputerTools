@@ -1,0 +1,60 @@
+# 设备类里残留的过滤驱动（只检测）。脚本：scripts/checks/hardware/class-filters.ps1
+# 杀毒软件的键盘保护、宏和热键软件、刻录和虚拟光驱软件会把自己的驱动加进整类设备的 UpperFilters / LowerFilters
+# （HKLM\SYSTEM\CurrentControlSet\Control\Class\{类 GUID}）。软件卸载了、名字还留在里面，这一类的所有设备都起不来：
+# 设备管理器显示代码 19（「注册表中的配置信息不完整或已损坏」）、39、32，所有键盘（或者鼠标、光驱、摄像头）都不能用
+# （微软《设备管理器错误代码》《Windows 不识别 CD 或 DVD 驱动器》）。键盘、鼠标类的 UpperFilters 还必须有 kbdclass、mouclass。
+# 残留的判断：服务没了，或者是内核驱动（Type 1）但驱动文件不在（ImagePath 按 \SystemRoot\、System32\、\??\C:\、C:\ 解析，
+# 没有 ImagePath 时是 System32\drivers\<名字>.sys）。能用的过滤驱动不动也不报。
+# 查的类：keyboard、mouse、cdrom（光驱）、usb（USB 控制器和集线器）、image（摄像头、扫描仪）、camera。磁盘、卷、存储控制器
+# 不查也不改（那里坏了电脑根本开不了机）。
+# 结果：ok、broken（有残留；修复 hardware.class-filters-repair）、class-missing（只是少了类驱动；同一个修复）。
+# 事实：classes（有问题的类）、filters（残留的名字）、missing_class（不在列表里的类驱动，数组）。
+id: hardware.class-filters
+schema_version: 1
+title: { zh-CN: 键盘、鼠标、光驱这些设备的驱动登记 }
+description:
+  zh-CN: 看看键盘、鼠标、光驱、USB、摄像头这几类设备的「过滤驱动」列表里，有没有已经卸载了的软件留下的名字。有的话，这一类设备全都用不了，设备管理器里显示代码 19、39。
+category: hardware
+requires_admin: false
+probe:
+  script: checks/hardware/class-filters.ps1
+fact_labels:
+  classes_text:
+    from: classes
+    values:
+      keyboard: { zh-CN: 键盘 }
+      mouse: { zh-CN: 鼠标 }
+      cdrom: { zh-CN: 光驱 }
+      usb: { zh-CN: USB 控制器 }
+      image: { zh-CN: 摄像头和扫描仪 }
+      camera: { zh-CN: 摄像头 }
+  missing_text:
+    from: missing_class
+    values:
+      kbdclass: { zh-CN: "，还少了 Windows 自己的键盘驱动 kbdclass" }
+      mouclass: { zh-CN: "，还少了 Windows 自己的鼠标驱动 mouclass" }
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 键盘、鼠标、光驱、USB、摄像头的驱动登记都正常，没有卸载了的软件留下的过滤驱动。
+  broken:
+    status: advice
+    message:
+      zh-CN: "「{classes_text}」这一类设备的驱动登记坏了：里面还留着已经卸载了的软件的驱动（{filters}）{missing_text}。这一类的设备会全都用不了，设备管理器里显示代码 19 或者 39。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮把失效的名字删掉（能用的都不动，键盘、鼠标缺的系统驱动会加回去），重启电脑以后生效。执行前会先建一个还原点，能撤销。键盘、鼠标都用不了的，可以先用笔记本的触摸板、屏幕键盘（「设置 → 辅助功能 → 键盘」），或者接一个别的 USB 键盘鼠标来点。
+    links: ["feature:hardware.class-filters-repair", "tool:open.device-manager"]
+  class-missing:
+    status: advice
+    message:
+      zh-CN: "「{classes_text}」的驱动登记里少了 Windows 自己的驱动（{missing_class}），这一类的设备会用不了，设备管理器里显示代码 19 或者 39。多半是「优化」软件或者网上的教程删掉的。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮把它加回去，重启电脑以后生效。执行前会先建一个还原点，能撤销。
+    links: ["feature:hardware.class-filters-repair", "tool:open.device-manager"]
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/device-manager-error-messages
+  - https://support.microsoft.com/en-us/topic/your-cd-or-dvd-drive-isn-t-recognized-by-windows-or-other-programs-64da3a6b-f0d1-8c3a-9f23-8d1d6fc3d80b
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-filter-driver

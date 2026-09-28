@@ -1,0 +1,38 @@
+# 删掉设备类里失效的过滤驱动（脚本类功能）：键盘、鼠标、光驱、USB、摄像头这几类设备的 UpperFilters / LowerFilters 里，
+# 驱动已经没了（服务不在，或者驱动文件不在）的名字删掉；键盘、鼠标类缺的 kbdclass、mouclass 加回去。能用的过滤驱动
+# 不动、顺序不变；删空了的列表整个去掉（没有列表就是没有过滤驱动）。重启以后 Windows 重新装配这些设备的驱动，代码 19、39 消失。
+# 脚本在 scripts/features/hardware/ 下，和检测 hardware.class-filters 共用共享块 class-filters。
+#   class-filters-detect.ps1  撤销前核对：没有问题 → applied；有 → not-applied
+#   class-filters-run.ps1     -Prepare：before = { lists: [{ code, value, current（原样，没有为 null）, fixed（要写的） }] }；
+#                             执行：列表变了就跳过；逐个写（REG_MULTI_SZ）、读回来确认，失败时写回原样再报错
+#   class-filters-undo.ps1    还是当时写的样子的，写回原样（原来没有的删掉）；别人改过的不动
+#   class-filters-break.ps1   只在测试中使用：在键盘类的 UpperFilters 最后加一个不存在的 medkitgoneflt
+# 改的是设备驱动的装配，按「谨慎」处理：执行前先建还原点。
+id: hardware.class-filters-repair
+schema_version: 1
+title: { zh-CN: 删掉失效的设备过滤驱动 }
+description:
+  zh-CN: 键盘、鼠标、光驱、USB、摄像头突然全都用不了（设备管理器里显示代码 19、39），多半是卸载了的软件还把它的驱动登记在这一类设备里。把已经不在了的驱动名字删掉，键盘、鼠标缺的 Windows 自带驱动加回去，能用的过滤驱动都不动。重启电脑以后生效，执行前会先建一个还原点，能撤销。
+category: hardware
+risk: caution
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+detect:
+  script: features/hardware/class-filters-detect.ps1
+prepare:
+  script: features/hardware/class-filters-run.ps1
+run:
+  script: features/hardware/class-filters-run.ps1
+undo:
+  script: features/hardware/class-filters-undo.ps1
+break:
+  script: features/hardware/class-filters-break.ps1
+verify: hardware.class-filters
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/device-manager-error-messages
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-filter-driver
+  - https://support.microsoft.com/en-us/topic/your-cd-or-dvd-drive-isn-t-recognized-by-windows-or-other-programs-64da3a6b-f0d1-8c3a-9f23-8d1d6fc3d80b

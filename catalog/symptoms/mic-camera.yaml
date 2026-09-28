@@ -32,12 +32,14 @@ causes:
   - zh-CN: 开会软件里选的不是你用的那个麦克风、摄像头（插着耳机、外接了摄像头时常见）
   - zh-CN: 笔记本的摄像头被遮挡片挡住，或者被快捷键关掉了
   - zh-CN: 摄像头正被另一个软件占着
-  - zh-CN: 驱动出了问题，或者设备被禁用了
+  - zh-CN: 驱动出了问题，或者设备被禁用了；卸载了的美颜、虚拟摄像头软件还在「摄像头」这一类设备里留着失效的驱动（设备管理器里显示代码 19、39）
 maturity: semi
 steps:
   - check: privacy.microphone
   - check: privacy.camera
   - check: hardware.device-problems
+  - check: hardware.class-filters
+    fixes: [hardware.class-filters-repair]
 guide:
   zh-CN: |
     先看上面的检查结果：隐私开关关着的，按提示打开，再把开会、聊天的软件关掉重开。

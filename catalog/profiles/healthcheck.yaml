@@ -33,6 +33,7 @@ checks:
   - security.tpm
   # 硬件
   - hardware.device-problems
+  - hardware.class-filters
   - hardware.system-disk-type
   - hardware.memory-size
   - system.pagefile

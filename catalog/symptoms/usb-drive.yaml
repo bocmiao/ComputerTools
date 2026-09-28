@@ -52,6 +52,8 @@ steps:
   - check: hardware.usb-storage
     fixes: [hardware.usb-automount-on, hardware.usb-write-protect-off]
   - check: hardware.device-problems
+  - check: hardware.class-filters
+    fixes: [hardware.class-filters-repair]
 guide:
   zh-CN: |
     先把 U 盘插上，再点上面的检查。查出能修的点修复；修完按提示把 U 盘拔下来再插上，或者重启电脑。
