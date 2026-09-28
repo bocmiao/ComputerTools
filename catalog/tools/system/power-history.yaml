@@ -1,0 +1,62 @@
+# 开关机记录（info）。脚本：scripts/tools/system/power-history.ps1，只读。
+# 最近 7 天每天什么时候开机、关机、重启、睡眠、醒来，从系统日志读：Kernel-General 12（开机）、13（关机；2 分钟内又开机的
+# 算重启）、Kernel-Boot 27（开机方式：完整启动、快速启动、从休眠恢复）、User32 1074（谁发起的关机或重启，只取程序的
+# 文件名：事件里还有电脑名、用户名和完整路径，不用）、Kernel-Power 41（上次没有正常关机：蓝屏、长按电源键、断电或死机，
+# 微软《Event ID 41 的高级排查》）、Kernel-Power 42（睡眠）、Power-Troubleshooter 1（醒来）。
+# 一天一个表格（新的在前），表格里按时间先后，一共最多 80 条。结果：found、unexpected（有没正常关机的）、none。
+# 事实：days、boots、unexpected。
+id: system.power-history
+schema_version: 1
+group: info
+title: { zh-CN: 开关机记录 }
+description:
+  zh-CN: 看看最近 7 天电脑每天几点开机、关机、重启、睡眠和醒来，关机、重启是谁发起的（开始菜单、Windows 更新、关机命令），有没有断电、死机、蓝屏、长按电源键这种没正常关机的。怀疑电脑半夜自己开机、自己重启、被别人用过时用。只看不改。
+category: system
+requires_admin: false
+timeout_sec: 60
+run:
+  script: tools/system/power-history.ps1
+results:
+  found:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天开了 {boots} 次机，每次都是正常关机的。下面按天列出了开机、关机、睡眠和醒来的时间。"
+    next:
+      zh-CN: 睡着以后自己醒过来的，用「谁把电脑叫醒的」看是被什么叫醒的；关机、重启是「Windows 更新」发起的，可以在「Windows 更新」里设置使用时段，别在你用电脑的时候重启。
+    links: ["tool:system.wake-sources", "symptom:wakes-up"]
+  unexpected:
+    status: advice
+    message:
+      zh-CN: "最近 {days} 天开了 {boots} 次机，其中 {unexpected} 次开机前电脑没有正常关机（蓝屏、断电、死机或者长按电源键强制关机）。下面按天列出了时间。"
+    fixer: user
+    next:
+      zh-CN: 偶尔一次（比如停电、自己长按了电源键）不用管。经常这样的，看「电脑蓝屏、自己重启」：蓝屏的用「最近的蓝屏」看原因；断电、死机的，查电源、插线板和散热。
+    links: ["symptom:bluescreen", "tool:system.bluescreens"]
+  none:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天的系统日志里没有开关机记录（日志可能被清理过，或者被设置得很小）。"
+labels:
+  sections:
+    day: { zh-CN: 日期 }
+  rows:
+    boot: { zh-CN: 开机 }
+    boot-fast: { zh-CN: 开机（快速启动） }
+    boot-resume: { zh-CN: 从休眠恢复 }
+    shutdown: { zh-CN: 关机 }
+    restart: { zh-CN: 重启 }
+    by: { zh-CN: 由谁发起 }
+    unexpected: { zh-CN: 开机时发现上次没正常关机（断电或死机） }
+    unexpected-bluescreen: { zh-CN: 开机时发现上次是蓝屏 }
+    unexpected-button: { zh-CN: 开机时发现上次是长按电源键关的 }
+    sleep: { zh-CN: 睡眠 }
+    wake: { zh-CN: 醒来 }
+  values:
+    by-start: { zh-CN: 开始菜单或者电源按钮 }
+    by-logon: { zh-CN: 登录界面、锁屏或者 Ctrl + Alt + Delete 菜单 }
+    by-command: { zh-CN: 关机命令（定时关机、软件或者 shutdown 命令） }
+    by-update: { zh-CN: Windows 更新 }
+    by-windows: { zh-CN: Windows 自己 }
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/event-id-41-restart
+  - https://learn.microsoft.com/en-us/windows/win32/shutdown/system-shutdown-reason-codes

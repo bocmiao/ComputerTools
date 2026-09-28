@@ -77,4 +77,4 @@ guide:
     7. 蓝屏以后开不了机：开机时连续两三次没能进入系统，Windows 会进入「自动修复」，在「高级选项」里可以选「启动修复」「系统还原」或者「卸载更新」。
 
     还是解决不了的，把「最近的蓝屏」的结果和诊断报告发给懂哥看看；蓝屏时保存的诊断文件在 C:\Windows\Minidump 文件夹里。
-links: ["tool:system.bluescreens", "tool:open.device-manager", "tool:open.memory-diagnostic", "tool:open.system-restore"]
+links: ["tool:system.bluescreens", "tool:system.power-history", "tool:open.device-manager", "tool:open.memory-diagnostic", "tool:open.system-restore"]
