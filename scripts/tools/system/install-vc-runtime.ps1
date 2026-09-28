@@ -9,7 +9,10 @@
 #   Administrators can open, so a program running without administrator
 #   rights cannot swap the file after its signature was checked;
 # - a file is run only when its Authenticode signature is valid and it is
-#   signed by Microsoft Corporation. The folder is deleted afterwards.
+#   signed by Microsoft Corporation. One that does not check out is
+#   downloaded once more (a transfer can go wrong), and each check is tried
+#   up to three times, two seconds apart (a file that was just written can be
+#   busy for a moment). The folder is deleted afterwards.
 # Both installers are downloaded first (at most 5 minutes; nothing is changed
 # when that fails), then run. One whose version is already installed with all
 # its files is not run; one whose version is installed but whose files are
@@ -20,7 +23,9 @@
 # Result codes: installed / restart / already / busy / download-failed /
 # not-signed / failed / slow (an installer was still running after 9 minutes:
 # it is left to finish). Facts: done (the architectures installed or repaired,
-# comma separated), arch (the one that failed), code (its exit code).
+# comma separated), arch (the one that failed), code (its exit code),
+# signature (why the signature did not check out: the Authenticode status,
+# NotMicrosoft, or the error).
 
 [CmdletBinding()]
 param()
@@ -147,6 +152,9 @@ function Save-Installer {
                     throw 'The download is too slow'
                 }
             }
+            if (($response.ContentLength -gt 0) -and ($total -ne $response.ContentLength)) {
+                throw 'The download is incomplete'
+            }
         }
         finally {
             $out.Dispose()
@@ -158,18 +166,51 @@ function Save-Installer {
     }
 }
 
-function Test-MicrosoftSigned {
+# '' when $Path carries a valid Authenticode signature by Microsoft Corporation;
+# else why not: the signature status (NotSigned, HashMismatch, UnknownError...),
+# NotMicrosoft, or the error
+function Get-SignatureProblem {
     param([string]$Path)
     try {
         $signature = Get-AuthenticodeSignature -FilePath $Path
     }
     catch {
-        return $false
+        return ('Error ' + $_.Exception.GetType().Name)
     }
     if ([string]$signature.Status -ne 'Valid') {
-        return $false
+        return [string]$signature.Status
     }
-    return ([string]$signature.SignerCertificate.Subject) -match '(^|,\s*)O=Microsoft Corporation(,|$)'
+    if (([string]$signature.SignerCertificate.Subject) -notmatch '(^|,\s*)O=Microsoft Corporation(,|$)') {
+        return 'NotMicrosoft'
+    }
+    return ''
+}
+
+# Download the installer for $Arch to $Path and check it: '' when it can be
+# run, 'download' when it could not be downloaded, else what
+# Get-SignatureProblem says.
+function Get-Installer {
+    param([string]$Arch, [string]$Path, [DateTime]$Deadline)
+    $problem = ''
+    for ($attempt = 0; $attempt -lt 2; $attempt++) {
+        try {
+            Save-Installer -Uri ('https://aka.ms/vc14/vc_redist.' + $Arch + '.exe') -Path $Path -Deadline $Deadline
+        }
+        catch {
+            Write-Verbose ('Download failed: {0}' -f $_.Exception.Message)
+            return 'download'
+        }
+        for ($check = 0; $check -lt 3; $check++) {
+            if ($check -gt 0) {
+                Start-Sleep -Seconds 2
+            }
+            $problem = Get-SignatureProblem $Path
+            if (($problem.Length -eq 0) -or ($problem -eq 'NotMicrosoft')) {
+                return $problem
+            }
+        }
+    }
+    return $problem
 }
 
 # The version an installer brings (its file version: 14.51.36247.0), $null when unknown
@@ -198,7 +239,7 @@ function Invoke-Installer {
 }
 
 $result = 'already'
-$facts = [ordered]@{ done = ''; arch = ''; code = '' }
+$facts = [ordered]@{ done = ''; arch = ''; code = ''; signature = '' }
 $done = New-Object System.Collections.Generic.List[string]
 $restart = $false
 $work = New-WorkFolder
@@ -206,18 +247,16 @@ try {
     $files = [ordered]@{}
     foreach ($arch in @(Get-VcArchitecture)) {
         $file = $work + '\vc_redist.' + $arch + '.exe'
-        try {
-            Save-Installer -Uri ('https://aka.ms/vc14/vc_redist.' + $arch + '.exe') -Path $file -Deadline $downloadBy
-        }
-        catch {
-            Write-Verbose ('Download failed: {0}' -f $_.Exception.Message)
+        $problem = Get-Installer $arch $file $downloadBy
+        if ($problem -eq 'download') {
             $result = 'download-failed'
             $facts.arch = $arch
             break
         }
-        if (-not (Test-MicrosoftSigned $file)) {
+        if ($problem.Length -gt 0) {
             $result = 'not-signed'
             $facts.arch = $arch
+            $facts.signature = $problem
             break
         }
         $files[$arch] = $file

@@ -3,6 +3,7 @@
 # （微软《Redistribute Visual C++ files》里的参数）。这是脚本唯一能做的下载（docs/architecture.md 5.1）：只从微软的地址下载，
 # 放进 %SystemRoot%\Temp 下新建的、只有管理员能打开的文件夹（没有管理员权限的程序换不了核对过签名的文件），装完删掉。
 # 64 位 Windows 装 x64 和 x86 两个（ARM64 的电脑上 x64 的包里带着 ARM64 的文件），32 位 Windows 只装 x86。
+# 签名核对不过的重新下载一次，每次核对最多试三次、隔两秒（刚写完的文件可能还被占着）。
 # 先把两个都下载好（最多 5 分钟，下载失败什么都不改），再安装：已经装着这个版本、文件也都在的不装；装着这个版本、文件没了的
 # 用 /repair 修。安装程序的退出代码：0 装好了，3010 装好了、要重启，1638 已经装着这个或者更新的版本，1618 有别的安装程序在运行。
 # 过了 9 分钟还没装完的不等了（slow），让它自己装完。
@@ -48,7 +49,7 @@ results:
     next: { zh-CN: 联网以后再试一次；也可以在浏览器里打开 https://aka.ms/vc14/vc_redist.x64.exe 和 https://aka.ms/vc14/vc_redist.x86.exe 自己下载安装。 }
   not-signed:
     status: advice
-    message: { zh-CN: "下载下来的文件（{arch}）没有微软的有效签名，已经删掉了，没有运行。可能是网络被劫持了，或者连着需要登录的 WiFi。" }
+    message: { zh-CN: "下载下来的文件（{arch}）核对不过微软的签名（{signature}），已经删掉了，没有运行。可能是网络被劫持了，或者连着需要登录的 WiFi。" }
     next: { zh-CN: 换一个网络再试一次。 }
   failed:
     status: manual
