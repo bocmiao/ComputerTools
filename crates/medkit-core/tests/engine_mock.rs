@@ -33,7 +33,13 @@ results:
     status: advice
     message: { zh-CN: "只剩 {free_gb} GB 了。" }
     fixer: medkit
-    next: { zh-CN: "先清理下载文件夹。" }
+    next: { zh-CN: "{biggest_note}先清理下载文件夹。" }
+fact_labels:
+  biggest_note:
+    from: biggest
+    values:
+      temp: { zh-CN: 临时文件占得最多。 }
+      "3": { zh-CN: 第三个文件夹最大。 }
 references: [ "https://example.com/disk" ]
 "#,
     r#"
@@ -736,6 +742,65 @@ fn check_results_are_rendered_from_facts() {
     assert_eq!(r.next.as_deref(), Some("先清理下载文件夹。"));
     assert_eq!(r.result_code.as_deref(), Some("low"));
     assert!(r.error.is_none());
+}
+
+#[test]
+fn fact_labels_add_explanations_for_codes() {
+    let w = world();
+    w.runner.returns(
+        "checks/disk/free-space.ps1",
+        json!({ "result": "low", "facts": { "free_gb": 3, "biggest": "temp" } }),
+    );
+    let r = w.engine.run_check("disk.free-space").unwrap();
+    assert_eq!(r.next.as_deref(), Some("临时文件占得最多。先清理下载文件夹。"));
+    assert_eq!(r.facts.get("biggest_note"), Some(&json!("临时文件占得最多。")));
+    assert_eq!(r.facts.get("biggest"), Some(&json!("temp")));
+
+    w.runner.returns(
+        "checks/disk/free-space.ps1",
+        json!({ "result": "low", "facts": { "free_gb": 3, "biggest": [9, 3] } }),
+    );
+    let r = w.engine.run_check("disk.free-space").unwrap();
+    assert_eq!(r.next.as_deref(), Some("第三个文件夹最大。先清理下载文件夹。"));
+
+    // 没有说明、或者脚本没返回这个事实：说明是空的，占位符照样被换掉，事实里也不多出一个空的
+    w.runner.returns(
+        "checks/disk/free-space.ps1",
+        json!({ "result": "low", "facts": { "free_gb": 3, "biggest": "music" } }),
+    );
+    let r = w.engine.run_check("disk.free-space").unwrap();
+    assert_eq!(r.next.as_deref(), Some("先清理下载文件夹。"));
+    assert!(!r.facts.contains_key("biggest_note"));
+    w.runner.returns("checks/disk/free-space.ps1", json!({ "result": "low", "facts": { "free_gb": 3 } }));
+    let r = w.engine.run_check("disk.free-space").unwrap();
+    assert_eq!(r.next.as_deref(), Some("先清理下载文件夹。"));
+    assert!(!r.facts.contains_key("biggest_note"));
+}
+
+#[test]
+fn fact_labels_are_validated() {
+    let bad = r#"
+id: disk.bad-labels
+schema_version: 1
+title: { zh-CN: 坏的说明表 }
+category: disk
+probe: { script: checks/disk/free-space.ps1 }
+results:
+  ok: { status: ok, message: { zh-CN: 正常 } }
+fact_labels:
+  Bad-Name: { from: code, values: { "1": { zh-CN: 一 } } }
+  same: { from: same, values: { "1": { zh-CN: 一 } } }
+  empty: { from: code, values: {} }
+references: [ "https://example.com/bad" ]
+"#;
+    let mut data = fixture_data();
+    data.checks.push(catalog::parse_typed::<Check>(bad).unwrap());
+    let problems = catalog::validate(&data, &fixture_scripts(&data));
+    let errors: Vec<String> =
+        problems.iter().filter(|p| p.severity == Severity::Error).map(ToString::to_string).collect();
+    assert!(errors.iter().any(|e| e.contains("fact_labels.Bad-Name")), "{errors:?}");
+    assert!(errors.iter().any(|e| e.contains("fact_labels.same")), "{errors:?}");
+    assert!(errors.iter().any(|e| e.contains("fact_labels.empty.values")), "{errors:?}");
 }
 
 #[test]

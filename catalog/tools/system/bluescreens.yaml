@@ -7,6 +7,13 @@
 #         按终止代码分组，最近出现的在前，最多 10 种：名字（照微软的 Bug Check Code Reference）、次数、第一次和最近一次、
 #         可能的原因和怎么办。脚本把认识的代码归成几类（驱动、显卡、硬盘、内存、硬件、睡眠唤醒、系统、开机、USB、网卡、
 #         BIOS、卡死后长按电源键、有人故意触发、驱动程序验证程序），每类一段原因和一段办法；不认识的只显示代码。
+#         有几种代码还看蓝屏时记下的四个参数（1001 的「(0x…, 0x…, 0x…, 0x…)」，或者 41 的 BugcheckParameter1～4），
+#         多一行「从蓝屏时记下的参数看」（照微软各代码的说明页，组里最近一次说得出来的为准）：
+#           0x7A（0x77 的参数 1 是状态码时也一样）看参数 2：C000009C、C000016A 是坏道（disk-bad-sector），
+#           C000009D、C0000185、C000000E 是硬盘连不上（线、接口、硬盘故障，disk-cable），C000009A 是非分页池不够（low-resources）；
+#           0xA0 参数 1 是 0xB：休眠文件太小（hiberfile-small）；
+#           0xFE 参数 1 是 3 或 5：USB 控制器报告了硬件故障（usb-hardware）；参数 1、2 是 8、6，参数 3 是 1～5、8、9：USB 口、
+#           集线器从选择性暂停里醒来超时（usb-suspend，指向「关掉 USB 选择性暂停」）。
 #   意外关机：BugcheckCode 是 0 的 41：断电、死机后强制关机，或者来不及记下终止代码；PowerButtonTimestamp 不是 0
 #         （或者 LongPowerButtonPressDetected 是 true）的是长按了电源键。
 #   Windows 更新让电脑重启、关机：User32 1074「进程 X 发起了重启 / 关机」里的进程是 Windows 更新的程序
@@ -80,6 +87,7 @@ labels:
     last: { zh-CN: 最近一次 }
     code: { zh-CN: 代码 }
     cause: { zh-CN: 可能的原因 }
+    detail: { zh-CN: 从蓝屏时记下的参数看 }
     advice: { zh-CN: 怎么办 }
     power_button: { zh-CN: 其中长按电源键关机 }
     state: { zh-CN: 情况 }
@@ -99,6 +107,12 @@ labels:
     manual: { zh-CN: 是有人故意触发的（调试时按了特定的组合键或者运行了命令），不是故障。 }
     verifier: { zh-CN: 「驱动程序验证程序」查出了驱动的问题。这是开发、维修人员排查驱动用的工具，开着它电脑很容易蓝屏。 }
     unknown: { zh-CN: 小药箱不认识这个终止代码。 }
+    disk-bad-sector: { zh-CN: 硬盘上有坏道（坏了的扇区），系统要用的数据读不出来。先把重要文件备份出来，再看体检里的「硬盘健康」；坏道越来越多的，尽快换硬盘。 }
+    disk-cable: { zh-CN: 读硬盘时硬盘「掉线」了：数据线、电源线松了或者坏了，也可能是硬盘或者主板上的接口出了故障。先备份重要文件；台式机请懂哥重新插紧、换一根数据线，笔记本请售后检查硬盘。 }
+    low-resources: { zh-CN: 系统内核的内存资源（非分页池）不够用了，微软说这通常是硬盘、存储相关的驱动出了问题。到电脑品牌的官网更新芯片组和存储（硬盘）驱动。 }
+    hiberfile-small: { zh-CN: 休眠文件太小，休眠时放不下内存里的内容。用过小药箱「缩小休眠文件」的，在修改日志里撤销它；也可以用管理员身份打开命令提示符，运行「powercfg /h /type full」把休眠文件改回完整大小。 }
+    usb-hardware: { zh-CN: USB 控制器的驱动报告了故障，微软说这通常是硬件出了问题。拔掉扩展坞、USB 集线器和最近插上的 USB 设备试试，台式机换主板后面的 USB 口；拔掉以后就不蓝屏的，是那个设备或者它的线有问题。 }
+    usb-suspend: { zh-CN: USB 口或者 USB 集线器从省电的「暂停」状态里醒过来时超时了。可以关掉「USB 选择性暂停」（症状「鼠标卡顿、USB 设备老断开」里能一键关，能撤销），再到电脑品牌的官网更新芯片组和 USB 驱动。 }
     driver-advice: { zh-CN: 想一想蓝屏是从哪天开始的（看「第一次」），那之前装了或者更新了什么软件、驱动，先把它卸载或者回退。再到电脑（或者主板）品牌的官网下载最新的驱动，重点是显卡、网卡、声卡和芯片组，然后打开「设备管理器」看看有没有带黄色感叹号的设备。还是蓝屏的话，用「Windows 内存诊断」查一查内存。 }
     gpu-advice: { zh-CN: 到显卡官网（NVIDIA、AMD、Intel）或者电脑品牌的官网下载最新的显卡驱动装上；更新了显卡驱动以后才开始蓝屏的，在「设备管理器」里回退显卡驱动。玩游戏时蓝屏的，清一清灰、看看显卡温度，超过频的恢复默认。 }
     disk-advice: { zh-CN: 先把重要的文件备份出来。然后看体检里的「硬盘健康」和「硬盘读写错误」；台式机可以请懂哥重新插一下硬盘的数据线和电源线。硬盘报了问题的，尽快换硬盘。 }
@@ -120,6 +134,10 @@ labels:
     dump-advice: { zh-CN: 在开始菜单里搜索「查看高级系统设置」打开它，点「高级」→ 性能下面的「设置」→「高级」→ 虚拟内存下面的「更改」，勾选「自动管理所有驱动器的分页文件大小」，确定以后重启电脑（C 盘上会占几 GB）。 }
 references:
   - https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0x7a--kernel-data-inpage-error
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0x77--kernel-stack-inpage-error
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0xa0--internal-power-error
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0xfe--bugcode-usb-driver
   - https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/event-id-41-restart
   - https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/event-id-46-start-a-computer
   - https://support.microsoft.com/windows/troubleshooting-windows-unexpected-restarts-and-stop-code-errors-60b01860-58f2-be66-7516-5c45a66ae3c6

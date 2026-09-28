@@ -7,17 +7,26 @@
 # numbers are left out (so that a later cumulative update, driver or Defender
 # update of the same kind counts too).
 # The update and its error code decide the result code (the texts live in the
-# YAML; meanings from Microsoft's Windows Update error references):
-#   failed-winre     the Windows Recovery Environment update (KB5034441, later
-#                    KB5042320): the recovery partition needs 250 MB free, and
-#                    resetting Windows Update does not help
-#   failed-blocked   Windows Update is turned off (service disabled, or a policy)
-#   failed-space     not enough disk space
-#   failed-network   could not reach Windows Update (network, proxy, time)
-#   failed-files     damaged or missing update files (reset the components)
-#   failed-restart   a restart is needed first
-#   failed-upgrade   a new version of Windows could not be installed
-#   failed-other     anything else
+# YAML; meanings from Microsoft's "Common Windows Update errors", "Windows
+# Update error code list by component", "Windows 10 upgrade resolution
+# procedures" and "Troubleshoot problems updating Windows"):
+#   failed-winre       the Windows Recovery Environment update (KB5034441,
+#                      later KB5042320): the recovery partition needs 250 MB
+#                      free, and resetting Windows Update does not help
+#   failed-blocked     Windows Update is turned off (service disabled, or a policy)
+#   failed-space       not enough disk space
+#   failed-vpn-space   0x800F0922: usually a VPN / proxy, or too little space
+#   failed-network     could not reach Windows Update (network, proxy, time)
+#   failed-files       damaged or missing downloaded update files (reset the
+#                      update components)
+#   failed-components  the component store is damaged (DISM and SFC)
+#   failed-security    antivirus or backup software blocked or held the files,
+#                      or access was denied
+#   failed-restart     timed out, interrupted, or a restart is needed first
+#   failed-upgrade     a new version of Windows could not be installed
+#   failed-other       anything else
+# Codes that are not failures (not applicable, cancelled, nothing to do) are
+# left out, like entries aborted without a code.
 #   ok               nothing failed
 #   empty            no history at all (new Windows, or the history was reset)
 #   off              the Windows Update service is disabled
@@ -39,34 +48,101 @@ $maxEntries = 1000
 $winreUpdates = @('KB5034441', 'KB5042320')
 # Error codes (as Windows shows them) -> result code.
 $codes = @{
+    # the service is disabled; policies (DisableWindowsUpdateAccess, "Group
+    # Policy settings prevented access", unmanaged server not allowed, WSUS
+    # server missing)
     '0x80070422' = 'failed-blocked'
     '0x8024002F' = 'failed-blocked'
     '0x80240025' = 'failed-blocked'
     '0x8024002E' = 'failed-blocked'
     '0x80244011' = 'failed-blocked'
+    # disk full; setup: not enough space to download / install
     '0x80070070' = 'failed-space'
     '0x80070027' = 'failed-space'
+    '0xC190020C' = 'failed-space'
+    '0xC190020E' = 'failed-space'
+    '0xC19001DF' = 'failed-space'
+    '0x800F0922' = 'failed-vpn-space'
+    # name not resolved, HTTP 403 / 407 / 408 / 502 / 503 / 504, timeouts,
+    # connection aborted, TLS decoding (often a wrong clock), no network,
+    # downloads filtered by a firewall
     '0x8024402C' = 'failed-network'
+    '0x80244018' = 'failed-network'
+    '0x8024401B' = 'failed-network'
     '0x8024401C' = 'failed-network'
+    '0x80244021' = 'failed-network'
     '0x80244022' = 'failed-network'
+    '0x80244023' = 'failed-network'
     '0x80072EE2' = 'failed-network'
     '0x80072EFD' = 'failed-network'
     '0x80072EFE' = 'failed-network'
     '0x80072F8F' = 'failed-network'
     '0x80D02002' = 'failed-network'
+    '0x8024001F' = 'failed-network'
+    '0x80246005' = 'failed-network'
+    '0x80200053' = 'failed-network'
+    # downloaded files missing, invalid or incomplete; invalid metadata (the
+    # fix Microsoft gives is renaming SoftwareDistribution and catroot2)
     '0x80070002' = 'failed-files'
     '0x80070003' = 'failed-files'
     '0x8007000D' = 'failed-files'
-    '0x80073712' = 'failed-files'
-    '0x800F081F' = 'failed-files'
-    '0x800F0831' = 'failed-files'
     '0x80240034' = 'failed-files'
-    '0x80070020' = 'failed-restart'
+    '0x80242006' = 'failed-files'
+    '0x8024000E' = 'failed-files'
+    '0x80246002' = 'failed-files'
+    '0x80246007' = 'failed-files'
+    '0x80246008' = 'failed-files'
+    '0x80246009' = 'failed-files'
+    '0x8024200D' = 'failed-files'
+    # component store corruption (Microsoft: DISM /RestoreHealth, then SFC);
+    # element not found, invalid parameter, server execution failed, a
+    # damaged previous cumulative update
+    '0x80073712' = 'failed-components'
+    '0x800F081F' = 'failed-components'
+    '0x800F0831' = 'failed-components'
+    '0x800F0825' = 'failed-components'
+    '0x80070570' = 'failed-components'
+    '0x80073701' = 'failed-components'
+    '0x8007371B' = 'failed-components'
+    '0x80070490' = 'failed-components'
+    '0x80070057' = 'failed-components'
+    '0x80080005' = 'failed-components'
+    '0x800706BE' = 'failed-components'
+    # access denied; all updates failed (most often antivirus blocking the
+    # SoftwareDistribution folder); file in use (antivirus, backup)
+    '0x80070005' = 'failed-security'
+    '0x80240022' = 'failed-security'
+    '0x80070020' = 'failed-security'
+    # restart pending or needed, nobody signed in, another installation
+    # running, the service shut down after a long idle time, servicing timed
+    # out or hung, out of memory, timeout
     '0xC1900107' = 'failed-restart'
+    '0x80242014' = 'failed-restart'
+    '0x80240020' = 'failed-restart'
+    '0x80070BC9' = 'failed-restart'
+    '0x80070652' = 'failed-restart'
+    '0x80240016' = 'failed-restart'
+    '0x80240009' = 'failed-restart'
+    '0x8024A10A' = 'failed-restart'
+    '0x8024001E' = 'failed-restart'
+    '0x800F0821' = 'failed-restart'
+    '0x800F0920' = 'failed-restart'
+    '0x8007000E' = 'failed-restart'
+    '0x800705B4' = 'failed-restart'
+    # upgrades rolled back (drivers), requirements, compatibility scans
     '0xC1900101' = 'failed-upgrade'
     '0xC1900200' = 'failed-upgrade'
+    '0xC1900201' = 'failed-upgrade'
+    '0xC1900202' = 'failed-upgrade'
+    '0xC1900204' = 'failed-upgrade'
+    '0xC1900206' = 'failed-upgrade'
     '0xC1900208' = 'failed-upgrade'
+    '0xC1900209' = 'failed-upgrade'
+    '0x80090011' = 'failed-upgrade'
 }
+# Not failures: no applicable updates, cancelled, nothing to do, no updates,
+# the update handler's operation was cancelled.
+$notFailures = @('0x80240017', '0x8024000B', '0x8024000C', '0x80240024', '0x80242008')
 
 # An HRESULT as Windows shows it: "0x80070643". HRESULTs usually come as
 # signed 32-bit numbers (0x80070643 is -2147023293).
@@ -164,6 +240,9 @@ foreach ($entry in $installs) {
     }
     # Aborted without an error: stopped by a restart or by the user.
     if (($code -eq 5) -and ([int64]$entry.HResult -eq 0)) {
+        continue
+    }
+    if ($notFailures -contains (Format-ErrorCode $entry.HResult)) {
         continue
     }
     # Entries are newest first: a success seen before this one came later.

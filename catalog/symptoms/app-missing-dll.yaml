@@ -1,14 +1,18 @@
 # 症状：软件打不开，提示缺少 dll（「由于找不到 VCRUNTIME140.dll，无法继续执行代码」「计算机中丢失 MSVCP140.dll」
 # 「应用程序无法正常启动(0xc000007b)」）。最常见的是没装微软 VC++ 运行库，或者文件被「清理」软件删了：
-# 查 system.vc-runtime，给小工具「安装微软 VC++ 运行库」（从微软官网下载，核对签名再装）。
-# 别的情况按缺的文件名给图文指引：老版本的运行库（120、110、100）、DirectX 的老组件（d3dx9、xinput1_3）、
-# .NET Framework 3.5（「启用或关闭 Windows 功能」）、新的 .NET、api-ms-win 开头的（系统文件坏了）、软件自己的文件。
+# 查 system.vc-runtime，给小工具「安装微软 VC++ 运行库」（从微软官网下载，核对签名再装；只自动装 VC++ v14）。
+# 别的情况按缺的文件名给图文指引（对照表见 docs/feature-gap-research.md 7.5）：老版本的运行库（120、110、100、90、80，
+# 在微软「最新受支持的 VC++ 可再发行程序包」页面里按年份找）、调试版（文件名以 d 结尾，微软不允许分发，没有官方下载）、
+# DirectX 的老组件（d3dx9、xinput1_3、xaudio2_7，装「DirectX 最终用户运行时」）、Windows 自带的（d3d11、d3dcompiler_47、
+# xinput1_4：查显卡驱动和系统文件）、.NET Framework 3.5（「启用或关闭 Windows 功能」）、新的 .NET（hostfxr.dll）、
+# api-ms-win-crt 和 ucrtbase（系统文件坏了）、api-ms-win-core（是接口名不是文件：软件要更新版本的 Windows）、
+# XNA、OpenAL、PhysX、VB6 的 ocx 控件、软件自己的文件；0xc000007b、并行配置不正确（14001）。
 # 提醒别从「dll 下载站」下载单个文件：常夹带病毒，版本不对还会让更多软件打不开。
 id: app-missing-dll
 schema_version: 1
 title: { zh-CN: 软件打不开，提示缺少 dll }
 summary:
-  zh-CN: 打开软件、游戏时弹出「找不到 VCRUNTIME140.dll」「丢失 MSVCP140.dll」「应用程序无法正常启动(0xc000007b)」，或者提示要装 .NET Framework。
+  zh-CN: 打开软件、游戏时弹出「找不到 VCRUNTIME140.dll」「丢失 MSVCP140.dll」「应用程序无法正常启动(0xc000007b)」「应用程序的并行配置不正确」，或者提示要装 .NET Framework。
 keywords:
   - 缺少dll
   - 找不到dll
@@ -26,19 +30,40 @@ keywords:
   - msvcp140_1.dll
   - msvcr120.dll
   - msvcp120.dll
+  - msvcr110.dll
+  - msvcp110.dll
   - msvcr100.dll
   - msvcp100.dll
+  - msvcr90.dll
+  - msvcp90.dll
+  - msvcr80.dll
   - mfc140u.dll
+  - msvcp140d.dll
+  - vcruntime140d.dll
+  - ucrtbase.dll
+  - api-ms-win-crt-runtime-l1-1-0.dll
+  - api-ms-win-core
   - "0xc000007b"
   - 应用程序无法正常启动
+  - 并行配置不正确
+  - "14001"
+  - 不是有效的win32应用程序
   - 运行库
   - vc运行库
   - vc++
   - visual c++
   - d3dx9
   - d3dx9_43.dll
+  - d3dcompiler_43.dll
+  - d3dcompiler_47.dll
   - xinput1_3.dll
+  - xaudio2_7.dll
   - directx
+  - openal32.dll
+  - physxloader.dll
+  - xna
+  - mscomctl.ocx
+  - hostfxr.dll
   - .net framework
   - net3.5
   - 软件打不开
@@ -49,9 +74,10 @@ keywords:
 causes:
   - zh-CN: 没装微软的 VC++ 运行库：很多软件、游戏要用它（缺 VCRUNTIME140.dll、MSVCP140.dll 这些带 140 的文件）
   - zh-CN: VC++ 运行库的文件被「清理」「优化」软件当成垃圾删掉了，或者只装了 32 位、64 位其中一个（常见 0xc000007b）
-  - zh-CN: 软件要的是老版本的运行库（带 120、110、100 的文件），或者 DirectX 的老组件（d3dx9、xinput1_3，老游戏常见）
+  - zh-CN: 软件要的是老版本的运行库（带 120、110、100、90、80 的文件），或者 DirectX 的老组件（d3dx9、xinput1_3，老游戏常见）
   - zh-CN: 老软件要 .NET Framework 3.5，新软件要新版的 .NET，Windows 没有自带
   - zh-CN: 软件没装完整，或者它自己的文件被杀毒软件删掉了
+  - zh-CN: 软件本身有问题：用的是开发时的调试版运行库，或者要更新版本的 Windows
 maturity: semi
 steps:
   - check: system.vc-runtime
@@ -61,15 +87,21 @@ guide:
 
     还是打不开的，看看提示框里缺的是哪个文件：
 
-    1. 带 140 的（VCRUNTIME140.dll、VCRUNTIME140_1.dll、MSVCP140.dll、MSVCP140_1.dll、CONCRT140.dll、MFC140U.dll 这些）：就是上面的 VC++ 运行库。检查结果正常还缺的，也可以再点一次小工具「安装微软 VC++ 运行库」，它会把文件修复回来。
-    2. 带 120、110、100 的（MSVCR120.dll、MSVCP120.dll、MSVCR110.dll、MSVCR100.dll、MSVCP100.dll 这些）：是老版本的 VC++ 运行库（2013、2012、2010 年的），和上面的是分开装的。在微软官网的「最新受支持的 Visual C++ 可再发行程序包下载」页面往下找对应的年份，x86 和 x64 的都下载安装。
-    3. d3dx9 开头的（d3dx9_43.dll 这些），或者 xinput1_3.dll、d3dcompiler_43.dll、X3DAudio1_7.dll（多半是老游戏）：是 DirectX 的老组件，Windows 10、11 没有自带。在微软官网下载安装「DirectX 最终用户运行时」（DirectX End-User Runtime）。
-    4. 提示「应用程序无法正常启动(0xc000007b)」：一般是 32 位、64 位的运行库只装了一个，或者软件文件夹里放着别的版本的运行库文件。先点「安装微软 VC++ 运行库」（两个都会装），再按第 3 条装 DirectX 老组件；还不行，卸载这个软件以后重新安装。
-    5. 提示要装 .NET Framework 3.5（或者 2.0、3.0）：打开小工具「启用或关闭 Windows 功能」，勾上「.NET Framework 3.5（包括 .NET 2.0 和 3.0）」，点「确定」，再选「让 Windows 更新为你下载文件」。要联网，一般几分钟。
-    6. 提示「要运行此应用程序，必须安装或更新 .NET」：点提示框里的「是」，会打开微软的下载页面，照着下载安装「.NET 桌面运行时」。
-    7. api-ms-win 开头的（api-ms-win-crt-runtime-l1-1-0.dll 这些）：Windows 10、11 本来就有，缺了说明系统文件坏了，打开小工具「检查并修复系统文件」。
-    8. 名字和这个软件有关的（不是上面这几类）：是软件自己的文件，多半是没装完整，或者被杀毒软件当成病毒删掉了。先在「Windows 安全中心 → 病毒和威胁防护 → 保护历史记录」里看看是不是被隔离了；不是的话，卸载以后重新安装这个软件。
+    1. 带 140 的（VCRUNTIME140.dll、VCRUNTIME140_1.dll、MSVCP140.dll、MSVCP140_1.dll、CONCRT140.dll、MFC140U.dll、VCOMP140.dll 这些）：就是上面的 VC++ 运行库（2015 到 2022 以后的版本共用这一套）。32 位的软件要装 x86 版，小工具两个都会装。检查结果正常还缺的，也可以再点一次小工具「安装微软 VC++ 运行库」，它会把文件修复回来。
+    2. 带 120、110、100、90、80 的（MSVCR120.dll、MSVCP120.dll、MSVCR110.dll、MSVCR100.dll、MSVCP100.dll、MSVCR90.dll、MSVCR80.dll 这些）：是老版本的 VC++ 运行库，分别是 2013、2012、2010、2008、2005 年的，和上面的是分开装的。在微软官网的「最新受支持的 Visual C++ 可再发行程序包下载」页面往下找对应的年份，x86 和 x64 的都下载安装。
+    3. 提示「应用程序的并行配置不正确」（错误 14001）：多半是缺 2005、2008 年的老运行库，按第 2 条装上。
+    4. 文件名以 d 结尾的（MSVCP140D.dll、VCRUNTIME140D.dll、ucrtbased.dll 这些）：是开发软件时用的「调试版」，微软不允许随软件分发，也没有官方下载，装什么运行库都没用。请找软件的作者要正式版。
+    5. d3dx9 开头的（d3dx9_43.dll 这些），或者 d3dx10_43.dll、d3dx11_43.dll、d3dcompiler_43.dll、xinput1_3.dll、XAudio2_7.dll、X3DAudio1_7.dll（多半是老游戏）：是 DirectX 的老组件，Windows 10、11 没有自带。在微软官网下载安装「DirectX 最终用户运行时」（DirectX End-User Runtime）。
+    6. d3d9.dll、d3d11.dll、dxgi.dll、d3dcompiler_47.dll、xinput1_4.dll、XAudio2_9.dll 这些：Windows 本来就有，缺了或者报错，先更新显卡驱动，再用小工具「检查并修复系统文件」。
+    7. 提示「应用程序无法正常启动(0xc000007b)」或者「不是有效的 Win32 应用程序」：一般是 32 位、64 位的运行库只装了一个，或者软件文件夹里放着别的版本的运行库文件。先点「安装微软 VC++ 运行库」（两个都会装），再按第 5 条装 DirectX 老组件；还不行，卸载这个软件以后重新安装。
+    8. 提示要装 .NET Framework 3.5（或者 2.0、3.0）：打开小工具「启用或关闭 Windows 功能」，勾上「.NET Framework 3.5（包括 .NET 2.0 和 3.0）」，点「确定」，再选「让 Windows 更新为你下载文件」。要联网，一般几分钟。
+    9. 缺 hostfxr.dll，或者提示「要运行此应用程序，必须安装或更新 .NET」：点提示框里的「是」，会打开微软的下载页面，照着下载安装「.NET 桌面运行时」。
+    10. api-ms-win-crt 开头的（api-ms-win-crt-runtime-l1-1-0.dll 这些）或者 ucrtbase.dll：Windows 10、11 本来就有，缺了说明系统文件坏了，打开小工具「检查并修复系统文件」。
+    11. api-ms-win-core 开头的：这不是真的文件，而是 Windows 的「接口名」，说明这个软件要更新版本的 Windows。先把 Windows 更新到最新；还不行，这个软件在你的 Windows 版本上用不了，换一个版本的软件。千万不要去下载这些文件。
+    12. Microsoft.Xna.Framework 开头的（老游戏）：在微软官网下载安装「Microsoft XNA Framework Redistributable 4.0 Refresh」。OpenAL32.dll、wrap_oal.dll：到 OpenAL 官网（openal.org）下载安装 OpenAL。PhysXLoader.dll、PhysXCore.dll：到 NVIDIA 官网下载安装「PhysX 系统软件」。
+    13. .ocx 结尾的（MSCOMCTL.OCX、COMDLG32.OCX 这些）：是老软件用的 VB6 控件，Windows 不自带，应该由软件自己的安装包装上：卸载以后重新安装这个软件（右键「以管理员身份运行」安装程序）。
+    14. 名字和这个软件有关的（不是上面这几类）：是软件自己的文件，多半是没装完整，或者被杀毒软件当成病毒删掉了。先在「Windows 安全中心 → 病毒和威胁防护 → 保护历史记录」里看看是不是被隔离了；不是的话，卸载以后重新安装这个软件。
 
-    不要从网上搜「某某.dll 下载」的网站下载单个文件放进 System32：那些文件常常夹带病毒，版本不对还会让更多软件打不开。上面这些缺的文件，都能从微软官方的安装包装回来。
+    不要从网上搜「某某.dll 下载」的网站下载单个文件放进 System32：那些文件常常夹带病毒，版本不对还会让更多软件打不开。上面这些缺的文件，都能从微软或者软件官方的安装包装回来。
 
     都试过还是不行，把提示框截个图，连同软件的名字发给懂哥。

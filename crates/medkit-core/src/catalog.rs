@@ -362,6 +362,23 @@ impl Validator<'_> {
             self.err(&file, "timeout_sec 要在 1 到 600 之间".into());
         }
         self.results(&file, &c.results, targets);
+        for (name, labels) in &c.fact_labels {
+            if !FACT_NAME_RE.is_match(name) || !FACT_NAME_RE.is_match(&labels.from) {
+                self.err(&file, format!("fact_labels.{name} 的名字或 from 格式不对（只能用小写字母、数字和下划线）"));
+            }
+            if *name == labels.from {
+                self.err(&file, format!("fact_labels.{name} 不能和它的 from 同名（会盖掉脚本返回的事实）"));
+            }
+            if labels.values.is_empty() {
+                self.err(&file, format!("fact_labels.{name}.values 不能为空"));
+            }
+            for (value, text) in &labels.values {
+                if value.trim().is_empty() {
+                    self.err(&file, format!("fact_labels.{name}.values 里有空的值"));
+                }
+                self.text(&file, text, &format!("fact_labels.{name}.values.{value}"));
+            }
+        }
         if c.references.is_empty() {
             self.warn(&file, "最好写上 references（来源）".into());
         }

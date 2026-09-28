@@ -4,17 +4,33 @@
 # 算「装失败」的：最近 30 天里安装失败（ResultCode 4）或者带错误代码中止（5）的，而且后来没有装上——
 # 同一个 KB 编号后来装上了，或者把标题里的数字去掉以后一样的更新后来装上了（下个月的累积更新、同一个驱动的
 # 新版本、Defender 的新病毒库），都算已经解决。没有错误代码的中止（装的时候重启了、用户取消了）不算。
-# 按最近一次失败的更新和错误代码分类，给不同的建议（错误代码的含义按微软的 Windows 更新错误代码文档）：
-#   failed-winre    Windows 恢复环境（WinRE）的更新 KB5034441（后来换成 KB5042320）：恢复分区要有 250 MB 空闲，
-#                   不够就一直装不上（常见的 0x80070643），重置更新组件也没用
-#   failed-blocked  更新被关掉了：服务被禁用（0x80070422），或者被策略挡住（0x8024002F、0x80240025、0x8024002E、
-#                   0x80244011）
-#   failed-space    C 盘空间不够（0x80070070、0x80070027）
-#   failed-network  连不上 Windows 更新的服务器：网络、代理、系统时间（0x8024402C、0x80072EE2、0x80072EFD、0x80072F8F 等）
-#   failed-files    更新文件坏了或者缺了（0x80070002、0x80070003、0x8007000D、0x80073712、0x800F081F 等）
-#   failed-restart  要先重启（0x80070020 文件被占用、0xC1900107 上一次升级还没清理完）
-#   failed-upgrade  Windows 大版本升级没装上（0xC1900101 驱动不兼容、0xC1900208 软件不兼容、0xC1900200 不满足要求）
-#   failed-other    别的代码
+# 按最近一次失败的更新和错误代码分类，给不同的建议（一共 73 个代码，含义按微软的《Common Windows Update errors》
+# 《Windows Update error code list by component》《Windows 10 upgrade resolution procedures》《解决更新 Windows 时的问题》）：
+#   failed-winre       Windows 恢复环境（WinRE）的更新 KB5034441（后来换成 KB5042320）：恢复分区要有 250 MB 空闲，
+#                      不够就一直装不上（常见的 0x80070643），重置更新组件也没用
+#   failed-blocked     更新被关掉了：服务被禁用（0x80070422），或者被策略挡住（0x8024002F、0x80240025、0x8024002E、0x80244011）
+#   failed-space       C 盘空间不够（0x80070070、0x80070027，升级时的 0xC190020C、0xC190020E、0xC19001DF）
+#   failed-vpn-space   0x800F0922：微软中文页说常见的是磁盘空间不够或者组件问题，建议腾出空间、断开 VPN
+#   failed-network     连不上 Windows 更新的服务器：域名解析不了、HTTP 403 / 407 / 408 / 502 / 503 / 504、超时、连接被断开、
+#                      TLS 解码失败（家用电脑多半是系统时间不对）、没网、下载被防火墙过滤（0x8024402C、0x80072EE2、
+#                      0x80072EFD、0x80072F8F、0x80200053 等）
+#   failed-files       下载下来的更新文件坏了、不全、找不到（0x80070002、0x80070003、0x8007000D、0x80240034、0x80242006
+#                      ——微软给的办法就是把 SoftwareDistribution、catroot2 改名，也就是「重置更新组件」——、0x80246007、
+#                      BITS 的 0x80246008 / 0x80246009 等）
+#   failed-components  组件存储坏了，微软的办法是 DISM /RestoreHealth 再 SFC（0x80073712、0x800F081F、0x800F0831、
+#                      0x800F0825、0x80070570、0x80073701、0x8007371B；中文页把 0x80070057、0x80080005 也归到文件损坏，
+#                      建议运行系统文件检查器；0x80070490、上一个累积更新坏了的 0x800706BE 也放这里）
+#   failed-security    被杀毒软件、备份软件挡住或者占着（0x80240022 微软说最常见的是杀毒软件挡了 SoftwareDistribution；
+#                      0x80070020 文件被杀毒、备份软件占着；0x80070005 拒绝访问）
+#   failed-restart     超时、被打断、要先重启（0xC1900107、0x80242014、0x80240020 没有人登录、0x80070BC9、0x80070652
+#                      和 0x80240016 另一个安装在进行、0x8024A10A 服务闲置太久关了、0x800F0821 / 0x800F0920 维护操作超时、
+#                      0x8007000E 内存不够、0x800705B4 超时）
+#   failed-upgrade     Windows 大版本升级没装上（0xC1900101 驱动不兼容、0xC1900200 / 0xC1900201 / 0xC1900202 不满足
+#                      要求、0xC1900204 选的升级方式不行、0xC1900206 设备扫描没通过、0xC1900208 / 0xC1900209 软件不兼容、
+#                      0x80090011 迁移数据时驱动出错）
+#   failed-other       别的代码（包括不是恢复环境更新的 0x80070643）
+# 不算失败的：0x80240017（没有适用的更新）、0x8024000B（被取消）、0x8024000C（不用做什么）、0x80240024（没有更新）、
+# 0x80242008（安装被取消），和没有错误代码的中止一样跳过。
 # 另有：ok（最近 30 天没有装失败的）、empty（没有任何记录：刚装的系统，或者更新组件重置过）、
 # off（Windows Update 服务被禁用，读不了记录，0x80070422）。
 # 记录按从新到旧一次读 100 条，读到 30 天以前就停（Defender 的病毒库更新一天就有好几条），最多读 1000 条。
@@ -57,14 +73,14 @@ results:
   failed-blocked:
     status: advice
     message:
-      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：更新被关掉了（服务被禁用，或者被策略挡住）。"
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：更新被关掉了（服务被禁用，或者被策略挡住）。{error_meaning}"
     next:
       zh-CN: 按「Windows 更新有没有被关掉」的提示处理，处理完再在「Windows 更新」里点「重试」。
     links: ["tool:settings.windows-update"]
   failed-space:
     status: advice
     message:
-      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：C 盘空间不够。"
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：C 盘空间不够。{error_meaning}"
     fixer: user
     next:
       zh-CN: 先给 C 盘腾出空间（平时的更新至少留 10 GB，升级大版本要 20 GB 以上），再打开「Windows 更新」点「重试」。
@@ -72,7 +88,7 @@ results:
   failed-network:
     status: advice
     message:
-      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：连不上 Windows 更新的服务器。"
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：连不上 Windows 更新的服务器。{error_meaning}"
     fixer: user
     next:
       zh-CN: 先确认能正常上网；开着「梯子」、加速器、代理的，先关掉再试；系统日期、时间不对也会这样。都没问题的话，过一会儿在「Windows 更新」里点「重试」。
@@ -80,7 +96,7 @@ results:
   failed-files:
     status: advice
     message:
-      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：更新文件坏了，或者系统里缺了它要用的文件。"
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：下载下来的更新文件坏了、不全，或者找不到了。{error_meaning}"
     fixer: medkit
     next:
       zh-CN: 先重启电脑，再在「Windows 更新」里点「重试」。还不行，点下面的「重置更新组件」，把下载坏了的更新文件换掉（旧的改名留着，不删除），再检查更新。
@@ -88,15 +104,39 @@ results:
   failed-restart:
     status: advice
     message:
-      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：要先重启电脑。"
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：装的时候超时了、被别的安装或者关机打断了，或者要先重启电脑才能接着装。{error_meaning}"
     fixer: user
     next:
-      zh-CN: 保存好手头的文件，重启一次电脑（开始 → 电源 → 重启），再在「Windows 更新」里点「重试」。
+      zh-CN: 保存好手头的文件，重启一次电脑（开始 → 电源 → 重启）。重启以后先别急着开别的软件，过几分钟再在「Windows 更新」里点「重试」；装的时候插着电源，别让电脑睡着。
     links: ["tool:settings.windows-update"]
+  failed-vpn-space:
+    status: advice
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：常见的原因是装的时候开着 VPN、「梯子」、加速器，或者 C 盘空间不够。{error_meaning}"
+    fixer: user
+    next:
+      zh-CN: 先关掉 VPN、「梯子」、加速器和代理软件，给 C 盘腾出至少 10 GB（升级大版本要 20 GB 以上），重启电脑以后在「Windows 更新」里点「重试」。还不行，用「检查并修复系统文件」修一遍再试。
+    links: ["symptom:disk-full", "tool:open.system-file-repair", "tool:settings.windows-update"]
+  failed-components:
+    status: advice
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：Windows 存放系统组件的地方（组件存储）坏了，更新要用的文件缺了或者坏了。{error_meaning}"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的「检查并修复系统文件」（先用 DISM 修复、再用 SFC 检查，要联网，10 到 30 分钟），修完重启电脑，再在「Windows 更新」里点「重试」。还不行的话，Windows 11 可以打开「恢复」，点「使用 Windows 更新修复问题」旁边的「立即重新安装」：重新装一遍当前版本的 Windows，应用、文件和设置都保留。
+    links: ["tool:open.system-file-repair", "tool:settings.recovery", "tool:settings.windows-update"]
+  failed-security:
+    status: advice
+    message:
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）：更新要用的文件被别的软件挡住或者占着了，常见的是第三方杀毒软件、「电脑管家」一类的软件和备份软件；也可能是文件的权限被「优化」软件改了。{error_meaning}"
+    fixer: user
+    next:
+      zh-CN: 先暂时退出第三方杀毒软件、「电脑管家」和备份软件（在任务栏右下角它的图标上点右键退出），重启电脑，再在「Windows 更新」里点「重试」，装好以后再把它们打开。还不行，用「检查并修复系统文件」修一遍再试。
+    links: ["tool:open.system-file-repair", "tool:settings.windows-update"]
   failed-upgrade:
     status: manual
     message:
-      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 升级「{failed_title}」时失败了（错误代码 {error_code}），系统已经退回了原来的版本，文件和软件都还在。"
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 升级「{failed_title}」时失败了（错误代码 {error_code}），系统已经退回了原来的版本，文件和软件都还在。{error_meaning}"
     fixer: helper
     next:
       zh-CN: 大版本升级失败，要么是电脑不满足新版本的要求（0xC1900200，看看「能不能升级 Windows 11」），要么是某个驱动（显卡、声卡、杀毒软件的驱动）或者软件不兼容。可以先更新显卡驱动、暂时卸载第三方杀毒软件再试，或者等微软修好了再升级；急着升级的，请懂哥看看。
@@ -104,11 +144,92 @@ results:
   failed-other:
     status: advice
     message:
-      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）。"
+      zh-CN: "最近 30 天有 {failed_count} 个更新没装上。{failed_date} 装「{failed_title}」时失败了（错误代码 {error_code}）。{error_meaning}"
     fixer: helper
     next:
       zh-CN: 先重启电脑，开着 VPN、「梯子」、加速器的先关掉，再在「Windows 更新」里点「重试」；还不行，运行 Windows 自带的「Windows 更新」疑难解答。都不行的话，把错误代码发给懂哥，或者用「诊断报告」里的「复制给 AI」问问。
     links: ["tool:settings.windows-update"]
+fact_labels:
+  error_meaning:
+    from: error_code
+    values:
+      "0x80070422": { zh-CN: 这个代码的意思是「Windows 更新服务被禁用了」。 }
+      "0x8024002F": { zh-CN: 这个代码的意思是「策略禁止访问 Windows 更新（DisableWindowsUpdateAccess）」。 }
+      "0x80240025": { zh-CN: 这个代码的意思是「组策略禁止访问 Windows 更新」。 }
+      "0x8024002E": { zh-CN: 这个代码的意思是「策略不允许连接微软的更新服务器」。 }
+      "0x80244011": { zh-CN: 这个代码的意思是「策略里指定的内部更新服务器（WSUS）地址是空的」。 }
+      "0x80070070": { zh-CN: 这个代码的意思是「磁盘空间不足」。 }
+      "0x80070027": { zh-CN: 这个代码的意思是「磁盘已满」。 }
+      "0xC190020C": { zh-CN: 这个代码的意思是「空间不够下载升级文件」。 }
+      "0xC190020E": { zh-CN: 这个代码的意思是「空间不够安装升级」。 }
+      "0xC19001DF": { zh-CN: 这个代码的意思是「磁盘空间用完了」。 }
+      "0x800F0922": { zh-CN: 这个代码的意思是「安装程序失败」。 }
+      "0x8024402C": { zh-CN: 这个代码的意思是「解析不了代理服务器或者更新服务器的名字」。 }
+      "0x80244018": { zh-CN: 这个代码的意思是「服务器拒绝了请求（HTTP 403），常见于被代理拦下」。 }
+      "0x8024401B": { zh-CN: 这个代码的意思是「代理服务器要求登录（HTTP 407）」。 }
+      "0x8024401C": { zh-CN: 这个代码的意思是「等请求超时了（HTTP 408）」。 }
+      "0x80244021": { zh-CN: 这个代码的意思是「网关或者代理收到了错误的响应（HTTP 502）」。 }
+      "0x80244022": { zh-CN: 这个代码的意思是「服务暂时忙不过来（HTTP 503）」。 }
+      "0x80244023": { zh-CN: 这个代码的意思是「等网关超时了」。 }
+      "0x80072EE2": { zh-CN: 这个代码的意思是「连接超时」。 }
+      "0x80072EFD": { zh-CN: 这个代码的意思是「连不上服务器」。 }
+      "0x80072EFE": { zh-CN: 这个代码的意思是「和服务器的连接被异常断开了」。 }
+      "0x80072F8F": { zh-CN: 这个代码的意思是「安全连接（TLS）的内容解不开，家用电脑多半是系统时间不对」。 }
+      "0x80D02002": { zh-CN: 这个代码的意思是「下载超时」。 }
+      "0x8024001F": { zh-CN: 这个代码的意思是「网络连接不可用」。 }
+      "0x80246005": { zh-CN: 这个代码的意思是「没有网络连接，下载不了」。 }
+      "0x80200053": { zh-CN: 这个代码的意思是「下载的文件没通过校验，常见于防火墙过滤了下载」。 }
+      "0x80070002": { zh-CN: 这个代码的意思是「找不到文件」。 }
+      "0x80070003": { zh-CN: 这个代码的意思是「找不到路径」。 }
+      "0x8007000D": { zh-CN: 这个代码的意思是「数据无效：下载的更新坏了」。 }
+      "0x80240034": { zh-CN: 这个代码的意思是「更新下载失败」。 }
+      "0x80242006": { zh-CN: 这个代码的意思是「更新里的描述信息无效」。 }
+      "0x8024000E": { zh-CN: 这个代码的意思是「更新里的描述信息（XML）无效」。 }
+      "0x80246002": { zh-CN: 这个代码的意思是「下载的文件校验值对不上」。 }
+      "0x80246007": { zh-CN: 这个代码的意思是「更新还没下载好」。 }
+      "0x80246008": { zh-CN: 这个代码的意思是「连不上后台智能传送服务（BITS）」。 }
+      "0x80246009": { zh-CN: 这个代码的意思是「后台智能传送服务（BITS）传输出错」。 }
+      "0x8024200D": { zh-CN: 这个代码的意思是「这个更新要重新下载」。 }
+      "0x80073712": { zh-CN: 这个代码的意思是「组件存储坏了」。 }
+      "0x800F081F": { zh-CN: 这个代码的意思是「找不到修复要用的源文件（组件存储坏了）」。 }
+      "0x800F0831": { zh-CN: 这个代码的意思是「组件存储坏了」。 }
+      "0x800F0825": { zh-CN: 这个代码的意思是「这个包卸载不了，一般是组件存储里有装了一半的组件」。 }
+      "0x80070570": { zh-CN: 这个代码的意思是「文件或者文件夹坏了，读不出来」。 }
+      "0x80073701": { zh-CN: 这个代码的意思是「找不到要用的组件」。 }
+      "0x8007371B": { zh-CN: 这个代码的意思是「组件的事务不完整，缺了必需的部分」。 }
+      "0x80070490": { zh-CN: 这个代码的意思是「找不到元素，常见于更新里带的驱动信息缺了」。 }
+      "0x80070057": { zh-CN: 这个代码的意思是「参数错误」。 }
+      "0x80080005": { zh-CN: 这个代码的意思是「系统组件运行失败」。 }
+      "0x800706BE": { zh-CN: 这个代码的意思是「远程过程调用失败，常见于上一个累积更新没装好、坏了」。 }
+      "0x80070005": { zh-CN: 这个代码的意思是「拒绝访问」。 }
+      "0x80240022": { zh-CN: 这个代码的意思是「这批更新全部失败了，最常见的是杀毒软件挡住了更新用的文件夹」。 }
+      "0x80070020": { zh-CN: 这个代码的意思是「文件正被别的程序使用，常见的是杀毒、备份软件在扫描它」。 }
+      "0xC1900107": { zh-CN: 这个代码的意思是「上一次安装的清理还没做完，要先重启」。 }
+      "0x80242014": { zh-CN: 这个代码的意思是「重启以后要做的操作还没做完」。 }
+      "0x80240020": { zh-CN: 这个代码的意思是「没有人登录电脑，没法装」。 }
+      "0x80070BC9": { zh-CN: 这个代码的意思是「要重启电脑，把改了一半的撤回去」。 }
+      "0x80070652": { zh-CN: 这个代码的意思是「另一个安装正在进行」。 }
+      "0x80240016": { zh-CN: 这个代码的意思是「另一个安装正在进行，或者在等重启」。 }
+      "0x80240009": { zh-CN: 这个代码的意思是「另一个冲突的操作正在进行」。 }
+      "0x8024A10A": { zh-CN: 这个代码的意思是「Windows 更新服务闲置太久，自己关掉了」。 }
+      "0x8024001E": { zh-CN: 这个代码的意思是「服务或者系统正在关闭」。 }
+      "0x800F0821": { zh-CN: 这个代码的意思是「维护操作超时了」。 }
+      "0x800F0920": { zh-CN: 这个代码的意思是「维护操作太久没反应，被当成卡住了」。 }
+      "0x8007000E": { zh-CN: 这个代码的意思是「内存不够」。 }
+      "0x800705B4": { zh-CN: 这个代码的意思是「操作超时」。 }
+      "0xC1900101": { zh-CN: 这个代码的意思是「升级出错，退回了原来的版本，多半是驱动不兼容」。 }
+      "0xC1900200": { zh-CN: 这个代码的意思是「电脑不满足新版本的最低要求」。 }
+      "0xC1900201": { zh-CN: 这个代码的意思是「电脑不满足最低要求，安装被取消了」。 }
+      "0xC1900202": { zh-CN: 这个代码的意思是「电脑不满足下载升级的最低要求」。 }
+      "0xC1900204": { zh-CN: 这个代码的意思是「选的升级方式（比如保留文件和应用）用不了」。 }
+      "0xC1900206": { zh-CN: 这个代码的意思是「设备扫描没通过」。 }
+      "0xC1900208": { zh-CN: 这个代码的意思是「兼容性扫描没通过，有不兼容的软件」。 }
+      "0xC1900209": { zh-CN: 这个代码的意思是「兼容性扫描没通过，有不兼容的软件，安装被取消了」。 }
+      "0x80090011": { zh-CN: 这个代码的意思是「迁移数据时驱动出错」。 }
+      "0x80070643": { zh-CN: 这个代码的意思是「安装时发生严重错误」。 }
+      "0x80246017": { zh-CN: 这个代码的意思是「这个账户没有权限下载更新，要用管理员账户」。 }
+      "0x8024200B": { zh-CN: 这个代码的意思是「安装程序没能装上这个更新」。 }
+      "0x80070522": { zh-CN: 这个代码的意思是「没有所需的权限，要用管理员账户」。 }
 references:
   - https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-queryhistory
   - https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iupdatehistoryentry
@@ -117,3 +238,5 @@ references:
   - https://learn.microsoft.com/en-us/troubleshoot/windows-client/deployment/windows-10-upgrade-resolution-procedures
   - https://learn.microsoft.com/en-us/troubleshoot/windows-client/installing-updates-features-roles/common-windows-update-errors
   - https://learn.microsoft.com/en-us/windows/deployment/update/windows-update-error-reference
+  - https://support.microsoft.com/en-us/windows/troubleshoot-problems-updating-windows-188c2b0f-10a7-d72f-65b8-32d177eb136c
+  - https://support.microsoft.com/en-us/windows/fix-issues-by-reinstalling-the-current-version-of-windows-497ac6da-7cac-4641-82a5-f50398d879a0

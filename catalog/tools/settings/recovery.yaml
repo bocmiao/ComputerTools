@@ -1,0 +1,15 @@
+# 打开「设置」里的一页（open）：ms-settings:recovery，由系统打开。Windows 11 的「系统 → 恢复」里有「使用 Windows 更新修复问题」
+# （「立即重新安装」：重新装一遍当前版本的 Windows，保留应用、文件和设置；要 Windows 11 22H2 以上、装了 2024 年 2 月的可选
+# 更新或者更新的，被单位管理的电脑可能没有）、「重置此电脑」和「高级启动」；Windows 10 在「更新和安全 → 恢复」，没有第一项。
+# 检测 update.history 报组件存储坏了时给这个按钮。
+id: settings.recovery
+schema_version: 1
+group: open
+title: { zh-CN: 恢复（重装当前版本的 Windows） }
+description:
+  zh-CN: 打开「设置」里的恢复页面。Windows 11 在这里点「使用 Windows 更新修复问题」旁边的「立即重新安装」，会重新装一遍当前版本的 Windows，应用、文件和设置都保留，更新老装不上、系统文件修不好时用（要插着电源、连着网，下载和安装要一段时间）；「重置此电脑」「高级启动」也在这里。
+category: settings
+open: { settings: recovery }
+references:
+  - https://support.microsoft.com/en-us/windows/fix-issues-by-reinstalling-the-current-version-of-windows-497ac6da-7cac-4641-82a5-f50398d879a0
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

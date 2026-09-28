@@ -177,8 +177,23 @@ pub struct Check {
     pub probe: Probe,
     /// 结果代码 → 展示方式
     pub results: BTreeMap<String, ResultSpec>,
+    /// 事实值的说明：新事实的名字 → 从哪个事实、按什么表查出文字。脚本只返回代码（比如错误代码），
+    /// 每个代码的中文说明写在这里，模板里用 `{新事实的名字}` 引用。
+    #[serde(default)]
+    pub fact_labels: BTreeMap<String, FactLabels>,
     #[serde(default)]
     pub references: Vec<String>,
+}
+
+/// 按值查说明：事实是字符串或数字时查它自己；是数组时逐个查，有说明的按原顺序连起来。一个都查不到时是空字符串，
+/// 所以说明要写成完整的句子（带句号），放在模板里一句话的开头或者结尾。
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FactLabels {
+    /// 脚本返回的事实的名字
+    pub from: String,
+    /// 值（数字也写成字符串）→ 说明
+    pub values: BTreeMap<String, Text>,
 }
 
 /// 检测方式：脚本或内置检测，二选一。

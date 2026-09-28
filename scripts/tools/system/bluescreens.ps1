@@ -15,6 +15,18 @@
 #   (Microsoft's bug check code reference, $stops), how many times, the first
 #   and the last time, the likely cause and what to do (a code per group of
 #   stop codes; codes not in $stops are shown as they are).
+#   For a few codes the four parameters tell more (the newest blue screen of
+#   the group whose parameters say something is used; see Get-Detail):
+#     0x7A (and 0x77 with a status as parameter 1): parameter 2 is the I/O
+#       status: C000009C / C000016A bad sectors, C000009D / C0000185 /
+#       C000000E the disk is not connected properly (cable, controller) or
+#       failed, C000009A out of nonpaged pool
+#     0xA0 with parameter 1 = 0xB: the hibernation file is too small
+#     0xFE with parameter 1 = 3 or 5: the USB controller reported a hardware
+#       failure; with 8, 6 and a timeout code about (selective) suspend or
+#       resume (1-5, 8, 9): a USB port or hub did not wake up in time
+#   The parameters come from the 1001 message ("(0x..., 0x..., 0x..., 0x...)")
+#   or from BugcheckParameter1-4 of the 41.
 #   Unexpected shutdowns: 41 with BugcheckCode 0 (power lost, hard hang;
 #   PowerButtonTimestamp non-zero or LongPowerButtonPressDetected: the power
 #   button was held).
@@ -215,6 +227,97 @@ function Get-WerCode {
     return [int64]-1
 }
 
+# A bug check parameter (0x... or decimal, up to 64 bits), or $null.
+function ConvertTo-Parameter {
+    param([string]$Text)
+    $t = Get-Text $Text
+    if ($t -match '^0[xX]([0-9A-Fa-f]{1,16})$') {
+        return [Convert]::ToUInt64($Matches[1], 16)
+    }
+    $number = [uint64]0
+    if ([uint64]::TryParse($t, [Globalization.NumberStyles]::None, $invariant, [ref]$number)) {
+        return $number
+    }
+    return $null
+}
+
+# The four parameters, or an empty list when one of them cannot be read.
+function ConvertTo-ParameterList {
+    param([string[]]$Texts)
+    $list = New-Object System.Collections.Generic.List[uint64]
+    foreach ($text in $Texts) {
+        $value = ConvertTo-Parameter $text
+        if ($null -eq $value) {
+            return , @()
+        }
+        $list.Add($value)
+    }
+    if ($list.Count -ne 4) {
+        return , @()
+    }
+    return , $list.ToArray()
+}
+
+# The parameters of a 1001 event: "0x0000007a (0x4, 0xffffffffc000009c, ...)".
+function Get-WerParameters {
+    param($Record)
+    foreach ($property in @($Record.Properties)) {
+        $m = [regex]::Match((Get-Text $property.Value), '^0[xX][0-9A-Fa-f]{1,16}\s*\(([^)]*)\)')
+        if ($m.Success) {
+            return , (ConvertTo-ParameterList $m.Groups[1].Value.Split(','))
+        }
+    }
+    return , @()
+}
+
+# What an I/O status (the low 32 bits of a parameter; on 64-bit Windows it is
+# sign-extended, 0xffffffffc000009c) says, or ''. Formatted as text, so no
+# 64-bit arithmetic is needed.
+function Get-StatusDetail {
+    param([uint64]$Value)
+    $status = ('{0:X16}' -f $Value).Substring(8)
+    if (($status -eq 'C000009C') -or ($status -eq 'C000016A')) {
+        return 'disk-bad-sector'
+    }
+    if (($status -eq 'C000009D') -or ($status -eq 'C0000185') -or ($status -eq 'C000000E')) {
+        return 'disk-cable'
+    }
+    if ($status -eq 'C000009A') {
+        return 'low-resources'
+    }
+    return ''
+}
+
+# What the parameters of a blue screen say (Microsoft's pages for 0x7A, 0x77,
+# 0xA0 and 0xFE), or ''.
+function Get-Detail {
+    param([int64]$Code, [uint64[]]$Parameters)
+    if (@($Parameters).Count -ne 4) {
+        return ''
+    }
+    $p1 = $Parameters[0]
+    $p2 = $Parameters[1]
+    $p3 = $Parameters[2]
+    if ($Code -eq 0x7A) {
+        return (Get-StatusDetail $p2)
+    }
+    if (($Code -eq 0x77) -and ($p1 -gt 2)) {
+        return (Get-StatusDetail $p2)
+    }
+    if (($Code -eq 0xA0) -and ($p1 -eq 11)) {
+        return 'hiberfile-small'
+    }
+    if ($Code -eq 0xFE) {
+        if (($p1 -eq 3) -or ($p1 -eq 5)) {
+            return 'usb-hardware'
+        }
+        if (($p1 -eq 8) -and ($p2 -eq 6) -and ($p3 -le 9) -and (@(1, 2, 3, 4, 5, 8, 9) -contains [int]$p3)) {
+            return 'usb-suspend'
+        }
+    }
+    return ''
+}
+
 function Format-Time {
     param([datetime]$Time)
     return $Time.ToString('yyyy-MM-dd HH:mm', $invariant)
@@ -237,13 +340,15 @@ foreach ($record in $events) {
         continue
     }
     if (($id -eq 1001) -and (($provider -eq 'Microsoft-Windows-WER-SystemErrorReporting') -or ($provider -eq 'BugCheck'))) {
-        $reports.Add([pscustomobject]@{ Time = $time; Code = (Get-WerCode $record); Paired = $false })
+        $code = Get-WerCode $record
+        $reports.Add([pscustomobject]@{ Time = $time; Code = $code; Paired = $false; Detail = (Get-Detail $code (Get-WerParameters $record)) })
     }
     elseif (($id -eq 41) -and ($provider -eq 'Microsoft-Windows-Kernel-Power')) {
         $values = Get-EventValue $record
         $code = ConvertTo-Code ([string]$values['BugcheckCode'])
         if ($code -gt 0) {
-            $crashes.Add([pscustomobject]@{ Time = $time; Code = $code })
+            $parameters = ConvertTo-ParameterList @(1..4 | ForEach-Object { [string]$values['BugcheckParameter' + $_] })
+            $crashes.Add([pscustomobject]@{ Time = $time; Code = $code; Detail = (Get-Detail $code $parameters) })
             continue
         }
         $shutdowns++
@@ -287,13 +392,16 @@ foreach ($crash in $crashes) {
     }
     if ($null -ne $match) {
         $match.Paired = $true
+        if ([string]$match.Detail -eq '') {
+            $match.Detail = $crash.Detail
+        }
     }
     else {
         $blueScreens.Add($crash)
     }
 }
 foreach ($report in $reports) {
-    $blueScreens.Add([pscustomobject]@{ Time = $report.Time; Code = $report.Code })
+    $blueScreens.Add([pscustomobject]@{ Time = $report.Time; Code = $report.Code; Detail = $report.Detail })
 }
 
 # Crash dumps since the last start. Unknown (not reported) when the start time
@@ -319,10 +427,14 @@ foreach ($screen in $blueScreens) {
         $key = '{0:X8}' -f $screen.Code
     }
     if (-not $groups.ContainsKey($key)) {
-        $groups[$key] = [pscustomobject]@{ Key = $key; Times = 0; First = $screen.Time; Last = $screen.Time }
+        $groups[$key] = [pscustomobject]@{ Key = $key; Times = 0; First = $screen.Time; Last = $screen.Time; Detail = ''; DetailTime = $null }
     }
     $group = $groups[$key]
     $group.Times++
+    if (([string]$screen.Detail -ne '') -and (($null -eq $group.DetailTime) -or ($screen.Time -gt $group.DetailTime))) {
+        $group.Detail = [string]$screen.Detail
+        $group.DetailTime = $screen.Time
+    }
     if ($screen.Time -lt $group.First) {
         $group.First = $screen.Time
     }
@@ -354,6 +466,9 @@ foreach ($group in @($groups.Values | Sort-Object -Property Last -Descending | S
         $name = '0x' + $group.Key
     }
     $rows.Add([ordered]@{ id = 'cause'; code = $cause })
+    if ($group.Detail.Length -gt 0) {
+        $rows.Add([ordered]@{ id = 'detail'; code = $group.Detail })
+    }
     $rows.Add([ordered]@{ id = 'advice'; code = ($cause + '-advice') })
     $section = [ordered]@{ id = 'bluescreen' }
     if ($name.Length -gt 0) {

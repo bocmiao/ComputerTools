@@ -25,7 +25,7 @@ use crate::model::{
 use crate::new_menu;
 use crate::platform::{OpenRequest, Platform, PlatformError};
 use crate::registry::{RegRoot, RegValue, SpecRoot, display_opt, is_sid, key_ancestors, split_key};
-use crate::render::render;
+use crate::render::{label_fact, render};
 use crate::report::redact;
 use crate::script::ScriptRunner;
 use crate::shell_places;
@@ -371,12 +371,21 @@ impl Engine {
             Ok(v) => {
                 let code = v.get("result").and_then(Value::as_str).map(str::to_owned);
                 result.facts = v.get("facts").and_then(Value::as_object).cloned().unwrap_or_default();
+                // 说明表查出的文字：模板里总能用（查不到就是空的）；事实里只放查到了的，免得详情里多出空行
+                let mut text_facts = result.facts.clone();
+                for (name, labels) in &check.fact_labels {
+                    let text = label_fact(result.facts.get(&labels.from), labels, &self.lang);
+                    if !text.is_empty() {
+                        result.facts.insert(name.clone(), Value::String(text.clone()));
+                    }
+                    text_facts.insert(name.clone(), Value::String(text));
+                }
                 match code.as_deref().and_then(|c| check.results.get(c)) {
                     Some(spec) => {
                         result.status = spec.status;
-                        result.message = render(spec.message.get(&self.lang), &result.facts);
+                        result.message = render(spec.message.get(&self.lang), &text_facts);
                         result.fixer = spec.fixer;
-                        result.next = spec.next.as_ref().map(|t| render(t.get(&self.lang), &result.facts));
+                        result.next = spec.next.as_ref().map(|t| render(t.get(&self.lang), &text_facts));
                         result.links = spec.links.clone();
                     }
                     None => {
