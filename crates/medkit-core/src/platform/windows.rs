@@ -741,6 +741,24 @@ impl Platform for WindowsPlatform {
             enhance_precision: mouse[2] != 0,
         })
     }
+
+    fn hotkeys_taken(&self, candidates: &[super::Hotkey]) -> PResult<Vec<super::Hotkey>> {
+        use windows_sys::Win32::Foundation::ERROR_HOTKEY_ALREADY_REGISTERED;
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey};
+        // 应用程序自己用的编号在 0x0000 到 0xBFFF 之间
+        const ID: i32 = 0x4D4B;
+        let mut taken = Vec::new();
+        for h in candidates {
+            // SAFETY: 窗口句柄为空：快捷键登记在当前线程上，登记上了就在同一个线程里马上注销
+            if unsafe { RegisterHotKey(std::ptr::null_mut(), ID, h.modifiers | MOD_NOREPEAT, h.vk) } != 0 {
+                // SAFETY: 同上
+                unsafe { UnregisterHotKey(std::ptr::null_mut(), ID) };
+            } else if last_error().raw_os_error() == Some(ERROR_HOTKEY_ALREADY_REGISTERED as i32) {
+                taken.push(*h);
+            }
+        }
+        Ok(taken)
+    }
 }
 
 // ───────────── 打开系统工具 ─────────────
@@ -937,6 +955,78 @@ pub fn native_machine() -> Option<u16> {
     // SAFETY: GetCurrentProcess 是伪句柄，不用关；两个输出都是有效的 u16
     let ok = unsafe { IsWow64Process2(GetCurrentProcess(), &mut process, &mut native) } != 0;
     (ok && native != 0).then_some(native)
+}
+
+/// 一次交给系统放进回收站的文件个数
+pub const RECYCLE_BATCH: usize = 500;
+
+/// 把这些文件放进回收站：`SHFileOperationW`（`FO_DELETE` + `FOF_ALLOWUNDO`），和在资源管理器里按 Delete 一样。
+/// - 回收站放不下、这个盘上没有回收站时，Windows 会弹框问要不要永久删除（`FOF_WANTNUKEWARNING`），不会不声不响地删掉；
+/// - 不弹「确定要删除吗」（界面上已经问过了）、进度框和错误框；
+/// - 只交文件，`FOF_NO_CONNECTED_ELEMENTS`：网页旁边的「_files」文件夹这类相连的东西不跟着删。
+///
+/// 一次交 [`RECYCLE_BATCH`] 个。哪些放进去了由调用的一方看文件还在不在（正在用的、路径太长的会留下）。
+/// 返回：用户在 Windows 的提示框里点了「取消」（后面的就不再交了）。
+pub fn recycle(paths: &[PathBuf]) -> bool {
+    use windows_sys::Win32::UI::Shell::{
+        FO_DELETE, FOF_ALLOWUNDO, FOF_NO_CONNECTED_ELEMENTS, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT,
+        FOF_WANTNUKEWARNING, SHFILEOPSTRUCTW, SHFileOperationW,
+    };
+    let flags = FOF_ALLOWUNDO
+        | FOF_NOCONFIRMATION
+        | FOF_WANTNUKEWARNING
+        | FOF_NOERRORUI
+        | FOF_SILENT
+        | FOF_NO_CONNECTED_ELEMENTS;
+    for batch in paths.chunks(RECYCLE_BATCH) {
+        // 一串以 NUL 分开、两个 NUL 结尾的路径
+        let mut from: Vec<u16> = Vec::new();
+        for p in batch {
+            from.extend(p.as_os_str().encode_wide());
+            from.push(0);
+        }
+        from.push(0);
+        let mut op = SHFILEOPSTRUCTW {
+            hwnd: null_mut(),
+            wFunc: FO_DELETE,
+            pFrom: from.as_ptr(),
+            pTo: null(),
+            fFlags: u16::try_from(flags).unwrap_or(0),
+            fAnyOperationsAborted: 0,
+            hNameMappings: null_mut(),
+            lpszProgressTitle: null(),
+        };
+        // SAFETY: pFrom 是两个 NUL 结尾的路径串，调用期间一直有效。返回值不是 0 时有的文件没放进去（微软：这些代码
+        // 不是 GetLastError 的代码，不要按系统错误解释），调用的一方按文件还在不在算
+        let _ = unsafe { SHFileOperationW(&mut op) };
+        if op.fAnyOperationsAborted != 0 {
+            return true;
+        }
+    }
+    false
+}
+
+/// 有没有叫这些名字的程序在运行（只看程序文件名，不分大小写；看得到所有账户的进程）。
+pub fn processes_running(names: &[&str]) -> bool {
+    // SAFETY: 标准的进程快照调用
+    let snap = Handle(unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) });
+    if snap.0 == INVALID_HANDLE_VALUE {
+        return false;
+    }
+    let Ok(size) = u32::try_from(std::mem::size_of::<PROCESSENTRY32W>()) else { return false };
+    let mut entry = PROCESSENTRY32W { dwSize: size, ..Default::default() };
+    // SAFETY: entry.dwSize 已正确设置
+    let mut more = unsafe { Process32FirstW(snap.0, &mut entry) } != 0;
+    while more {
+        let end = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+        let exe = String::from_utf16_lossy(&entry.szExeFile[..end]);
+        if names.iter().any(|n| exe.eq_ignore_ascii_case(n)) {
+            return true;
+        }
+        // SAFETY: 同上
+        more = unsafe { Process32NextW(snap.0, &mut entry) } != 0;
+    }
+    false
 }
 
 pub fn drives() -> Vec<Drive> {

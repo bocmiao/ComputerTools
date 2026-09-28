@@ -39,6 +39,8 @@ pub struct AppState {
     pub space: Arc<Mutex<crate::space::SpaceState>>,
     /// 「弹窗是哪个软件的」最近一次找到的程序文件（「打开所在的文件夹」用）
     pub popup: Arc<Mutex<Option<std::path::PathBuf>>>,
+    /// 「微信占 C 盘」最近一次查到的账号文件夹（界面只传编号）
+    pub wechat: Arc<Mutex<crate::wechat::WechatState>>,
 }
 
 pub fn init() -> AppState {
@@ -55,6 +57,7 @@ pub fn init() -> AppState {
         lockers: Arc::new(Mutex::new(None)),
         space: Arc::new(Mutex::new(Default::default())),
         popup: Arc::new(Mutex::new(None)),
+        wechat: Arc::new(Mutex::new(Default::default())),
     }
 }
 
@@ -284,5 +287,6 @@ pub fn test_state() -> AppState {
         lockers: Arc::new(Mutex::new(None)),
         space: Arc::new(Mutex::new(Default::default())),
         popup: Arc::new(Mutex::new(None)),
+        wechat: Arc::new(Mutex::new(Default::default())),
     }
 }

@@ -65,6 +65,8 @@ const COMMANDS: &[&str] = &[
     "popup_reveal",
     "brightness_list",
     "brightness_set",
+    "wechat_scan",
+    "wechat_clean",
 ];
 
 fn main() {

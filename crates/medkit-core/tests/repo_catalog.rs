@@ -6,7 +6,7 @@ use medkit_core::builtin;
 use medkit_core::bundle::Bundle;
 use medkit_core::catalog::Severity;
 use medkit_core::platform::mock::MockPlatform;
-use medkit_core::platform::{Display, Displays, MouseSettings, Platform, WifiLink, WifiStatus};
+use medkit_core::platform::{Display, Displays, Hotkey, MouseSettings, Platform, WifiLink, WifiStatus};
 use medkit_core::render::{render, unresolved};
 
 #[test]
@@ -161,6 +161,16 @@ fn common_error_messages_find_their_symptom() {
         ("鼠标左右键反了，怎么改回来", "mouse"),
         ("鼠标单击变双击，拖文件拖着拖着就松开了", "mouse"),
         ("无线鼠标没反应，指针不动", "mouse"),
+        ("任务管理器性能里CPU一直是0%，没有图表", "taskmgr-blank"),
+        ("资源监视器打不开，性能监视器里没有数据", "taskmgr-blank"),
+        ("任务管理器看不到CPU使用率，性能页一片空白", "taskmgr-blank"),
+        ("装软件提示 WMI 错误：无效类", "wmi-broken"),
+        ("打开系统信息显示不能收集信息", "wmi-broken"),
+        ("WMI Provider Host 占用CPU特别高", "wmi-broken"),
+        ("快捷键没反应，按Ctrl+Alt+A弹出来的是QQ截图", "hotkeys"),
+        ("按PrtSc截图键没反应", "hotkeys"),
+        ("笔记本F1到F12变成了调音量调亮度", "hotkeys"),
+        ("Ctrl+C和Ctrl+V不能用了，没法复制粘贴", "hotkeys"),
     ];
     let wrong: Vec<String> = cases
         .iter()
@@ -257,6 +267,46 @@ fn every_mouse_settings_result_has_its_words_filled_in() {
         for text in std::iter::once(&spec.message).chain(spec.next.as_ref()) {
             let filled = render(text.get("zh-CN"), facts);
             assert!(unresolved(&filled).is_empty(), "{want}：有没填上的占位符：{filled}");
+        }
+        seen.push(want);
+    }
+    let mut defined: Vec<&str> = check.results.keys().map(String::as_str).collect();
+    defined.sort_unstable();
+    seen.sort_unstable();
+    assert_eq!(defined, seen, "数据里的结果和这里试过的对不上");
+}
+
+/// 被别的程序占着的快捷键：两种结果都真的跑一遍内置检测（模拟的平台），说法里的占位符都要填得上。
+#[test]
+fn every_hotkeys_result_has_its_words_filled_in() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let (bundle, _) = Bundle::from_repo(&root);
+    let bundle = bundle.expect("数据要能打包");
+    let check = bundle.catalog.checks.iter().find(|c| c.id == "system.hotkeys").expect("有这个检测");
+    let qq = Hotkey { modifiers: Hotkey::CONTROL | Hotkey::ALT, vk: u32::from(b'A') };
+    let f1 = Hotkey { modifiers: 0, vk: 0x70 };
+    // 不在要试的范围里的（带 Win 键）就算被占着也不报
+    let win_e = Hotkey { modifiers: 0x0008, vk: u32::from(b'E') };
+    let cases: Vec<(&str, Vec<Hotkey>)> = vec![("ok", vec![win_e]), ("taken", vec![qq, f1, win_e])];
+    let mut seen = Vec::new();
+    for (want, taken) in cases {
+        let platform = MockPlatform::new();
+        platform.set_taken_hotkeys(taken);
+        let os = platform.os_info();
+        let env = builtin::Env { os: &os, now: time::OffsetDateTime::now_utc(), platform: &platform };
+        let v = builtin::run("hotkeys", &env).expect("模拟的平台能试快捷键");
+        assert_eq!(v["result"], want, "{v}");
+        let facts = v["facts"].as_object().expect("事实是一个对象");
+        let spec = check.results.get(want).unwrap_or_else(|| panic!("数据里没有结果 {want}"));
+        for text in std::iter::once(&spec.message).chain(spec.next.as_ref()) {
+            let filled = render(text.get("zh-CN"), facts);
+            assert!(unresolved(&filled).is_empty(), "{want}：有没填上的占位符：{filled}");
+            if want == "taken" {
+                assert!(!filled.contains("Win"), "{filled}");
+            }
+        }
+        if want == "taken" {
+            assert_eq!(facts["taken"], "Ctrl + Alt + A（QQ 截图默认用的）、F1（Snipaste 截图默认用的）");
         }
         seen.push(want);
     }

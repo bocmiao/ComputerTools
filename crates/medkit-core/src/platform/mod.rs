@@ -92,6 +92,21 @@ impl Default for MouseSettings {
     }
 }
 
+/// 一个全局快捷键：修饰键加一个键。修饰键是 [`Hotkey::ALT`]、[`Hotkey::CONTROL`]、[`Hotkey::SHIFT`] 的组合（和
+/// RegisterHotKey 的 MOD_ALT、MOD_CONTROL、MOD_SHIFT 一样），键是 Windows 的虚拟键码（字母、数字键就是大写字母、
+/// 数字的 ASCII 码）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Hotkey {
+    pub modifiers: u32,
+    pub vk: u32,
+}
+
+impl Hotkey {
+    pub const ALT: u32 = 0x0001;
+    pub const CONTROL: u32 = 0x0002;
+    pub const SHIFT: u32 = 0x0004;
+}
+
 /// 正在用的一个显示器（「设置 → 屏幕」里列出来的一个）。怎么看结论见 [`crate::builtin`] 里的 display-resolution。
 /// 只有型号名和分辨率，没有序列号。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -435,6 +450,14 @@ pub trait Platform: Send + Sync {
     /// 鼠标的几项设置（见 [`MouseSettings`]）。只读。
     fn mouse_settings(&self) -> PResult<MouseSettings> {
         Err(PlatformError::Unsupported("读鼠标的设置".into()))
+    }
+
+    /// `candidates` 里哪些已经被别的程序登记成了全局快捷键（按下去只有那个程序收得到）。做法照
+    /// heathhenley/windows_hotkey_checker（MIT）：每一个都用 RegisterHotKey 登记一次，登记不上、报
+    /// ERROR_HOTKEY_ALREADY_REGISTERED 的就是被占了；登记上的马上注销。看不出是哪个程序占的；用低级键盘钩子
+    /// 截按键的程序也看不出来。不留下任何改动。
+    fn hotkeys_taken(&self, _candidates: &[Hotkey]) -> PResult<Vec<Hotkey>> {
+        Err(PlatformError::Unsupported("看快捷键有没有被别的程序占着".into()))
     }
 
     /// 现在连着的 WiFi（见 [`WifiStatus`]）。只读。

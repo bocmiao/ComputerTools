@@ -602,3 +602,20 @@ fn brightness_commands_pass_the_permission_check() {
     let e = invoke(&win, "brightness_set", json!({ "id": laptop["id"], "percent": 35 })).unwrap_err();
     assert!(e.as_str().is_some_and(|m| m.contains("DDC/CI")), "{e}");
 }
+
+/// 微信占 C 盘的两个命令也要登记进权限清单：查的结果是界面要的 camelCase；还没查就清理、天数不对，都说清楚。
+/// （假系统和 CI 机器上都没有微信，一个账号也找不到。）
+#[test]
+fn wechat_commands_pass_the_permission_check() {
+    let win = app();
+    let e = invoke(&win, "wechat_clean", json!({ "ids": [0], "cache": true, "chat": false, "days": 365 })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("先查")), "{e}");
+    let r = ok(&win, "wechat_scan", json!({ "days": 365 }));
+    has_keys(&r, &["accounts", "cacheDays", "chatDays", "running", "complete"]);
+    assert!(r["accounts"].as_array().is_some_and(Vec::is_empty), "{r}");
+    assert_eq!(r["chatDays"], 365);
+    let e = invoke(&win, "wechat_scan", json!({ "days": 1 })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("天数")), "{e}");
+    let e = invoke(&win, "wechat_clean", json!({ "ids": [], "cache": true, "chat": true, "days": 99999 })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("天数")), "{e}");
+}

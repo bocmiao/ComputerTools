@@ -65,6 +65,8 @@
     "allow-popup-find",
     "allow-popup-reveal",
     "allow-brightness-list",
-    "allow-brightness-set"
+    "allow-brightness-set",
+    "allow-wechat-scan",
+    "allow-wechat-clean"
   ]
 }

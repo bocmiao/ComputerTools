@@ -111,6 +111,7 @@ references:
 | `display-resolution` | `count`（正在用的显示器个数）、`summary`（每个显示器现在的分辨率，用「、」隔开）、`displays`（每个显示器一行：名字、现在的分辨率、推荐的分辨率、是不是在「复制」）；有显示器低于推荐的分辨率时，还有第一个这样的显示器的 `name`、`current`、`recommended` | `remote`（远程桌面里）、`no-display`、`not-recommended`（有显示器比推荐的分辨率低：宽或者高小一些，宽高比不一样的也算）、`cloned`（低于推荐的是在「复制」模式下）、`ok`（有显示器读得到推荐的分辨率，都不低于它）、`unknown`（都读不到）；先满足哪个算哪个 |
 | `wifi-link` | `summary`（一句话：信号、频段和信道、第几代 WiFi、连接速率、加密方式）、`signal`（0–100）、`signal_text`、`rssi`（dBm，读不到时是 null）、`band`（2.4 GHz / 5 GHz / 6 GHz，读不到时是空的）、`channel`、`standard`（WiFi 4/5/6/6E/7 这些）、`rx_mbps`、`tx_mbps`、`security`、`adapters`（无线网卡几块）；没有 WiFi 名称和接入点的 MAC 地址 | `weak`（信号质量低于 40，相当于 -80 dBm）、`old-security`（WEP、TKIP、第一代 WPA）、`open`（没有密码）、`ok`；没有 WiFi 的：`no-service`（系统里没有 wlanapi.dll，或者「WLAN AutoConfig」服务没在运行）、`no-adapter`、`disconnected` |
 | `mouse-settings` | `summary`（每一项：主按钮、双击速度、指针速度、滚轮、单击锁定、自动移到默认按钮、指针轨迹、提高指针精确度）、`double_click_ms`、`speed`（1–20）、`wheel`（「一次滚 3 行」「一次滚一屏」「不滚动」）、`trails` | `swapped`、`wheel-off`、`click-lock`、`snap-to-default`、`trails`、`double-click-fast`（短于 300 毫秒）、`double-click-slow`（长于 800 毫秒）、`pointer-slow`（第 3 档及以下）、`pointer-fast`（第 18 档及以上），按这个顺序报一项；都正常是 `ok` |
+| `hotkeys` | `taken`（被别的程序占着的快捷键，写法是「Ctrl + Alt + A」，常见软件的默认快捷键在括号里，用「、」隔开）、`taken_count`、`checked`（试了几个，375） | `taken`（有被占着的）、`ok` |
 
 `winsock` 用微软公开的服务提供程序接口读 Winsock 目录（`crates/medkit-core/src/platform/winsock.rs`）：`WSCEnumProtocols` 列出每一项（包括隐藏的项和分层协议本身），`WSCGetProviderPath` 读 DLL 的路径；64 位 Windows 上 32 位程序用的那一份用 `WSCEnumProtocols32`、`WSCGetProviderPath32` 读（很多国产软件是 32 位的），路径里的 `%ProgramFiles%` 按 `Program Files (x86)`、System32 按 SysWOW64 解释。协议链长度不是 1 的是 LSP（微软 WSAPROTOCOLCHAIN 文档：0 是分层协议本身，大于 1 是经过它的协议链）；DLL 在 Windows 文件夹里、版本信息里的公司是 Microsoft 的算 Windows 自己的（放在 System32 里冒充系统文件的老式 LSP 照样算第三方）。结论在 `crates/medkit-core/src/winsock.rs`，路径只用来看文件在不在、读版本信息。
 
@@ -119,6 +120,8 @@ references:
 `wifi-link` 用微软的 Native WiFi 接口（`crates/medkit-core/src/platform/wifi.rs`，做法照 emoacht/ManagedNativeWifi，MIT）：`WlanOpenHandle` → `WlanEnumInterfaces` 找状态是「已连接」的无线网卡 → `WlanQueryInterface`（`wlan_intf_opcode_current_connection`）读信号质量、物理层类型、收发速率（kbps）、身份验证和加密 → `WlanQueryInterface`（`wlan_intf_opcode_channel_number`）读信道 → `WlanGetNetworkBssList` 按 BSSID 找到连着的接入点，读中心频率和信号强度（dBm）；频率换算频段、信道的范围照它的 `TryDetectBandChannel`（6 GHz 的信道和 2.4 GHz 重号，要靠频率分）。WiFi 名称和 BSSID 只在读的时候用来查，不进事实。wlanapi.dll 不放进导入表，第一次用时用 `LoadLibraryExW`（`LOAD_LIBRARY_SEARCH_SYSTEM32`）+ `GetProcAddress` 加载：没有 WiFi 组件的系统（服务器版、精简过的系统）上程序照样能打开，这一项报 `no-service`。
 
 `mouse-settings` 和 `keyboard-aids` 一样读这次登录实际生效的值、不读注册表（`platform/windows.rs`）：`GetSystemMetrics(SM_SWAPBUTTON)`、`GetDoubleClickTime`，`SystemParametersInfo` 的 `SPI_GETMOUSECLICKLOCK`、`SPI_GETMOUSESPEED`、`SPI_GETMOUSETRAILS`、`SPI_GETSNAPTODEFBUTTON`、`SPI_GETWHEELSCROLLLINES`、`SPI_GETMOUSE`（第三个值是「提高指针精确度」）。读哪几项照 MartinGC94/MouseSettings（MIT）；默认值照微软的说明（双击 500 毫秒、指针速度 1–20 默认 10、滚轮 3 行、轨迹 0 或 1 是关）。双击和指针速度的界限是自己定的，只提很偏的设置。
+
+`hotkeys` 的做法照 heathhenley/windows_hotkey_checker（MIT）：Ctrl、Alt、Shift 的 7 种组合配上字母、数字、F1～F12、四个方向键，再加上单独按的 F1～F11，挨个用 `RegisterHotKey`（窗口句柄为空，登记在当前线程上，带 `MOD_NOREPEAT`）登记一次；登记上的马上用 `UnregisterHotKey` 注销，登记不上而且 `GetLastError` 是 `ERROR_HOTKEY_ALREADY_REGISTERED`（1409）的，就是被别的程序登记成了全局快捷键（`platform/windows.rs`）。看不出是哪个程序占的；常见软件的默认快捷键（查证过的几个：QQ、微信、钉钉的截图，Snipaste，英特尔显卡的旋转屏幕，NVIDIA 的游戏内覆盖）写在括号里当线索（`builtin.rs` 的 `hotkey_hint`）。不试带 Win 键的（归操作系统用）、单独的 F12（留给调试器）、Print Screen 和 Tab、Esc 这些系统自己处理的键；用低级键盘钩子截按键的程序看不出来。
 
 `clock` 的构建日期：编译时的环境变量 `SOURCE_DATE_EPOCH`（CI 构建安装包时设成提交时间），没有时用 `builtin.rs` 里写死的日期（发版前顺手改成最近的日期）。这个日期只能早不能晚，晚于真实日期会让所有人都被误报；单元测试会拦住写成将来日期的情况。
 
@@ -410,6 +413,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `awake_set` | `on`、`display` | `AwakeStatus`（SetThreadExecutionState，只在小药箱开着时有效，不改电源设置） |
 | `brightness_list` | — | `MonitorBrightness[]`（显示器亮度：每个显示器的 `id`（`<GDI 设备名>#<序号>`，插拔、换接口以后就变）、型号名（一块桌面上只接着一个显示器时才对得上）、是不是电脑自带的屏幕、现在的亮度 `percent`（0–100）。外接显示器用 DDC/CI 读，读不到的（笔记本自带的屏幕、虚拟机、显示器菜单里关了 DDC/CI）也列出来，`percent` 是 null） |
 | `brightness_set` | `id`、`percent`（0–100） | `number`（调完以后显示器读回来的亮度。做法照 emoacht/Monitorian（MIT）：先用高级接口 SetMonitorBrightness，不支持时用 VCP 代码 0x10（SetVCPFeature），按显示器报的最小、最大值换算；有的显示器报成功其实没设上，所以设完读回来。找不到这个显示器、显示器不让调、调不上各有一句话。改的是显示器自己的亮度，和按显示器上的按钮一样，不记修改日志） |
+| `wechat_scan` | `days`（30–3650） | `WechatReport`（微信占 C 盘：找出微信 3.x、4.x 的账号文件夹，数一数「缓存和临时文件」（7 天以前的）和「聊天里的图片、视频、文件」（`days` 天以前的）各有多少；账号只有编号、版本、在哪个盘、最近收到文件的时间，没有账号名和路径。找的地方、挑哪些文件见 `src-tauri/src/wechat.rs` 和 `medkit_core::wechat`，照 blackboxo/CleanMyWechat（MIT）的目录规则；只读） |
+| `wechat_clean` | `ids`（最近一次结果里的编号）、`cache`、`chat`、`days` | `WechatCleanResult`（把勾选的账号里勾选的几类文件放进回收站：`SHFileOperationW` 的 `FO_DELETE` + `FOF_ALLOWUNDO`，和在资源管理器里按 Delete 一样，回收站放不下时 Windows 会先问要不要永久删除；只挑白名单子文件夹里的普通文件，跳过数据库、程序文件和链接，不删文件夹。微信开着时不清理。返回放进去的个数和大小、没放进去的个数、有没有点「取消」、到了 10 分钟还没清完的，以及重新查的结果） |
 | `shutdown_get` | — | `ShutdownStatus`（`{ plan: { at, restart } \| null }`：小药箱安排的定时关机；系统查不到别处安排的） |
 | `shutdown_schedule` | `seconds`（60 到 24 小时加 60 秒）、`restart` | `ShutdownStatus`（InitiateSystemShutdownExW，到时间强制关掉程序，和 `shutdown /s /t` 一样；小药箱安排过的先取消再换成新的时间；已经有别处安排的就报错，不去动它） |
 | `shutdown_cancel` | — | `ShutdownCancel`（`{ cancelled }`：AbortSystemShutdownW，不管是谁安排的；false 表示本来就没有安排） |

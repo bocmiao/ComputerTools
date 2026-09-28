@@ -24,6 +24,7 @@ use crate::rename::{self, RenamePreview, RenameRules};
 use crate::setup::AppState;
 use crate::shutdown::{ShutdownCancel, ShutdownStatus};
 use crate::space::{self, SpaceReport};
+use crate::wechat::{self, WechatCleanResult, WechatReport};
 
 type CmdResult<T> = Result<T, String>;
 
@@ -801,4 +802,60 @@ pub async fn brightness_list(state: State<'_, AppState>) -> CmdResult<Vec<medkit
 #[tauri::command]
 pub async fn brightness_set(state: State<'_, AppState>, id: String, percent: u8) -> CmdResult<u8> {
     with_engine(state, move |e| e.set_monitor_brightness(&id, percent)).await
+}
+
+/// 微信占 C 盘：找出微信 3.x、4.x 的账号，数一数缓存和 `days` 天以前的聊天文件各有多少（只读；结果里没有账号名和路径，
+/// 账号只有编号）。
+#[tauri::command]
+pub async fn wechat_scan(state: State<'_, AppState>, days: u32) -> CmdResult<WechatReport> {
+    let days = wechat::check_days(days)?;
+    let shared = state.wechat.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let found = wechat::find_accounts(&wechat::roots());
+        let (report, accounts) = wechat::scan(found, days, std::time::SystemTime::now(), wechat::running());
+        shared.lock().map_err(|_| "状态异常。")?.accounts = accounts;
+        Ok(report)
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
+}
+
+/// 微信占 C 盘：把勾选的账号（最近一次结果里的编号）里勾选的几类文件放进回收站：`cache` 是缓存和临时文件，`chat` 是
+/// `days` 天以前的聊天图片、视频、文件。微信开着的时候不清理。返回清理的结果和重新查的结果。
+#[tauri::command]
+pub async fn wechat_clean(
+    state: State<'_, AppState>,
+    ids: Vec<usize>,
+    cache: bool,
+    chat: bool,
+    days: u32,
+) -> CmdResult<WechatCleanResult> {
+    let days = wechat::check_days(days)?;
+    let shared = state.wechat.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut s = shared.lock().map_err(|_| "状态异常。")?;
+        if s.accounts.is_empty() {
+            return Err("请先查一查微信占了多少。".to_owned());
+        }
+        if wechat::running() {
+            return Err(
+                "微信还开着：先在任务栏右下角的微信图标上点右键，选「退出微信」（有的版本叫「退出」），再来清理。"
+                    .to_owned(),
+            );
+        }
+        let done = wechat::clean(&s.accounts, &ids, cache, chat, days, std::time::SystemTime::now(), &wechat::recycle)?;
+        let found = wechat::find_accounts(&wechat::roots());
+        let (report, accounts) = wechat::scan(found, days, std::time::SystemTime::now(), wechat::running());
+        s.accounts = accounts;
+        Ok(WechatCleanResult {
+            files: done.files,
+            bytes: done.bytes,
+            failed: done.failed,
+            cancelled: done.cancelled,
+            partial: done.partial,
+            report,
+        })
+    })
+    .await
+    .map_err(|e| format!("内部错误：{e}"))?
 }

@@ -1,0 +1,49 @@
+# 一键处理（action）：修复 WMI。脚本：scripts/tools/system/wmi-salvage.ps1
+# 照微软《winmgmt》《WMI: Repository Corruption, or Not?》：仓库不一致时第一步是 winmgmt /salvagerepository（重建仓库，把旧仓库
+# 里还读得出来的内容并进去），做完再 winmgmt /verifyrepository 看好了没有。先检查一次，一致就什么都不做（CI 上真跑也只是检查）。
+# 不做 /resetrepository（回到刚装好系统的样子，软件登记在 WMI 里的内容会丢）、不删仓库文件夹：交给懂哥。
+# 结果：consistent（没坏，没动）、done、still-inconsistent、failed（事实 step：出错的命令，exit_code：它的退出代码）。
+id: system.wmi-salvage
+schema_version: 1
+group: action
+title: { zh-CN: 修复 WMI }
+description:
+  zh-CN: 软件报 WMI 错误、「无效类」，「系统信息」打不开时用：先检查 WMI 的仓库，坏了就用 Windows 自带的办法修复（旧仓库里还读得出来的内容会保留），没坏就什么都不动。
+category: system
+requires_admin: true
+timeout_sec: 600
+run:
+  script: tools/system/wmi-salvage.ps1
+confirm:
+  zh-CN: 会先检查 WMI 的仓库，坏了就用 Windows 自带的 winmgmt /salvagerepository 修复，可能要几分钟，这期间用 WMI 的软件可能报错。现在修复吗？
+results:
+  consistent:
+    status: ok
+    message:
+      zh-CN: 检查过了，WMI 的仓库没坏，什么都没动。
+    next:
+      zh-CN: 软件还是报 WMI 错误的，先重启电脑；还不行，点「检查并修复系统文件」；再不行，把报错的截图发给懂哥。
+    links: ["tool:open.system-file-repair"]
+  done:
+    status: ok
+    message:
+      zh-CN: WMI 的仓库修复好了，再检查已经一致了。
+    next:
+      zh-CN: 重启一次电脑，再打开刚才报错的软件试试。
+  still-inconsistent:
+    status: advice
+    message:
+      zh-CN: 修复做完了，但再检查，WMI 的仓库还是不一致。
+    fixer: helper
+    next:
+      zh-CN: 先重启电脑，再点一次「修复 WMI」；还不行，请懂哥看看（微软的下一步是 winmgmt /resetrepository，会丢掉软件登记在 WMI 里的内容，要先备份）。
+  failed:
+    status: advice
+    message:
+      zh-CN: 运行「{step}」时出错了（返回 {exit_code}），WMI 没有修好。
+    fixer: helper
+    next:
+      zh-CN: 重启电脑以后再试一次；还不行，把这个结果发给懂哥。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/wmisdk/winmgmt
+  - https://learn.microsoft.com/en-us/archive/blogs/supportingwindows/wmi-repository-corruption-or-not

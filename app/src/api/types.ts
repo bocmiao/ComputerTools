@@ -170,6 +170,45 @@ export interface MonitorBrightness {
   percent: number | null
 }
 
+/** 微信占 C 盘：一个账号（没有账号名和路径，只有编号） */
+export interface WechatAccount {
+  id: number
+  /** 「4.x」「3.x」 */
+  version: string
+  /** 在哪个盘上（盘符） */
+  drive: string
+  /** 聊天里的文件夹里最新的一个文件的修改时间（秒，从 1970 年算） */
+  lastFileSecs: number | null
+  cacheFiles: number
+  cacheBytes: number
+  chatFiles: number
+  chatBytes: number
+}
+
+/** 微信占 C 盘：查到的账号，缓存只算 cacheDays 天以前的，聊天里的文件只算 chatDays 天以前的 */
+export interface WechatReport {
+  accounts: WechatAccount[]
+  cacheDays: number
+  chatDays: number
+  /** 微信正开着（开着的时候不清理） */
+  running: boolean
+  /** 数完了（没数完的是「至少这么多」） */
+  complete: boolean
+}
+
+/** 微信占 C 盘：放进回收站的结果和重新查的结果 */
+export interface WechatCleanResult {
+  files: number
+  bytes: number
+  /** 没放进去的（正在用、路径太长） */
+  failed: number
+  /** 在 Windows 的提示框里点了「取消」 */
+  cancelled: boolean
+  /** 到了时间还没清完 */
+  partial: boolean
+  report: WechatReport
+}
+
 /** 定时关机：小药箱安排的那一次（at 是 Unix 毫秒）。系统查不到别处安排的，重新打开小药箱也不知道 */
 export interface ShutdownPlan { at: number; restart: boolean }
 export interface ShutdownStatus { plan: ShutdownPlan | null }

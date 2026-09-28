@@ -46,6 +46,10 @@ CI 在 Windows Server 虚拟机上跑脚本和往返测试，能发现大部分�
 | `boot.last-boot-duration` 快速启动 | 事实 `fast_startup` 按 `HiberbootEnabled` 和 `HibernateEnabled` 任一为 0 判为关着（慢的话报 slow-no-fast-startup）；有的电脑休眠不可用（`powercfg /a` 里没有「休眠」）但这两个值都是 1，现在按「开着」处理、不提快速启动 | 分别在「控制面板 → 电源选项」里关掉快速启动、`powercfg /h off` 之后运行检测，看 `fast_startup`；在不支持休眠的电脑（部分虚拟机、精简系统）上看这两个值 |
 | `network.wifi-link` | 连着 2.4 GHz、5 GHz、6 GHz（WiFi 6E 路由器）的 WiFi 时，报的频段、信道和「设置 → 网络和 Internet → WLAN → 硬件属性」里的「网络频带」「网络通道」对不对；WiFi 几代和「协议」对不对；连接速率和「链接速度（接收/传输）」对不对（ulRxRate 按 kbps 换算）；信号百分比和任务栏的格数大致对得上；WPA2、WPA3、没有密码的、路由器改成 WPA-TKIP 时报的加密方式和结论对不对；拔掉无线网卡、关掉 WLAN AutoConfig 服务时报什么；结果里没有 WiFi 名称 | 一台笔记本连家里的双频路由器，靠近、隔两堵墙各查一次；在路由器里临时改成 WPA-TKIP 再查，查完改回 |
 | `hardware.mouse-settings`、症状「鼠标不听使唤」、小工具「鼠标」「鼠标属性」 | 在「设置 → 鼠标」里把主按钮改成右、滚轮行数调成最少（有没有 0）、指针速度拖到两头，在「鼠标属性」里打开单击锁定、指针轨迹、自动移到默认按钮、把双击速度拖到两头，每改一项查一次，报的结果对不对；以另一个管理员账户运行小药箱时读到的是不是登录用户的设置；「鼠标属性」里这几个选项的中文名字（「启用单击锁定」还是「启用 ClickLock」、「显示指针轨迹」还是「显示指针跟踪」、「提高指针精确度」还是「提高指针精度」）和说明里写的对不对 | 一台 Win11、一台 Win10 上逐项改、逐项查，查完改回 |
+| `system.perf-counters`、小工具「重建性能计数器」 | 把 PerfOS 服务 Performance 键下的 Disable Performance Counters 设成 1（或者用 `lodctr /d:PerfOS`，以 `lodctr /?` 列出的参数为准）、把 Perflib 下的总开关设成 1 以后，任务管理器「性能」页、资源监视器是不是真的空了、检测是不是报 disabled；点「重建性能计数器」以后开关是不是都改回了 0、重启以后是不是好了；Win10、Win11 上 lodctr /R 的退出代码（失败时是不是非 0）、要多久；32 位 PowerShell 里跑是不是也对（Sysnative） |
+| `system.wmi`、小工具「修复 WMI」 | 正常的电脑上 `winmgmt /verifyrepository` 要跑多久（体检里多了这一项，慢不慢）；WMI 服务设成禁用时报 disabled；真坏了的仓库（虚拟机快照里做一个，别在自己的电脑上试）是不是报 inconsistent（退出代码 1358），「修复 WMI」以后是不是报 done；查询失败时事实里的错误代码是不是 0x8004…… 这种（从 FullyQualifiedErrorId 取的）；OBJECTS.DATA 的大小读不读得到 |
+| `system.hotkeys`、症状「快捷键没反应」 | 开着 QQ、微信、钉钉、Snipaste 时，检测是不是列出了它们的截图快捷键（Ctrl + Alt + A、Alt + A、Ctrl + Shift + A、F1）、退出以后是不是就不列了；英特尔核显的电脑上 Ctrl + Alt + 方向键；NVIDIA 显卡装了 GeForce Experience / NVIDIA App 的 Alt + Z 列不列（它要是用键盘钩子就列不出来）；Windows 11 打开「使用 Print Screen 键打开屏幕截图」以后有没有哪一项被误报；在远程桌面里试的结果 |
+| 工具箱「微信占的地方」（`wechat_scan`、`wechat_clean`） | 装了微信 4.x（和从 3.x 升级上来的）的电脑上，账号找不找得到（存储位置改到 D 盘的、「文档」挪到别处的）、个数和大小和资源管理器里看到的对不对；「缓存」清掉以后打开微信，聊天里的图片、表情、朋友圈是不是还能看（会不会重新下载）；「聊天里的旧文件」清掉以后在微信里点开是什么提示；回收站里能不能「还原」回去、还原以后微信里能不能看；微信开着时是不是拦住；回收站放不下时 Windows 的提示；文件很多（几十万个）时要多久 |
 
 ## 修复
 

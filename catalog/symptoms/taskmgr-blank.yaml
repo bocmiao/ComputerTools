@@ -1,0 +1,47 @@
+# 症状：任务管理器的「性能」页没有图表、CPU 一直是 0%，资源监视器打不开、性能监视器没有数据。先看性能计数器有没有被关掉
+# （system.perf-counters），再照微软《Manually rebuild performance counters》重建（一键处理 system.perf-counters-rebuild）。
+# 还不行的，修复系统文件、看 WMI（symptom:wmi-broken）。
+id: taskmgr-blank
+schema_version: 1
+title: { zh-CN: 任务管理器「性能」页空白、CPU 一直 0% }
+summary:
+  zh-CN: 任务管理器的「性能」页没有图表，CPU、磁盘一直显示 0%；资源监视器打不开，性能监视器里没有数据。
+keywords:
+  - 任务管理器性能空白
+  - 任务管理器不显示cpu
+  - 任务管理器cpu0
+  - 任务管理器没有图表
+  - cpu利用率一直是0
+  - cpu使用率一直是0
+  - cpu占用一直是0
+  - cpu一直是0
+  - cpu一直显示0
+  - cpu显示0%
+  - 看不到cpu使用率
+  - 看不到cpu占用
+  - 性能页空白
+  - 性能页一片空白
+  - 性能一片空白
+  - 性能里没有图表
+  - 性能页没有图表
+  - 任务管理器性能不显示
+  - 资源监视器打不开
+  - 性能监视器没有数据
+  - 性能计数器
+  - 性能计数器损坏
+  - lodctr
+causes:
+  - zh-CN: 性能计数器被「优化」软件关掉了
+  - zh-CN: 性能计数器的设置坏了（装卸软件、异常关机以后常见）
+  - zh-CN: 系统文件损坏
+maturity: semi
+steps:
+  - check: system.perf-counters
+guide:
+  zh-CN: |
+    1. 先看上面的检查：有计数器被关掉的，点「重建性能计数器」；没有被关掉、但「性能」页还是空的，也点「重建性能计数器」重建一次。做完重启电脑。
+    2. 重启以后还是空的：点「检查并修复系统文件」，等它跑完再重启，再重建一次性能计数器。
+    3. 只是任务管理器里某一项不显示（比如 GPU、磁盘）：在「性能」页的左边列表上点右键，看看是不是把它隐藏了；显卡的要装好显卡驱动。
+
+    都不行的话，把检查结果和任务管理器的截图发给懂哥。
+links: ["tool:system.perf-counters-rebuild", "tool:open.system-file-repair", "tool:open.task-manager", "symptom:wmi-broken", "symptom:slow-pc"]

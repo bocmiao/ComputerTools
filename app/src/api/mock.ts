@@ -55,6 +55,8 @@ import type {
   ToolSection,
   ToolSummary,
   UndoResult,
+  WechatCleanResult,
+  WechatReport,
   WindowOwnerReport,
 } from './types'
 
@@ -1192,6 +1194,75 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'system.wmi': {
+    title: 'WMI（Windows 管理规范）',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          resultCode: 'ok',
+          message: 'WMI 正常：服务没被禁用，仓库检查一致，查得到系统信息。',
+          facts: { exit_code: '0', error: '', size_mb: 38 },
+        }
+      }
+      // 说法和 catalog/checks/system/wmi.yaml 一样
+      return {
+        status: 'advice',
+        resultCode: 'inconsistent',
+        message: 'WMI 的仓库（Windows 记录各种系统信息怎么查的数据库）检查出不一致，坏了。装软件、玩游戏、打开「系统信息」时报 WMI 错误、「无效类」，多半就是它。',
+        fixer: 'user',
+        next: '点下面的「修复 WMI」，它用 Windows 自带的 winmgmt /salvagerepository 修复，旧仓库里还读得出来的内容会保留，做完重启电脑。',
+        links: ['tool:system.wmi-salvage'],
+        facts: { exit_code: '1358', error: '', size_mb: 41 },
+      }
+    },
+  },
+  'system.perf-counters': {
+    title: '性能计数器',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          resultCode: 'ok',
+          message: '没有被关掉的性能计数器。任务管理器的「性能」页还是空的、一直 0% 的，可以点「重建性能计数器」重建一次。',
+          links: ['tool:system.perf-counters-rebuild'],
+          facts: { disabled: '', disabled_count: 0 },
+        }
+      }
+      // 说法和 catalog/checks/system/perf-counters.yaml 一样
+      return {
+        status: 'advice',
+        resultCode: 'disabled',
+        message: '有 2 处性能计数器被关掉了（PerfOS、PerfProc），任务管理器的「性能」页、资源监视器会显示不出来、一直 0%。多半是「优化」软件关的。',
+        fixer: 'user',
+        next: '点下面的「重建性能计数器」，它会把这些计数器重新打开、再重建一遍，做完重启电脑。',
+        links: ['tool:system.perf-counters-rebuild'],
+        facts: { disabled: 'PerfOS、PerfProc', disabled_count: 2 },
+      }
+    },
+  },
+  'system.hotkeys': {
+    title: '被别的程序占着的快捷键',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          resultCode: 'ok',
+          message: '试了 375 个常用的 Ctrl、Alt、Shift 组合键和 F1～F11，都没有被别的程序占着。',
+          facts: { taken: '', taken_count: 0, checked: 375 },
+        }
+      }
+      // 说法和 catalog/checks/system/hotkeys.yaml 一样
+      return {
+        status: 'advice',
+        resultCode: 'taken',
+        message: '这 3 个快捷键被别的程序登记成了全局快捷键：Ctrl + Alt + A（QQ 截图默认用的）、Alt + A（微信截图默认用的）、Ctrl + Alt + ↓（英特尔显卡旋转屏幕的快捷键）。按下去只有占着它的程序收得到，在别的软件里按就没反应，或者弹出来的是那个程序。',
+        fixer: 'user',
+        next: '你按了没反应的快捷键在上面的话，到占着它的软件的「设置 → 快捷键（热键）」里改掉或者关掉它（括号里写的是常见软件的默认快捷键，只是线索）。不知道是哪个软件的：把开着的软件一个一个退出（右下角托盘里的也算），每退出一个就点「重新检查」，哪个退出以后这一项没了就是它。英特尔显卡的 Ctrl + Alt + 方向键在英特尔显卡的控制面板（英特尔显卡控制中心）里关掉「热键」。',
+        facts: { taken: 'Ctrl + Alt + A（QQ 截图默认用的）、Alt + A（微信截图默认用的）、Ctrl + Alt + ↓（英特尔显卡旋转屏幕的快捷键）', taken_count: 3, checked: 375 },
+      }
+    },
+  },
   'network.wifi-link': {
     title: 'WiFi 连接情况',
     evaluate: () => {
@@ -1367,6 +1438,7 @@ const PROFILES: Record<string, { title: string; checks: string[] }> = {
       'network.proxy-dead',
       'system.component-store',
       'update.status',
+      'system.wmi',
       'system.pending-reboot',
       'hardware.disk-health',
       'hardware.battery',
@@ -1636,6 +1708,33 @@ const SYMPTOMS: MockSymptom[] = [
     guide: '先重启电脑。能打开但网页老崩溃的，更新 Edge、删除浏览数据、关掉用不上的扩展。一打开就闪退的，关掉所有 Edge 窗口，点「修复 Edge 浏览器」。还不行，从微软官网下载安装程序装在原来的上面。',
     steps: [{ check: 'system.reliability-recent', fixes: [] }],
     links: ['tool:system.edge-repair', 'tool:web.edge-download', 'tool:settings.apps'],
+  },
+  {
+    id: 'taskmgr-blank', title: '任务管理器「性能」页空白、CPU 一直 0%',
+    summary: '任务管理器的「性能」页没有图表，CPU、磁盘一直显示 0%；资源监视器打不开，性能监视器里没有数据。',
+    keywords: ['任务管理器性能空白', 'cpu一直是0', '资源监视器打不开', '性能计数器'], maturity: 'semi',
+    causes: ['性能计数器被「优化」软件关掉了', '性能计数器的设置坏了（装卸软件、异常关机以后常见）', '系统文件损坏'],
+    guide: '有计数器被关掉的，点「重建性能计数器」；没有被关掉、但「性能」页还是空的，也点「重建性能计数器」重建一次，做完重启电脑。还是空的，点「检查并修复系统文件」，再重建一次。',
+    steps: [{ check: 'system.perf-counters', fixes: [] }],
+    links: ['tool:system.perf-counters-rebuild', 'tool:open.system-file-repair', 'tool:open.task-manager', 'symptom:wmi-broken'],
+  },
+  {
+    id: 'hotkeys', title: '快捷键没反应：截图键、Ctrl / Alt 组合键、F1～F12',
+    summary: '在某个软件里按快捷键没反应，或者弹出来的是别的软件（按 Ctrl + Alt + A 打开的是 QQ 截图）；按 Print Screen 截不了图；F1～F12 变成了调音量、调亮度；Win 键、Ctrl + C / Ctrl + V 不好使。',
+    keywords: ['快捷键没反应', '快捷键冲突', '截图键没反应', 'fn锁'], maturity: 'semi',
+    causes: ['别的软件把这个快捷键登记成了全局快捷键：QQ、微信、钉钉的截图，截图软件、显卡的热键最常见', 'Windows 11 更新以后，按 Print Screen 默认打开截图工具；没开这个设置的，按它是把整个屏幕复制到剪贴板', '笔记本按了 Fn 锁，F1～F12 变成了调音量、调亮度', '游戏键盘开了「锁 Win 键」，或者 Win 键组合键被策略关掉了', '输入法把快捷键抢走了'],
+    guide: '先看上面的检查：快捷键被别的程序占着的，找到是哪个软件、在它的设置里改掉。按 Print Screen 看起来没反应的，多半是复制到了剪贴板，到微信、画图里按 Ctrl + V 就有了。F1～F12 变成调音量的，按一下 Fn + Esc 切换 Fn 锁。只有 Win 键没反应的，看看游戏键盘上的「锁 Win 键」。',
+    steps: [{ check: 'system.hotkeys', fixes: [] }],
+    links: ['tool:web.oem-drivers', 'test:keyboard'],
+  },
+  {
+    id: 'wmi-broken', title: '软件报 WMI 错误、「系统信息」打不开',
+    summary: '装软件、玩游戏、打开「系统信息」时报「WMI 错误」「无效类」「无法连接到 WMI」，错误代码 0x80041010、0x80041002；或者任务管理器里「WMI Provider Host」一直占着处理器。',
+    keywords: ['wmi错误', '无效类', '0x80041010', '系统信息打不开'], maturity: 'semi',
+    causes: ['WMI 的仓库坏了（突然断电、强制关机、硬盘出错以后常见）', 'WMI 服务被「优化」软件或者精简版系统关掉了', '某个软件、驱动登记在 WMI 里的组件坏了', '有软件一直在查询 WMI，「WMI Provider Host」就一直占着处理器'],
+    guide: '仓库坏了的，点「修复 WMI」，做完重启电脑；服务被禁用的，在「服务管理」里改回「自动」。检查都正常、只有某个软件报错的，先重启电脑，再把这个软件卸载重装。网上教的删掉 Repository 文件夹、把所有 .mof 重新编译一遍别照做：微软说会损坏系统和装好的软件。',
+    steps: [{ check: 'system.wmi', fixes: [] }],
+    links: ['tool:system.wmi-salvage', 'tool:open.system-file-repair', 'tool:open.services', 'tool:open.task-manager'],
   },
   {
     id: 'downloads-grouped', title: '下载文件夹里的文件按日期分组了',
@@ -2249,6 +2348,55 @@ const TOOL_LIST: MockTool[] = [
         message: '已经打开了「Microsoft Edge」的修复。',
         next: '照窗口里的提示点「修复」，等它下载安装完（要联网，几分钟），再重新打开 Edge 试试。修完还是打不开的，看「Edge 浏览器打不开、闪退、网页崩溃」里的其他办法。',
       }),
+      requiresAdmin: true,
+    },
+  ),
+  defineTool(
+    {
+      id: 'system.perf-counters-rebuild',
+      title: '重建性能计数器',
+      description: '任务管理器的「性能」页没有图表、CPU 一直 0%，资源监视器、性能监视器打不开或者没有数据时，照微软的办法把性能计数器重建一遍。做完要重启电脑。',
+      category: 'system',
+      group: 'action',
+      confirm: '会把被关掉的性能计数器重新打开，再照微软的办法重建一遍（一两分钟），做完要重启电脑。现在重建吗？',
+    },
+    {
+      // 说法和 catalog/tools/system/perf-counters-rebuild.yaml 一样
+      run: () => ({
+        status: 'ok',
+        resultCode: 'done',
+        message: '性能计数器重建好了（改回了 2 处关掉计数器的设置）。',
+        next: '重启一次电脑，再打开任务管理器的「性能」页看看。还是空的，把这个结果和截图发给懂哥。',
+      }),
+      requiresAdmin: true,
+    },
+  ),
+  defineTool(
+    {
+      id: 'system.wmi-salvage',
+      title: '修复 WMI',
+      description: '软件报 WMI 错误、「无效类」，「系统信息」打不开时用：先检查 WMI 的仓库，坏了就用 Windows 自带的办法修复（旧仓库里还读得出来的内容会保留），没坏就什么都不动。',
+      category: 'system',
+      group: 'action',
+      confirm: '会先检查 WMI 的仓库，坏了就用 Windows 自带的 winmgmt /salvagerepository 修复，可能要几分钟，这期间用 WMI 的软件可能报错。现在修复吗？',
+    },
+    {
+      // 说法和 catalog/tools/system/wmi-salvage.yaml 一样
+      run: () =>
+        DEMO_ALL_OK
+          ? {
+              status: 'ok',
+              resultCode: 'consistent',
+              message: '检查过了，WMI 的仓库没坏，什么都没动。',
+              next: '软件还是报 WMI 错误的，先重启电脑；还不行，点「检查并修复系统文件」；再不行，把报错的截图发给懂哥。',
+              links: ['tool:open.system-file-repair'],
+            }
+          : {
+              status: 'ok',
+              resultCode: 'done',
+              message: 'WMI 的仓库修复好了，再检查已经一致了。',
+              next: '重启一次电脑，再打开刚才报错的软件试试。',
+            },
       requiresAdmin: true,
     },
   ),
@@ -3292,6 +3440,36 @@ const handlers: Handlers = {
     m.percent = percent
     return percent
   },
+  // 说法和 src-tauri/src/wechat.rs 一样
+  wechat_scan: ({ days }) => {
+    demoWechatDays(days)
+    demoWechatScanned = true
+    return demoWechatReport(days)
+  },
+  wechat_clean: ({ ids, cache, chat, days }) => {
+    demoWechatDays(days)
+    if (!demoWechatScanned) throw '请先查一查微信占了多少。'
+    if (ids.length === 0) throw '没有勾选要清理的账号。'
+    if (!cache && !chat) throw '没有勾选要清理的东西。'
+    const before = demoWechatReport(days)
+    let files = 0
+    let bytes = 0
+    for (const id of ids) {
+      const a = before.accounts.find((x) => x.id === id)
+      if (!a) throw '有的账号不在刚才的结果里，请重新查一遍。'
+      if (cache) {
+        files += a.cacheFiles
+        bytes += a.cacheBytes
+        demoWechatCleaned.add(`cache-${id}`)
+      }
+      if (chat) {
+        files += a.chatFiles
+        bytes += a.chatBytes
+        demoWechatCleaned.add(`chat-${id}`)
+      }
+    }
+    return { files, bytes, failed: 0, cancelled: false, partial: false, report: demoWechatReport(days) } satisfies WechatCleanResult
+  },
   space_pick_folder: () => {
     demoSpace = true
     return demoSpaceReport()
@@ -3398,6 +3576,34 @@ function demoHiddenReport(): HiddenReport {
 }
 
 // ── 找大文件和重复文件（演示）──
+// 微信占 C 盘（演示）：两个账号，清过的那一类变成 0
+let demoWechatScanned = false
+const demoWechatCleaned = new Set<string>()
+function demoWechatDays(days: number): void {
+  if (days < 30 || days > 3650) throw '天数要在 30 到 3650 之间。'
+}
+function demoWechatReport(days: number): WechatReport {
+  // 天数越少，算进去的聊天文件越多
+  const scale = days >= 730 ? 0.5 : days >= 365 ? 1 : days >= 180 ? 1.5 : 2.2
+  const now = Math.floor(Date.now() / 1000)
+  const accounts = [
+    { version: '4.x', drive: 'C', lastFileSecs: now - 3 * 3600, cacheFiles: 18342, cacheBytes: 1_350_000_000, chatFiles: 6021, chatBytes: 5_800_000_000 },
+    { version: '3.x', drive: 'C', lastFileSecs: now - 420 * 86400, cacheFiles: 2210, cacheBytes: 320_000_000, chatFiles: 1804, chatBytes: 2_100_000_000 },
+  ].map((a, id) => {
+    const cacheGone = demoWechatCleaned.has(`cache-${id}`)
+    const chatGone = demoWechatCleaned.has(`chat-${id}`)
+    return {
+      id,
+      ...a,
+      cacheFiles: cacheGone ? 0 : a.cacheFiles,
+      cacheBytes: cacheGone ? 0 : a.cacheBytes,
+      chatFiles: chatGone ? 0 : Math.round(a.chatFiles * scale),
+      chatBytes: chatGone ? 0 : Math.round(a.chatBytes * scale),
+    }
+  })
+  return { accounts, cacheDays: 7, chatDays: days, running: false, complete: true }
+}
+
 let demoSpace = false
 const DEMO_SPACE_IDS = 8
 const GB = 1024 * 1024 * 1024

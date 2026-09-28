@@ -17,8 +17,16 @@ use crate::registry::{RegValue, SpecRoot, split_key};
 use crate::yaml;
 
 pub const SCHEMA_VERSION: u32 = 1;
-pub const BUILTIN_PROBES: &[&str] =
-    &["cpu-features", "clock", "keyboard-aids", "winsock", "display-resolution", "wifi-link", "mouse-settings"];
+pub const BUILTIN_PROBES: &[&str] = &[
+    "cpu-features",
+    "clock",
+    "keyboard-aids",
+    "winsock",
+    "display-resolution",
+    "wifi-link",
+    "mouse-settings",
+    "hotkeys",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]

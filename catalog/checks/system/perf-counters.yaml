@@ -1,0 +1,44 @@
+# Windows 的性能计数器有没有被关掉。脚本：scripts/checks/system/perf-counters.ps1（只读）
+# 任务管理器的「性能」页、资源监视器、性能监视器都读性能计数器；被「优化」软件关掉以后，图表是空的、一直 0%。
+# 关掉的地方有两处（值叫「Disable Performance Counters」，中间有空格；微软较新的排错文章写成 DisablePerformanceCounters，
+# 两种写法都看）：HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Perflib 下的是总开关，默认 0，1 是关掉整个系统的
+# （V1）计数器（微软《Using the Registry Functions to Consume Counter Data》）；每个服务的 Performance 键下的应该是 0
+# （1 是关掉，2 是关掉 32 位的，4 是关掉 64 位的，微软《Manually rebuild performance counters》）。重建（lodctr /R）要用
+# System32 下的 PerfStringBackup.INI。
+# 结果（按这个顺序）：disabled（有计数器被关掉，一键处理「重建性能计数器」会打开它们）、no-backup（PerfStringBackup.INI
+# 不见了，重建不了）、ok。事实：disabled（总开关写 Perflib，其余是服务名，用「、」隔开）、disabled_count。
+id: system.perf-counters
+schema_version: 1
+title: { zh-CN: 性能计数器 }
+description:
+  zh-CN: 看看任务管理器「性能」页、资源监视器要用的性能计数器有没有被「优化」软件关掉。关掉以后图表是空的、一直显示 0%。
+category: system
+requires_admin: false
+timeout_sec: 60
+probe:
+  script: checks/system/perf-counters.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 没有被关掉的性能计数器。任务管理器的「性能」页还是空的、一直 0% 的，可以点「重建性能计数器」重建一次。
+    links: ["tool:system.perf-counters-rebuild"]
+  disabled:
+    status: advice
+    message:
+      zh-CN: 有 {disabled_count} 处性能计数器被关掉了（{disabled}），任务管理器的「性能」页、资源监视器会显示不出来、一直 0%。多半是「优化」软件关的。
+    fixer: user
+    next:
+      zh-CN: 点下面的「重建性能计数器」，它会把这些计数器重新打开、再重建一遍，做完重启电脑。
+    links: ["tool:system.perf-counters-rebuild"]
+  no-backup:
+    status: advice
+    message:
+      zh-CN: Windows 用来重建性能计数器的文件（System32 下的 PerfStringBackup.INI）不见了，计数器坏了也重建不了。多半是被「清理」软件删了。
+    fixer: user
+    next:
+      zh-CN: 先点「检查并修复系统文件」让 Windows 修复一遍；还不行，把这个检查结果发给懂哥。
+    links: ["tool:open.system-file-repair"]
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/manually-rebuild-performance-counters
+  - https://learn.microsoft.com/en-us/windows/win32/perfctrs/using-the-registry-functions-to-consume-counter-data

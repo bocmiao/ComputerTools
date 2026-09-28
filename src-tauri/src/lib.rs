@@ -1,7 +1,8 @@
 //! 电脑小药箱的桌面外壳。拆成 lib + bin 两部分，是为了让 tests/ 里的集成测试能调用命令。
 //!
 //! 诊断和修复命令只接受 ID；批量重命名、图片批量处理的目录，「文件删不掉」要查的文件，图片合成的 PDF、长图存到哪里，
-//! 「U 盘里的文件不见了」要查的 U 盘，都由原生选择器取得（见 docs/architecture.md 第 9 节）。
+//! 「U 盘里的文件不见了」要查的 U 盘，都由原生选择器取得（见 docs/architecture.md 第 9 节）；「微信占 C 盘」只收最近一次结果
+//! 里的账号编号。
 
 pub mod awake;
 pub mod commands;
@@ -16,6 +17,7 @@ pub mod rename;
 pub mod setup;
 pub mod shutdown;
 pub mod space;
+pub mod wechat;
 
 /// 注册命令处理器。`run()` 和集成测试都用它，保证测的和真跑的是同一套。
 #[macro_export]
@@ -83,6 +85,8 @@ macro_rules! command_handler {
             $crate::commands::popup_reveal,
             $crate::commands::brightness_list,
             $crate::commands::brightness_set,
+            $crate::commands::wechat_scan,
+            $crate::commands::wechat_clean,
         ]
     };
 }

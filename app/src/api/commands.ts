@@ -32,6 +32,8 @@ import type {
   SystemInfo,
   ToolResult,
   UndoResult,
+  WechatCleanResult,
+  WechatReport,
   WindowOwnerReport,
 } from './types'
 
@@ -103,6 +105,8 @@ export type CommandMap = {
   popup_reveal: { args: NoArgs; result: null }
   brightness_list: { args: NoArgs; result: MonitorBrightness[] }
   brightness_set: { args: { id: string; percent: number }; result: number }
+  wechat_scan: { args: { days: number }; result: WechatReport }
+  wechat_clean: { args: { ids: number[]; cache: boolean; chat: boolean; days: number }; result: WechatCleanResult }
   space_pick_folder: { args: NoArgs; result: SpaceReport | null }
   space_rescan: { args: NoArgs; result: SpaceReport | null }
   space_reveal: { args: { id: number }; result: null }

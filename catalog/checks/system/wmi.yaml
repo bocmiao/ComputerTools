@@ -1,0 +1,69 @@
+# WMI 能不能用。脚本：scripts/checks/system/wmi.ps1（只读；要管理员：winmgmt 和 Repository 文件夹）
+# WMI（Windows 管理规范）是 Windows 给软件查电脑信息的接口：装软件、玩游戏、「系统信息」（msinfo32）和小药箱自己的大部分检测
+# 都靠它，坏了以后常见「无效类」（0x80041010）、「找不到」（0x80041002）这些报错。照微软《winmgmt》和《WMI: Repository
+# Corruption, or Not?》：WMI 服务（Winmgmt）不能被禁用；winmgmt /verifyrepository 检查 WMI 正在用的仓库
+# （System32\wbem\Repository），不一致时退出代码是 1358（ERROR_INTERNAL_DB_CORRUPTION），只看退出代码（文字跟着系统语言变）；
+# 仓库一致但还是查不了的，问题在别处（某个提供程序、权限）：查一次 Win32_OperatingSystem 看 WMI 应不应答（Tron 的
+# repair_wmi.bat 也是先试一次查询）；OBJECTS.DATA 到 1 GB 算太大（微软：到 1 GB 建议重建；重建会丢掉软件登记的内容，交给懂哥）。
+# 结果（按这个顺序）：disabled（服务被禁用，别的都不跑）、inconsistent（仓库不一致：一键处理「修复 WMI」）、broken（查询失败，
+# 事实 error）、too-large（事实 size_mb）、verify-failed（winmgmt 返回了别的代码）、ok。
+# 事实：exit_code（winmgmt /verifyrepository 的退出代码）、error（查询的错误代码，没出错是空的）、size_mb（OBJECTS.DATA 多少 MB，
+# 读不到是 -1）。
+# 不做：winmgmt /resetrepository（回到刚装好系统的样子，软件登记在 WMI 里的内容会丢）、删 Repository 文件夹（微软：不要一上来就删，
+# 会损坏系统和装好的软件）、网上流传的把所有 .mof 文件重新编译一遍的脚本（微软：几乎任何情况下都不要用，卸载用的 .mof 也会被
+# 编译进去，把刚装上的类又删掉）。
+id: system.wmi
+schema_version: 1
+title: { zh-CN: WMI（Windows 管理规范） }
+description:
+  zh-CN: 看看 WMI 能不能用。它是软件查电脑信息的接口，坏了以后装软件、玩游戏、打开「系统信息」会报 WMI 错误、「无效类」，小药箱的很多检查也查不了。
+category: system
+requires_admin: true
+timeout_sec: 180
+probe:
+  script: checks/system/wmi.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: WMI 正常：服务没被禁用，仓库检查一致，查得到系统信息。
+  disabled:
+    status: advice
+    message:
+      zh-CN: WMI 服务（Windows Management Instrumentation）被禁用了。很多软件、驱动的安装程序和「系统信息」都要用它，小药箱的很多检查也会查不了。多半是「优化」软件或者精简版系统关的。
+    fixer: user
+    next:
+      zh-CN: 点下面的「服务管理」，找到「Windows Management Instrumentation」双击，把「启动类型」改成「自动」，点「启动」，再点「确定」，然后重启电脑。
+    links: ["tool:open.services"]
+  inconsistent:
+    status: advice
+    message:
+      zh-CN: WMI 的仓库（Windows 记录各种系统信息怎么查的数据库）检查出不一致，坏了。装软件、玩游戏、打开「系统信息」时报 WMI 错误、「无效类」，多半就是它。
+    fixer: user
+    next:
+      zh-CN: 点下面的「修复 WMI」，它用 Windows 自带的 winmgmt /salvagerepository 修复，旧仓库里还读得出来的内容会保留，做完重启电脑。
+    links: ["tool:system.wmi-salvage"]
+  broken:
+    status: advice
+    message:
+      zh-CN: 用 WMI 查询系统信息失败了（错误代码 {error}），用 WMI 的软件都会报错。
+    fixer: helper
+    next:
+      zh-CN: 先重启一次电脑再查；还不行，点「检查并修复系统文件」修一遍，再重启；再不行，把这个检查结果发给懂哥（可以按错误代码搜一下）。
+    links: ["tool:open.system-file-repair", "tool:system.wmi-salvage"]
+  too-large:
+    status: advice
+    message:
+      zh-CN: WMI 的仓库文件有 {size_mb} MB，太大了（一般几十到一两百 MB）：WMI 会变慢，「WMI Provider Host」可能老占着处理器。微软建议到 1 GB 就重建。
+    fixer: helper
+    next:
+      zh-CN: "重建会丢掉软件登记在 WMI 里的内容，小药箱不自动做。请懂哥照微软的文章《WMI: Repository Corruption, or Not?》先备份（winmgmt /backup），再重建。"
+  verify-failed:
+    status: unknown
+    message:
+      zh-CN: WMI 能正常查询，但检查它的仓库时 winmgmt 返回了 {exit_code}，没查出仓库好不好。
+    next:
+      zh-CN: 重启电脑以后再查一次。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/wmisdk/winmgmt
+  - https://learn.microsoft.com/en-us/archive/blogs/supportingwindows/wmi-repository-corruption-or-not

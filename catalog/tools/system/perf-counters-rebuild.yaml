@@ -1,0 +1,54 @@
+# 一键处理（action）：重建性能计数器。脚本：scripts/tools/system/perf-counters-rebuild.ps1
+# 照微软《Manually rebuild performance counters》：把被关掉的计数器重新打开（Perflib 下的总开关和每个服务 Performance 键下的
+# Disable Performance Counters 改回默认的 0，两种写法都改）、在 System32 和 SysWOW64 里各跑一次 lodctr /R（按系统自带的
+# PerfStringBackup.INI 重建）、winmgmt /resyncperf（和 WMI 同步）。微软还重启「性能日志和警报」「WMI」两个服务：这里让用户
+# 重启电脑，不在程序还开着的时候停 WMI。lodctr 的退出代码 0 只说明命令写对了（微软《lodctr》），所以每一步都跑起来了就报
+# done；哪一步返回别的代码就再跑一次（lodctr /R 偶尔报「error code is 2」，第二次就好了），还不行报 failed。
+# PerfStringBackup.INI 不在时只做第一步：打开了的报 switched-on，什么都不用做的报 no-backup。
+id: system.perf-counters-rebuild
+schema_version: 1
+group: action
+title: { zh-CN: 重建性能计数器 }
+description:
+  zh-CN: 任务管理器的「性能」页没有图表、CPU 一直 0%，资源监视器、性能监视器打不开或者没有数据时，照微软的办法把性能计数器重建一遍。做完要重启电脑。
+category: system
+requires_admin: true
+timeout_sec: 300
+run:
+  script: tools/system/perf-counters-rebuild.ps1
+confirm:
+  zh-CN: 会把被关掉的性能计数器重新打开，再照微软的办法重建一遍（一两分钟），做完要重启电脑。现在重建吗？
+results:
+  done:
+    status: ok
+    message:
+      zh-CN: 性能计数器重建好了（改回了 {enabled} 处关掉计数器的设置）。
+    next:
+      zh-CN: 重启一次电脑，再打开任务管理器的「性能」页看看。还是空的，把这个结果和截图发给懂哥。
+  switched-on:
+    status: advice
+    message:
+      zh-CN: 把 {enabled} 处关掉性能计数器的设置改回来了；但 Windows 用来重建性能计数器的文件（System32 下的 PerfStringBackup.INI）不见了，没有重建。
+    fixer: user
+    next:
+      zh-CN: 先重启电脑，看看任务管理器的「性能」页好了没有；还是空的，点「检查并修复系统文件」让 Windows 修复一遍，再来重建。
+    links: ["tool:open.system-file-repair"]
+  no-backup:
+    status: advice
+    message:
+      zh-CN: Windows 用来重建性能计数器的文件（System32 下的 PerfStringBackup.INI）不见了，没有重建。
+    fixer: user
+    next:
+      zh-CN: 先点「检查并修复系统文件」让 Windows 修复一遍，再来重建。
+    links: ["tool:open.system-file-repair"]
+  failed:
+    status: advice
+    message:
+      zh-CN: 重建到「{step}」这一步没有成功，性能计数器可能还没重建好。
+    fixer: user
+    next:
+      zh-CN: 重启电脑以后再点一次「重建性能计数器」；还不行，先点「检查并修复系统文件」，再来重建。
+    links: ["tool:open.system-file-repair"]
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/manually-rebuild-performance-counters
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/lodctr

@@ -12,6 +12,7 @@ import FileRecovery from '../components/FileRecovery.vue'
 import PopupOwner from '../components/PopupOwner.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import RecycleBinRepair from '../components/RecycleBinRepair.vue'
+import WechatCleanup from '../components/WechatCleanup.vue'
 import ResultLinks from '../components/ResultLinks.vue'
 import StatusLamp, { type LampState } from '../components/StatusLamp.vue'
 import TagPill from '../components/TagPill.vue'
@@ -512,6 +513,7 @@ watch(
 
         <PopupOwner v-if="detail.id === 'popup-ads'" class="block" />
         <RecycleBinRepair v-if="detail.id === 'recycle-bin-corrupted'" class="block" />
+        <WechatCleanup v-if="detail.id === 'disk-full'" class="block" />
         <FileLockers v-if="detail.id === 'file-in-use'" class="block" />
         <ExeCheck v-if="detail.id === 'app-cannot-run'" class="block" />
         <BrightnessControl v-if="detail.id === 'screen-display'" class="block" />

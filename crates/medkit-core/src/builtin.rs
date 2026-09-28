@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use time::{Date, OffsetDateTime};
 
 use crate::platform::{
-    Display, Displays, KeyboardAids, MouseSettings, OsInfo, Platform, WifiStatus, wifi_band, wifi_channel,
+    Display, Displays, Hotkey, KeyboardAids, MouseSettings, OsInfo, Platform, WifiStatus, wifi_band, wifi_channel,
 };
 
 /// 内置检测能用到的信息。
@@ -25,6 +25,10 @@ pub fn run(name: &str, env: &Env<'_>) -> Result<Value, String> {
         "display-resolution" => env.platform.displays().map(|d| display_resolution(&d)).map_err(|e| e.to_string()),
         "wifi-link" => env.platform.wifi_status().map(|w| wifi_link(&w)).map_err(|e| e.to_string()),
         "mouse-settings" => env.platform.mouse_settings().map(|m| mouse_settings(&m)).map_err(|e| e.to_string()),
+        "hotkeys" => {
+            let candidates = hotkey_candidates();
+            env.platform.hotkeys_taken(&candidates).map(|t| hotkeys(&t, candidates.len())).map_err(|e| e.to_string())
+        }
         _ => Err(format!("不认识的内置检测：{name}")),
     }
 }
@@ -162,6 +166,94 @@ fn mouse_settings(m: &MouseSettings) -> Value {
             "speed": m.speed,
             "wheel": wheel,
             "trails": m.trails,
+        }
+    })
+}
+
+const VK_F1: u32 = 0x70;
+const VK_F3: u32 = 0x72;
+const VK_F11: u32 = 0x7A;
+const VK_F12: u32 = 0x7B;
+const VK_LEFT: u32 = 0x25;
+const VK_UP: u32 = 0x26;
+const VK_RIGHT: u32 = 0x27;
+const VK_DOWN: u32 = 0x28;
+
+/// 要试的全局快捷键：Ctrl、Alt、Shift 的每一种组合（7 种）配上字母、数字、F1～F12、四个方向键，再加上单独按的
+/// F1～F11，一共 375 个。照 heathhenley/windows_hotkey_checker（MIT）的枚举。不试的：带 Win 键的（微软：
+/// 归操作系统用）、单独的 F12（微软 RegisterHotKey：一直留给调试器）、Print Screen 和 Tab、Esc 这些系统自己处理的键。
+fn hotkey_candidates() -> Vec<Hotkey> {
+    const MODIFIERS: [u32; 7] = [
+        Hotkey::CONTROL,
+        Hotkey::ALT,
+        Hotkey::SHIFT,
+        Hotkey::CONTROL | Hotkey::ALT,
+        Hotkey::CONTROL | Hotkey::SHIFT,
+        Hotkey::ALT | Hotkey::SHIFT,
+        Hotkey::CONTROL | Hotkey::ALT | Hotkey::SHIFT,
+    ];
+    let keys: Vec<u32> = (u32::from(b'A')..=u32::from(b'Z'))
+        .chain(u32::from(b'0')..=u32::from(b'9'))
+        .chain(VK_F1..=VK_F12)
+        .chain([VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN])
+        .collect();
+    let mut out: Vec<Hotkey> =
+        MODIFIERS.iter().flat_map(|&modifiers| keys.iter().map(move |&vk| Hotkey { modifiers, vk })).collect();
+    out.extend((VK_F1..=VK_F11).map(|vk| Hotkey { modifiers: 0, vk }));
+    out
+}
+
+/// 快捷键的写法：「Ctrl + Alt + A」「F1」「Ctrl + Alt + ←」，修饰键按 Ctrl、Alt、Shift 的顺序。
+fn hotkey_name(h: Hotkey) -> String {
+    let mut parts: Vec<String> = [(Hotkey::CONTROL, "Ctrl"), (Hotkey::ALT, "Alt"), (Hotkey::SHIFT, "Shift")]
+        .iter()
+        .filter(|(bit, _)| h.modifiers & bit != 0)
+        .map(|(_, name)| (*name).to_owned())
+        .collect();
+    parts.push(match h.vk {
+        VK_LEFT => "←".to_owned(),
+        VK_UP => "↑".to_owned(),
+        VK_RIGHT => "→".to_owned(),
+        VK_DOWN => "↓".to_owned(),
+        vk @ VK_F1..=VK_F12 => format!("F{}", vk - VK_F1 + 1),
+        vk => char::from_u32(vk).map_or_else(|| format!("键 {vk}"), |c| c.to_string()),
+    });
+    parts.join(" + ")
+}
+
+/// 常见软件默认用的全局快捷键（只写查证过的）：占着它的不一定就是这个软件，只是一个线索。
+fn hotkey_hint(h: Hotkey) -> Option<&'static str> {
+    const CTRL_ALT: u32 = Hotkey::CONTROL | Hotkey::ALT;
+    match (h.modifiers, h.vk) {
+        (CTRL_ALT, 0x41) => Some("QQ 截图默认用的"),
+        (Hotkey::ALT, 0x41) => Some("微信截图默认用的"),
+        (CTRL_ALT, 0x57) => Some("微信「显示微信窗口」默认用的"),
+        (m, 0x41) if m == Hotkey::CONTROL | Hotkey::SHIFT => Some("钉钉截图默认用的"),
+        (0, VK_F1) => Some("Snipaste 截图默认用的"),
+        (0, VK_F3) => Some("Snipaste 贴图默认用的"),
+        (CTRL_ALT, VK_LEFT | VK_UP | VK_RIGHT | VK_DOWN) => Some("英特尔显卡旋转屏幕的快捷键"),
+        (CTRL_ALT, VK_F12) => Some("英特尔显卡控制面板的快捷键"),
+        (Hotkey::ALT, 0x5A) => Some("NVIDIA 游戏内覆盖默认用的"),
+        _ => None,
+    }
+}
+
+/// 常用的快捷键里，有哪些被别的程序登记成了全局快捷键（按下去只有占着它的程序收得到，别的软件里就「没反应」）。
+/// 看不出是哪个程序占的，常见软件的默认快捷键写在后面的括号里当线索。`checked` 是试了几个。
+fn hotkeys(taken: &[Hotkey], checked: usize) -> Value {
+    let list: Vec<String> = taken
+        .iter()
+        .map(|&h| match hotkey_hint(h) {
+            Some(hint) => format!("{}（{hint}）", hotkey_name(h)),
+            None => hotkey_name(h),
+        })
+        .collect();
+    json!({
+        "result": if taken.is_empty() { "ok" } else { "taken" },
+        "facts": {
+            "taken": list.join("、"),
+            "taken_count": taken.len(),
+            "checked": checked,
         }
     })
 }
@@ -607,6 +699,49 @@ mod tests {
         let v = mouse_settings(&page);
         assert_eq!(v["result"], "ok");
         assert_eq!(v["facts"]["wheel"], "一次滚一屏");
+    }
+
+    #[test]
+    fn hotkeys_are_tried_without_win_or_a_lone_f12_and_written_the_usual_way() {
+        let all = hotkey_candidates();
+        assert_eq!(all.len(), 7 * (26 + 10 + 12 + 4) + 11);
+        let unique: std::collections::HashSet<Hotkey> = all.iter().copied().collect();
+        assert_eq!(unique.len(), all.len(), "不能重复");
+        let ctrl_alt = Hotkey::CONTROL | Hotkey::ALT;
+        assert!(all.contains(&Hotkey { modifiers: ctrl_alt, vk: u32::from(b'A') }));
+        assert!(all.contains(&Hotkey { modifiers: 0, vk: VK_F1 }));
+        assert!(!all.contains(&Hotkey { modifiers: 0, vk: VK_F12 }), "单独的 F12 留给调试器");
+        assert!(all.iter().all(|h| h.modifiers & !(Hotkey::CONTROL | Hotkey::ALT | Hotkey::SHIFT) == 0), "不试 Win 键");
+        assert!(
+            all.iter().filter(|h| h.modifiers == 0).all(|h| (VK_F1..=VK_F11).contains(&h.vk)),
+            "单独按的只有 F1～F11"
+        );
+
+        let name = |modifiers, vk| hotkey_name(Hotkey { modifiers, vk });
+        assert_eq!(name(ctrl_alt, u32::from(b'A')), "Ctrl + Alt + A");
+        assert_eq!(name(Hotkey::ALT | Hotkey::SHIFT, u32::from(b'1')), "Alt + Shift + 1");
+        assert_eq!(name(Hotkey::SHIFT | Hotkey::CONTROL | Hotkey::ALT, VK_F12), "Ctrl + Alt + Shift + F12");
+        assert_eq!(name(ctrl_alt, VK_LEFT), "Ctrl + Alt + ←");
+        assert_eq!(name(0, VK_F1), "F1");
+
+        let v = hotkeys(&[], all.len());
+        assert_eq!(v["result"], "ok");
+        assert_eq!(v["facts"]["taken"], "");
+        assert_eq!(v["facts"]["checked"], 375);
+        let v = hotkeys(
+            &[
+                Hotkey { modifiers: ctrl_alt, vk: u32::from(b'A') },
+                Hotkey { modifiers: Hotkey::CONTROL | Hotkey::SHIFT, vk: u32::from(b'Q') },
+                Hotkey { modifiers: ctrl_alt, vk: VK_DOWN },
+            ],
+            all.len(),
+        );
+        assert_eq!(v["result"], "taken");
+        assert_eq!(v["facts"]["taken_count"], 3);
+        assert_eq!(
+            v["facts"]["taken"],
+            "Ctrl + Alt + A（QQ 截图默认用的）、Ctrl + Shift + Q、Ctrl + Alt + ↓（英特尔显卡旋转屏幕的快捷键）"
+        );
     }
 
     #[test]

@@ -7,8 +7,9 @@ checks:
   - disk.system-free-space
   - disk.smart-health
   - disk.error-events
-  # 系统与更新（时间放最前面：时间不对时，支持期这些和日期有关的结论也不准）
+  # 系统与更新（时间放最前面：时间不对时，支持期这些和日期有关的结论也不准；WMI 紧跟着：它坏了，后面很多检查都查不了）
   - system.clock
+  - system.wmi
   - system.os-support
   - update.blocked
   - system.pending-reboot

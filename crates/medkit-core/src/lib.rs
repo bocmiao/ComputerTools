@@ -17,6 +17,7 @@
 //! - [`disk_speed`]：硬盘测速（只写一个关掉就删的临时文件）
 //! - [`window_owner`]：弹窗是哪个软件的：鼠标指着的窗口是哪个程序的（只读）
 //! - [`winsock`]：Winsock 目录里有没有第三方的网络组件（LSP）、文件已经不在的组件（内置检测 `winsock`）
+//! - [`wechat`]：微信占 C 盘：挑出微信 3.x、4.x 的缓存和聊天里的旧文件（白名单文件夹，不碰数据库），交给外壳放进回收站
 
 pub mod builtin;
 pub mod bundle;
@@ -43,6 +44,7 @@ pub mod shell_places;
 pub mod startup;
 pub mod tools;
 pub mod views;
+pub mod wechat;
 pub mod window_owner;
 pub mod winsock;
 mod yaml;

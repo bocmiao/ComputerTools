@@ -1,0 +1,55 @@
+# 症状：软件报 WMI 错误、「无效类」，「系统信息」打不开，「WMI Provider Host」一直占着处理器。先做 WMI 自检（system.wmi）。
+# 指引照微软《winmgmt》《WMI: Repository Corruption, or Not?》（先查一致不一致，不一致先 salvage；不要一上来就删仓库、不要把所有
+# .mof 重新编译一遍）和《Troubleshoot WMI high CPU usage issues》（WMI Provider Host 占处理器多半是有软件、服务一直在查询）。
+id: wmi-broken
+schema_version: 1
+title: { zh-CN: 软件报 WMI 错误、「系统信息」打不开 }
+summary:
+  zh-CN: 装软件、玩游戏、打开「系统信息」时报「WMI 错误」「无效类」「无法连接到 WMI」，错误代码 0x80041010、0x80041002；或者任务管理器里「WMI Provider Host」一直占着处理器。
+keywords:
+  - wmi错误
+  - wmi出错
+  - wmi报错
+  - wmi损坏
+  - wmi坏了
+  - wmi修复
+  - 修复wmi
+  - wmi服务
+  - 无法连接wmi
+  - 无法连接到wmi
+  - 连接wmi失败
+  - 初始化wmi失败
+  - wmi查询失败
+  - 无效类
+  - 无效的类
+  - 无效命名空间
+  - "0x80041010"
+  - "0x80041002"
+  - "0x8004100e"
+  - 系统信息打不开
+  - 不能收集信息
+  - 无法收集信息
+  - wmiproviderhost
+  - wmiprvse
+  - wmi提供程序主机
+  - winmgmt
+causes:
+  - zh-CN: WMI 的仓库坏了（突然断电、强制关机、硬盘出错以后常见）
+  - zh-CN: WMI 服务被「优化」软件或者精简版系统关掉了
+  - zh-CN: 某个软件、驱动登记在 WMI 里的组件坏了（仓库没坏，只是查某一类信息时报错）
+  - zh-CN: 有软件一直在查询 WMI，「WMI Provider Host」（WmiPrvSE.exe）就一直占着处理器
+maturity: semi
+steps:
+  - check: system.wmi
+guide:
+  zh-CN: |
+    先看上面的检查：
+
+    1. 说仓库坏了（不一致）的：点「修复 WMI」，做完重启电脑。
+    2. 说 WMI 服务被禁用了的：照提示在「服务管理」里改回「自动」，重启电脑。
+    3. 检查都正常、只有某一个软件报 WMI 错误的：先重启电脑；再把这个软件卸载重装（它登记在 WMI 里的东西可能坏了）；还不行，点「检查并修复系统文件」。
+    4. 任务管理器里「WMI Provider Host」一直占着处理器：多半是某个软件一直在查询 WMI。先重启电脑；想想最近装了什么硬件检测、监控、驱动管理、杀毒类的软件，先退出或者卸载它试试。
+    5. 网上教的「删掉 Repository 文件夹」「把所有 .mof 文件重新编译一遍」别照做：微软说这会损坏系统和已经装好的软件，修不好还查不出原因。
+
+    都不行的话，把检查结果和报错的截图发给懂哥。
+links: ["tool:system.wmi-salvage", "tool:open.system-file-repair", "tool:open.services", "tool:open.task-manager", "symptom:slow-pc"]

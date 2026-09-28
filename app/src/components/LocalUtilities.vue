@@ -11,6 +11,7 @@ import OcrTool from './OcrTool.vue'
 import FileLockers from './FileLockers.vue'
 import PopupOwner from './PopupOwner.vue'
 import SpaceFinder from './SpaceFinder.vue'
+import WechatCleanup from './WechatCleanup.vue'
 import HiddenFilesTool from './HiddenFilesTool.vue'
 import TextQrTool from './TextQrTool.vue'
 import AmountWordsTool from './AmountWordsTool.vue'
@@ -265,6 +266,7 @@ async function copy(value: string): Promise<void> {
       <FileLockers />
       <PopupOwner />
       <SpaceFinder />
+      <WechatCleanup level="h3" />
       <HiddenFilesTool />
     </div>
     <p v-if="copyNotice" class="muted small" role="status">{{ copyNotice }}</p>

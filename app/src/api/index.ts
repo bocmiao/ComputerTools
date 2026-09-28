@@ -34,6 +34,8 @@ import type {
   SystemInfo,
   ToolResult,
   UndoResult,
+  WechatCleanResult,
+  WechatReport,
   WindowOwnerReport,
 } from './types'
 
@@ -382,6 +384,16 @@ export function brightnessList(): Promise<MonitorBrightness[]> {
 /** 显示器亮度：把一个显示器调到 percent（0–100），返回调完以后读回来的亮度 */
 export function brightnessSet(id: string, percent: number): Promise<number> {
   return call('brightness_set', { id, percent })
+}
+
+/** 微信占 C 盘：找出微信的账号，数一数缓存和 days 天以前的聊天文件（只读） */
+export function wechatScan(days: number): Promise<WechatReport> {
+  return call('wechat_scan', { days })
+}
+
+/** 微信占 C 盘：把勾选的账号里勾选的几类文件放进回收站（微信开着时不清理） */
+export function wechatClean(ids: number[], cache: boolean, chat: boolean, days: number): Promise<WechatCleanResult> {
+  return call('wechat_clean', { ids, cache, chat, days })
 }
 
 /** 找大文件和重复文件：用系统的选择框选文件夹，数一遍（只读）；取消返回 null */

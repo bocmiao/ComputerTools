@@ -18,7 +18,7 @@ use medkit_core::catalog::{BREAK_IN_TESTS, Catalog};
 use medkit_core::journal::{Journal, new_id};
 use medkit_core::model::{Action, Feature, StartType, ToolGroup};
 use medkit_core::platform::windows::{WindowsPlatform, dir_owner_sid, ensure_secure_dir};
-use medkit_core::platform::{Platform, PlatformError};
+use medkit_core::platform::{Hotkey, Platform, PlatformError};
 use medkit_core::registry::{RegRoot, RegValue, SpecRoot, is_sid, split_key};
 use medkit_core::render::unresolved;
 use medkit_core::script::{HostConfig, PowerShellHost};
@@ -1430,7 +1430,8 @@ fn wifi_status_is_read_without_the_network_name() {
 }
 
 /// 「修复 Edge」要运行什么：只加载脚本里的函数，调用 Get-RepairPlan（读真实的注册表、核对路径、参数和微软签名），不启动修复。
-/// CI 机器装着 Edge，要核对出 Edge 更新程序自己的联机修复；没装 Edge 的机器上说没有。
+/// CI 机器装着 Edge，要核对出 Edge 更新程序自己的联机修复（更新程序被去掉了的机器上是 missing）；没装 Edge 的机器上说没有。
+/// 核对不过（untrusted）、没登记修复（no-repair）都算失败。
 #[test]
 fn edge_repair_plans_edge_updates_own_repair() {
     let script = repo_root().join("scripts/tools/system/edge-repair.ps1");
@@ -1459,8 +1460,11 @@ fn edge_repair_plans_edge_updates_own_repair() {
             assert!(arguments.contains("repairtype=windowsonlinerepair"), "{arguments}");
             assert!(!arguments.to_lowercase().contains("uninstall"), "{arguments}");
         }
+        // 命令的样子核对过了（Get-RepairPlan 先核对路径和参数，再看文件在不在），只是更新程序不在：GitHub 的 Windows 镜像
+        // 把 Edge 更新程序去掉了（CI 153 上是这样）
+        Some("missing") => println!("::notice title=edge::Edge 登记的修复命令核对通过，但 Edge 更新程序不在这台机器上"),
         Some("no-edge") => println!("::notice title=edge::这台机器上没装 Microsoft Edge"),
-        other => panic!("CI 机器上的 Edge 应该能修复，结果是 {other:?}：{plan}"),
+        other => panic!("CI 机器上的 Edge 登记的应该是修复命令，结果是 {other:?}：{plan}"),
     }
 }
 
@@ -1521,6 +1525,107 @@ fn winsock_catalog_is_read_from_both_views() {
     eprintln!("{:?} {:?} {}", r.status, r.result_code, r.message);
     assert!(r.error.is_none(), "{r:?}");
     assert!(matches!(r.result_code.as_deref(), Some("ok" | "ok-others" | "lsp")), "{r:?}");
+}
+
+/// 微信占 C 盘用的两个系统调用：放进回收站以后原来的位置上就没有了（和在资源管理器里按 Delete 一样，进了回收站）；
+/// 看微信开没开着（CI 机器上没有微信；本测试进程自己一定在运行）。
+#[test]
+fn files_go_to_the_recycle_bin_and_running_programs_are_seen() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (0..3).map(|i| dir.path().join(format!("medkit-recycle-{i}.tmp"))).collect();
+    for f in &files {
+        std::fs::write(f, b"medkit").unwrap();
+    }
+    let keep = dir.path().join("keep.tmp");
+    std::fs::write(&keep, b"keep").unwrap();
+    let cancelled = medkit_core::platform::windows::recycle(&files);
+    assert!(!cancelled);
+    for f in &files {
+        assert!(!f.exists(), "{} 应该进了回收站", f.display());
+    }
+    assert!(keep.exists(), "没交给回收站的不动");
+
+    let me = std::env::current_exe().unwrap();
+    let me = me.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(medkit_core::platform::windows::processes_running(&[&me]));
+    assert!(!medkit_core::platform::windows::processes_running(&["medkit-no-such-program.exe"]));
+}
+
+/// 快捷键有没有被别的程序占着：另一个线程先登记一个平时没人用的（Ctrl + Alt + Shift + F11），真的试一遍要找到它；
+/// 那个线程注销以后就找不到了。CI 机器上本来被占着的也打印出来。
+#[test]
+fn hotkeys_registered_elsewhere_are_found() {
+    use std::sync::mpsc;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey};
+
+    let key = Hotkey { modifiers: Hotkey::CONTROL | Hotkey::ALT | Hotkey::SHIFT, vk: 0x7A };
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (done_tx, done_rx) = mpsc::channel::<()>();
+    let holder = std::thread::spawn(move || {
+        // SAFETY: 窗口句柄为空：快捷键登记在这个线程上，下面在同一个线程里注销
+        let ok = unsafe { RegisterHotKey(std::ptr::null_mut(), 7, key.modifiers, key.vk) } != 0;
+        ready_tx.send(ok).unwrap();
+        let _ = done_rx.recv();
+        if ok {
+            // SAFETY: 同上
+            unsafe { UnregisterHotKey(std::ptr::null_mut(), 7) };
+        }
+    });
+    let registered = ready_rx.recv().unwrap();
+    let platform = WindowsPlatform::new();
+    let while_held = platform.hotkeys_taken(&[key]);
+    done_tx.send(()).unwrap();
+    holder.join().unwrap();
+    assert!(registered, "测试用的 Ctrl + Alt + Shift + F11 登记不上：这台机器上已经有程序占着它了");
+    assert_eq!(while_held.unwrap(), vec![key], "别的线程占着的要找得到");
+    assert!(platform.hotkeys_taken(&[key]).unwrap().is_empty(), "注销以后就不该再报");
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+    let r = engine.run_check("system.hotkeys").unwrap();
+    eprintln!(
+        "被占着的快捷键：{:?} {:?} {} {}",
+        r.status,
+        r.result_code,
+        r.message,
+        serde_json::Value::Object(r.facts.clone())
+    );
+    assert!(r.error.is_none(), "{r:?}");
+}
+
+/// CI 机器上的 WMI 是好的：自检要报「正常」（winmgmt /verifyrepository 仓库一致时退出代码是 0，查得到系统信息，
+/// 仓库文件不大）；「修复 WMI」先检查，仓库一致就什么都不做，报「没坏」。性能计数器的检测只打印（看 CI 机器的实际情况）。
+#[test]
+fn wmi_self_check_finds_the_repository_consistent() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    if !platform.is_admin() {
+        println!("不是管理员：跳过（winmgmt /verifyrepository 要管理员权限）");
+        return;
+    }
+    let r = engine.run_check("system.wmi").unwrap();
+    eprintln!(
+        "WMI 自检：{:?} {:?} {} {}",
+        r.status,
+        r.result_code,
+        r.message,
+        serde_json::Value::Object(r.facts.clone())
+    );
+    assert!(r.error.is_none(), "{r:?}");
+    assert_eq!(r.result_code.as_deref(), Some("ok"), "{r:?}");
+    let t = engine.tool_run("system.wmi-salvage").unwrap();
+    eprintln!("修复 WMI：{:?} {:?} {}", t.status, t.result_code, t.message);
+    assert!(t.error.is_none(), "{t:?}");
+    assert_eq!(t.result_code.as_deref(), Some("consistent"), "{t:?}");
+    let p = engine.run_check("system.perf-counters").unwrap();
+    eprintln!(
+        "性能计数器：{:?} {:?} {} {}",
+        p.status,
+        p.result_code,
+        p.message,
+        serde_json::Value::Object(p.facts.clone())
+    );
+    assert!(p.error.is_none(), "{p:?}");
 }
 
 /// 重置 Winsock 的脚本真的跑一次：netsh 要成功，重置完 Winsock 还是好的。撤销不了，还会去掉 VPN 这类软件装的组件，

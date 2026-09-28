@@ -1,0 +1,33 @@
+# 常用的快捷键有没有被别的程序占着。内置检测（Rust 实现，见 crates/medkit-core/src/builtin.rs 的 hotkeys 和 platform/windows.rs）：
+# 照 heathhenley/windows_hotkey_checker（MIT）的办法，把 Ctrl、Alt、Shift 的 7 种组合配上字母、数字、F1～F12、方向键，再加上单独
+# 按的 F1～F11，一共 375 个，挨个用 RegisterHotKey 登记一次：登记不上、报 ERROR_HOTKEY_ALREADY_REGISTERED（1409）的，就是被别的
+# 程序登记成了全局快捷键（按下去只有它收得到，在别的软件里就「没反应」）；登记上的马上注销，不留下改动。看不出是哪个程序占的，
+# 常见软件的默认快捷键写在括号里当线索（只写查证过的：QQ 截图 Ctrl + Alt + A、微信截图 Alt + A 和「显示微信窗口」Ctrl + Alt + W、
+# 钉钉截图 Ctrl + Shift + A、Snipaste 的 F1 和 F3、英特尔显卡的 Ctrl + Alt + 方向键和 Ctrl + Alt + F12、NVIDIA 的 Alt + Z）。
+# 不试：带 Win 键的（归操作系统用）、单独的 F12（微软：留给调试器）、Print Screen 和 Tab、Esc 这些系统自己处理的键；用低级键盘钩子
+# 截按键的程序也看不出来。
+# 结果：taken（有被占着的）、ok。事实：taken（被占着的，用「、」隔开）、taken_count、checked（试了几个）。
+id: system.hotkeys
+schema_version: 1
+title: { zh-CN: 被别的程序占着的快捷键 }
+description:
+  zh-CN: 看看常用的 Ctrl、Alt、Shift 组合键和 F1～F11 有没有被别的程序（QQ、微信的截图，显卡的热键这些）登记成全局快捷键。被占着的，在别的软件里按了就没反应。
+category: system
+requires_admin: false
+probe:
+  builtin: hotkeys
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 试了 {checked} 个常用的 Ctrl、Alt、Shift 组合键和 F1～F11，都没有被别的程序占着。
+  taken:
+    status: advice
+    message:
+      zh-CN: 这 {taken_count} 个快捷键被别的程序登记成了全局快捷键：{taken}。按下去只有占着它的程序收得到，在别的软件里按就没反应，或者弹出来的是那个程序。
+    fixer: user
+    next:
+      zh-CN: 你按了没反应的快捷键在上面的话，到占着它的软件的「设置 → 快捷键（热键）」里改掉或者关掉它（括号里写的是常见软件的默认快捷键，只是线索）。不知道是哪个软件的：把开着的软件一个一个退出（右下角托盘里的也算），每退出一个就点「重新检查」，哪个退出以后这一项没了就是它。英特尔显卡的 Ctrl + Alt + 方向键在英特尔显卡的控制面板（英特尔显卡控制中心）里关掉「热键」。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey
+  - https://github.com/heathhenley/windows_hotkey_checker
