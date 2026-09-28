@@ -1,0 +1,60 @@
+# 系统工具有没有被策略停用。脚本：scripts/checks/system/disabled-tools.ps1（user_hive：读登录用户的设置）
+# 读的是组策略写的那些值（微软 ADMX 文档里都是「用户配置」的策略）；病毒、「锁机」工具常直接写注册表，还常连整台电脑（HKLM）
+# 一起写，所以登录用户和整台电脑的两份都读：
+#   Policies\System：DisableTaskMgr（删除任务管理器）、DisableRegistryTools（阻止访问注册表编辑工具）
+#   Software\Policies\Microsoft\Windows\System：DisableCMD（阻止访问命令提示符）
+#   Policies\Explorer：NoRun（开始菜单里的「运行」，Win + R 也用不了）、NoControlPanel（控制面板和「设置」）、
+#     NoFolderOptions（文件夹选项）、NoViewContextMenu（资源管理器和桌面的右键菜单）、NoClose（关机、重启、睡眠）、
+#     NoWinKeys（Win 键组合键）、DisallowRun（不运行指定的程序）、RestrictRun（只运行指定的程序）
+# DWORD 不是 0 就算。只读：小药箱不改策略（计划书第五节），只说清楚是什么、怎么改回来。
+# 结果：disabled（advice）、ok。事实：disabled（被停用的代码）、where（user / machine / both）、values（哪些值，HKCU / HKLM 开头）。
+id: system.disabled-tools
+schema_version: 1
+title: { zh-CN: 被停用的系统工具 }
+description:
+  zh-CN: 看看任务管理器、注册表编辑器、命令提示符、「运行」、控制面板、右键菜单、关机按钮这些，有没有被策略停用。病毒和「锁机」软件常这么做，让人没法查、没法关掉它。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/disabled-tools.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 任务管理器、注册表编辑器、命令提示符这些系统工具都没有被策略停用。
+  disabled:
+    status: advice
+    message:
+      zh-CN: "这些被策略停用了：{disabled_text}（{where_text}）。打开它们时会提示「已被系统管理员停用」，或者「本次操作由于这台计算机的限制而被取消」。"
+    fixer: helper
+    next:
+      zh-CN: 单位、学校的电脑是管理员有意设置的，不要改，找管理员。个人电脑上出现这些，多半是病毒、流氓软件或者别人用「锁定」「优化」工具设置的：先用「Windows 安全中心」做一次全盘扫描；扫完还是这样的，专业版可以在「本地组策略编辑器」（gpedit.msc）的「用户配置 → 管理模板」里把对应的项改回「未配置」，家庭版请懂哥在注册表里删掉详情里列出的这几个值。小药箱不改策略。
+    links: ["tool:settings.windows-security"]
+fact_labels:
+  disabled_text:
+    from: disabled
+    values:
+      task-manager: { zh-CN: 「任务管理器」 }
+      registry-editor: { zh-CN: 「注册表编辑器」 }
+      cmd: { zh-CN: 「命令提示符」 }
+      run: { zh-CN: 「运行」（Win + R） }
+      control-panel: { zh-CN: 「控制面板」和「设置」 }
+      folder-options: { zh-CN: 「文件夹选项」 }
+      context-menu: { zh-CN: 桌面和文件夹里的「右键菜单」 }
+      shutdown: { zh-CN: 开始菜单里的「关机」「重启」 }
+      win-keys: { zh-CN: 「Win 键组合键」（Win + E、Win + D 这些） }
+      disallow-run: { zh-CN: 「指定的一些程序」（不许运行） }
+      restrict-run: { zh-CN: 「除了指定的程序以外的所有程序」（只许运行几个） }
+  where_text:
+    from: where
+    values:
+      user: { zh-CN: 设在当前登录的用户上 }
+      machine: { zh-CN: 设在整台电脑上 }
+      both: { zh-CN: 当前用户和整台电脑上都设了 }
+references:
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-shellcommandpromptregedittools
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-ctrlaltdel
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-windowsexplorer
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-startmenu
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-controlpanel

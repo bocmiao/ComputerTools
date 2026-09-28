@@ -1,0 +1,62 @@
+# 桌面、文档、下载、图片、音乐、视频这几个文件夹指向的位置还在不在。脚本：scripts/checks/system/shell-folders.ps1（共享块
+# shell-folders，user_hive：读登录用户的设置）
+# 读登录用户 User Shell Folders 里存的原样的值（文件夹属性的「位置」页改的就是它），%USERPROFILE% 换成登录用户自己的用户文件夹
+# （ProfileList），%OneDrive% 这些换成登录用户自己的环境变量。指向的文件夹或者整个盘不在了（取消了 OneDrive 的链接、拔掉了移动
+# 硬盘、换了盘符、重装系统以后 D 盘变了）就算坏了：资源管理器提示「位置不可用」，桌面一片空白，软件保存不了。网络路径不查。
+# 结果：broken（advice，修复 system.shell-folders-default）、moved（ok：挪到了别处，那里在）、ok。
+# 事实：broken、moved（文件夹的代码）、kind（第一个坏了的原因：onedrive、drive、folder）。不输出路径（里面有用户名）。
+id: system.shell-folders
+schema_version: 1
+title: { zh-CN: 桌面、文档这些文件夹的位置 }
+description:
+  zh-CN: 看看桌面、文档、下载、图片、音乐、视频这几个文件夹指向的位置还在不在。挪到 D 盘或者 OneDrive 以后那边没了，桌面就会一片空白，软件也存不了文件。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/shell-folders.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 桌面、文档、下载、图片、音乐、视频都在默认的位置，没问题。
+  moved:
+    status: ok
+    message:
+      zh-CN: "{moved_text}挪到了别的位置，那里都在，没问题。"
+  broken:
+    status: advice
+    message:
+      zh-CN: "{broken_text}指向的位置已经不在了{kind_text}：资源管理器会提示「位置不可用」，桌面可能一片空白，软件也存不进去。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮把它们改回默认的位置（C 盘你的用户文件夹里），注销再登录以后生效，能撤销。原来那个位置的文件不会被删、也不会被搬：那个盘、那个文件夹找回来以后（插上移动硬盘、重新登录 OneDrive），文件还在那里，可以自己拷回来。
+    links: ["feature:system.shell-folders-default"]
+fact_labels:
+  broken_text:
+    from: broken
+    values:
+      desktop: { zh-CN: 「桌面」 }
+      documents: { zh-CN: 「文档」 }
+      downloads: { zh-CN: 「下载」 }
+      pictures: { zh-CN: 「图片」 }
+      music: { zh-CN: 「音乐」 }
+      videos: { zh-CN: 「视频」 }
+  moved_text:
+    from: moved
+    values:
+      desktop: { zh-CN: 「桌面」 }
+      documents: { zh-CN: 「文档」 }
+      downloads: { zh-CN: 「下载」 }
+      pictures: { zh-CN: 「图片」 }
+      music: { zh-CN: 「音乐」 }
+      videos: { zh-CN: 「视频」 }
+  kind_text:
+    from: kind
+    values:
+      onedrive: { zh-CN: （原来放在 OneDrive 里，多半是退出或者取消链接了 OneDrive） }
+      drive: { zh-CN: （原来放在另一个盘上，那个盘现在没有了：拔掉了、换了盘符或者重装系统以后变了） }
+      folder: { zh-CN: （那个文件夹被删掉、改名或者挪走了） }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid
+  - https://support.microsoft.com/en-us/office/back-up-your-folders-with-onedrive-d61a7930-a6fb-4b95-b28a-6552e77c3057

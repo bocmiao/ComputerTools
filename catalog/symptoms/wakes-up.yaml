@@ -25,19 +25,22 @@ keywords:
 causes:
   - zh-CN: 鼠标、键盘轻轻一碰，或者网卡收到网络上的信号，就把电脑叫醒了
   - zh-CN: Windows 更新、软件的定时任务设了唤醒定时器，半夜把电脑叫醒
+  - zh-CN: Windows 每天的「自动维护」到了时间，把睡着的电脑叫起来做维护
   - zh-CN: BIOS 里开了定时开机、网络唤醒（Wake on LAN）或者「来电自启动」
   - zh-CN: 其实是重启：蓝屏以后自动重启，或者装完更新重启
 maturity: semi
 steps:
   - check: system.wake-timers
     fixes: [power.wake-timers-off]
+  - check: system.maintenance-wake
+    fixes: [power.maintenance-wake-off]
 guide:
   zh-CN: |
     先打开小工具「谁把电脑叫醒的」，看看最近几次是被什么叫醒的，再按下面对应的办法处理。
 
     1. 被鼠标、键盘叫醒（鼠标一碰就醒，或者桌子一震就醒）：打开「设备管理器」，展开「鼠标和其他指针设备」，双击鼠标 →「电源管理」，取消勾选「允许此设备唤醒计算机」。键盘想留着用来叫醒电脑的，键盘就别改。
     2. 被网卡叫醒（叫醒它的是 Ethernet、Wi-Fi 这类名字）：在「设备管理器」的「网络适配器」里双击网卡 →「电源管理」，取消勾选「允许此设备唤醒计算机」，或者只勾「只允许幻数据包唤醒计算机」。
-    3. 被定时器叫醒（写着定时器、计划任务、Windows 更新）：上面的检查报「允许唤醒定时器」的，点修复关掉。Windows 更新还可以在「设置 → Windows 更新 → 高级选项 → 使用时段」里设成你用电脑的时间。
+    3. 被定时器叫醒（写着定时器、计划任务、Windows 更新）：上面的检查报「允许唤醒定时器」的，点修复关掉。写着 Maintenance（维护）的是每天的自动维护，只想关掉它的，用上面「自动维护叫醒电脑」的修复。Windows 更新还可以在「设置 → Windows 更新 → 高级选项 → 使用时段」里设成你用电脑的时间。
     4. 关机以后自己开机：Windows 记不到原因，多半是 BIOS 里的设置。开机时按 Del、F2 这类键进 BIOS，在电源管理（Power Management）里关掉定时开机（RTC Alarm、Power On By RTC）、网络唤醒（Wake on LAN、Power On By PCI-E）、「来电自启动」（AC Power Recovery、Restore on AC Power Loss 设成 Off）。不熟悉 BIOS 的请懂哥帮忙。
     5. 其实是重启了：蓝屏以后会自动重启，打开小工具「最近的蓝屏」看看；装完更新也会自己重启。
     6. 电源键、键盘的按键卡住了也会反复开机，看看按键有没有卡住。

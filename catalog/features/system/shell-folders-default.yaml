@@ -1,0 +1,36 @@
+# 把指向不存在位置的桌面、文档、下载、图片、音乐、视频改回默认位置（脚本类功能）：User Shell Folders 改回
+# %USERPROFILE%\Desktop 这样的默认值，Shell Folders 改成展开后的路径；默认文件夹不在的，建一个空的。只改坏了的那几个，
+# 不搬文件（文件还在原来的地方）。注销再登录以后生效（资源管理器和软件会记住旧的位置）。
+# 脚本在 scripts/features/system/ 下，和检测 system.shell-folders 共用共享块 shell-folders。
+#   shell-folders-detect.ps1  撤销前核对：没有坏的 → applied；有坏的 → not-applied
+#   shell-folders-run.ps1     -Prepare：before = { folders: [{ code, user, shell, default_existed }] }；执行：变了就跳过；
+#                             逐个改、读回来确认，失败时把改过的改回去再报错
+#   shell-folders-undo.ps1    还指向默认位置的，改回记下的值；当时新建的默认文件夹还是空的，就删掉
+#   shell-folders-break.ps1   只在测试中使用：把「音乐」指向用户文件夹里不存在的 medkit-missing-music
+id: system.shell-folders-default
+schema_version: 1
+title: { zh-CN: 桌面、文档这些文件夹改回默认位置 }
+description:
+  zh-CN: 桌面、文档、下载这些文件夹指向的位置已经不在了（拔掉的移动硬盘、没了的 D 盘、退出了的 OneDrive），把它们改回 C 盘用户文件夹里的默认位置，桌面就能正常显示、软件也能存文件了。原来位置的文件不删也不搬。注销再登录以后生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: logoff
+target: current-user
+detect:
+  script: features/system/shell-folders-detect.ps1
+prepare:
+  script: features/system/shell-folders-run.ps1
+run:
+  script: features/system/shell-folders-run.ps1
+undo:
+  script: features/system/shell-folders-undo.ps1
+break:
+  script: features/system/shell-folders-break.ps1
+verify: system.shell-folders
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid
+  - https://support.microsoft.com/en-us/office/back-up-your-folders-with-onedrive-d61a7930-a6fb-4b95-b28a-6552e77c3057

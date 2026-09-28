@@ -1,0 +1,46 @@
+# CPU 虚拟化（VT）开没开。脚本：scripts/checks/hardware/virtualization.ps1
+# 安卓模拟器（雷电、MuMu、BlueStacks 这些）、WSL 2、Windows 沙盒、虚拟机都要用 Intel VT-x / AMD-V，在 BIOS（UEFI）里开关。
+# 读 Win32_Processor 的 VirtualizationFirmwareEnabled（BIOS 里开了）、VMMonitorModeExtensions（处理器支持）；Windows 自己跑在
+# 虚拟化上时（Hyper-V、WSL 2、虚拟机平台、内存完整性），这两个都读成 False，这时 Win32_ComputerSystem 的 HypervisorPresent 是 True，
+# 也说明虚拟化开着。只读。
+# 结果：hypervisor（ok）、enabled（ok）、disabled（advice：支持但 BIOS 里没开）、unsupported（manual：处理器不支持）。
+# 事实：cpu（处理器型号）、hypervisor、firmware_enabled、supported。
+id: hardware.virtualization
+schema_version: 1
+title: { zh-CN: CPU 虚拟化（VT） }
+description:
+  zh-CN: 看看处理器的虚拟化（常说的 VT）开没开。安卓模拟器、虚拟机、WSL 2 都要用它，没开时模拟器会很卡或者打不开，要在 BIOS 里打开。
+category: hardware
+requires_admin: false
+probe:
+  script: checks/hardware/virtualization.ps1
+results:
+  hypervisor:
+    status: ok
+    message:
+      zh-CN: 虚拟化（VT）开着，而且 Windows 自己的 Hyper-V、WSL 2、「内存完整性」这类功能正在用它。
+    next:
+      zh-CN: 新版本的安卓模拟器（雷电 9、MuMu 12、BlueStacks 5 这些）能和它们一起用；老版本的模拟器提示要关掉 Hyper-V 的，换成新版本就好，不要为了模拟器关掉「内存完整性」这类安全功能。
+  enabled:
+    status: ok
+    message:
+      zh-CN: 虚拟化（VT）开着，安卓模拟器、虚拟机能用上它。
+  disabled:
+    status: advice
+    message:
+      zh-CN: "处理器（{cpu}）支持虚拟化（VT），但是在 BIOS 里没有打开：安卓模拟器会很卡、打不开，WSL 2、虚拟机也用不了。"
+    fixer: user
+    next:
+      zh-CN: 要在 BIOS 里打开，不能在 Windows 里改。按「安卓模拟器、虚拟机要开 VT」里的步骤进 BIOS，把「Intel Virtualization Technology」「Intel VT-x」或者「SVM Mode」（AMD）改成 Enabled，保存重启。
+    links: ["symptom:vt-disabled"]
+  unsupported:
+    status: manual
+    message:
+      zh-CN: "处理器（{cpu}）不支持虚拟化（VT），安卓模拟器只能用比较慢的方式运行，WSL 2、虚拟机用不了。"
+    fixer: hardware
+    next:
+      zh-CN: 这是处理器本身的限制，改设置解决不了。很老的电脑才会这样；想流畅地玩模拟器，要换一台新一点的电脑。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-processor
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-computersystem
+  - https://support.microsoft.com/en-us/windows/enable-virtualization-on-windows-c5578302-6e43-4b4b-a449-8ced115f58e1

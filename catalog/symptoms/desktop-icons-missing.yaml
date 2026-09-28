@@ -1,7 +1,8 @@
 # 症状：桌面图标不见了。先查「显示桌面图标」是不是没勾上（system.desktop-icons → 修复 desktop.show-desktop-icons，
 # 能撤销）；别的原因给图文指引：只是「此电脑」「回收站」不见了（桌面图标设置、常用设置里的「桌面显示「此电脑」」）、
 # 任务栏也一起不见了（资源管理器卡住，重启资源管理器）、自己放在桌面上的文件不见了（桌面被 OneDrive 接管，文件在
-# OneDrive 的「桌面」文件夹里；用临时配置文件登录了）、Windows 10 的平板模式。
+# OneDrive 的「桌面」文件夹里；用临时配置文件登录了）、Windows 10 的平板模式。桌面等文件夹指向的位置没了的，查
+# system.shell-folders（修复 system.shell-folders-default：改回默认位置，不搬文件，能撤销）。
 id: desktop-icons-missing
 schema_version: 1
 title: { zh-CN: 桌面图标不见了 }
@@ -24,16 +25,27 @@ keywords:
   - 回收站不见了
   - 显示桌面图标
   - 桌面图标隐藏
+  - 位置不可用
+  - 桌面位置不可用
+  - desktop不可用
+  - 桌面引用了一个不可用的位置
+  - 桌面路径
+  - 桌面位置
+  - 文档位置不可用
+  - 下载文件夹打不开
 causes:
   - zh-CN: 不小心取消了「显示桌面图标」（桌面右键 →「查看」里）：图标全藏起来了，文件都还在
   - zh-CN: 「此电脑」「回收站」这些系统图标没有勾选显示
   - zh-CN: 资源管理器卡住、崩溃了（任务栏常常也一起不见了）
   - zh-CN: 桌面被 OneDrive 接管了：文件跑到了 OneDrive 里的「桌面」文件夹，登录别的账号、退出 OneDrive 以后桌面上就空了
   - zh-CN: 开机时提示「你已使用临时配置文件登录」：自己的桌面、文档这次没加载出来
+  - zh-CN: 桌面被挪到了 D 盘、移动硬盘或者 OneDrive，那边现在没了，提示「位置不可用」
 maturity: semi
 steps:
   - check: system.desktop-icons
     fixes: [desktop.show-desktop-icons]
+  - check: system.shell-folders
+    fixes: [system.shell-folders-default]
 guide:
   zh-CN: |
     先看上面的检查结果：「显示桌面图标」没勾上的，点「显示桌面图标」就回来了（也可以自己在桌面空白处点右键 →「查看」→「显示桌面图标」）。

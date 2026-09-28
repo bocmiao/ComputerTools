@@ -1,0 +1,45 @@
+# 自动维护能不能把电脑叫醒。脚本：scripts/checks/system/maintenance-wake.ps1
+# 控制面板「安全和维护 → 维护 → 更改维护设置」里的「允许预定维护在预定时间唤醒我的计算机」，就是
+# HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance 的 WakeUp（DWORD）：1 允许、0 不允许；没有这个值时
+# 维护会叫醒电脑（Win10-Initial-Setup-Script（MIT）「打开」就是删掉这个值；微软文档说维护时电脑会「自动从睡眠中恢复」）。
+# 组策略「自动维护唤醒策略」（HKLM\SOFTWARE\Policies\Microsoft\Windows\Task Scheduler\Maintenance 的 WakeUp）优先，只检测。
+# 能不能真的叫醒，还要看电源计划的「允许唤醒定时器」（system.wake-timers）。
+# 结果：policy-on（manual）、policy-off（ok）、on（advice，修复 power.maintenance-wake-off）、off（ok）。事实：wake_up、policy。
+# 待真机验证：新装的 Win10、Win11 上有没有 WakeUp、控制面板里那个勾默认勾没勾，见 docs/real-machine-checklist.md。
+id: system.maintenance-wake
+schema_version: 1
+title: { zh-CN: 自动维护叫醒电脑 }
+description:
+  zh-CN: 看看 Windows 的「自动维护」能不能在半夜把睡着的电脑叫醒。它每天会找一个时间做更新、磁盘优化、病毒扫描这些维护，允许唤醒时，电脑睡着了也会被叫起来。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/maintenance-wake.ps1
+results:
+  "on":
+    status: advice
+    message:
+      zh-CN: 「自动维护」允许把电脑叫醒（Windows 默认这样）：到了每天的维护时间，电脑睡着了也会被叫起来做更新、磁盘优化、病毒扫描这些维护，所以半夜屏幕会亮、风扇会转。
+    fixer: medkit
+    next:
+      zh-CN: 不想半夜被叫醒的，点下面的按钮关掉，维护会改在你用电脑、插着电源的空闲时候做。能撤销。
+    links: ["feature:power.maintenance-wake-off"]
+  "off":
+    status: ok
+    message:
+      zh-CN: 「自动维护」不会把电脑叫醒，维护会在你用电脑的空闲时候做。
+  policy-on:
+    status: manual
+    message:
+      zh-CN: 组策略「自动维护唤醒策略」要求自动维护把电脑叫醒，单位的电脑常这样设置；小药箱不改策略。
+    fixer: helper
+    next:
+      zh-CN: 单位、学校的电脑找管理员。自己的电脑：专业版在「组策略编辑器」（Win + R 输入 gpedit.msc）里打开「计算机配置 → 管理模板 → Windows 组件 → 维护计划程序」，把「自动维护唤醒策略」改回「未配置」；家庭版请懂哥帮忙。
+  policy-off:
+    status: ok
+    message:
+      zh-CN: 组策略已经不让自动维护把电脑叫醒。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/taskschd/task-maintenence
+  - https://learn.microsoft.com/en-us/windows/win32/w8cookbook/automatic-maintenance
+  - https://github.com/Disassembler0/Win10-Initial-Setup-Script

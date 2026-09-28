@@ -141,7 +141,10 @@ function Wait-NetworkCategory {
     param([int]$Index, [string]$Category)
     $deadline = (Get-Date).AddSeconds(10)
     while ($true) {
-        $now = @(Get-ConnectedNetworks | Where-Object { ($null -ne $_) -and ($_.Index -eq $Index) })
+        # Assigned first: the function returns its list as one object (return ,),
+        # so piping the call itself would hand Where-Object the whole list at once.
+        $networks = Get-ConnectedNetworks
+        $now = @($networks | Where-Object { ($null -ne $_) -and ($_.Index -eq $Index) })
         if (($now.Count -gt 0) -and ($now[0].Category -eq $Category)) {
             return $true
         }

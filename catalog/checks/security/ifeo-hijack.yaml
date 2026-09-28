@@ -1,0 +1,98 @@
+# 程序有没有被「映像劫持」。脚本：scripts/checks/security/ifeo-hijack.ps1
+# HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\<程序名>.exe 下有 Debugger 值时，Windows 打开
+# 这个程序会改去运行 Debugger 指定的程序。调试工具用它；病毒用它挡住任务管理器、注册表编辑器和杀毒软件，或者在登录界面留后门：
+# 粘滞键（sethc.exe）、轻松使用（utilman.exe）这些辅助工具在登录界面就能打开，而且是 SYSTEM 权限（MITRE ATT&CK T1546.008、
+# T1546.012）。Process Explorer、System Informer、Process Hacker 的「替换任务管理器」也是这么做的，是有意的。
+# 两个注册表视图都读（WOW6432Node 下的对 32 位程序启动的生效），只看名单里的程序：登录界面的辅助工具、系统工具、
+# Microsoft Defender 和 Windows 安全中心、国内常见的杀毒软件（360、火绒、腾讯电脑管家、金山毒霸）。
+# 只读：映像劫持只检测、说明（计划书第五节）。
+# 结果（先满足哪个就是哪个）：logon-backdoor、hijacked、taskmgr-missing（换成的程序不在了，任务管理器打不开）、
+# taskmgr-replaced（换成了 Process Explorer 这类，ok）、ok。
+# 事实：programs（被劫持的程序文件名）、debugger（改去运行的程序的文件名；不输出路径）。
+id: security.ifeo-hijack
+schema_version: 1
+title: { zh-CN: 程序被「劫持」（映像劫持） }
+description:
+  zh-CN: 看看任务管理器、注册表编辑器、杀毒软件和登录界面上的「粘滞键」这些程序，有没有被偷偷换成别的程序。病毒常这么做：让人打不开任务管理器和杀毒软件，或者在登录界面留一个后门。
+category: security
+requires_admin: false
+probe:
+  script: checks/security/ifeo-hijack.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 任务管理器、注册表编辑器、杀毒软件和登录界面的辅助工具都没有被换成别的程序。
+  logon-backdoor:
+    status: advice
+    message:
+      zh-CN: "登录界面上的辅助工具被换成了别的程序：{programs_text}打开时会改去运行「{debugger}」。这是常见的后门：别人在登录界面按 5 次 Shift（或者点「轻松使用」）就能打开它，不用密码就能控制这台电脑。"
+    fixer: helper
+    next:
+      zh-CN: 先用「Windows 安全中心」做一次全盘扫描，最好再做一次「Microsoft Defender 脱机扫描」；扫完还是这样的，请懂哥在注册表的 Image File Execution Options 里删掉这些程序下面的 Debugger 值，再改掉这台电脑的登录密码。不是你自己或者维修人员有意设置的，就当这台电脑可能被人动过。
+    links: ["tool:settings.windows-security"]
+  hijacked:
+    status: advice
+    message:
+      zh-CN: "这些程序被「映像劫持」了：{programs_text}打开时，Windows 会改去运行「{debugger}」，所以它们打不开，或者打开的不是它们。病毒常这样挡住任务管理器、注册表编辑器和杀毒软件。"
+    fixer: helper
+    next:
+      zh-CN: 先用「Windows 安全中心」做一次全盘扫描，最好再做一次「Microsoft Defender 脱机扫描」；扫完还是这样的，请懂哥在注册表的 Image File Execution Options 里删掉这些程序下面的 Debugger 值。你自己装过调试工具、有意这么设置的，不用管。
+    links: ["tool:settings.windows-security"]
+  taskmgr-missing:
+    status: advice
+    message:
+      zh-CN: "任务管理器被换成了「{debugger}」（Process Explorer、System Informer 这类软件的「替换任务管理器」功能），但是这个程序已经不在了（多半被卸载或者删掉了），所以任务管理器打不开。"
+    fixer: helper
+    next:
+      zh-CN: 把那个软件重新下载回来，在它的菜单里取消「替换任务管理器」（Process Explorer 在「Options → Replace Task Manager」）；或者请懂哥在注册表的 Image File Execution Options\taskmgr.exe 下面删掉 Debugger 值。
+  taskmgr-replaced:
+    status: ok
+    message:
+      zh-CN: "任务管理器被换成了「{debugger}」（Process Explorer、System Informer 这类软件的「替换任务管理器」功能）。是你自己设置的话不用管；想换回来，在那个软件的菜单里取消「替换任务管理器」。"
+fact_labels:
+  programs_text:
+    from: programs
+    values:
+      sethc.exe: { zh-CN: 「粘滞键」（sethc.exe） }
+      utilman.exe: { zh-CN: 「轻松使用」（utilman.exe） }
+      osk.exe: { zh-CN: 「屏幕键盘」（osk.exe） }
+      magnify.exe: { zh-CN: 「放大镜」（magnify.exe） }
+      narrator.exe: { zh-CN: 「讲述人」（narrator.exe） }
+      displayswitch.exe: { zh-CN: 「投影切换」（displayswitch.exe） }
+      atbroker.exe: { zh-CN: 「辅助功能」（atbroker.exe） }
+      taskmgr.exe: { zh-CN: 「任务管理器」（taskmgr.exe） }
+      regedit.exe: { zh-CN: 「注册表编辑器」（regedit.exe） }
+      cmd.exe: { zh-CN: 「命令提示符」（cmd.exe） }
+      powershell.exe: { zh-CN: 「PowerShell」（powershell.exe） }
+      mmc.exe: { zh-CN: 「管理控制台」（mmc.exe，设备管理器、服务这些都靠它） }
+      msconfig.exe: { zh-CN: 「系统配置」（msconfig.exe） }
+      control.exe: { zh-CN: 「控制面板」（control.exe） }
+      explorer.exe: { zh-CN: 「资源管理器」（explorer.exe） }
+      rstrui.exe: { zh-CN: 「系统还原」（rstrui.exe） }
+      systemsettings.exe: { zh-CN: 「设置」（systemsettings.exe） }
+      resmon.exe: { zh-CN: 「资源监视器」（resmon.exe） }
+      perfmon.exe: { zh-CN: 「性能监视器」（perfmon.exe） }
+      msmpeng.exe: { zh-CN: 「Microsoft Defender」（msmpeng.exe） }
+      mpcmdrun.exe: { zh-CN: 「Microsoft Defender 命令行」（mpcmdrun.exe） }
+      securityhealthsystray.exe: { zh-CN: 「Windows 安全中心」的托盘图标（securityhealthsystray.exe） }
+      securityhealthservice.exe: { zh-CN: 「Windows 安全中心服务」（securityhealthservice.exe） }
+      mrt.exe: { zh-CN: 「恶意软件删除工具」（mrt.exe） }
+      360tray.exe: { zh-CN: 「360 安全卫士」（360tray.exe） }
+      360safe.exe: { zh-CN: 「360 安全卫士」（360safe.exe） }
+      360sd.exe: { zh-CN: 「360 杀毒」（360sd.exe） }
+      zhudongfangyu.exe: { zh-CN: 「360 主动防御」（zhudongfangyu.exe） }
+      hipstray.exe: { zh-CN: 「火绒安全」（hipstray.exe） }
+      hipsdaemon.exe: { zh-CN: 「火绒安全」（hipsdaemon.exe） }
+      usysdiag.exe: { zh-CN: 「火绒安全」（usysdiag.exe） }
+      qqpctray.exe: { zh-CN: 「腾讯电脑管家」（qqpctray.exe） }
+      qqpcrtp.exe: { zh-CN: 「腾讯电脑管家」（qqpcrtp.exe） }
+      qqpcmgr.exe: { zh-CN: 「腾讯电脑管家」（qqpcmgr.exe） }
+      kxetray.exe: { zh-CN: 「金山毒霸」（kxetray.exe） }
+      kxescore.exe: { zh-CN: 「金山毒霸」（kxescore.exe） }
+references:
+  - https://attack.mitre.org/techniques/T1546/012/
+  - https://attack.mitre.org/techniques/T1546/008/
+  - https://learn.microsoft.com/en-us/sysinternals/downloads/process-explorer
+  - https://support.microsoft.com/en-us/windows/stay-protected-with-windows-security-2ae0363d-0ada-c064-8b56-6a39afb6a963
+  - https://support.microsoft.com/en-us/windows/help-protect-my-pc-with-microsoft-defender-offline-9306d528-64bf-4668-5b80-ff533f183d6c

@@ -1,0 +1,34 @@
+# 不让自动维护把电脑叫醒：HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance 的 WakeUp = 0，和在控制面板
+# 「安全和维护 → 维护 → 更改维护设置」里取消「允许预定维护在预定时间唤醒我的计算机」一样（Win10-Initial-Setup-Script（MIT）
+# 的 DisableMaintenanceWakeUp）。维护不会停，改在插着电源、空闲的时候做。马上生效，能撤销（原来没有这个值的，撤销时删掉）。
+# 组策略「自动维护唤醒策略」开着时改这个没用，检测 system.maintenance-wake 会报 policy-on。
+id: power.maintenance-wake-off
+schema_version: 1
+title: { zh-CN: 不让自动维护半夜叫醒电脑 }
+description:
+  zh-CN: 取消「允许预定维护在预定时间唤醒我的计算机」：电脑睡着以后，不会再因为每天的自动维护被叫起来。维护照样会做，改在你用电脑、插着电源的空闲时候。能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+actions:
+  - registry:
+      key: HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance
+      name: WakeUp
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance
+      name: WakeUp
+      type: dword
+      value: 1
+verify: system.maintenance-wake
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/taskschd/task-maintenence
+  - https://github.com/Disassembler0/Win10-Initial-Setup-Script
+undo: auto

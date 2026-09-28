@@ -1,0 +1,56 @@
+# 症状：安卓模拟器很卡、打不开，提示「请开启 VT」「虚拟化技术未开启」；WSL 2、虚拟机报 0x80370102 这类错误。
+# 查 hardware.virtualization（只读）；VT 只能在 BIOS（UEFI）里开，指引按微软《Enable virtualization on Windows》：从「设置 → 系统
+# → 恢复 → 高级启动」进 UEFI 固件设置（各品牌都一样），再补上各品牌开机按的键。WSL 2 还要「虚拟机平台」这个 Windows 功能。
+id: vt-disabled
+schema_version: 1
+title: { zh-CN: 安卓模拟器、虚拟机要开 VT }
+summary:
+  zh-CN: 雷电、MuMu、BlueStacks 这些安卓模拟器提示「请开启 VT」「虚拟化技术未开启」，或者很卡；WSL 2、虚拟机打不开，报 0x80370102 这类错误。
+keywords:
+  - 开启vt
+  - vt没开
+  - 开vt
+  - vt
+  - 虚拟化
+  - 虚拟化没开
+  - 虚拟化技术未开启
+  - 虚拟化已禁用
+  - 模拟器卡
+  - 模拟器打不开
+  - 安卓模拟器
+  - 雷电模拟器
+  - mumu
+  - 蓝叠
+  - bluestacks
+  - 夜神
+  - 逍遥
+  - intel vt-x
+  - amd-v
+  - svm
+  - 虚拟机打不开
+  - wsl2
+  - "0x80370102"
+  - hyper-v
+causes:
+  - zh-CN: BIOS 里的虚拟化（Intel VT-x、AMD SVM）没有打开，很多电脑出厂时就是关着的
+  - zh-CN: 模拟器版本太老，和 Windows 自己的 Hyper-V、「内存完整性」合不来
+  - zh-CN: WSL 2 还要打开「虚拟机平台」这个 Windows 功能
+  - zh-CN: 处理器太老，本来就不支持虚拟化
+maturity: semi
+steps:
+  - check: hardware.virtualization
+guide:
+  zh-CN: |
+    先看上面的检查结果。「没有打开」的，VT 只能在 BIOS（也叫 UEFI）里开，Windows 里改不了，按下面的步骤做：
+
+    1. 保存好手头的文件。打开「设置 → 系统 → 恢复」（Windows 10 在「设置 → 更新和安全 → 恢复」），点「高级启动」旁边的「立即重新启动」。
+    2. 电脑重启后出现蓝色的选项界面，依次点「疑难解答 → 高级选项 → UEFI 固件设置 → 重启」，就会进到 BIOS。没有「UEFI 固件设置」这一项的老电脑：关机以后开机时连续按 F2（联想、华硕、戴尔、宏碁、华为、荣耀、小米常见）、Del（组装机、微星、技嘉常见）或者 F10（惠普），联想 ThinkPad 按 F1；联想的家用笔记本也可以关机后用机身侧面的一键恢复小孔（Novo 键）选「BIOS Setup」。
+    3. 在 BIOS 里找「Intel Virtualization Technology」「Intel VT-x」「VT-d」「SVM Mode」（AMD）或者「虚拟化技术」，一般在 Advanced（高级）、CPU Configuration、Security 这几页里，改成 Enabled（开启）。
+    4. 按 F10 保存并退出（有的在 Exit 页里选 Save Changes and Exit），电脑会重启。
+    5. 回到 Windows 以后，按 Ctrl + Shift + Esc 打开任务管理器，点「性能 → CPU」，右下角「虚拟化」显示「已启用」就好了。
+
+    其他情况：
+
+    - 检查结果说 Windows 的 Hyper-V、「内存完整性」正在用虚拟化：新版本的模拟器（雷电 9、MuMu 12、BlueStacks 5 的 Hyper-V 版本）能和它们一起用，到模拟器官网下载新版本就行；不要为了老版本的模拟器关掉「内存完整性」这类安全功能。
+    - 用 WSL 2、Windows 沙盒的：开了 VT 以后，还要在小工具「启用或关闭 Windows 功能」里勾上「虚拟机平台」（沙盒勾「Windows 沙盒」），装完重启。
+    - BIOS 里找不到这个选项：到电脑品牌官网按型号查一查，或者更新一下 BIOS；拿不准的请懂哥帮忙，别乱改 BIOS 里别的设置。

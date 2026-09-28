@@ -16,6 +16,7 @@ checks:
   - boot.last-boot-duration
   - system.winre-status
   - system.windows-search
+  - system.shell-folders
   - system.managed-device
   # 网络（DNS 只在「上不了网」里查：断网时它只会说「查不了」）
   - network.connectivity
@@ -25,6 +26,8 @@ checks:
   - security.browser-shortcuts
   - security.uac
   - security.firewall
+  - security.ifeo-hijack
+  - system.disabled-tools
   - security.bitlocker-status
   - security.secureboot-ca2023
   - security.tpm
