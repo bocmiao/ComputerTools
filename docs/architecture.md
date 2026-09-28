@@ -282,6 +282,8 @@ steps:                       # 按顺序检查
     stop_on: [advice, manual] # 这一步出问题就不再往下查（可省略）
     fixes: [network.proxy-off]
 guide: { zh-CN: "…手动步骤…" }   # 可省略；maturity 是 guide 时必填
+links: ["tool:settings.display", "symptom:screen-colors"]  # 可省略：手动步骤下面的按钮，给指引里提到的小工具、
+                             # 相关症状（只能是 tool: 或 symptom:，修复写在 steps 的 fixes 里；不能指向自己、不能重复；要有 guide）
 ```
 
 ## 7. 检测清单（`catalog/profiles/*.yaml`）
@@ -473,7 +475,7 @@ export interface CatalogSummary {
   tools: ToolSummary[]
 }
 export interface SymptomStep { check: string; checkTitle: string; stopOn: Status[]; fixes: FeatureSummary[] }
-export interface SymptomDetail extends SymptomSummary { causes: string[]; guide: string | null; steps: SymptomStep[] }
+export interface SymptomDetail extends SymptomSummary { causes: string[]; guide: string | null; steps: SymptomStep[]; links: string[] }
 export interface CheckResult {
   id: string; title: string; category: string
   status: Status; resultCode: string | null; message: string
@@ -635,7 +637,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `system-protection` | `SystemPropertiesProtection.exe`（「系统属性」的「系统保护」页：开关系统保护、创建还原点） |
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 
-settings 页面：`windowsupdate`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、
+settings 页面：`windowsupdate`、`windowsupdate-optionalupdates`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、
 `sound`、`powersleep`、`batterysaver-usagedetails`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`easeofaccess-colorfilter`、`easeofaccess-highcontrast`、`nightlight`、`regionlanguage`、`apps-volume`、`notifications`。
 
 - 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。

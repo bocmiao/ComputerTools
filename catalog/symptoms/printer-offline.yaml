@@ -42,3 +42,4 @@ guide:
     4. 连的是别的电脑共享的打印机：那台电脑要开着，两台电脑能互相访问；报错 0x00000709、0x0000011b 的，看「打印机连不上或不打印」里的办法。
     5. 队列里有卡住的文档，删不掉：用小工具「清空打印队列」，再重新打印。
     6. 都不行：在「打印机和扫描仪」里删掉这台打印机，重启电脑，再重新添加（驱动到打印机品牌的官网下载）。
+links: ["tool:printer.resume", "tool:settings.printers", "tool:printer.clear-queue", "symptom:printer-share"]

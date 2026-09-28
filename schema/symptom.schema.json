@@ -32,6 +32,14 @@
         "type": "string"
       }
     },
+    "links": {
+      "description": "手动步骤下面的按钮（和检测结果的 links 一样：`tool:<id>`、`symptom:<id>`、`feature:<id>`），\n给指引里提到的小工具、相关症状",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
     "maturity": {
       "$ref": "#/$defs/Maturity"
     },

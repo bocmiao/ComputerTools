@@ -76,3 +76,4 @@ guide:
     以后装软件：尽量从软件的官网或者 Microsoft Store 下载，别点下载站的「高速下载」「安全下载」按钮；安装时选「自定义安装」，把顺带勾上的其他软件、「设为主页」都取消勾选。
 
     关掉以后还是弹，弹的是色情、赌博这类广告，或者浏览器的主页、搜索被改了改不回来：可能中了流氓软件或病毒，用杀毒软件做一次全面扫描（Windows 自带的「Windows 安全中心 → 病毒和威胁防护」就可以）。
+links: ["tool:settings.notifications", "tool:system.installed-programs", "tool:settings.windows-security"]

@@ -163,6 +163,8 @@ pub struct SymptomDetail {
     pub causes: Vec<String>,
     pub guide: Option<String>,
     pub steps: Vec<SymptomStep>,
+    /// 手动步骤下面的按钮（`tool:<id>`、`symptom:<id>`、`feature:<id>`）
+    pub links: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

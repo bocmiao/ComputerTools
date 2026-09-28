@@ -29,7 +29,13 @@ export interface CatalogSummary {
   tools: ToolSummary[]
 }
 export interface SymptomStep { check: string; checkTitle: string; stopOn: Status[]; fixes: FeatureSummary[] }
-export interface SymptomDetail extends SymptomSummary { causes: string[]; guide: string | null; steps: SymptomStep[] }
+export interface SymptomDetail extends SymptomSummary {
+  causes: string[]
+  guide: string | null
+  steps: SymptomStep[]
+  /** 手动步骤下面的按钮：tool:<id>、symptom:<id> */
+  links: string[]
+}
 export interface CheckResult {
   id: string; title: string; category: string
   status: Status; resultCode: string | null; message: string

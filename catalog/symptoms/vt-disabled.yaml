@@ -54,3 +54,4 @@ guide:
     - 检查结果说 Windows 的 Hyper-V、「内存完整性」正在用虚拟化：新版本的模拟器（雷电 9、MuMu 12、BlueStacks 5 的 Hyper-V 版本）能和它们一起用，到模拟器官网下载新版本就行；不要为了老版本的模拟器关掉「内存完整性」这类安全功能。
     - 用 WSL 2、Windows 沙盒的：开了 VT 以后，还要在小工具「启用或关闭 Windows 功能」里勾上「虚拟机平台」（沙盒勾「Windows 沙盒」），装完重启。
     - BIOS 里找不到这个选项：到电脑品牌官网按型号查一查，或者更新一下 BIOS；拿不准的请懂哥帮忙，别乱改 BIOS 里别的设置。
+links: ["tool:open.windows-features"]

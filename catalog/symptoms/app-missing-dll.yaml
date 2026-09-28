@@ -115,3 +115,4 @@ guide:
     不要从网上搜「某某.dll 下载」的网站下载单个文件放进 System32：那些文件常常夹带病毒，版本不对还会让更多软件打不开。上面这些缺的文件，都能从微软或者软件官方的安装包装回来。
 
     都试过还是不行，把提示框截个图，连同软件的名字发给懂哥。
+links: ["tool:system.install-vc-runtime", "tool:open.system-file-repair", "tool:system.install-netfx3", "tool:system.install-directplay"]

@@ -49,3 +49,4 @@ guide:
     4. 只想在某个文件夹里找：在资源管理器里打开那个文件夹，在右上角的搜索框里搜。没建索引也能搜到，只是慢一些。
 
     都不行的话，微软还有重置搜索的办法，要改的东西多一些，请懂哥帮忙。
+links: ["tool:open.indexing-options", "tool:system.restart-explorer"]

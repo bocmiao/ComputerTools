@@ -1069,6 +1069,7 @@ interface MockSymptom {
   causes: string[]
   guide: string | null
   steps: { check: string; stopOn?: Status[]; fixes: string[] }[]
+  links?: string[]
 }
 
 const SYMPTOMS: MockSymptom[] = [
@@ -2063,6 +2064,7 @@ const handlers: Handlers = {
         stopOn: step.stopOn ?? [],
         fixes: step.fixes.map((fid) => getFeature(fid).summary),
       })),
+      links: s.links ?? [],
     }
   },
 

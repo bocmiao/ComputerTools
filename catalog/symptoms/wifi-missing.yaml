@@ -68,3 +68,4 @@ guide:
     6. 台式机没有无线网卡：买一个 USB 无线网卡（几十块钱，选写着「免驱」的，插上就能用）。
 
     都不行的话，可能是无线网卡坏了，或者在 BIOS 里被关掉了，请懂哥或者电脑的售后看看。
+links: ["tool:settings.windows-update", "tool:open.device-manager", "tool:network.wifi-passwords"]

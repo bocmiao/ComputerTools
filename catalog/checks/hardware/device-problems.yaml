@@ -67,7 +67,7 @@ results:
     fixer: system
     next:
       zh-CN: 打开「Windows 更新」（点下面的按钮）检查更新，显卡驱动一般会自动装上；没有的话，再看看「可选更新」（Windows 11 在「高级选项」里，Windows 10 点「查看可选更新」）。也可以用电脑品牌自带的管家软件（比如联想电脑管家、华为电脑管家）更新驱动，或者到品牌官网按型号下载；组装机到显卡厂商（NVIDIA、AMD、Intel）的官网下载。装完重启一下电脑。特别老的电脑可能已经没有适合现在系统的显卡驱动，装不上也不影响上网、办公。
-    links: ["tool:settings.windows-update", "tool:system.hardware-info", "tool:open.device-manager"]
+    links: ["tool:settings.windows-update", "tool:settings.optional-updates", "tool:system.hardware-info", "tool:open.device-manager"]
   device-error:
     status: advice
     message:
@@ -83,7 +83,7 @@ results:
     fixer: system
     next:
       zh-CN: 打开「Windows 更新」（点下面的按钮）检查更新，再看看「可选更新」里有没有驱动（Windows 11 在「高级选项」里，Windows 10 点「查看可选更新」），勾上安装，装完重启电脑。还缺的，用电脑品牌自带的管家软件（比如联想电脑管家、华为电脑管家）更新，或者到品牌官网按型号下载（组装机到主板品牌的官网）。名字里带 VPN、加速器、Virtual（虚拟）这类字样的，是某个软件装的，重新安装那个软件就好。实在找不到驱动、用起来又没什么影响的，可以不管。拿不准的话，请懂哥帮忙。
-    links: ["tool:settings.windows-update", "tool:system.hardware-info", "tool:open.device-manager"]
+    links: ["tool:settings.windows-update", "tool:settings.optional-updates", "tool:system.hardware-info", "tool:open.device-manager"]
   needs-restart:
     status: advice
     message:

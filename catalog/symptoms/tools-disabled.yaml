@@ -60,3 +60,4 @@ guide:
     5. 只是任务管理器打不开、检查都正常：按 Ctrl + Alt + Del，看看那个界面上有没有「任务管理器」；还不行，用小工具「检查并修复系统文件」。
 
     实在弄不干净、又有重要资料的，先把资料备份出来，再请懂哥帮忙或者重装系统。
+links: ["tool:open.task-manager", "tool:open.system-file-repair"]

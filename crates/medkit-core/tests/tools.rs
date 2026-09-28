@@ -7,7 +7,7 @@ use std::sync::Arc;
 use medkit_core::Engine;
 use medkit_core::catalog::{self, Catalog, CatalogData, Severity};
 use medkit_core::journal::Journal;
-use medkit_core::model::{Check, Status, Tool, ToolGroup};
+use medkit_core::model::{Check, Status, Symptom, Tool, ToolGroup};
 use medkit_core::platform::OpenRequest;
 use medkit_core::platform::mock::MockPlatform;
 use medkit_core::script::{MockRunner, ScriptError};
@@ -197,6 +197,43 @@ fn tool_scripts_and_links_must_exist() {
 
     let e = errors_after("test.flush", |t| t.results.get_mut("done").unwrap().links.push("tool:test.gone".into()));
     assert!(e.iter().any(|m| m.contains("链接无效：tool:test.gone")), "{e:?}");
+}
+
+/// 症状手动步骤下面的按钮：只能指向存在的小工具、别的症状；不能指向修复、自己，不能重复；要有 guide。
+#[test]
+fn symptom_links_must_exist() {
+    let symptom = |links: &[&str], guide: bool| -> Symptom {
+        let mut yaml = String::from(
+            "id: test-screen\nschema_version: 1\ntitle: { zh-CN: 测试 }\nkeywords: [测试]\nmaturity: semi\n\
+             steps:\n  - check: disk.free-space\n",
+        );
+        if guide {
+            yaml.push_str("guide: { zh-CN: 照着做 }\n");
+        }
+        yaml.push_str(&format!(
+            "links: [{}]\n",
+            links.iter().map(|l| format!("\"{l}\"")).collect::<Vec<_>>().join(", ")
+        ));
+        catalog::parse_typed(&yaml).unwrap_or_else(|e| panic!("{e}\n{yaml}"))
+    };
+    let errors_with = |s: Symptom| {
+        let mut d = data();
+        d.symptoms.push(s);
+        errors(&d)
+    };
+
+    let e = errors_with(symptom(&["tool:test.flush"], true));
+    assert!(e.is_empty(), "{e:?}");
+    let e = errors_with(symptom(&["tool:test.nope"], true));
+    assert!(e.iter().any(|m| m.contains("链接无效：tool:test.nope")), "{e:?}");
+    let e = errors_with(symptom(&["feature:test.fix"], true));
+    assert!(e.iter().any(|m| m.contains("只能是 tool: 或 symptom:")), "{e:?}");
+    let e = errors_with(symptom(&["symptom:test-screen"], true));
+    assert!(e.iter().any(|m| m.contains("不能指向自己")), "{e:?}");
+    let e = errors_with(symptom(&["tool:test.flush", "tool:test.flush"], true));
+    assert!(e.iter().any(|m| m.contains("重复的链接")), "{e:?}");
+    let e = errors_with(symptom(&["tool:test.flush"], false));
+    assert!(e.iter().any(|m| m.contains("就要写 guide")), "{e:?}");
 }
 
 #[test]

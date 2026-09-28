@@ -50,3 +50,4 @@ guide:
     5. 到电脑品牌的官网按型号下载最新的芯片组驱动、USB 驱动装上。
 
     换了几个口、几个设备都这样，请懂哥看看主板和电源。
+links: ["tool:settings.power", "tool:open.device-manager"]

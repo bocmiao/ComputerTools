@@ -83,3 +83,4 @@ guide:
     4. 电量一直是 0%，怎么也充不进：电池多半坏了（或者放了太久没用，电放光了），找售后看看。
 
     电池鼓起来了（外壳鼓包，触控板、键盘被顶起来，盖子合不上）：马上停止充电，别再用了，尽快送售后换电池；不要自己拆，也不要去按压。
+links: ["tool:settings.battery-usage", "tool:settings.power", "symptom:slow-pc"]

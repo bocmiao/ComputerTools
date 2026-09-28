@@ -367,6 +367,10 @@ pub struct Symptom {
     pub steps: Vec<Step>,
     #[serde(default)]
     pub guide: Option<Text>,
+    /// 手动步骤下面的按钮（和检测结果的 links 一样：`tool:<id>`、`symptom:<id>`、`feature:<id>`），
+    /// 给指引里提到的小工具、相关症状
+    #[serde(default)]
+    pub links: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

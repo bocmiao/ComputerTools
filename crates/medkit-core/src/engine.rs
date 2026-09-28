@@ -304,6 +304,7 @@ impl Engine {
             causes: s.causes.iter().map(|t| t.get(&self.lang).to_owned()).collect(),
             guide: s.guide.as_ref().map(|t| t.get(&self.lang).to_owned()),
             steps,
+            links: s.links.clone(),
         })
     }
 

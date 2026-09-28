@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:windowsupdate-optionalupdates（Windows 更新 → 高级选项 → 可选更新），由系统打开。
+# 显卡、声卡这些的驱动程序更新常常在这里，不会自动装（微软《在 Windows 中自动获取推荐的驱动程序和更新》）。
+id: settings.optional-updates
+schema_version: 1
+group: open
+title: { zh-CN: 可选更新（驱动程序） }
+description:
+  zh-CN: 打开「Windows 更新」里的「可选更新」：显卡、声卡、网卡这些的驱动程序更新常常在「驱动程序更新」这一栏里，不会自动安装，勾上要装的再点「下载并安装」。没有这一栏就是 Windows 更新暂时没有给这台电脑的驱动。
+category: settings
+open: { settings: windowsupdate-optionalupdates }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/windows/automatically-get-recommended-drivers-and-updates-for-your-hardware-aa2e8f6c-7ff1-1fe1-bf93-44ba7abc5a2e

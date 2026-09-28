@@ -537,6 +537,7 @@ watch(
         <section v-if="detail.guide" class="card block" aria-labelledby="guide-title">
           <h2 id="guide-title" class="section-title">手动步骤</h2>
           <p class="pre-text guide">{{ detail.guide }}</p>
+          <ResultLinks v-if="detail.links.length > 0" :links="detail.links" :kinds="['tool', 'symptom']" />
         </section>
       </template>
     </template>

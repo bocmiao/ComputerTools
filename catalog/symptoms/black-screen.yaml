@@ -53,3 +53,4 @@ guide:
     7. 查出登录以后启动的程序被改过的，改完以后用「Windows 安全中心」全盘扫描一次病毒。
 
     都不行的话，先把重要文件备份出来（可以用 U 盘启动盘），再请懂哥帮忙。
+links: ["tool:open.system-restore", "tool:settings.windows-security"]

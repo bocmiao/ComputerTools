@@ -70,6 +70,8 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
 /// 「设置」里能打开的页面（ms-settings:<页面>）。
 pub const SETTINGS_PAGES: &[&str] = &[
     "windowsupdate",
+    // 「Windows 更新 → 高级选项 → 可选更新」：驱动程序更新在这里（Windows 10 2004 起）
+    "windowsupdate-optionalupdates",
     "storagesense",
     "storagepolicies",
     "appsfeatures",

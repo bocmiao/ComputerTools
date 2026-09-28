@@ -1,0 +1,12 @@
+# 打开「设置」里的一页（open）：ms-settings:display（系统 → 屏幕 / 显示），由系统打开。
+id: settings.display
+schema_version: 1
+group: open
+title: { zh-CN: 屏幕（分辨率、缩放、多显示器） }
+description:
+  zh-CN: 打开「设置」里的「屏幕」（Windows 10 叫「显示」）：调分辨率、缩放（字和图标的大小）、屏幕方向，接了第二个显示器、投影仪时在这里选「复制」还是「扩展」、点「检测」；刷新率在「高级显示设置」里。
+category: settings
+open: { settings: display }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/windows/change-your-screen-resolution-and-layout-in-windows-5effefe3-2eac-e306-0b5d-2073b765876b

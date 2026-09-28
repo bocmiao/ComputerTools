@@ -287,7 +287,7 @@ impl Validator<'_> {
             self.feature(f, &check_ids);
         }
         for s in &data.symptoms {
-            self.symptom(s, &check_ids, &feature_ids);
+            self.symptom(s, &check_ids, &feature_ids, &targets);
         }
         for p in &data.profiles {
             let file = self.file("profiles", &p.id);
@@ -679,7 +679,7 @@ impl Validator<'_> {
         }
     }
 
-    fn symptom(&mut self, s: &Symptom, checks: &HashSet<&str>, features: &HashSet<&str>) {
+    fn symptom(&mut self, s: &Symptom, checks: &HashSet<&str>, features: &HashSet<&str>, targets: &LinkTargets) {
         let file = self.file("symptoms", &s.id);
         self.common(&file, s.schema_version, &s.title, "title");
         if let Some(t) = &s.summary {
@@ -707,6 +707,23 @@ impl Validator<'_> {
                 if !features.contains(fix.as_str()) {
                     self.err(&file, format!("steps[{i}] 引用了不存在的功能：{fix}"));
                 }
+            }
+        }
+        if !s.links.is_empty() && s.guide.is_none() {
+            self.err(&file, "写了 links（手动步骤下面的按钮）就要写 guide".into());
+        }
+        let mut seen = HashSet::new();
+        for link in &s.links {
+            if link.starts_with("feature:") {
+                self.err(&file, format!("症状的 links 只能是 tool: 或 symptom:，修复写在 steps 的 fixes 里：{link}"));
+            } else if !targets.contains(link) {
+                self.err(&file, format!("links 里的链接无效：{link}"));
+            }
+            if *link == format!("symptom:{}", s.id) {
+                self.err(&file, format!("links 不能指向自己：{link}"));
+            }
+            if !seen.insert(link.as_str()) {
+                self.err(&file, format!("links 里有重复的链接：{link}"));
             }
         }
     }
