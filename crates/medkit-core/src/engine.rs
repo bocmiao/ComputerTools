@@ -534,9 +534,14 @@ impl Engine {
                 Some((None, None, None, Some(name))) => {
                     tools::website(name)
                         .ok_or_else(|| Error::Catalog(format!("{id} 的 open.website 不在名单里：{name}")))?;
-                    let (url, text) = self.oem_drivers_page()?;
-                    notice = Some(text);
-                    OpenRequest::Web(url)
+                    match tools::fixed_website(name) {
+                        Some(url) => OpenRequest::Web(url),
+                        None => {
+                            let (url, text) = self.oem_drivers_page()?;
+                            notice = Some(text);
+                            OpenRequest::Web(url)
+                        }
+                    }
                 }
                 _ => return Err(Error::Invalid(format!("「{title}」不是用来打开的工具"))),
             };

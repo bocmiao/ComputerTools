@@ -119,6 +119,16 @@ category: hardware
 open: { website: oem-drivers }
 references: [ "https://example.com" ]
 "#,
+    r#"
+id: test.office-uninstall
+schema_version: 1
+group: open
+title: { zh-CN: 微软官方的 Office 卸载工具 }
+description: { zh-CN: 打开微软的卸载说明。 }
+category: system
+open: { website: office-uninstall }
+references: [ "https://example.com" ]
+"#,
 ];
 
 fn tools() -> Vec<Tool> {
@@ -516,6 +526,20 @@ fn virtual_machines_and_unknown_brands_are_explained_without_opening_anything() 
     let e = w.engine.tool_open("test.oem-drivers").unwrap_err().to_string();
     assert!(e.contains("没有写这台电脑的品牌"), "{e}");
     assert!(w.platform.opened().is_empty());
+}
+
+/// 网址固定的官方网页：打开名单里写死的网址，不读 BIOS，也没有要多说的；资源管理器没在运行时同样给出网址。
+#[test]
+fn fixed_official_pages_open_their_listed_address() {
+    let w = world();
+    let url = medkit_core::tools::fixed_website("office-uninstall").unwrap();
+    assert_eq!(w.engine.tool_open("test.office-uninstall").unwrap(), None);
+    assert_eq!(w.platform.opened(), vec![OpenRequest::Web(url)]);
+
+    let w = world();
+    w.platform.stop_desktop();
+    let e = w.engine.tool_open("test.office-uninstall").unwrap_err().to_string();
+    assert!(e.contains("资源管理器") && e.contains(url), "{e}");
 }
 
 /// 资源管理器没在运行：不退回到直接打开（浏览器会以管理员身份运行），给出网址让用户自己打开。

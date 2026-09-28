@@ -1,0 +1,13 @@
+# 打开微软的《在电脑或 Mac 上下载、安装或重新安装 Microsoft 365 或 Office 2024》（open：website office-install）。
+# 用买 Office 时用的微软账户（或者单位、学校给的账户）登录，下载安装自己那一份，新电脑自带的 Office 也是这样装回来。
+# Mocreak 这类工具一键下载安装的是批量许可版（个人没有授权，装了就要「激活」）；小药箱不做激活，只给微软的正版安装说明。
+id: web.office-install
+schema_version: 1
+group: open
+title: { zh-CN: 微软的正版 Office 下载安装说明 }
+description:
+  zh-CN: 打开微软的《在电脑上下载、安装或重新安装 Microsoft 365 或 Office》：用买 Office 时用的微软账户（或者单位、学校给的账户）登录，就能下载安装自己那一份；新电脑自带的 Office 卸掉以后也是这样装回来。
+category: system
+open: { website: office-install }
+references:
+  - https://support.microsoft.com/zh-cn/office/lifecycle/officeinstall/download-install-or-reinstall-microsoft-365-or-office-2024-on-a-pc-or-mac

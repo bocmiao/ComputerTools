@@ -1,0 +1,56 @@
+# 一键处理（action）：打开 Office 自己的修复。脚本：scripts/tools/system/office-repair.ps1
+# 和在「应用和功能」里点 Office 的「修改」一样：运行 Office 登记在卸载信息里的 ModifyPath。即点即用版弹出「你希望如何修复
+# Office 程序」（快速修复 / 联机修复），MSI 版弹出「更改安装」（修复）。步骤照微软《修复 Office 应用程序》和《Repair process
+# does not start for Office Click-to-Run application》。只运行 Office 共享文件夹里（或者系统的 msiexec）、微软签名的程序，
+# 不等修复窗口关掉。借鉴 Mocreak 的「修复 Office」，但只用 Office 自带的修复，不自己改文件。
+id: system.office-repair
+schema_version: 1
+group: action
+title: { zh-CN: 修复 Office }
+description:
+  zh-CN: Word、Excel、PPT 打不开、闪退、报错时，打开 Office 自己的修复：先选「快速修复」（几分钟，不用联网），不行再选「联机修复」（要联网，相当于重新下载安装一遍）。和在「应用和功能」里点 Office 的「修改」一样。
+category: system
+requires_admin: true
+timeout_sec: 60
+run:
+  script: tools/system/office-repair.ps1
+confirm:
+  zh-CN: 修复前先保存文件，关掉 Word、Excel 这些 Office 程序。现在打开 Office 的修复吗？
+results:
+  started:
+    status: ok
+    message:
+      zh-CN: 已经打开了「{name}」的修复窗口。
+    next:
+      zh-CN: 在「你希望如何修复 Office 程序」里先选「快速修复」，点「修复」；修完还是打不开，再来一次选「联机修复」（要联网，时间长一些，修完可能要重新登录微软账户）。MSI 版的 Office 在「更改安装」里选「修复」，点「继续」。修完重启一下电脑。
+  no-office:
+    status: na
+    message:
+      zh-CN: 这台电脑上没找到装好的 Office（「应用和功能」里没有），没什么可修的。
+  no-repair:
+    status: advice
+    message:
+      zh-CN: 「{name}」没有登记修复的办法。
+    fixer: user
+    next:
+      zh-CN: 用「微软官方的 Office 卸载工具」把它卸干净，重启电脑，再照微软的说明重新下载安装。
+    links: ["tool:web.office-uninstall", "tool:web.office-install"]
+  missing:
+    status: advice
+    message:
+      zh-CN: 「{name}」登记的修复程序已经找不到了，Office 可能坏得比较厉害。
+    fixer: user
+    next:
+      zh-CN: 用「微软官方的 Office 卸载工具」把它卸干净，重启电脑，再照微软的说明重新下载安装。
+    links: ["tool:web.office-uninstall", "tool:web.office-install"]
+  untrusted:
+    status: advice
+    message:
+      zh-CN: 「{name}」登记的修复程序不在 Office 自己的文件夹里，或者不是微软签名的，小药箱没有运行它。
+    fixer: user
+    next:
+      zh-CN: 打开「应用和功能」，找到 Office 点「修改」自己修复；修复打不开的，用「微软官方的 Office 卸载工具」卸掉重装。
+    links: ["tool:settings.apps", "tool:web.office-uninstall"]
+references:
+  - https://support.microsoft.com/zh-cn/office/lifecycle/repair-an-office-application
+  - https://learn.microsoft.com/en-us/previous-versions/troubleshoot/microsoft-365/microsoft-365-apps/office-suite-problems/click-to-run-app-repair-process

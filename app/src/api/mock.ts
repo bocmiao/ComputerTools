@@ -1144,6 +1144,30 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'system.office-installs': {
+    title: '装了哪些 Office',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          resultCode: 'ok',
+          message: '装的 Office：Microsoft 365 - zh-cn（64 位）。没有互相冲突的。',
+          facts: { products: 'Microsoft 365 - zh-cn（64 位）', count: 1 },
+        }
+      }
+      // 说法和 catalog/checks/system/office-installs.yaml 一样
+      return {
+        status: 'advice',
+        resultCode: 'same-version',
+        message:
+          '同一版本的 Office 用两种方式装了两套：Microsoft 365 - zh-cn（64 位）、Microsoft Office Professional Plus 2016（32 位）。微软说这样不支持，Office 容易打不开，装新的时候也会报错。',
+        fixer: 'user',
+        next: '只留一套（一般留 Microsoft 365 或者新的那套），另一套用下面的「微软官方的 Office 卸载工具」卸掉，重启电脑，再点「修复 Office」把留下的那套修一下，打开文件时才会用它。',
+        links: ['tool:web.office-uninstall', 'tool:system.office-repair'],
+        facts: { products: 'Microsoft 365 - zh-cn（64 位）、Microsoft Office Professional Plus 2016（32 位）', count: 2 },
+      }
+    },
+  },
   'system.jpeg-extension': {
     title: '网页上保存的图片的扩展名',
     evaluate: () => {
@@ -1516,6 +1540,15 @@ const SYMPTOMS: MockSymptom[] = [
       { check: 'system.device-problems', fixes: [] },
     ],
     links: ['tool:settings.display', 'tool:open.cleartype', 'tool:web.oem-drivers'],
+  },
+  {
+    id: 'office-broken', title: 'Word、Excel 打不开、闪退、装不上',
+    summary: 'Word、Excel、PPT 打不开，一打开就闪退、报错；Office 装不上、装到最后报错误代码；卸不掉、卸不干净；标题栏显示「未经授权的产品」。',
+    keywords: ['word打不开', 'excel打不开', 'office装不上', '30015', '0xc0000142'], maturity: 'semi',
+    causes: ['Office 自己的文件坏了（更新到一半断电、被「清理」软件删了东西）', '同一台电脑上装了两套互相冲突的 Office，或者旧版本没卸干净', 'Word、Excel 里装的加载项出问题，一打开就闪退', '授权的问题：没用买 Office 的账户登录，或者用了网上的「激活工具」'],
+    guide: '先重启一次电脑。再点「修复 Office」，先选「快速修复」，不行再选「联机修复」。只有 Word 一打开就闪退的，按住 Ctrl 双击它用安全模式打开，能打开就是加载项的问题。装不上、卸不干净的，用「微软官方的 Office 卸载工具」卸干净再装。提示要激活的，用买 Office 的微软账户登录，别用「激活工具」。',
+    steps: [{ check: 'system.office-installs', fixes: [] }],
+    links: ['tool:system.office-repair', 'tool:web.office-uninstall', 'tool:web.office-install', 'tool:settings.apps'],
   },
   {
     id: 'builtin-app-broken', title: '照片、计算器这些自带的应用打不开',
@@ -2068,6 +2101,26 @@ const TOOL_LIST: MockTool[] = [
   ),
   defineTool(
     {
+      id: 'system.office-repair',
+      title: '修复 Office',
+      description: 'Word、Excel、PPT 打不开、闪退、报错时，打开 Office 自己的修复：先选「快速修复」（几分钟，不用联网），不行再选「联机修复」（要联网，相当于重新下载安装一遍）。和在「应用和功能」里点 Office 的「修改」一样。',
+      category: 'system',
+      group: 'action',
+      confirm: '修复前先保存文件，关掉 Word、Excel 这些 Office 程序。现在打开 Office 的修复吗？',
+    },
+    {
+      // 说法和 catalog/tools/system/office-repair.yaml 一样
+      run: () => ({
+        status: 'ok',
+        resultCode: 'started',
+        message: '已经打开了「Microsoft 365 - zh-cn」的修复窗口。',
+        next: '在「你希望如何修复 Office 程序」里先选「快速修复」，点「修复」；修完还是打不开，再来一次选「联机修复」（要联网，时间长一些，修完可能要重新登录微软账户）。MSI 版的 Office 在「更改安装」里选「修复」，点「继续」。修完重启一下电脑。',
+      }),
+      requiresAdmin: true,
+    },
+  ),
+  defineTool(
+    {
       id: 'system.restart-explorer',
       title: '重启资源管理器',
       description: '任务栏点不动、桌面图标不见了、文件夹窗口卡住时，把资源管理器关掉再重新打开，不用重启电脑。',
@@ -2162,6 +2215,22 @@ const TOOL_LIST: MockTool[] = [
     'hardware',
     'website',
     'https://newsupport.lenovo.com.cn/driveDownloads_index.html',
+  ),
+  openTool(
+    'web.office-uninstall',
+    '微软官方的 Office 卸载工具',
+    '打开微软的《从电脑卸载 Microsoft 365 或 Office》：先照页面在「控制面板」里卸载；卸不掉、卸不干净、装新版时提示已经有旧版本的，下载页面里的「卸载支持工具」，它会把 Office 卸干净。卸完要重启电脑。',
+    'system',
+    'website',
+    'https://support.microsoft.com/zh-cn/office/lifecycle/officeinstall/uninstall-microsoft-365-or-office-from-a-pc',
+  ),
+  openTool(
+    'web.office-install',
+    '微软的正版 Office 下载安装说明',
+    '打开微软的《在电脑上下载、安装或重新安装 Microsoft 365 或 Office》：用买 Office 时用的微软账户（或者单位、学校给的账户）登录，就能下载安装自己那一份；新电脑自带的 Office 卸掉以后也是这样装回来。',
+    'system',
+    'website',
+    'https://support.microsoft.com/zh-cn/office/lifecycle/officeinstall/download-install-or-reinstall-microsoft-365-or-office-2024-on-a-pc-or-mac',
   ),
   openTool(
     'open.disk-cleanup',
@@ -2429,7 +2498,8 @@ function openMockTool(id: string): string | null {
     throw `桌面（资源管理器）没在运行，小药箱没法用你的账户打开浏览器。请自己打开浏览器，输入这个网址：${t.target ?? ''}`
   }
   if (t.summary.opens === 'website') {
-    // 演示：一台联想 ThinkPad（说法和引擎一样）
+    // 网址固定的官方网页打开以后没有要多说的；品牌驱动页演示一台联想 ThinkPad（说法和引擎一样）
+    if (id !== 'web.oem-drivers') return null
     return '已经在浏览器里打开了联想官网的驱动下载页。这台电脑的型号是「ThinkPad X1 Carbon Gen 9」，在网页上搜这个型号就能找到它的驱动。'
   }
   if (DEMO_OPEN_FAIL) {

@@ -1,0 +1,13 @@
+# 打开微软的《从电脑卸载 Microsoft 365 或 Office》（open：website office-uninstall，网址写在 tools.rs 的 FIXED_WEBSITES 里）。
+# 页面教先在控制面板里卸载，卸不掉、卸不干净时下载微软的「卸载支持工具」（SetupProd_OffScrub.exe，微软签名），它会把 Office
+# 连同残留一起卸掉。借鉴 Mocreak 的「完全删除 Office」，但小药箱自己不删 Office 的文件和注册表：用微软的工具。
+id: web.office-uninstall
+schema_version: 1
+group: open
+title: { zh-CN: 微软官方的 Office 卸载工具 }
+description:
+  zh-CN: 打开微软的《从电脑卸载 Microsoft 365 或 Office》：先照页面在「控制面板」里卸载；卸不掉、卸不干净、装新版时提示已经有旧版本的，下载页面里的「卸载支持工具」，它会把 Office 卸干净。卸完要重启电脑。
+category: system
+open: { website: office-uninstall }
+references:
+  - https://support.microsoft.com/zh-cn/office/lifecycle/officeinstall/uninstall-microsoft-365-or-office-from-a-pc

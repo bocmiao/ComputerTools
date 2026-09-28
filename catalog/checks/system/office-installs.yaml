@@ -1,0 +1,47 @@
+# 装了哪些 Office，有没有两套互相冲突（借鉴 Mocreak「自动检测冲突的 Office 组件」的思路，只检测、不卸载）。
+# 脚本：scripts/checks/system/office-installs.ps1（只读 HKLM 的卸载信息，和「应用和功能」列出来的一样；共享块 office-installs
+# 和「修复 Office」共用）。判断照微软的两篇说明：
+# - 《Office installed with Click-to-Run and Windows Installer on same computer isn't supported》：同一版本的 Office 不能一套用
+#   即点即用、一套用 Windows Installer（MSI）装。即点即用的 Microsoft 365、Office 2016～2024 都是版本 16，MSI 的 Office 2016
+#   也是版本 16 → same-version；
+# - 《Install and use different versions of Office on the same PC》：同一台电脑上的 Office 要么都是 32 位、要么都是 64 位
+#   → mixed-bitness；不同版本、有一套是 MSI 装的可以并存；卸掉一套以后要修复留下的那套，文件关联才正常。
+# 结果：none（na）/ ok / same-version、mixed-bitness（advice，给微软官方的卸载工具和修复）。
+# 事实：products（每一套的名字和位数，用「、」隔开）、count。
+id: system.office-installs
+schema_version: 1
+title: { zh-CN: 装了哪些 Office }
+description:
+  zh-CN: 看看这台电脑装了哪些 Office，有没有两套互相冲突的（同一版本用两种方式装了两遍、32 位和 64 位混着装）。冲突时 Office 容易打不开、装新的时候报错。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/office-installs.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 装的 Office：{products}。没有互相冲突的。
+  none:
+    status: na
+    message:
+      zh-CN: 这台电脑上没找到装好的 Office（「应用和功能」里没有）。
+  same-version:
+    status: advice
+    message:
+      zh-CN: 同一版本的 Office 用两种方式装了两套：{products}。微软说这样不支持，Office 容易打不开，装新的时候也会报错。
+    fixer: user
+    next:
+      zh-CN: 只留一套（一般留 Microsoft 365 或者新的那套），另一套用下面的「微软官方的 Office 卸载工具」卸掉，重启电脑，再点「修复 Office」把留下的那套修一下，打开文件时才会用它。
+    links: ["tool:web.office-uninstall", "tool:system.office-repair"]
+  mixed-bitness:
+    status: advice
+    message:
+      zh-CN: 装的 Office 有 32 位的也有 64 位的：{products}。微软说同一台电脑上的 Office 要么都是 32 位、要么都是 64 位，混着装会装不上、打不开。
+    fixer: user
+    next:
+      zh-CN: 只留一种位数的，另一种用下面的「微软官方的 Office 卸载工具」卸掉，重启电脑，再点「修复 Office」把留下的修一下；以后装 Office、Visio、Project 都选同一种位数。
+    links: ["tool:web.office-uninstall", "tool:system.office-repair"]
+references:
+  - https://support.microsoft.com/en-us/office/office-installed-with-click-to-run-and-windows-installer-on-same-computer-isn-t-supported-30775ef4-fa77-4f47-98fb-c5826a6926cd
+  - https://support.microsoft.com/en-us/office/install-and-use-different-versions-of-office-on-the-same-pc-6ebb44ce-18a3-43f9-a187-b78c513788bf

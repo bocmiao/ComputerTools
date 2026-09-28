@@ -155,14 +155,36 @@ pub fn troubleshooter(name: &str) -> Option<&'static str> {
     TROUBLESHOOTERS.iter().copied().find(|t| *t == name)
 }
 
-/// 能打开的网页（`open.website` 的名字）。网址不写在数据文件里：由引擎按这台电脑的情况从下面的表里挑。
+/// 能打开的网页（`open.website` 的名字）。网址不写在数据文件里：`oem-drivers` 由引擎按这台电脑的情况从品牌表里挑，
+/// 别的是 [`FIXED_WEBSITES`] 里写死的官方网页。
 pub const WEBSITES: &[&str] = &[
     // 电脑品牌官网的驱动下载页：按 BIOS 里写的厂商认品牌（见 [`oem_match`]）
     "oem-drivers",
+    "office-uninstall",
+    "office-install",
 ];
 
 pub fn website(name: &str) -> Option<&'static str> {
     WEBSITES.iter().copied().find(|w| *w == name)
+}
+
+/// 网址固定的官方网页（名字都在 [`WEBSITES`] 里）。都是微软的中文页面，逐个打开核实过内容。
+pub const FIXED_WEBSITES: &[(&str, &str)] = &[
+    // 微软《从电脑卸载 Microsoft 365 或 Office》：先在控制面板里卸载，卸不掉、卸不干净时下载里面的「卸载支持工具」
+    (
+        "office-uninstall",
+        "https://support.microsoft.com/zh-cn/office/lifecycle/officeinstall/uninstall-microsoft-365-or-office-from-a-pc",
+    ),
+    // 微软《在电脑或 Mac 上下载、安装或重新安装 Microsoft 365 或 Office 2024》：用买 Office 的账户登录，下载安装自己那一份
+    (
+        "office-install",
+        "https://support.microsoft.com/zh-cn/office/lifecycle/officeinstall/download-install-or-reinstall-microsoft-365-or-office-2024-on-a-pc-or-mac",
+    ),
+];
+
+/// 固定网页的网址；按这台电脑的情况挑网址的（`oem-drivers`）是 `None`。
+pub fn fixed_website(name: &str) -> Option<&'static str> {
+    FIXED_WEBSITES.iter().find(|(n, _)| *n == name).map(|(_, url)| *url)
 }
 
 /// 一个电脑（或主板）品牌在中国大陆的官方驱动下载页。
@@ -678,6 +700,19 @@ mod tests {
         }
         assert_eq!(website("oem-drivers"), Some("oem-drivers"));
         assert!(website("https://example.com").is_none());
+    }
+
+    #[test]
+    fn fixed_websites_are_listed_official_and_https() {
+        for (name, url) in FIXED_WEBSITES {
+            assert_eq!(website(name), Some(*name), "{name} 要在 WEBSITES 里");
+            assert!(url.starts_with("https://support.microsoft.com/zh-cn/") && !url.contains(' '), "{url}");
+        }
+        // 除了按电脑挑网址的品牌驱动页，名单里的都有固定网址
+        for name in WEBSITES.iter().filter(|n| **n != "oem-drivers") {
+            assert!(fixed_website(name).is_some(), "{name}");
+        }
+        assert_eq!(fixed_website("oem-drivers"), None);
     }
 
     #[test]

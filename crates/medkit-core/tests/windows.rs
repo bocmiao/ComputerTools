@@ -683,6 +683,18 @@ fn open_tools_launch_or_explain_why_not() {
                 close_new("GetHelp.exe", &before);
                 close_new("OpenWith.exe", &before_open_with);
             }
+            // 网址固定的官方网页：借资源管理器用普通权限打开浏览器。新开的浏览器进程随后关掉，免得窗口留在屏幕上
+            // （浏览器已经开着时只是多一个标签页）
+            (None, None, None, Some(name)) if tools::fixed_website(name).is_some() => {
+                let url = tools::fixed_website(name).unwrap_or_default();
+                let before = pids_of("msedge.exe");
+                match engine.tool_open(&t.id) {
+                    Ok(_) => eprintln!("打开了 {:<28} {url}", t.id),
+                    Err(e) => failures.push(format!("{}（{name}）：{e}", t.id)),
+                }
+                std::thread::sleep(Duration::from_secs(3));
+                close_new("msedge.exe", &before);
+            }
             // 品牌官网的驱动下载页：CI 机器是 Azure 上的 Hyper-V 虚拟机，要如实说「这是虚拟机」、不打开网页。
             // 把 BIOS 里写的厂商和型号打印出来（这里没有序列号），核对认虚拟机的规则
             (None, None, None, Some(name)) => {

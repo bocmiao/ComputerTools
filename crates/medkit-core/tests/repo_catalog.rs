@@ -139,6 +139,10 @@ fn common_error_messages_find_their_symptom() {
         ("看视频全屏的时候下面的任务栏还在，挡住字幕", "fullscreen-taskbar"),
         ("电脑上的字体模糊不清，看久了眼睛累", "blurry-text"),
         ("有个软件界面模糊，字有重影", "blurry-text"),
+        // 「软件闪退」也有「打开就闪退」，Word 打不开的要先到 Office 这边
+        ("Word 打不开，一打开就闪退", "office-broken"),
+        ("安装 Office 时出错，错误代码 30015-6", "office-broken"),
+        ("WINWORD.EXE - 应用程序错误：应用程序无法正常启动(0xc0000142)。请单击“确定”关闭应用程序。", "office-broken"),
     ];
     let wrong: Vec<String> = cases
         .iter()

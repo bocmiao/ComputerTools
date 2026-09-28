@@ -1,0 +1,67 @@
+# 症状：Word、Excel 打不开、闪退、装不上（借鉴 Mocreak 的 Office 修复、冲突检测、完全卸载，全部用微软官方的办法）。
+# 先查装了哪些 Office、有没有两套冲突（system.office-installs）。指引照微软的说明：
+# - 《修复 Office 应用程序》：「应用和功能」里 Office 的「修改」，即点即用版先「快速修复」、不行「联机修复」（按钮 system.office-repair）；
+# - 《在 Windows 电脑上以安全模式打开 Office 应用》：按住 Ctrl 双击，或者 Win + R 输入 winword /safe、excel /safe；
+# - 错误代码 30015-6：先重启电脑，再联机修复；0xc0000142：先更新 Office，再联机修复，再装 Windows 更新；
+# - 《从电脑卸载 Microsoft 365 或 Office》：卸不掉、卸不干净用微软的卸载支持工具（按钮 web.office-uninstall）；
+# - 《在电脑上下载、安装或重新安装 Microsoft 365 或 Office》：用买 Office 的账户登录下载（按钮 web.office-install）。
+# 标题栏显示「未经授权的产品」、提示要激活的，只说明是授权的问题、教用自己的账户登录；小药箱不做激活，也劝别用「激活工具」。
+id: office-broken
+schema_version: 1
+title: { zh-CN: Word、Excel 打不开、闪退、装不上 }
+summary:
+  zh-CN: Word、Excel、PPT 打不开，一打开就闪退、报错；Office 装不上、装到最后报错误代码；卸不掉、卸不干净；标题栏显示「未经授权的产品」。
+keywords:
+  - office打不开
+  - word打不开
+  - excel打不开
+  - ppt打不开
+  - powerpoint打不开
+  - outlook打不开
+  - word闪退
+  - excel闪退
+  - ppt闪退
+  - office闪退
+  - word崩溃
+  - excel崩溃
+  - word安全模式
+  - excel安全模式
+  - winword.exe
+  - excel.exe
+  - powerpnt.exe
+  - outlook.exe
+  - office装不上
+  - office安装失败
+  - office无法安装
+  - 安装office时出错
+  - office卸载不了
+  - office卸载不干净
+  - office修复
+  - 修复office
+  - "30015"
+  - "30145"
+  - "0xc0000142"
+  - 未经授权的产品
+  - office未激活
+causes:
+  - zh-CN: Office 自己的文件坏了（更新到一半断电、被「清理」软件删了东西）
+  - zh-CN: 同一台电脑上装了两套互相冲突的 Office（同一版本用两种方式装、32 位和 64 位混着装），或者旧版本没卸干净
+  - zh-CN: Word、Excel 里装的加载项（PDF、网盘、翻译、输入法这些软件装的插件）出问题，一打开就闪退
+  - zh-CN: 授权的问题：没用买 Office 的账户登录，或者用了网上的「激活工具」
+maturity: semi
+steps:
+  - check: system.office-installs
+guide:
+  zh-CN: |
+    先看上面的检查：装了两套互相冲突的 Office，先按提示卸掉一套，重启以后再往下做。
+
+    1. 先重启一次电脑，再打开试试。
+    2. 修复 Office：点下面的「修复 Office」，先选「快速修复」（几分钟，不用联网）；修完还是不行，再来一次选「联机修复」（要联网，相当于重新下载安装一遍，时间长一些，修完可能要重新登录微软账户）。
+    3. 只有 Word（或者 Excel）一打开就闪退：按住 Ctrl 键双击它的图标，问要不要用安全模式打开时点「是」（也可以按 Win + R，输入 winword /safe 或者 excel /safe 回车）。安全模式能打开的，多半是加载项的问题：在「文件 → 选项 → 加载项」里，下面「管理」选「COM 加载项」，点「转到」，把勾都去掉，关掉重开；再一个一个勾回来，找出是哪个软件装的插件。
+    4. 装 Office 装到最后报错（错误代码 30015-6 这类）：先重启电脑，再点「修复 Office」选「联机修复」。提示已经装了别的版本、装不上的，先用「微软官方的 Office 卸载工具」把旧的卸干净，重启以后再装。
+    5. 一打开就报 0xc0000142：先更新 Office（「文件 → 账户 → 更新选项 → 立即更新」），再联机修复，再装 Windows 更新。
+    6. 标题栏显示「未经授权的产品」、提示要激活：这是授权的问题，不是 Office 坏了。点「文件 → 账户」，用买 Office（或者新电脑自带 Office）时用的那个微软账户登录；单位的电脑找单位的管理员。别用网上的「激活工具」，这类工具常带木马、会改 hosts、关掉杀毒软件。
+    7. 想卸掉重装正版：先用「微软官方的 Office 卸载工具」卸干净，重启电脑，再照「微软的正版 Office 下载安装说明」用自己的账户登录下载安装。
+
+    都试过还是不行，把报错的截图、Office 的版本（「文件 → 账户」里能看到）发给懂哥。
+links: ["tool:system.office-repair", "tool:web.office-uninstall", "tool:web.office-install", "tool:settings.apps", "symptom:app-crash"]
