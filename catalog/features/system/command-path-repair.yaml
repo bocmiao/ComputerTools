@@ -1,0 +1,39 @@
+# 修好系统的 Path 和 PATHEXT 环境变量（脚本类功能）：Path 里少了的 Windows 文件夹（%SystemRoot%\system32、%SystemRoot%、
+# System32\Wbem、PowerShell 的文件夹，存在的才加）加回最前面，别的软件加的都留着、顺序不变，类型写成 REG_EXPAND_SZ；PATHEXT 少了
+# .COM / .EXE / .BAT / .CMD 时改回默认的那一串，软件加的别的扩展名接在后面。改完用 .NET 删一个本来就没有的系统变量，让它发出
+# 「环境变量变了」的通知（WM_SETTINGCHANGE），资源管理器收到以后，新打开的命令提示符就能用了，不用注销。
+# 脚本在 scripts/features/system/ 下，和检测 system.command-path 共用共享块 command-path。
+#   command-path-detect.ps1  撤销前核对：没有问题 → applied；有 → not-applied
+#   command-path-run.ps1     -Prepare：before = { path, pathext }（原样的值和类型，没有的 present 为 false）；执行：值变了、没有问题就跳过；
+#                            写入再核对，失败时写回原样再报错
+#   command-path-undo.ps1    还是当时写的样子的，写回原样（原来没有的删掉）；别人改过的不动
+#   command-path-break.ps1   只在测试中使用：从 Path 里去掉 System32\Wbem（不通知正在运行的程序）
+# 改的是整台电脑的环境变量，按「谨慎」处理：执行前先建还原点。不写 verify：检测 system.command-path 还会报登录用户自己的 PATHEXT，
+# 那不归这个修复管，修完是不是好了只看整台电脑的 Path 和 PATHEXT（detect 脚本）。
+id: system.command-path-repair
+schema_version: 1
+title: { zh-CN: 修好系统的 Path 环境变量 }
+description:
+  zh-CN: 命令提示符里 ping、ipconfig 这些 Windows 自带的命令提示「不是内部或外部命令」时用：把 Path 里少了的 Windows 文件夹加回最前面（别的软件加的都留着），类型改回「可扩展字符串」，PATHEXT 少了的扩展名补上。新打开的命令提示符里马上能用，执行前会先建一个还原点，能撤销。
+category: system
+risk: caution
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/system/command-path-detect.ps1
+prepare:
+  script: features/system/command-path-run.ps1
+run:
+  script: features/system/command-path-run.ps1
+undo:
+  script: features/system/command-path-undo.ps1
+break:
+  script: features/system/command-path-break.ps1
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc737559(v=ws.10)
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/start
+  - https://learn.microsoft.com/en-us/dotnet/api/system.environment.setenvironmentvariable

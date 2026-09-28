@@ -1,0 +1,13 @@
+# 打开「系统属性」的「高级」页（open：SystemPropertiesAdvanced.exe，微软《Executing Control Panel Items》里的命令）。
+# 点下面的「环境变量」改 Path、PATHEXT 这些：上面是当前用户的，下面是整台电脑的（改下面的要管理员权限）。
+# 检测 system.command-path 查出用户自己的 PATHEXT、软件的文件夹被 Path 覆盖掉时给这个按钮。
+id: open.environment-variables
+schema_version: 1
+group: open
+title: { zh-CN: 环境变量 }
+description:
+  zh-CN: 打开「系统属性」的「高级」页，点最下面的「环境变量」：装了 Python、Java、adb 这类软件以后命令提示符里提示「不是内部或外部命令」，在这里把软件所在的文件夹加进 Path。
+category: system
+open: { program: environment-variables }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/executing-control-panel-items

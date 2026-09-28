@@ -1,0 +1,69 @@
+# 命令提示符能不能找到 Windows 自带的命令（ping、ipconfig 这些）。脚本：scripts/checks/system/command-path.ps1（只读）
+# 整台电脑的环境变量在 HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment：
+#   - Path 必须是 REG_EXPAND_SZ，不然里面的 %SystemRoot% 不会被换成 Windows 文件夹（微软《Path Entry》）；要有 Windows 自带的
+#     几个文件夹：%SystemRoot%\system32、%SystemRoot%、System32\Wbem、PowerShell 的文件夹（新装的 Windows 10 / 11 就是这几个）。
+#     软件安装程序、网上的「配置环境变量」教程改 Path 时常把它整个覆盖掉，或者用 setx 把它截断到 1024 个字（微软《setx》）。
+#   - PATHEXT 是命令提示符认程序的扩展名，默认 .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC（微软《start》），
+#     少了 .EXE 等于什么程序都要写扩展名。
+#   - 登录用户自己设的 PATHEXT 会盖掉整台电脑的（只提示）。
+# 结果（按顺序取第一个）：path-type、path-missing、pathext（修复 system.command-path-repair）、user-pathext（advice）、ok。
+# 事实：missing（少了的文件夹：system32 / windows / wbem / powershell）、missing_ext（少了的扩展名）、path_kind（expand / string / none）。
+id: system.command-path
+schema_version: 1
+title: { zh-CN: 系统命令找不找得到（Path 环境变量） }
+description:
+  zh-CN: 看看命令提示符里能不能直接用 ping、ipconfig 这些 Windows 自带的命令。系统的 Path 环境变量被软件、教程改坏了时，它们都会提示「不是内部或外部命令」。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/command-path.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 系统的 Path 和 PATHEXT 环境变量都正常，命令提示符里能直接用 ping、ipconfig 这些 Windows 自带的命令。
+  path-type:
+    status: advice
+    message:
+      zh-CN: 系统的 Path 环境变量的类型被改错了（从「可扩展字符串」改成了普通字符串），里面的 %SystemRoot% 不会被换成 Windows 文件夹，所以命令提示符里的 ping、ipconfig 这些命令都会提示「不是内部或外部命令」。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的修复，把 Path 的类型改回来（里面的内容一个字都不动）。改完新打开的命令提示符就能用了，已经开着的要关掉重开。
+    links: ["feature:system.command-path-repair"]
+  path-missing:
+    status: advice
+    message:
+      zh-CN: "系统的 Path 环境变量里少了 Windows 自带的文件夹：{missing_text}命令提示符里的 ping、ipconfig 这些命令会提示「不是内部或外部命令」。多半是装软件、照着教程配置环境变量时把 Path 整个覆盖了。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的修复，把少了的 Windows 文件夹加回 Path 的最前面，别的软件加的都留着。改完新打开的命令提示符就能用了，已经开着的要关掉重开。之前被覆盖掉的别的软件的文件夹找不回来，那些软件要是也提示「不是内部或外部命令」，重装一下，或者在「环境变量」里把它的文件夹加回去。
+    links: ["feature:system.command-path-repair", "tool:open.environment-variables"]
+  pathext:
+    status: advice
+    message:
+      zh-CN: "系统的 PATHEXT 环境变量里少了 {missing_ext}，命令提示符认不出不写扩展名的程序，ping、ipconfig 这些命令都会提示「不是内部或外部命令」。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的修复，把 PATHEXT 改回 Windows 默认的那一串（软件加的 .PY 这类扩展名留着）。改完新打开的命令提示符就能用了。
+    links: ["feature:system.command-path-repair"]
+  user-pathext:
+    status: advice
+    message:
+      zh-CN: "当前用户自己设了一个 PATHEXT 环境变量，盖掉了系统的，里面少了 {missing_ext}，所以命令提示符认不出不写扩展名的程序。"
+    fixer: user
+    next:
+      zh-CN: 点下面的「环境变量」，在上面的「用户变量」里选中 PATHEXT，点「删除」，再点「确定」；然后关掉命令提示符重新打开。
+    links: ["tool:open.environment-variables"]
+fact_labels:
+  missing_text:
+    from: missing
+    values:
+      system32: { zh-CN: 「Windows\System32」（ping、ipconfig、cmd 这些命令都在这里）。 }
+      windows: { zh-CN: 「Windows」文件夹本身。 }
+      wbem: { zh-CN: 「System32\Wbem」（wmic 这些管理命令在这里）。 }
+      powershell: { zh-CN: 「WindowsPowerShell\v1.0」（powershell 命令在这里）。 }
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc737559(v=ws.10)
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/start
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/setx
