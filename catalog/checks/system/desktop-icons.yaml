@@ -1,0 +1,38 @@
+# 桌面图标是不是被隐藏了。脚本：scripts/checks/system/desktop-icons.ps1（读登录用户 -UserHive 的注册表）
+# 桌面右键 →「查看」→「显示桌面图标」就是 Explorer\Advanced 下的 HideIcons（DWORD）：1 是把桌面上的图标全藏起来
+# （文件都还在）。策略 NoDesktop = 1（组策略「隐藏和禁用桌面上的所有项目」，用户的或者机器的 Policies\Explorer 下）
+# 会把桌面整个去掉，小药箱不改策略，只说明。
+# 结果（按这个顺序判断）：policy（策略关掉了桌面）、hidden（取消了「显示桌面图标」，修复 desktop.show-desktop-icons）、ok。
+id: system.desktop-icons
+schema_version: 1
+title: { zh-CN: 桌面图标 }
+description:
+  zh-CN: 看看桌面上的图标是不是被隐藏了（桌面右键 →「查看」→「显示桌面图标」没勾上）。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/desktop-icons.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 桌面图标没有被隐藏。
+  hidden:
+    status: advice
+    message:
+      zh-CN: 桌面图标被隐藏了：桌面右键 →「查看」里的「显示桌面图标」没勾上，所以桌面上一个图标都看不到。文件都还在，勾上就回来了。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮把「显示桌面图标」重新勾上（也可以自己在桌面空白处点右键 →「查看」→「显示桌面图标」）。
+    links: ["feature:desktop.show-desktop-icons"]
+  policy:
+    status: manual
+    message:
+      zh-CN: 桌面被策略关掉了（组策略「隐藏和禁用桌面上的所有项目」），桌面上什么都不显示，右键也没反应。单位、学校的电脑多半是管理员有意设置的。
+    fixer: helper
+    next:
+      zh-CN: 单位、学校的电脑请找管理员。自己的电脑请懂哥帮忙看看是什么软件改的，小药箱不改策略。
+references:
+  - https://support.microsoft.com/en-us/windows/show-desktop-icons-in-windows-c13270f0-3812-c71d-f27e-29aa32588b20
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-desktop

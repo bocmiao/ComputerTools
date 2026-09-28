@@ -1,0 +1,37 @@
+# 显示桌面图标：桌面右键 →「查看」→「显示桌面图标」。HKCU\…\Explorer\Advanced 的 HideIcons（DWORD）：0 = 显示，
+# 1 = 全部藏起来（文件都还在）。系统默认是 0。检测 system.desktop-icons 报 hidden 时给这个按钮；改完重启资源管理器
+# 生效（自己在桌面右键里勾选是马上生效的）。
+id: desktop.show-desktop-icons
+schema_version: 1
+title: { zh-CN: 显示桌面图标 }
+description:
+  zh-CN: 把桌面右键 →「查看」里的「显示桌面图标」重新勾上：不小心取消以后，桌面上一个图标都看不到（文件都还在）。重启资源管理器以后生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: HideIcons
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: HideIcons
+      type: dword
+      value: 0
+break_actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: HideIcons
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/show-desktop-icons-in-windows-c13270f0-3812-c71d-f27e-29aa32588b20
