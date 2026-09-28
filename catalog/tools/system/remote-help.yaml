@@ -1,0 +1,52 @@
+# 远程求助：打开 Windows 自带的「快速助手」（action）。脚本：scripts/tools/system/remote-help.ps1
+# 让认识的人看到你的屏幕、经你同意后操作，帮你解决问题。远程控制是电信诈骗最常用的手段，所以确认框里放醒目的反诈提示
+# （微软《Use Quick Assist to help users》：只有你自己主动联系了对方，才让对方连进来）。
+# 快速助手是 Microsoft Store 的应用（MicrosoftCorporationII.QuickAssist，产品 9P7BP5VNWKX5）：登录用户装了的用
+# ms-quick-assist: 打开，没装的打开商店里它的页面。都交给系统的外壳打开（商店应用以用户身份运行，不带管理员权限）。
+# 结果：opened、store（打开了商店页面去装）、no-store（都打不开：没有商店，比如服务器版、精简版）、failed（装了但打不开）。
+id: system.remote-help
+schema_version: 1
+group: action
+title: { zh-CN: 远程求助（快速助手） }
+description:
+  zh-CN: 打开 Windows 自带的「快速助手」，让认识的人（家人、朋友、单位的网管）远程看你的屏幕、经你同意后帮你操作。只让你认识、信得过的人连：自称客服、公安、银行、快递、平台工作人员要你「开远程」「共享屏幕」的，一律是诈骗。
+category: system
+requires_admin: false
+user_hive: true
+timeout_sec: 30
+run:
+  script: tools/system/remote-help.ps1
+confirm:
+  zh-CN: 先看清楚：远程控制是电信诈骗最常用的手段，连上以后对方能看到你屏幕上的一切（包括银行卡、验证码、聊天记录）。只让你认识、信得过、而且是你自己主动找的人帮你；陌生人打电话、发消息，自称客服、公安、银行、快递、平台工作人员，要你下载软件、「开远程」「共享屏幕」的，一律是诈骗，马上挂断。确定要打开「快速助手」吗？
+results:
+  opened:
+    status: ok
+    message:
+      zh-CN: 打开了「快速助手」。
+    next:
+      zh-CN: 要别人帮你：在「获取帮助」下面输入对方告诉你的安全代码，点「提交」，看清楚对方的名字再点「允许」。对方申请控制你的电脑时，你点「允许」对方才能操作，随时可以点「暂停」「结束」断开。要帮别人：点「帮助他人」（要登录微软账户），把出现的安全代码告诉对方。不认识的人发来的安全代码，不要输入。
+  store:
+    status: advice
+    message:
+      zh-CN: 这台电脑上还没有「快速助手」，已经打开了 Microsoft Store 里它的页面。
+    fixer: user
+    next:
+      zh-CN: 点「获取」（或者「安装」）装好以后，再点一次这个小工具；也可以按 Ctrl + Win + Q 打开它。
+  no-store:
+    status: manual
+    message:
+      zh-CN: "这台电脑上没有「快速助手」，也打不开 Microsoft Store（可能是精简过的系统，或者是服务器版）。{error}"
+    fixer: user
+    next:
+      zh-CN: 可以用 QQ 的「远程协助」、向日葵、ToDesk 这类软件，从它们的官网下载。同样只让你认识、信得过的人远程连你的电脑，用完就断开。
+  failed:
+    status: manual
+    message:
+      zh-CN: "装着「快速助手」，可是没能打开它。{error}"
+    fixer: user
+    next:
+      zh-CN: 按 Ctrl + Win + Q 试试，或者在开始菜单里搜「快速助手」打开。
+references:
+  - https://learn.microsoft.com/en-us/windows/client-management/client-tools/quick-assist
+  - https://support.microsoft.com/en-us/windows/solve-pc-problems-over-a-remote-connection-b077e31a-f4a3-4e2a-b5fd-3b0c58498cc1
+  - https://support.microsoft.com/en-us/windows/protect-yourself-from-tech-support-scams-2ebf91bd-f94c-2a8a-e541-f5c800d18435

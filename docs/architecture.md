@@ -635,6 +635,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `region` | `control.exe intl.cpl`（控制面板的「区域」，「管理」页里改「非 Unicode 程序的语言」） |
 | `network-connections` | `control.exe netconnections`（控制面板的「网络连接」：网卡的禁用、启用和属性） |
 | `system-protection` | `SystemPropertiesProtection.exe`（「系统属性」的「系统保护」页：开关系统保护、创建还原点） |
+| `store-reset` | `WSReset.exe`（重置 Microsoft Store 的缓存：空白窗口自己关掉、商店自动打开，不删应用） |
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 
 settings 页面：`windowsupdate`、`windowsupdate-optionalupdates`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、

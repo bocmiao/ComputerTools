@@ -1,0 +1,13 @@
+# 重置 Microsoft Store 的缓存（open：WSReset.exe，微软《Microsoft Store 应用疑难解答》里的办法）。
+# 运行时先出现一个空白的命令行窗口，十几秒后自己关掉、商店自动打开；不删已经装的应用，也不退出微软账户。
+id: open.store-reset
+schema_version: 1
+group: open
+title: { zh-CN: 重置应用商店缓存 }
+description:
+  zh-CN: Microsoft Store（应用商店）打不开、一直转圈、下载卡住时用：运行 Windows 自带的 wsreset，清掉商店的缓存。会先出现一个空白的黑色窗口，等十几秒它自己关掉、商店自动打开就好了，不会删掉已经装好的应用。
+category: system
+open: { program: store-reset }
+references:
+  - https://support.microsoft.com/en-us/windows/troubleshoot-problems-with-apps-from-the-microsoft-store-2ee3ec2c-5c0d-4e2d-a05b-eeaf1c2d1b1e
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/cannot-start-microsoft-store

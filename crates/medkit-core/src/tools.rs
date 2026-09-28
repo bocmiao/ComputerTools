@@ -56,6 +56,9 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     // 控制面板的「网络连接」（微软《Executing Control Panel Items》里的 control.exe netconnections）：网卡的禁用、启用
     // 和属性（「配置」里有「电源管理」「高级」两页）
     ("network-connections", Program { exe: "control.exe", args: &["netconnections"], console: &[] }),
+    // 重置 Microsoft Store 的缓存（微软《Microsoft Store 应用疑难解答》里的 wsreset）：先出现一个空白的命令行窗口，
+    // 十几秒后自己关掉、商店自动打开；不删已经装的应用
+    ("store-reset", Program { exe: "WSReset.exe", args: &[], console: &[] }),
     // 微软《使用系统文件检查器工具修复丢失或损坏的系统文件》：先用 DISM 修复映像，再运行 sfc
     (
         "system-file-repair",

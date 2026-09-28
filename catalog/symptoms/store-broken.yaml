@@ -1,0 +1,59 @@
+# 症状：Microsoft Store（应用商店）打不开、一直转圈、下载不了、报错。商店的下载走 Windows 更新的服务和 WinHTTP 代理，
+# 登录和页面走浏览器的代理，时间不对时证书校验失败（0x80072F8F）。查：系统时间、失效的浏览器代理、失效的 WinHTTP 代理、
+# 更新服务被关掉。指引：wsreset（小工具「重置应用商店缓存」）、退出再登录微软账户、「设置」里修复和重置商店、疑难解答。
+id: store-broken
+schema_version: 1
+title: { zh-CN: 应用商店打不开、下载不了 }
+summary:
+  zh-CN: Microsoft Store（应用商店）打不开、一直转圈、页面空白，或者下载安装应用时卡住、报错（0x80131500、0x80072EFD、0x80072F8F、0x80070422 这类）。
+keywords:
+  - 应用商店打不开
+  - 应用商店
+  - 微软商店
+  - microsoft store
+  - store打不开
+  - 商店打不开
+  - 商店转圈
+  - 商店下载不了
+  - 商店无法下载
+  - 应用商店下载失败
+  - 应用商店一直转圈
+  - 应用商店空白
+  - wsreset
+  - "0x80131500"
+  - "0x80072efd"
+  - "0x80072f8f"
+  - "0x80070422"
+  - "0x803f8001"
+  - "0x80073cf9"
+causes:
+  - zh-CN: 商店的缓存坏了，打开就转圈或者一片空白
+  - zh-CN: 开着代理、加速器，或者卸载了的代理软件留下了失效的代理（浏览器的和系统服务用的两套）
+  - zh-CN: 系统时间不对，商店连微软服务器时证书校验失败（常见 0x80072F8F）
+  - zh-CN: 「Windows 更新」服务被「关更新」的软件关掉了，商店下载应用要用它（常见 0x80070422）
+  - zh-CN: 登录的微软账户出了问题，或者商店应用本身坏了
+maturity: semi
+steps:
+  - check: system.clock
+  - check: network.proxy-dead
+    fixes: [network.proxy-off]
+  - check: network.winhttp-proxy
+    fixes: [network.winhttp-proxy-off]
+  - check: update.blocked
+    fixes: [update.enable-services]
+guide:
+  zh-CN: |
+    先看上面的检查结果，按提示处理。
+
+    然后按这个顺序试：
+
+    1. 点下面的「重置应用商店缓存」：会先出现一个空白的黑色窗口，等十几秒它自己关掉、商店自动打开。已经装好的应用不会被删掉。
+    2. 开着「梯子」、加速器、代理软件的，先关掉再打开商店。
+    3. 在商店右上角点头像，退出微软账户，关掉商店重新打开，再登录。
+    4. 打开「设置 → 应用 → 安装的应用」（Windows 10 是「应用和功能」），找到 Microsoft Store，点「高级选项」，先点「修复」，不行再点「重置」（会退出登录，要重新登录）。
+    5. 运行 Windows 自带的疑难解答：Windows 11 在「设置 → 系统 → 疑难解答 → 其他疑难解答」里点「Windows 应用商店应用」旁边的「运行」；Windows 10 在「设置 → 更新和安全 → 疑难解答 → 其他疑难解答」里。
+    6. 只是某一个应用装不上、别的都能装：把这个应用在「安装的应用」里卸载干净，重启电脑再装；C 盘空间不够也会装不上。
+    7. 还不行：用小工具「检查并修复系统文件」修一遍，重启以后再试。
+
+    商店实在用不了、只是想装某个软件的，也可以直接到软件的官网下载安装。
+links: ["tool:open.store-reset", "tool:settings.apps", "tool:open.system-file-repair", "tool:settings.date-time"]
