@@ -1,0 +1,45 @@
+# 驱动仓库（C:\Windows\System32\DriverStore\FileRepository）里第三方驱动的旧版本占了多少。脚本：scripts/checks/disk/old-drivers.ps1
+# 显卡、声卡驱动每更新一次，旧版本都留在驱动仓库里，显卡驱动一份常常好几百 MB，几年下来能占好几 GB。
+# 哪些算旧版本照 Driver Store Explorer（lostindark/DriverStoreExplorer，GPL-2.0，只照它的规则，不用它的代码）的
+# 「选择旧驱动」，更保守一点，写在共享块 old-drivers 里（和修复 disk.remove-old-drivers 共用）：
+#   - 只看第三方驱动（Get-WindowsDriver -Online，不加 -All：oemNN.inf 那些），Windows 自带的驱动一概不碰；
+#   - 启动要用的（BootCritical）、ntprint.inf、扩展 INF（Extension 类：按扩展 ID 挂在设备上，这里看不到）、打印机和打印队列、
+#     版本号读不出的，都不算；
+#   - 按类别 + 提供商 + 原始 INF 文件名分组，组里有好几个版本时，最新的（和一模一样的副本）留下，日期比它还新的也留下
+#     （版本号可能不可信）；
+#   - 剩下的里面，没有任何设备（插着的、拔掉的都算：Control\Class 下每个设备实例的 InfPath）在用的才算旧版本。
+#     pnputil /delete-driver 不加 /force 时也删不掉有设备在用的驱动，是第二道保险。
+# 只输出个数、大小、类别和提供商（比如 Display、NVIDIA），不输出路径。要管理员（Get-WindowsDriver）。
+# 结果：none（没有）、small（有，但加起来不到 100 MB，不值得专门清理）、found（100 MB 以上）。
+# 事实：count、size_mb、size_gb、classes、providers；total（第三方驱动包总数）、multi（有好几个版本的组数）给日志看。
+id: disk.old-drivers
+schema_version: 1
+title: { zh-CN: 旧版驱动占的空间 }
+description:
+  zh-CN: 看看显卡、声卡这些驱动每次更新留下的旧版本，在 C 盘上占了多少地方。
+category: disk
+requires_admin: true
+timeout_sec: 120
+probe:
+  script: checks/disk/old-drivers.ps1
+results:
+  none:
+    status: ok
+    message:
+      zh-CN: 驱动仓库里没有可以清理的旧版驱动。
+  small:
+    status: ok
+    message:
+      zh-CN: "驱动仓库里有 {count} 个旧版驱动，加起来只占 {size_mb} MB，不值得专门清理。"
+  found:
+    status: advice
+    message:
+      zh-CN: "驱动仓库里有 {count} 个旧版驱动（{providers}），占了 {size_gb} GB。它们已经被新版本代替，也没有设备在用。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的「删掉没在用的旧版驱动」清理。删掉的是已经被新版本代替、没有设备在用的旧版本，现在用着的驱动不会动；删之前会先建一个系统还原点。
+    links: ["feature:disk.remove-old-drivers"]
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/pnputil-command-syntax
+  - https://learn.microsoft.com/en-us/powershell/module/dism/get-windowsdriver
+  - https://github.com/lostindark/DriverStoreExplorer

@@ -232,7 +232,7 @@ const DENIED_SERVICES: &[(&str, &str)] = &[
 /// 这些脚本类功能不写「制造故障」的脚本，通用的往返测试跳过它们，由 tests/windows.rs 里的专门测试来测：
 /// - 要做的事正是第五节不许做的（禁用 Windows 更新服务），这种脚本不放进安装包；
 /// - 没法安全地制造故障（重置 Winsock：得往测试机的 Winsock 里装一个 LSP）。
-pub const BREAK_IN_TESTS: &[&str] = &["update.enable-services", "network.winsock-reset"];
+pub const BREAK_IN_TESTS: &[&str] = &["update.enable-services", "network.winsock-reset", "disk.remove-old-drivers"];
 
 static CONTROL_SET_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^hklm\\system\\controlset\d+\\").unwrap());
 

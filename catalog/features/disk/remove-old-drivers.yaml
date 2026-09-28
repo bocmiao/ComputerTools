@@ -1,0 +1,29 @@
+# 删掉没在用的旧版驱动（脚本类功能，撤销不了）。脚本：scripts/features/disk/remove-old-drivers-run.ps1
+# 用和检测 disk.old-drivers 一样的规则（共享块 old-drivers）重新算一遍旧版本，逐个 pnputil /delete-driver oemNN.inf
+# （微软《PnPUtil Command Syntax》，Windows 10 1607 起有），不加 /force：有设备在用的驱动 pnputil 会拒绝删除，这种跳过、计数。
+# 只看退出代码（0，或者 3010：要重启才彻底完成）。一个都没删掉时报错。
+# 撤销不了：删掉的驱动包不在电脑上了。风险设成 caution，执行前引擎先建还原点（系统还原能把驱动装回来）。
+# 状态看检测 disk.old-drivers，不写 detect（撤销不了，也就用不着撤销前的核对）。
+# 测试：没法在测试机上安全地制造一个旧版驱动（没签名的驱动包装不上），列在 BREAK_IN_TESTS 里；CI 上只跑检测。
+id: disk.remove-old-drivers
+schema_version: 1
+title: { zh-CN: 删掉没在用的旧版驱动 }
+description:
+  zh-CN: 把显卡、声卡这些驱动每次更新留下的旧版本从驱动仓库里删掉，腾出 C 盘空间。只删已经被新版本代替、没有设备在用的旧版本，现在用着的驱动不动；删之前先建一个系统还原点。
+category: disk
+risk: caution
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+run:
+  script: features/disk/remove-old-drivers-run.ps1
+undo: none
+irreversible_reason:
+  zh-CN: 删掉的旧版驱动就不在电脑上了。以后万一要换回旧版本，可以用删之前建的还原点，或者到电脑、显卡厂商的官网下载那个版本重新装。
+verify: disk.old-drivers
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/pnputil-command-syntax
+  - https://github.com/lostindark/DriverStoreExplorer
