@@ -1,0 +1,70 @@
+# 症状：WiFi 不见了、飞行模式关不掉。先看飞行模式开着没有（network.airplane-mode），再看 WiFi 和飞行模式用到的服务
+# 有没有被「优化」软件关掉（network.wireless-services → 修复 network.enable-wireless-services），再看无线网卡有没有被禁用
+# （network.wifi-adapter → 修复 network.enable-wifi-adapter），最后看设备管理器里出错的设备（没装好驱动的无线网卡在这里）。
+# 别的情况给图文指引：重启、快捷键和物理开关、驱动（刚重装、大更新以后）、卸载设备让 Windows 重装、网络重置、台式机没有无线网卡。
+# 「上不了网」（network）管的是连不上网；这里管的是 WiFi 这一项整个不见了、飞行模式开关不听使唤。
+id: wifi-missing
+schema_version: 1
+title: { zh-CN: WiFi 不见了、飞行模式关不掉 }
+summary:
+  zh-CN: 任务栏右下角、设置里找不到 WiFi，搜不到任何无线网络，只剩有线网络；或者飞行模式的按钮是灰的、关不掉。
+keywords:
+  - wifi不见了
+  - WiFi不见了
+  - wifi图标不见了
+  - wifi图标没了
+  - wifi开关不见了
+  - wifi开关没了
+  - 没有wifi选项
+  - 没有WLAN选项
+  - WLAN不见了
+  - 设置里没有WLAN
+  - 找不到wifi
+  - 电脑不显示wifi
+  - 右下角没有wifi
+  - 无线网络不见了
+  - 无线网卡不见了
+  - 搜不到wifi
+  - 搜不到无线网络
+  - 只有以太网
+  - 只剩以太网
+  - 只能插网线
+  - 笔记本连不了wifi
+  - 飞行模式关不掉
+  - 飞行模式是灰的
+  - 飞行模式灰色
+  - 飞行模式点不动
+  - 飞行模式打不开
+  - 飞行模式开关不见了
+  - 飞行模式自己打开
+  - 无线开关不见了
+  - wlan autoconfig
+  - 无线网卡被禁用
+causes:
+  - zh-CN: 开着飞行模式，或者不小心按到了笔记本上的飞行模式快捷键、无线开关
+  - zh-CN: WiFi 用的无线网络服务、飞行模式用的无线电管理服务被「优化」类软件关掉了
+  - zh-CN: 无线网卡被禁用了（在「网络连接」或者设备管理器里点了「禁用」）
+  - zh-CN: 无线网卡的驱动坏了、丢了，常见于刚重装完系统、系统大更新以后
+  - zh-CN: 台式机本来就没有无线网卡
+maturity: semi
+steps:
+  - check: network.airplane-mode
+  - check: network.wireless-services
+    fixes: [network.enable-wireless-services]
+  - check: network.wifi-adapter
+    fixes: [network.enable-wifi-adapter]
+  - check: hardware.device-problems
+guide:
+  zh-CN: |
+    先看上面的检查结果：服务被关掉、网卡被禁用的点修复；飞行模式开着、没装好驱动的照提示处理。
+
+    其他情况，从最简单的开始：
+
+    1. 重启一次电脑（笔记本最好关机以后拔掉电源，等一会儿再开机）。很多时候 WiFi 就回来了。
+    2. 笔记本键盘上画着飞机或者信号的键（有的要和 Fn 一起按）按一下；老笔记本的侧面、前面可能有无线网络的拨动开关，拨到「开」。
+    3. 刚重装完系统、刚更新完系统以后 WiFi 没了：多半是无线网卡的驱动没装上或者坏了。打开「Windows 更新」检查更新，再看看「高级选项 → 可选更新」里有没有网卡驱动；没有的话，到电脑品牌的官网按型号下载无线网卡驱动（WLAN 驱动）。电脑没网下载不了的，用数据线把安卓手机连上电脑，在手机的设置里打开「USB 网络共享」，电脑就能用手机的流量上网；插网线也行。
+    4. 让 Windows 重新装一遍网卡：打开「设备管理器」，展开「网络适配器」，在名字里带 Wireless、Wi-Fi、WLAN 或者 802.11 的那个上点右键 →「卸载设备」（不要勾「删除此设备的驱动程序」），再重启电脑，Windows 会自动把它装回来。
+    5. 还不行，用 Windows 自带的「网络重置」：Windows 11 在「设置 → 网络和 Internet → 高级网络设置 → 网络重置」，Windows 10 在「设置 → 网络和 Internet → 状态」页的最下面。它会把所有网卡和网络设置恢复成刚装好系统时的样子，保存过的 WiFi 密码要重新输入（可以先用小药箱小工具里的「查看 WiFi 密码」记下来），VPN、加速器要重新装，做完会重启电脑。
+    6. 台式机没有无线网卡：买一个 USB 无线网卡（几十块钱，选写着「免驱」的，插上就能用）。
+
+    都不行的话，可能是无线网卡坏了，或者在 BIOS 里被关掉了，请懂哥或者电脑的售后看看。

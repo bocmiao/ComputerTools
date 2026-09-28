@@ -1,0 +1,33 @@
+# 恢复 WiFi 和飞行模式用到的服务：Windows 连接管理器（Wcmsvc）、WLAN AutoConfig（WlanSvc）改回 Windows 默认的「自动」，
+# 无线电管理服务（RmSvc）改回默认的「手动」（用到时 Windows 自己启动）。只改启动类型，不启动服务：改完重启电脑。
+# 检测 network.wireless-services 报 disabled、manual、radio-disabled 时给这个按钮；verify 用这个检测：
+# 有一个服务不在（na，服务器版、被精简的系统）时不给执行，改好没有也看它。break_actions（测试用）：三个都设成禁用。
+id: network.enable-wireless-services
+schema_version: 1
+title: { zh-CN: 恢复 WiFi 和飞行模式用到的服务 }
+description:
+  zh-CN: 把被「优化」软件关掉的三个系统服务改回 Windows 默认的启动方式：关掉以后找不到 WiFi、搜不到无线网络，或者飞行模式关不掉。改完重启电脑就好，能撤销。
+category: network
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+verify: network.wireless-services
+actions:
+  - service: { name: Wcmsvc, start_type: auto }
+  - service: { name: WlanSvc, start_type: auto }
+  - service: { name: RmSvc, start_type: manual }
+windows_default:
+  - service: { name: Wcmsvc, start_type: auto }
+  - service: { name: WlanSvc, start_type: auto }
+  - service: { name: RmSvc, start_type: manual }
+break_actions:
+  - service: { name: WlanSvc, start_type: disabled }
+  - service: { name: RmSvc, start_type: disabled }
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/hh994698(v=ws.11)
+  - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server

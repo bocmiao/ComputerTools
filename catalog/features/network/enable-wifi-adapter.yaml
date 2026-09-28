@@ -1,0 +1,38 @@
+# 重新启用被禁用的无线网卡（脚本类功能）：一块能用的无线网卡都没有、有被禁用的时候，用 Enable-NetAdapter 把它们启用，
+# 和在「网络连接」里右键「启用」一样。脚本在 scripts/features/network/ 下，和检测 network.wifi-adapter 共用共享块 wifi-adapter。
+#   wifi-adapter-detect.ps1  撤销前核对：有没被禁用的无线网卡 → applied；有无线网卡、全被禁用 → not-applied；别的 → unknown
+#   wifi-adapter-run.ps1     -Prepare：before = { enabled（没被禁用的个数）, disabled（被禁用的网卡的 DeviceID，排好序） }；
+#                            执行：已经有能用的了、被禁用的不是记下的那几块了，就跳过；否则逐个启用，等它们读回来是启用的
+#                            （最多 15 秒），没等到就把已经启用的再禁用回去，报错
+#   wifi-adapter-undo.ps1    把记下的、现在是启用的网卡再禁用，等它们读回来是禁用的
+#   wifi-adapter-break.ps1   只在测试中使用：禁用所有没被禁用的无线网卡
+# 能不能执行、改好没有都看 network.wifi-adapter（verify）：一块无线网卡都没有是 na，不给执行。
+# 网卡的 DeviceID 是网卡在这台电脑上的编号（GUID），只记在本机的修改日志里，不进诊断报告。
+# 待真机验证：见 docs/real-machine-checklist.md。
+id: network.enable-wifi-adapter
+schema_version: 1
+title: { zh-CN: 重新启用无线网卡 }
+description:
+  zh-CN: 把被禁用（关掉）的无线网卡重新启用，和在「网络连接」里右键「启用」一样。启用以后等几秒钟，WiFi 就会出现在任务栏右下角。能撤销。
+category: network
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/network/wifi-adapter-detect.ps1
+prepare:
+  script: features/network/wifi-adapter-run.ps1
+run:
+  script: features/network/wifi-adapter-run.ps1
+undo:
+  script: features/network/wifi-adapter-undo.ps1
+break:
+  script: features/network/wifi-adapter-break.ps1
+verify: network.wifi-adapter
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/netadapter/enable-netadapter
+  - https://learn.microsoft.com/en-us/powershell/module/netadapter/disable-netadapter

@@ -1,0 +1,53 @@
+# WiFi 和飞行模式用到的服务有没有被关掉。脚本：scripts/checks/network/wireless-services.ps1
+# WLAN AutoConfig（WlanSvc，默认「自动」）负责找 WiFi、连 WiFi：它没在运行时，网络列表里没有 WLAN 这一栏，也搜不到任何
+# 无线网络（微软《Wireless LAN Service Overview》）；它依赖 Windows 连接管理器（Wcmsvc，默认「自动（触发启动）」），
+# 后者被禁用时它也起不来。无线电管理服务（RmSvc，默认「手动」，微软的说明是「Radio Management and Airplane Mode
+# Service」）被禁用时，飞行模式的按钮点了没反应或者是灰的。这几个常被「优化」软件和网上的「关闭无用服务」教程关掉。
+# 结果（按这个顺序）：missing（有一个不在：服务器版默认不装 WLAN AutoConfig，或者是被精简过的系统，na）、
+# disabled（WlanSvc 或 Wcmsvc 被禁用）、manual（WlanSvc 被改成「手动」而且没在运行）、radio-disabled（只有 RmSvc 被禁用）、ok。
+# 修复 network.enable-wireless-services 把三个一起改回默认，它的 verify 用这个检测。
+# 事实：wlansvc、wcmsvc、rmsvc（Start 值，不在时为空）、wlansvc_running。
+id: network.wireless-services
+schema_version: 1
+title: { zh-CN: WiFi 和飞行模式用到的服务 }
+description:
+  zh-CN: 看看 WiFi 和飞行模式用到的系统服务有没有被「优化」软件关掉。关掉以后找不到 WiFi、搜不到无线网络，或者飞行模式关不掉。
+category: network
+requires_admin: false
+probe:
+  script: checks/network/wireless-services.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: WiFi 和飞行模式用到的服务都没有被关掉。 }
+  disabled:
+    status: advice
+    message:
+      zh-CN: 无线网络服务（WLAN AutoConfig）被禁用了，所以设置里、任务栏右下角都找不到 WiFi，也搜不到无线网络，只剩有线网络。多半是「优化」类软件关的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后重启电脑。
+    links: ["feature:network.enable-wireless-services"]
+  manual:
+    status: advice
+    message:
+      zh-CN: 无线网络服务（WLAN AutoConfig）被改成了「手动」启动，现在没有运行，所以找不到 WiFi，也搜不到无线网络。多半是「优化」类软件改的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回「自动」，改完重启电脑。
+    links: ["feature:network.enable-wireless-services"]
+  radio-disabled:
+    status: advice
+    message:
+      zh-CN: 无线电管理服务被禁用了，所以「飞行模式」的按钮点了没反应、是灰的，或者关不掉。多半是「优化」类软件关的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后重启电脑，再把飞行模式关掉。
+    links: ["feature:network.enable-wireless-services"]
+  missing:
+    status: na
+    message:
+      zh-CN: 这台电脑的 Windows 里没有 WiFi 要用的系统服务。服务器版的 Windows 默认不装；家用电脑上没有的，多半是装了被精简过的系统，只能重装原版 Windows 才能用 WiFi。
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/hh994698(v=ws.11)
+  - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server

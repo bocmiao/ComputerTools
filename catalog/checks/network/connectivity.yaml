@@ -85,8 +85,8 @@ results:
       zh-CN: 电脑开着「飞行模式」，WiFi 这类无线网络都被关掉了，所以上不了网。
     fixer: user
     next:
-      zh-CN: 点任务栏右下角的网络图标（或者按 Win + A），点一下「飞行模式」把它关掉，再选你的 WiFi 连上。笔记本上一般也有开关飞行模式的快捷键（键帽上画着飞机或者信号，有的要和 Fn 一起按），可能是不小心按到了，再按一次就行。
-    links: ["tool:settings.network"]
+      zh-CN: 点任务栏右下角的网络图标（或者按 Win + A），点一下「飞行模式」把它关掉，再选你的 WiFi 连上。笔记本上一般也有开关飞行模式的快捷键（键帽上画着飞机或者信号，有的要和 Fn 一起按），可能是不小心按到了，再按一次就行。飞行模式关不掉、按钮是灰的，看「按症状修」里的「WiFi 不见了、飞行模式关不掉」。
+    links: ["tool:settings.network", "symptom:wifi-missing"]
   not-connected-wifi:
     status: advice
     message:

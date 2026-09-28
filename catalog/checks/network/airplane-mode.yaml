@@ -1,0 +1,31 @@
+# 飞行模式开着没有。脚本：scripts/checks/network/airplane-mode.ps1
+# 依据和 network.connectivity 一样：HKLM\SYSTEM\CurrentControlSet\Control\RadioManagement\SystemRadioState 这个键的默认值
+# （DWORD，1 = 开，0 = 关），也兼容 RadioManagement 下名为 SystemRadioState 的值。微软没有公开文档，来自社区经验和
+# 微软论坛版主的说明（待真机验证，见 docs/real-machine-checklist.md）。
+# 结果：on（advice，用户自己关）、off（ok）、none（读不到：没有无线设备的台式机、服务器，na）。事实：airplane_mode。
+id: network.airplane-mode
+schema_version: 1
+title: { zh-CN: 飞行模式 }
+description:
+  zh-CN: 看看「飞行模式」是不是开着。开着的时候 WiFi、蓝牙都会被关掉。
+category: network
+requires_admin: false
+probe:
+  script: checks/network/airplane-mode.ps1
+results:
+  off:
+    status: ok
+    message: { zh-CN: 飞行模式没有开。 }
+  on:
+    status: advice
+    message:
+      zh-CN: 电脑开着「飞行模式」，WiFi、蓝牙这些无线功能都被关掉了。
+    fixer: user
+    next:
+      zh-CN: 点任务栏右下角的网络图标（或者按 Win + A），点一下「飞行模式」把它关掉。笔记本上也可能是不小心按到了飞行模式的快捷键（键帽上画着飞机或者信号，有的要和 Fn 一起按），再按一次就行。按钮点了没反应、是灰的，看下面「WiFi 和飞行模式用到的服务」的结果；服务没问题的，重启电脑以后再关。
+    links: ["tool:settings.network"]
+  none:
+    status: na
+    message: { zh-CN: 这台电脑没有飞行模式（没有无线设备的台式机常常是这样）。 }
+references:
+  - https://support.microsoft.com/en-us/windows/turn-airplane-mode-on-or-off-f2c2e0a1-706f-ff26-c4b2-4a37f9796df1

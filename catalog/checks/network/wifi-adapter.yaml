@@ -1,0 +1,46 @@
+# 无线网卡有没有被禁用。脚本：scripts/checks/network/wifi-adapter.ps1（和修复 network.enable-wifi-adapter 的脚本共用
+# 共享块 wifi-adapter）。
+# 无线网卡：Get-NetAdapter 列出的（和「网络连接」里看到的一样）实体网卡（HardwareInterface 或 ConnectorPresent 为真、
+# EndPointInterface 为假），NdisPhysicalMedium 是 9 / 1、InterfaceType 是 71，或者 PhysicalMediaType 是 802.11；
+# 被禁用的网卡可能读不到这些，再看驱动自己写在网卡类别键下的 *PhysicalMediaType、*IfType，最后看型号名字里有没有
+# Wi-Fi、WLAN、802.11 这类字样。蓝牙网络、移动宽带、Wi-Fi Direct 不算。
+# 在「网络连接」或设备管理器里「禁用」了无线网卡，Windows 里就完全没有 WiFi 了：设置里没有 WLAN，网络列表里只有有线网络。
+# 结果：ok（有一块没被禁用的无线网卡）、disabled（有无线网卡，全都被禁用了）、none（一块无线网卡都没有，na：很多台式机本来
+# 就没有；驱动没装好的无线网卡还不算网卡，由 hardware.device-problems 报出来）。
+# 它也是修复 network.enable-wifi-adapter 的 verify：none 时不给执行。
+# 事实：wifi_count（没被禁用的无线网卡数）、disabled_count、adapter（网卡型号，来自驱动，不涉及个人信息）。
+id: network.wifi-adapter
+schema_version: 1
+title: { zh-CN: 无线网卡 }
+description:
+  zh-CN: 看看这台电脑有没有无线网卡，无线网卡有没有被禁用（关掉）。
+category: network
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/network/wifi-adapter.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: "这台电脑有无线网卡，没有被禁用（{adapter}）。"
+  disabled:
+    status: advice
+    message:
+      zh-CN: "无线网卡被禁用了（{adapter}），所以设置里、任务栏右下角都找不到 WiFi，只剩有线网络。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮重新启用，启用以后等几秒钟，WiFi 就会出现。以后想关 WiFi，点任务栏右下角网络图标里的 WiFi 开关就行，不用禁用网卡。
+    links: ["feature:network.enable-wifi-adapter"]
+  none:
+    status: na
+    message:
+      zh-CN: 这台电脑上没找到无线网卡。很多台式机本来就没有；笔记本本来能连 WiFi 的，多半是无线网卡的驱动出了问题，看看下面「设备和驱动」的结果。
+    next:
+      zh-CN: 台式机想连 WiFi，可以买一个 USB 无线网卡（几十块钱，选写着「免驱」的，插上就能用）。笔记本先按一下键盘上画着飞机或者信号的键（有的要和 Fn 一起按），再打开「Windows 更新」看看「可选更新」里有没有无线网卡驱动；没有的话，到电脑品牌的官网按型号下载无线网卡驱动（WLAN 驱动）。
+    links: ["tool:settings.windows-update", "tool:open.device-manager"]
+references:
+  - https://support.microsoft.com/en-us/windows/experience/connectivity-networking/fix-wi-fi-connection-issues-in-windows
+  - https://learn.microsoft.com/en-us/powershell/module/netadapter/get-netadapter
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/network/standardized-inf-keywords-for-network-devices
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/network/oid-gen-physical-medium
