@@ -1,0 +1,67 @@
+# 打开 DirectPlay（老游戏用）。脚本：scripts/tools/system/install-directplay.ps1
+# 2008 年以前的很多游戏要用 DirectX 里的 DirectPlay（「你电脑上的应用需要使用下列 Windows 功能：DirectPlay」），Windows 10、11
+# 默认没开。和在「启用或关闭 Windows 功能 → 旧版组件」里勾上「DirectPlay」一样：Dism.exe /Online /Enable-Feature
+# /FeatureName:DirectPlay /All。文件是 Windows 自带的，一般不用下载。Dism.exe 隐藏窗口运行，最多等 4 分钟。
+# 和「安装 .NET Framework 3.5」共用 optional-feature 这段脚本（错误代码的分法一样）。
+id: system.install-directplay
+schema_version: 1
+group: action
+title: { zh-CN: 打开 DirectPlay（老游戏用） }
+description:
+  zh-CN: 老游戏（红色警戒 2、帝国时代 2 这些）打开时提示要 DirectPlay，或者局域网联机进不去时用：和在「启用或关闭 Windows 功能 → 旧版组件」里勾上「DirectPlay」一样。文件是 Windows 自带的，一般一两分钟。
+category: system
+requires_admin: true
+timeout_sec: 300
+run:
+  script: tools/system/install-directplay.ps1
+confirm:
+  zh-CN: 要打开 Windows 自带的 DirectPlay 组件，一般一两分钟。现在打开吗？
+results:
+  installed:
+    status: ok
+    message: { zh-CN: 打开了 DirectPlay。 }
+    next: { zh-CN: 再打开刚才的游戏试试。还是打不开，看看「软件打不开，提示缺少 dll」：老游戏还常缺 DirectX 的老组件（d3dx9 这些）。 }
+    links: ["symptom:app-missing-dll"]
+  restart:
+    status: ok
+    message: { zh-CN: 打开了 DirectPlay，要重启电脑以后才能用。 }
+    next: { zh-CN: 重启电脑以后再打开刚才的游戏。 }
+  already:
+    status: ok
+    message: { zh-CN: DirectPlay 已经打开了，不用再装。 }
+    next: { zh-CN: 游戏还是打不开的，看看「软件打不开，提示缺少 dll」：老游戏还常缺 DirectX 的老组件（d3dx9 这些）、要用兼容模式运行。 }
+    links: ["symptom:app-missing-dll"]
+  download-failed:
+    status: advice
+    message: { zh-CN: "Windows 要从网上下载 DirectPlay 的文件，但是没下载下来（错误 {code}）。电脑上什么都没改。" }
+    fixer: user
+    next: { zh-CN: 联网以后再试一次；还不行，运行「系统更新失败」里的检查（更新服务、hosts 文件、系统时间这些都会挡住下载）。 }
+    links: ["symptom:update-failed"]
+  corrupt:
+    status: advice
+    message: { zh-CN: "Windows 的组件存储坏了（错误 {code}），打不开新的功能。" }
+    fixer: medkit
+    next: { zh-CN: 点下面的按钮检查并修复系统文件，修完重启，再点一次这个小工具。 }
+    links: ["tool:open.system-file-repair"]
+  missing:
+    status: manual
+    message: { zh-CN: 这个 Windows 里找不到 DirectPlay 这个功能，可能是被精简过的系统。 }
+    fixer: helper
+    next: { zh-CN: 请懂哥看看；精简版的系统常常少东西，最好换成微软官方的 Windows。 }
+  failed:
+    status: manual
+    message: { zh-CN: "打开 DirectPlay 时出错了（错误 {code}）。" }
+    fixer: helper
+    next: { zh-CN: 重启电脑以后再试一次。还不行，点下面的按钮打开「启用或关闭 Windows 功能」，在「旧版组件」里勾上「DirectPlay」，看看报什么错，把错误代码发给懂哥。 }
+    links: ["tool:open.windows-features"]
+  slow:
+    status: advice
+    message: { zh-CN: 过了四分钟还没装完，它会在后台接着装。 }
+    fixer: user
+    next: { zh-CN: 过几分钟再打开刚才的游戏；还是提示要 DirectPlay，重启电脑以后再点一次这个小工具。 }
+  unsupported:
+    status: na
+    message: { zh-CN: 这是服务器版的 Windows，请在「服务器管理器 → 添加角色和功能」里添加。 }
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/application-management/dotnet-framework-35-installation-error

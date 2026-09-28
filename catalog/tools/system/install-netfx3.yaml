@@ -1,0 +1,96 @@
+# 安装 .NET Framework 3.5（包括 .NET 2.0 和 3.0）。脚本：scripts/tools/system/install-netfx3.ps1
+# 和在「启用或关闭 Windows 功能」里勾上它一样：Dism.exe /Online /Enable-Feature /FeatureName:NetFx3 /All（微软《在 Windows 10
+# 和 Windows Server 上安装 .NET Framework 3.5》），文件从 Windows 更新下载（七十 MB 左右）。Dism.exe 隐藏窗口运行，最多等 9 分钟，
+# 还没装完的让它自己装完（slow）。
+# 从 Windows 11 26H1（build 28000）起 .NET Framework 3.5 不再是 Windows 功能，只有给那个版本专门做的独立安装包（微软《在 Windows 11
+# 上安装 .NET Framework 3.5》）：只说明去哪下载。服务器版在「服务器管理器」里加，这里不管。
+# 下载不了的原因只检测、不改（组策略不改，docs/architecture.md 第 5 节）：「关更新」软件留下的 UseWUServer（更新从「单位的更新服务器」
+# 下载），除非 Servicing 策略的 RepairContentServerSource = 2（可选功能直接从 Windows 更新下载）；「Windows 更新」服务被禁用时不运行
+# Dism.exe，直接给「恢复更新用到的服务」。
+# 错误代码按微软《.NET Framework 3.5 installation errors》分：0x800F0906、0x800F081F（以及 0x800F0950、0x800F0954 和 0x8024、0x80072
+# 开头的更新、网络错误）是下载不到文件，0x800F0907 是组策略不许下载，0x800F0831、0x80073712 是组件存储坏了。
+id: system.install-netfx3
+schema_version: 1
+group: action
+title: { zh-CN: 安装 .NET Framework 3.5 }
+description:
+  zh-CN: 老软件（很多财务、税务、设计软件和老游戏）打开时提示要装 .NET Framework 3.5（包括 .NET 2.0 和 3.0）时用：和在「启用或关闭 Windows 功能」里勾上它一样，Windows 会从 Windows 更新下载七十 MB 左右的文件。要联网，一般几分钟。
+category: system
+requires_admin: true
+timeout_sec: 600
+run:
+  script: tools/system/install-netfx3.ps1
+confirm:
+  zh-CN: 要从 Windows 更新下载七十 MB 左右的文件，一般几分钟（网速慢的更久），期间可以照常用电脑。现在安装吗？
+results:
+  installed:
+    status: ok
+    message: { zh-CN: 装好了 .NET Framework 3.5（包括 .NET 2.0 和 3.0）。 }
+    next: { zh-CN: 再打开刚才提示要装它的软件试试。 }
+  restart:
+    status: ok
+    message: { zh-CN: 装好了 .NET Framework 3.5，要重启电脑以后才能用。 }
+    next: { zh-CN: 重启电脑以后再打开刚才的软件。 }
+  already:
+    status: ok
+    message: { zh-CN: 这台电脑上已经装着 .NET Framework 3.5 了，不用再装。 }
+    next: { zh-CN: 软件还是提示缺少 .NET 的，看看提示里要的是不是新版的 .NET（写着 .NET 6、.NET 8 这些，或者缺 hostfxr.dll）：点提示框里的「是」，照着微软的页面下载安装「.NET 桌面运行时」。 }
+    links: ["symptom:app-missing-dll"]
+  standalone:
+    status: advice
+    message: { zh-CN: 这台电脑是 Windows 11 26H1 或者更新的版本：从这个版本起，.NET Framework 3.5 不再是 Windows 自带的功能，要到微软官网下载专门给这个版本做的安装包。 }
+    fixer: user
+    next: { zh-CN: 在浏览器里打开微软的「在 Windows 11 上安装 .NET Framework 3.5」页面（https://learn.microsoft.com/zh-cn/dotnet/framework/install/dotnet-35-windows-11），下载和你的 Windows 版本对应的安装包，双击安装。别的版本的安装包装不上。 }
+  service-disabled:
+    status: advice
+    message: { zh-CN: 「Windows 更新」服务被禁用了（多半是「关更新」软件干的）。.NET Framework 3.5 的文件要从 Windows 更新下载，服务关着就装不上，所以这次没有安装。 }
+    fixer: medkit
+    next: { zh-CN: 点下面的按钮恢复更新用到的服务，再点一次这个小工具。 }
+    links: ["feature:update.enable-services"]
+  update-server:
+    status: manual
+    message: { zh-CN: "没能下载 .NET Framework 3.5 的文件（错误 {code}）：这台电脑被设置成从「单位的更新服务器」下载更新，个人电脑上这多半是「关更新」软件留下的，那里没有这些文件。电脑上什么都没改。" }
+    fixer: user
+    next: { zh-CN: 用当初那个「关更新」软件把更新恢复（一般叫「恢复更新」「开启更新」）以后再点一次这个小工具；单位的电脑请找网管。专业版也可以在组策略编辑器（gpedit.msc）的「计算机配置 → 管理模板 → 系统」里打开「指定可选组件安装和组件修复的设置」，选「已启用」，勾上「直接从 Windows 更新下载修复内容和可选功能」那一项。小药箱不改组策略。 }
+    links: ["symptom:update-failed"]
+  download-failed:
+    status: advice
+    message: { zh-CN: "没能从 Windows 更新下载 .NET Framework 3.5 的文件（错误 {code}）：多半是没联网、网络不稳，或者开着代理、加速器。电脑上什么都没改。" }
+    fixer: user
+    next: { zh-CN: 联网以后再试一次；开着「梯子」、加速器的先关掉。还不行，运行「系统更新失败」里的检查（更新服务、hosts 文件、系统时间这些都会挡住下载）。 }
+    links: ["symptom:update-failed"]
+  policy:
+    status: manual
+    message: { zh-CN: 组策略设成了「从不从 Windows 更新下载可选功能」（错误 0x800F0907），装不了。 }
+    fixer: helper
+    next: { zh-CN: 单位的电脑请找网管；自己的电脑，在组策略编辑器（gpedit.msc）的「计算机配置 → 管理模板 → 系统」里把「指定可选组件安装和组件修复的设置」改回「未配置」，再点一次这个小工具。小药箱不改组策略。 }
+  corrupt:
+    status: advice
+    message: { zh-CN: "Windows 的组件存储坏了（错误 {code}），装不了新的功能。" }
+    fixer: medkit
+    next: { zh-CN: 点下面的按钮检查并修复系统文件，修完重启，再点一次这个小工具。 }
+    links: ["tool:open.system-file-repair"]
+  missing:
+    status: manual
+    message: { zh-CN: 这个 Windows 里找不到 .NET Framework 3.5 这个功能，可能是被精简过的系统。 }
+    fixer: helper
+    next: { zh-CN: 请懂哥看看；精简版的系统常常少东西，最好换成微软官方的 Windows。 }
+  failed:
+    status: manual
+    message: { zh-CN: "安装出错了（错误 {code}）。" }
+    fixer: helper
+    next: { zh-CN: 重启电脑以后再试一次。还不行，点下面的按钮打开「启用或关闭 Windows 功能」，勾上「.NET Framework 3.5（包括 .NET 2.0 和 3.0）」，看看报什么错，把错误代码发给懂哥。 }
+    links: ["tool:open.windows-features"]
+  slow:
+    status: advice
+    message: { zh-CN: 过了九分钟还没装完（多半还在下载，网速比较慢），它会在后台接着装。 }
+    fixer: user
+    next: { zh-CN: 过十几分钟再打开刚才的软件；还是提示要装，重启电脑以后再点一次这个小工具。 }
+  unsupported:
+    status: na
+    message: { zh-CN: 这是服务器版的 Windows，请在「服务器管理器 → 添加角色和功能」里添加「.NET Framework 3.5 功能」。 }
+references:
+  - https://learn.microsoft.com/en-us/dotnet/framework/install/dotnet-35-windows
+  - https://learn.microsoft.com/en-us/dotnet/framework/install/dotnet-35-windows-11
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/application-management/dotnet-framework-35-installation-error
+  - https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/net-framework-35-deployment-errors-and-resolution-steps

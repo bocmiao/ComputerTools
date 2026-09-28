@@ -1,0 +1,44 @@
+# 老软件、老游戏要用的两个 Windows 组件装了没有。脚本：scripts/checks/system/old-components.ps1
+# .NET Framework 3.5（包括 2.0 和 3.0，老软件用）和 DirectPlay（老游戏用）都是 Windows 自带、默认不装的功能，读 Win32_OptionalFeature
+# （InstallState 1 开着，2 关着，3 没有）。从 Windows 11 26H1 起 .NET Framework 3.5 是独立安装包，不再是功能，这时读它一直用的登记位置
+# HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v3.5 的 Install = 1（微软《确定安装了哪些 .NET Framework 版本》）。
+# 没装不算问题（结果都是 ok），只说清楚各是干什么用的，给装它的小工具。不进体检，「软件打不开，提示缺少 dll」里查。
+# 结果：ok（都装着）、netfx3-off、directplay-off、both-off、unsupported（服务器版：在「服务器管理器」里加）。事实：netfx3、directplay（on / off）。
+id: system.old-components
+schema_version: 1
+title: { zh-CN: 老软件、老游戏要用的 Windows 组件 }
+description:
+  zh-CN: 看看 .NET Framework 3.5（老软件用）和 DirectPlay（老游戏用）装了没有。这两个是 Windows 自带、默认不装的组件，软件提示要装时才需要装。
+category: system
+requires_admin: true
+timeout_sec: 60
+probe:
+  script: checks/system/old-components.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: .NET Framework 3.5 和 DirectPlay 都装着。
+  netfx3-off:
+    status: ok
+    message:
+      zh-CN: 没装 .NET Framework 3.5（包括 .NET 2.0 和 3.0）。只有老软件要用它（很多财务、税务、设计软件），软件提示要装的时候点下面的按钮；没提示就不用管。
+    links: ["tool:system.install-netfx3"]
+  directplay-off:
+    status: ok
+    message:
+      zh-CN: 没打开 DirectPlay。只有老游戏要用它（红色警戒 2、帝国时代 2 这些），游戏提示要 DirectPlay 的时候点下面的按钮；没提示就不用管。
+    links: ["tool:system.install-directplay"]
+  both-off:
+    status: ok
+    message:
+      zh-CN: 没装 .NET Framework 3.5，也没打开 DirectPlay。这两个是 Windows 自带、默认不装的老组件：老软件提示要 .NET Framework 3.5、老游戏提示要 DirectPlay 的时候，点下面对应的按钮；没提示就不用管。
+    links: ["tool:system.install-netfx3", "tool:system.install-directplay"]
+  unsupported:
+    status: na
+    message:
+      zh-CN: 这是服务器版的 Windows，这两个组件在「服务器管理器 → 添加角色和功能」里加。
+references:
+  - https://learn.microsoft.com/en-us/dotnet/framework/install/dotnet-35-windows
+  - https://learn.microsoft.com/en-us/dotnet/framework/install/how-to-determine-which-versions-are-installed
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-optionalfeature
