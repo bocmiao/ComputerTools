@@ -7,6 +7,7 @@ import BusySpinner from '../components/BusySpinner.vue'
 import ErrorShotSearch from '../components/ErrorShotSearch.vue'
 import ExeCheck from '../components/ExeCheck.vue'
 import FileLockers from '../components/FileLockers.vue'
+import FileRecovery from '../components/FileRecovery.vue'
 import PopupOwner from '../components/PopupOwner.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import RecycleBinRepair from '../components/RecycleBinRepair.vue'
@@ -548,6 +549,9 @@ watch(
           <p class="pre-text guide">{{ detail.guide }}</p>
           <ResultLinks v-if="detail.links.length > 0" :links="detail.links" :kinds="['tool', 'symptom', 'test']" />
         </section>
+
+        <!-- 误删的文件先照手动步骤去回收站这些地方找，都没有才用恢复工具：放在手动步骤后面 -->
+        <FileRecovery v-if="detail.id === 'deleted-files'" class="block" />
       </template>
     </template>
 

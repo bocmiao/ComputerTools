@@ -1264,6 +1264,14 @@ const SYMPTOMS: MockSymptom[] = [
     guide: '先同时按 Ctrl + Alt + ↑ 试试；没反应的，在「设置 → 系统 → 屏幕」的「显示方向」里选「横向」，再点「保留更改」。',
     steps: [],
   },
+  {
+    id: 'deleted-files', title: '误删了文件，怎么找回来',
+    summary: '文件不小心删了、清空了回收站、按 Shift + Delete 删的，或者 U 盘、存储卡上的文件删了，想找回来。',
+    keywords: ['误删文件', '文件恢复', '回收站清空了'], maturity: 'guide',
+    causes: ['删的时候没进回收站：按了 Shift + Delete、在 U 盘和存储卡上删的、文件太大放不进回收站', '回收站被清空了，或者被「清理垃圾」的软件清掉了'],
+    guide: '先按 Ctrl + Z 撤销、看回收站、看文件夹属性里的「以前的版本」和网盘的回收站。都找不到的话，别再往那个盘里存东西，用下面的「拼出恢复命令」和微软的 Windows File Recovery 找。',
+    steps: [],
+  },
 ]
 
 function getSymptom(id: string): MockSymptom {
@@ -1820,6 +1828,22 @@ const TOOL_LIST: MockTool[] = [
         links: ['tool:settings.date-time'],
       }),
       requiresAdmin: true,
+    },
+  ),
+  defineTool(
+    {
+      // 说法和 catalog/tools/system/file-recovery.yaml 一样（演示：还没装，打开了商店页面）
+      id: 'system.file-recovery',
+      title: '打开微软的「Windows File Recovery」（找回误删的文件）',
+      description: '微软免费的误删文件恢复工具，清空了回收站、按 Shift + Delete 删的、U 盘上删的文件，有机会找回来。没装的会打开 Microsoft Store 里它的页面。',
+      category: 'disk', group: 'action',
+    },
+    {
+      run: () => ({
+        status: 'advice', resultCode: 'store',
+        message: '这台电脑上还没有「Windows File Recovery」，已经打开了 Microsoft Store 里它的页面。',
+        next: '点「获取」（或者「安装」）装好以后，再点一次这个小工具。它要 Windows 10 2004 或者更新的版本。',
+      }),
     },
   ),
   defineTool(

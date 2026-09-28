@@ -2,8 +2,8 @@
 # 的顺序：撤销、回收站、「以前的版本」、网盘的回收站（微软：OneDrive 个人账户的回收站保留 30 天）、聊天软件里重新下载；
 # 都没有的，先别再往那个盘写东西，用微软的 Windows File Recovery（winfr，Microsoft Store 免费）把文件恢复到另一个盘
 # （微软《Windows File Recovery》：少用电脑，删掉的地方随时会被新文件覆盖，固态硬盘尤其如此；存到别的盘）。
-# 调研时找过能直接用的开源项目：kil0bit-kb/winfr-pro（MIT，Tauri + Rust，给 winfr 做的图形界面）、6r6/Windows-File-Recovery-GUI
-# （GPL-3.0，Go），以后做「找回误删的文件」小工具时在 winfr-pro 的做法上改（命令行参数、UTF-16 输出、进度）。
+# 页面上（手动步骤下面）有「拼出恢复命令」（app/src/components/FileRecovery.vue，照用户选的拼 winfr 的命令，参考了
+# kil0bit-kb/winfr-pro 的做法，MIT）和打开它的小工具 system.file-recovery（没装的打开商店页面）。小药箱不替用户运行 winfr。
 id: deleted-files
 schema_version: 1
 title: { zh-CN: 误删了文件，怎么找回来 }
@@ -44,7 +44,7 @@ guide:
     都找不到的话，用恢复工具：
 
     6. 马上停止往那个盘里存东西：别在那个盘里下载、装软件，最好先少用电脑。删掉的文件占的地方随时会被新文件盖掉，盖掉就找不回来了。
-    7. 用微软免费的「Windows File Recovery」：在 Microsoft Store 里搜「Windows File Recovery」装上（要 Windows 10 2004 或者更新的版本），在开始菜单里打开它，会出来一个命令行窗口。找回来的文件必须存到另一个盘（U 盘、移动硬盘或者别的分区）。例如把 C 盘里删掉的 Word 和 PDF 找回来、存到 E 盘：输入 winfr C: E: /regular /n *.docx /n *.pdf 回车，问要不要继续时按 y。刚删不久、盘是 NTFS 的用 /regular；删了很久、格式化过、U 盘和存储卡（FAT、exFAT）用 /extensive。找到的文件在 E 盘新建的 Recovery_日期_时间 文件夹里。
+    7. 用微软免费的「Windows File Recovery」找：在下面的「拼出恢复命令」里选好文件原来在哪个盘、要找哪些文件、存到哪个盘，复制拼好的命令，再点「打开 Windows File Recovery」（没装的会打开 Microsoft Store 里它的页面，要 Windows 10 2004 或者更新的版本），弹出提示时点「是」，把命令粘贴进去回车，问要不要继续时按 y。找回来的文件必须存到另一个盘（U 盘、移动硬盘或者别的分区），在那个盘新建的 Recovery_日期_时间 文件夹里。
     8. 固态硬盘（SSD）上删的文件，系统很快就会把那块地方清掉，找回来的希望很小；机械硬盘、U 盘、存储卡的机会大一些。
     9. 硬盘摔过、有咔咔的响声、电脑认不出这块盘的：别自己反复扫描（会加重损坏），直接找专业的数据恢复。
 

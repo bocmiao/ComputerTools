@@ -31,14 +31,17 @@ $storePackage = 'Microsoft.WindowsStore'
 $appUri = 'ms-quick-assist:'
 $storeUri = 'ms-windows-store://pdp/?ProductId=9P7BP5VNWKX5'
 
+# ---- shared block store-package: identical in tools/system/remote-help.ps1 and tools/system/file-recovery.ps1 (medkit-data check compares them) ----
+# The logged-in user's SID from -UserHive (HKEY_USERS\<SID>); '' for HKCU:.
 $userSid = ''
 if ($UserHive -match '(?i)HKEY_USERS\\(S-1-[0-9-]+)$') {
     $userSid = $Matches[1]
 }
 
-# A Store app is installed for the logged-in user (asking for another user
-# needs administrator rights; without them the current user is asked).
-function Test-Package {
+# The Store package installed for the logged-in user, or $null (asking for
+# another user needs administrator rights; without them the current user is
+# asked).
+function Get-UserPackage {
     param([string]$Name)
     $packages = @()
     try {
@@ -58,12 +61,16 @@ function Test-Package {
             Write-Verbose ('Get-AppxPackage failed: {0}' -f $_.Exception.Message)
         }
     }
-    return ($packages.Count -gt 0)
+    if ($packages.Count -gt 0) {
+        return $packages[0]
+    }
+    return $null
 }
+# ---- end of shared block store-package ----
 
 $facts = [ordered]@{ error = '' }
 $result = ''
-if (Test-Package $packageName) {
+if ($null -ne (Get-UserPackage $packageName)) {
     try {
         Start-Process -FilePath $appUri -ErrorAction Stop
         $result = 'opened'
@@ -73,7 +80,7 @@ if (Test-Package $packageName) {
         $facts.error = ([string]$_.Exception.Message).Trim()
     }
 }
-elseif (Test-Package $storePackage) {
+elseif ($null -ne (Get-UserPackage $storePackage)) {
     try {
         Start-Process -FilePath $storeUri -ErrorAction Stop
         $result = 'store'

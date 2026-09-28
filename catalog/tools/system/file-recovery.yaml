@@ -1,0 +1,51 @@
+# 打开微软的「Windows File Recovery」（action）。脚本：scripts/tools/system/file-recovery.ps1
+# 微软免费的误删文件恢复工具（winfr，Microsoft Store 的应用 Microsoft.WindowsFileRecovery，产品 9N26S50LN705），用命令行找回
+# 删掉的文件（微软《Windows File Recovery》）。命令由「按症状修 → 误删了文件」页面上的「拼出恢复命令」照用户的选择拼好，
+# 这个小工具只负责打开它：登录用户装了的，按应用清单里的应用 ID 从 shell:AppsFolder 打开（它自己会要管理员权限：微软的
+# 说法是弹出提示时点「是」）；没装的，装着 Microsoft Store 时打开商店里它的页面。和「远程求助」一样，找商店应用的代码是
+# 共享块 store-package。
+# 结果：opened、installed（装着但没能从这里打开）、store（打开了商店页面去装）、no-store（没装，也没有商店）。
+id: system.file-recovery
+schema_version: 1
+group: action
+title: { zh-CN: 打开微软的「Windows File Recovery」（找回误删的文件） }
+description:
+  zh-CN: 微软免费的误删文件恢复工具，清空了回收站、按 Shift + Delete 删的、U 盘上删的文件，有机会找回来。没装的会打开 Microsoft Store 里它的页面。在「按症状修」里搜「误删了文件」，照着选一选就能拼出要输入的命令。
+category: disk
+requires_admin: false
+user_hive: true
+timeout_sec: 60
+run:
+  script: tools/system/file-recovery.ps1
+results:
+  opened:
+    status: ok
+    message:
+      zh-CN: 打开了「Windows File Recovery」。
+    next:
+      zh-CN: 弹出「你要允许此应用对你的设备进行更改吗？」时点「是」。在黑色的窗口里按 Ctrl + V（或者点右键）把拼好的命令粘贴进去，按回车；问「Continue? (y/n)」时按 y 再回车。找完以后，找到的文件在你选的那个盘里新建的 Recovery_日期_时间 文件夹里。
+  installed:
+    status: advice
+    message:
+      zh-CN: "这台电脑上装着「Windows File Recovery」，可是没能从这里打开它。{error}"
+    fixer: user
+    next:
+      zh-CN: 点开始菜单，搜「Windows File Recovery」打开它，弹出提示时点「是」，再把拼好的命令粘贴进去。
+  store:
+    status: advice
+    message:
+      zh-CN: 这台电脑上还没有「Windows File Recovery」，已经打开了 Microsoft Store 里它的页面。
+    fixer: user
+    next:
+      zh-CN: 点「获取」（或者「安装」）装好以后，再点一次这个小工具。它要 Windows 10 2004 或者更新的版本。
+  no-store:
+    status: manual
+    message:
+      zh-CN: "这台电脑上没有「Windows File Recovery」，也打不开 Microsoft Store（可能是精简过的系统，或者是服务器版），在这里装不了。{error}"
+    fixer: user
+    next:
+      zh-CN: 可以把这块硬盘（或者 U 盘、存储卡）接到别的电脑上，在那台电脑上装好「Windows File Recovery」来找；在那之前，别再往这个盘里存东西。
+references:
+  - https://support.microsoft.com/en-us/windows/windows-file-recovery-61f5b28a-f5b8-3cc2-0f8e-a63cb4e1d4c4
+  - https://apps.microsoft.com/detail/9n26s50ln705
+  - https://github.com/kil0bit-kb/winfr-pro
