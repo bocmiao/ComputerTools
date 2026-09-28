@@ -333,6 +333,27 @@ const FEATURE_LIST: MockFeature[] = [
   ),
   defineFeature(
     {
+      id: 'explorer.no-duplicate-drives',
+      title: '资源管理器左边的 U 盘只显示一次',
+      description:
+        '插上 U 盘、SD 卡、移动硬盘以后，资源管理器左边会出现两个一样的盘：「此电脑」下面一个，下面单独又一个。这里去掉单独的那个，只在「此电脑」下面显示；U 盘本身、盘符都不受影响。重启资源管理器以后生效，能撤销。',
+      category: 'explorer',
+      subjective: true,
+      reboot: 'explorer',
+    },
+    {
+      changes: [
+        {
+          target: 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Desktop\\NameSpace\\DelegateFolders\\{F5FB2C77-0E2F-4A16-A381-3E560C68BC83}',
+          initial: '有（默认值 Removable Drives）',
+          planned: '删掉这个键（32 位程序用的 WOW6432Node 下的也删）',
+        },
+      ],
+      notes: ['撤销时按原样建回这个键。'],
+    },
+  ),
+  defineFeature(
+    {
       id: 'desktop.show-this-pc',
       title: '桌面显示「此电脑」',
       description: '在桌面上放一个「此电脑」图标，双击就能打开 C 盘、D 盘。',

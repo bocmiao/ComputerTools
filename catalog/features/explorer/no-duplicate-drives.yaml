@@ -1,0 +1,38 @@
+# 资源管理器左边的 U 盘只显示一次（脚本类功能）。脚本在 scripts/features/explorer/ 下，共享块 no-duplicate-drives。
+# 插上 U 盘、SD 卡以后，导航栏里它出现两次：「此电脑」下面一次，下面单独又一次。单独的那个是
+# HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\DelegateFolders 下登记的委托文件夹
+# {F5FB2C77-0E2F-4A16-A381-3E560C68BC83}（默认值 Removable Drives），键在就显示，所以要删整个键（引擎的注册表原语只删值，
+# 这里用脚本）。照 Win11Debloat（Raphire，MIT）的 Hide_duplicate_removable_drives_from_navigation_pane_of_File_Explorer.reg 和
+# 它的撤销文件；32 位程序的「打开」「另存为」对话框用 WOW6432Node 下同一个键，一起处理。键里除了默认值还有别的东西时不动。
+#   no-duplicate-drives-detect.ps1  两个位置都没有这个键 → applied；有一个在 → not-applied
+#   no-duplicate-drives-run.ps1     -Prepare：before = { x64, x86 }（各是 { exists, value }）；执行：变了、两个都不在 → 跳过；
+#                                   删掉、读回来确认，失败时把删掉的建回去再报错
+#   no-duplicate-drives-undo.ps1    原来在的键建回去，默认值照原样
+#   no-duplicate-drives-break.ps1   只在测试中使用：两个位置都建上这个键（默认值 Removable Drives）
+# 新打开的资源管理器窗口生效，已经开着的要重启资源管理器。
+id: explorer.no-duplicate-drives
+schema_version: 1
+title: { zh-CN: 资源管理器左边的 U 盘只显示一次 }
+description:
+  zh-CN: 插上 U 盘、SD 卡、移动硬盘以后，资源管理器左边会出现两个一样的盘：「此电脑」下面一个，下面单独又一个。这里去掉单独的那个，只在「此电脑」下面显示；U 盘本身、盘符都不受影响。重启资源管理器以后生效，能撤销。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: true
+reboot: explorer
+target: machine
+detect:
+  script: features/explorer/no-duplicate-drives-detect.ps1
+prepare:
+  script: features/explorer/no-duplicate-drives-run.ps1
+run:
+  script: features/explorer/no-duplicate-drives-run.ps1
+undo:
+  script: features/explorer/no-duplicate-drives-undo.ps1
+break:
+  script: features/explorer/no-duplicate-drives-break.ps1
+references:
+  - https://github.com/Raphire/Win11Debloat/blob/master/Regfiles/Hide_duplicate_removable_drives_from_navigation_pane_of_File_Explorer.reg
+  - https://github.com/Raphire/Win11Debloat/blob/master/Regfiles/Undo/Show_duplicate_removable_drives_in_navigation_pane_of_File_Explorer.reg
