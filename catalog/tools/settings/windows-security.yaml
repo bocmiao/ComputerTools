@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:windowsdefender（隐私和安全性 → Windows 安全中心），由系统打开。
+# 从这里进「病毒和威胁防护」→「扫描选项」→「完全扫描」。小药箱不改 Defender 的任何设置（计划书第五节第 4 条），只给入口。
+id: settings.windows-security
+schema_version: 1
+group: open
+title: { zh-CN: Windows 安全中心 }
+description:
+  zh-CN: 打开 Windows 自带的杀毒软件「Windows 安全中心」。怀疑中了病毒时，点「病毒和威胁防护」→「扫描选项」→「完全扫描」→「立即扫描」；装了别的杀毒软件的，用那个软件全盘扫描。
+category: settings
+open: { settings: windowsdefender }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/en-us/windows/security/windows-security/stay-protected-with-the-windows-security-app

@@ -1,0 +1,63 @@
+# Windows 登录以后启动的程序有没有被改掉。脚本：scripts/checks/system/winlogon.ps1（和修复 system.winlogon-defaults 共用共享块
+# winlogon）。HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon 的 Shell（桌面和任务栏，默认 explorer.exe）、Userinit
+# （默认「<系统目录>\system32\userinit.exe,」，逗号分隔的列表），以及登录用户自己的 Shell（默认没有）。
+# 被病毒、「锁机」软件改掉以后，开机只有黑屏和鼠标，或者每次登录都启动来路不明的程序；网吧、学校机房、自助终端的电脑是故意改的。
+# 结果（按这个顺序）：userinit-broken、shell-missing、shell-changed、userinit-extra、user-shell（都是 advice，修复
+# system.winlogon-defaults）、ok。事实里只有文件名（路径里可能有用户名）：shell、user_shell、userinit_extra、userinit_ok。
+id: system.winlogon
+schema_version: 1
+title: { zh-CN: 登录以后启动的程序 }
+description:
+  zh-CN: 看看 Windows 登录以后启动的「外壳」（桌面和任务栏）和登录程序有没有被病毒、锁机软件改掉。被改掉以后开机可能只有黑屏和鼠标。
+category: system
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/system/winlogon.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: 登录以后启动的是 Windows 默认的桌面（explorer.exe），没有被改过。 }
+  shell-changed:
+    status: advice
+    message:
+      zh-CN: "登录以后启动的「外壳」被改成了 {shell}，不是 Windows 的桌面（explorer.exe），所以开机可能只有黑屏和鼠标、没有任务栏。多半是病毒或者锁机软件改的；网吧、学校机房、自助终端的电脑是故意这样设的，不要改。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回 explorer.exe，注销再登录以后生效；改完用「Windows 安全中心」全盘扫描一次病毒。
+    links: ["feature:system.winlogon-defaults", "tool:settings.windows-security"]
+  shell-missing:
+    status: advice
+    message:
+      zh-CN: 登录以后启动「外壳」（桌面和任务栏）的设置没了，开机可能只有黑屏和鼠标。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回 explorer.exe，注销再登录以后生效。
+    links: ["feature:system.winlogon-defaults"]
+  userinit-extra:
+    status: advice
+    message:
+      zh-CN: "每次登录时 Windows 除了自己的 userinit.exe，还会运行 {userinit_extra}。正常的电脑上这里只有 userinit.exe，多出来的多半是病毒加的。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮去掉多出来的程序，注销再登录以后生效；改完用「Windows 安全中心」全盘扫描一次病毒。能撤销。
+    links: ["feature:system.winlogon-defaults", "tool:settings.windows-security"]
+  userinit-broken:
+    status: advice
+    message:
+      zh-CN: 登录时 Windows 要运行的 userinit.exe 被从设置里去掉了，登录以后可能马上被注销，或者只有黑屏。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回来，注销再登录以后生效。
+    links: ["feature:system.winlogon-defaults"]
+  user-shell:
+    status: advice
+    message:
+      zh-CN: "当前用户单独设了登录以后启动的程序（{user_shell}），不是 Windows 的桌面，所以这个用户登录以后可能只有黑屏和鼠标。多半是病毒或者锁机软件设的。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮去掉它，注销再登录以后生效；改完用「Windows 安全中心」全盘扫描一次病毒。
+    links: ["feature:system.winlogon-defaults", "tool:settings.windows-security"]
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-shell-setup
+  - https://attack.mitre.org/techniques/T1547/004/

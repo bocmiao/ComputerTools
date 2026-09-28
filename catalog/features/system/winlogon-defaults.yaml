@@ -1,0 +1,37 @@
+# 恢复 Windows 登录以后启动的程序（脚本类功能）：Winlogon 的 Shell 改回 explorer.exe，Userinit 改回「<这台电脑的系统目录>\system32\
+# userinit.exe,」（按 %SystemRoot% 拼，不写死 C 盘：写错了会登录不了），去掉登录用户自己的 Shell（不是 explorer.exe 时）。
+# 下次登录生效。脚本在 scripts/features/system/ 下，和检测 system.winlogon 共用共享块 winlogon。
+#   winlogon-detect.ps1  撤销前核对：都是默认 → applied；否则 not-applied
+#   winlogon-run.ps1     -Prepare：before = { shell, userinit, user_shell }（原样，没有的为 null）；执行：值变了、本来就是默认就跳过；
+#                        写入默认值再核对，失败时写回原来的值再报错
+#   winlogon-undo.ps1    写回原来的值（原来没有的删掉）
+#   winlogon-break.ps1   只在测试中使用：Userinit 后面加一个不存在的程序（就算真的登录也只是启动失败）
+# 改的是登录要用的关键设置，按「谨慎」处理：执行前先建还原点。改完提醒用户扫一遍病毒。
+# target 是 current-user：要拿到登录用户的注册表去掉他自己的 Shell；也要改 HKLM，所以需要管理员。
+id: system.winlogon-defaults
+schema_version: 1
+title: { zh-CN: 恢复登录以后启动的桌面 }
+description:
+  zh-CN: 把 Windows 登录以后启动的「外壳」改回自己的桌面（explorer.exe），去掉被病毒、锁机软件加进登录过程的程序。开机只有黑屏和鼠标、每次登录都弹出来路不明的程序时用。注销再登录以后生效，执行前会先建一个还原点，能撤销。网吧、学校机房、自助终端的电脑是故意改的，不要用。
+category: system
+risk: caution
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: logoff
+target: current-user
+detect:
+  script: features/system/winlogon-detect.ps1
+prepare:
+  script: features/system/winlogon-run.ps1
+run:
+  script: features/system/winlogon-run.ps1
+undo:
+  script: features/system/winlogon-undo.ps1
+break:
+  script: features/system/winlogon-break.ps1
+verify: system.winlogon
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-shell-setup
+  - https://attack.mitre.org/techniques/T1547/004/
