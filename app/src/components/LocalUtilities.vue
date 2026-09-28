@@ -12,6 +12,8 @@ import SpaceFinder from './SpaceFinder.vue'
 import HiddenFilesTool from './HiddenFilesTool.vue'
 import TextQrTool from './TextQrTool.vue'
 import AmountWordsTool from './AmountWordsTool.vue'
+import DateCalcTool from './DateCalcTool.vue'
+import TextDiffTool from './TextDiffTool.vue'
 
 const selectedFile = ref<File | null>(null)
 const digests = ref<FileDigests | null>(null)
@@ -248,8 +250,10 @@ async function copy(value: string): Promise<void> {
           <button type="button" class="btn btn-secondary btn-small self-start" @click="copy(textOutput)">复制结果</button>
         </template>
       </article>
+      <TextDiffTool />
       <TextQrTool />
       <AmountWordsTool />
+      <DateCalcTool />
       <BatchImageTool />
       <ImagesToPdfTool />
       <LongImageTool />
