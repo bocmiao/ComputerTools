@@ -1,7 +1,8 @@
 # Check: disk.smart-health
 # Health of every physical disk (Get-PhysicalDisk HealthStatus / OperationalStatus),
 # plus wear, temperature and power-on hours from Get-StorageReliabilityCounter when
-# the disk exposes them. The worst disk decides the result.
+# the disk exposes them, and the bad sector counts of hard disks (see
+# Get-SmartSectors). The worst disk decides the result.
 # A disk whose health is Unknown is never counted as healthy. Internal disks are
 # everything except USB disks, mounted virtual disks (File Backed Virtual) and
 # SD / MMC cards other than the system disk (eMMC); when an internal disk is
@@ -10,6 +11,10 @@
 # Result codes: healthy / warning / unhealthy / incomplete. If no disk at all
 # reports a known health status and none of them is internal, the script throws
 # and the engine shows "unknown".
+# Facts of the worst disk also: sign (bad-sectors: a hard disk with bad
+# sectors; wear: an SSD past $wearWarningPct percent of its rated life),
+# reallocated_sectors, pending_sectors, uncorrectable_sectors (hard disks whose
+# SMART data could be read).
 
 [CmdletBinding()]
 param()
@@ -39,6 +44,59 @@ $wearWarningPct = 90
 
 $rank = @{ 'unknown' = -1; 'healthy' = 0; 'warning' = 1; 'unhealthy' = 2 }
 
+# The bad sector counts of the disks' ATA SMART data, by disk number:
+# @{ Reallocated; Pending; Uncorrectable } ($null when not reported).
+# MSStorageDriver_FailurePredictData (root\wmi) holds the SMART data the disk
+# driver read: VendorSpecific has 30 entries of 12 bytes from offset 2 (id,
+# flags (2 bytes), value, worst, raw value (6 bytes), reserved); the lower 4
+# bytes of the raw value are the count. 05 is Reallocated Sectors Count, C5
+# Current Pending Sector Count, C6 Offline Uncorrectable. Its InstanceName is
+# the disk's PNPDeviceID followed by "_0"; Win32_DiskDrive.Index is the disk
+# number (Get-PhysicalDisk DeviceId). NVMe, USB and RAID disks usually have no
+# entry (the query can also fail with "Not supported"): then nothing is added.
+function Get-SmartSectors {
+    $byDisk = @{}
+    try {
+        $data = @(Get-CimInstance -Namespace 'root\wmi' -ClassName 'MSStorageDriver_FailurePredictData' -ErrorAction Stop)
+        $drives = @(Get-CimInstance -ClassName 'Win32_DiskDrive' -Property 'Index', 'PNPDeviceID' -ErrorAction Stop)
+    }
+    catch {
+        Write-Verbose ('no SMART data: ' + $_.Exception.Message)
+        return $byDisk
+    }
+    $numbers = @{}
+    foreach ($drive in $drives) {
+        $pnp = ([string]$drive.PNPDeviceID).ToUpperInvariant()
+        if ($pnp.Length -gt 0) {
+            $numbers[$pnp] = [string]$drive.Index
+        }
+    }
+    foreach ($entry in $data) {
+        $instance = ([string]$entry.InstanceName).ToUpperInvariant() -replace '_\d+$', ''
+        if (-not $numbers.ContainsKey($instance)) {
+            continue
+        }
+        $bytes = [byte[]]@($entry.VendorSpecific)
+        $counts = @{ Reallocated = $null; Pending = $null; Uncorrectable = $null }
+        for ($i = 0; $i -lt 30; $i++) {
+            $offset = 2 + ($i * 12)
+            if (($offset + 11) -gt $bytes.Length) {
+                break
+            }
+            $raw = [int64][BitConverter]::ToUInt32($bytes, $offset + 5)
+            switch ([int]$bytes[$offset]) {
+                0x05 { $counts.Reallocated = $raw }
+                0xC5 { $counts.Pending = $raw }
+                0xC6 { $counts.Uncorrectable = $raw }
+            }
+        }
+        if (($null -ne $counts.Reallocated) -or ($null -ne $counts.Pending) -or ($null -ne $counts.Uncorrectable)) {
+            $byDisk[$numbers[$instance]] = $counts
+        }
+    }
+    return $byDisk
+}
+
 function ConvertTo-Name {
     param($Value, [hashtable]$Names)
     $text = [string]$Value
@@ -67,6 +125,8 @@ try {
 catch {
     $systemDisk = ''
 }
+
+$sectors = Get-SmartSectors
 
 $worstLevel = 'unknown'
 $worst = $null
@@ -135,8 +195,27 @@ foreach ($disk in $disks) {
             $level = 'warning'
         }
     }
-    if (($null -ne $wear) -and ($wear -ge $wearWarningPct) -and ($rank[$level] -lt $rank['warning'])) {
-        $level = 'warning'
+    $sign = ''
+    if (($null -ne $wear) -and ($wear -ge $wearWarningPct)) {
+        $sign = 'wear'
+        if ($rank[$level] -lt $rank['warning']) {
+            $level = 'warning'
+        }
+    }
+
+    # Bad sectors count on hard disks only: SSDs use these IDs for other
+    # counters.
+    $counts = $null
+    $isHdd = @('HDD', '3') -contains [string]$disk.MediaType
+    if ($isHdd -and $sectors.ContainsKey([string]$disk.DeviceId)) {
+        $counts = $sectors[[string]$disk.DeviceId]
+        $bad = @($counts.Reallocated, $counts.Pending, $counts.Uncorrectable | Where-Object { ($null -ne $_) -and ($_ -gt 0) })
+        if ($bad.Count -gt 0) {
+            $sign = 'bad-sectors'
+            if ($rank[$level] -lt $rank['warning']) {
+                $level = 'warning'
+            }
+        }
     }
 
     $parts = New-Object System.Collections.Generic.List[string]
@@ -152,6 +231,9 @@ foreach ($disk in $disks) {
     }
     if ($null -ne $hours) {
         $parts.Add(('{0}h' -f $hours))
+    }
+    if ($null -ne $counts) {
+        $parts.Add(('05/C5/C6 {0}/{1}/{2}' -f $counts.Reallocated, $counts.Pending, $counts.Uncorrectable))
     }
     $summaries.Add(('{0}: {1}' -f $name, ($parts -join ', ')))
 
@@ -170,6 +252,8 @@ foreach ($disk in $disks) {
             Wear        = $wear
             Temperature = $temperature
             Hours       = $hours
+            Sign        = $sign
+            Sectors     = $counts
         }
     }
 }
@@ -198,6 +282,16 @@ if ($null -ne $worst) {
     }
     if ($null -ne $worst.Hours) {
         $facts['power_on_hours'] = $worst.Hours
+    }
+    if ($worst.Sign.Length -gt 0) {
+        $facts['sign'] = $worst.Sign
+    }
+    if ($null -ne $worst.Sectors) {
+        foreach ($pair in @(@('reallocated_sectors', 'Reallocated'), @('pending_sectors', 'Pending'), @('uncorrectable_sectors', 'Uncorrectable'))) {
+            if ($null -ne $worst.Sectors[$pair[1]]) {
+                $facts[$pair[0]] = $worst.Sectors[$pair[1]]
+            }
+        }
     }
 }
 $facts['unknown_count'] = $unknownInternal.Count

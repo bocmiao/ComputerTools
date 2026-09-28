@@ -7,11 +7,17 @@
 #   warning：  HealthStatus 为 Warning，或 OperationalStatus 含 Degraded / Stressed / Error / IO Error，
 #              或 Wear ≥ 90%（Wear 是「已用掉的额定寿命」，100% 表示到了厂商标称的寿命；
 #              参考 CrystalDiskInfo「固态硬盘看剩余寿命」的口径，这一条是在任务要求之外加的）
+#              或者是机械硬盘（MediaType HDD）、SMART 里 05（重新分配扇区计数）、C5（当前待映射扇区计数）、C6（无法校正的扇区计数）
+#              的原始值有不是 0 的：已经有坏道了（CrystalDiskInfo 也是这三项不是 0 就报「警告」）。SMART 数据从 root\wmi 的
+#              MSStorageDriver_FailurePredictData 读（VendorSpecific：从第 2 个字节起 30 项、每项 12 字节），按 PNPDeviceID 对上盘号；
+#              固态硬盘把这几个编号用在别的计数上，不看；NVMe、USB、RAID 的盘一般读不到，读不到就不管
 #   healthy：  其余 HealthStatus 为 Healthy 的盘（文案里的块数只数查到了状态的盘）
 #   incomplete：没有盘报告问题，但有内置盘的 HealthStatus 是 Unknown——不能说「状态良好」，状态用 unknown。
 #              内置盘指 USB 盘、挂载的虚拟磁盘（File Backed Virtual）以外的盘；SD / MMC 总线上的只有系统盘（eMMC）算内置，
 #              读卡器里的存储卡不算。
 # 所有盘都是 Unknown、而且没有一块是内置盘时，脚本报错，界面显示「没查出来」。
+# 最差那块盘的事实还有：sign（bad-sectors 机械硬盘有坏道、wear 固态硬盘磨损过了 90%）、reallocated_sectors、pending_sectors、
+# uncorrectable_sectors（读到了 SMART 的机械硬盘才有）。
 # 待真机验证：RAID / Intel RST、USB 硬盘盒上 HealthStatus 是否总是 Unknown 或总是 Healthy；
 # 读卡器里的 SD 卡、eMMC 系统盘各报什么 BusType。
 id: disk.smart-health
@@ -38,17 +44,23 @@ results:
   warning:
     status: advice
     message:
-      zh-CN: "硬盘「{worst_disk}」出现了异常迹象，可能快要坏了。"
+      zh-CN: "硬盘「{worst_disk}」出现了异常迹象，可能快要坏了。{sign_text}"
     fixer: hardware
     next:
       zh-CN: "请尽快把照片、文档、聊天记录等重要文件备份到另一块硬盘、U 盘或网盘。备份好以后，可以找懂哥或售后检测一下，需要的话换一块新硬盘。"
   unhealthy:
     status: manual
     message:
-      zh-CN: "硬盘「{worst_disk}」报告自己已经损坏或即将损坏，里面的数据随时可能读不出来。"
+      zh-CN: "硬盘「{worst_disk}」报告自己已经损坏或即将损坏，里面的数据随时可能读不出来。{sign_text}"
     fixer: hardware
     next:
       zh-CN: "请马上备份重要文件（备份时先别做别的事，尽量少让硬盘读写），然后联系电脑售后，或者换一块新硬盘。"
+fact_labels:
+  sign_text:
+    from: sign
+    values:
+      bad-sectors: { zh-CN: 它是机械硬盘，已经有坏道了：SMART 里的「重新分配扇区计数」（05）、「当前待映射扇区计数」（C5）、「无法校正的扇区计数」（C6）有不是 0 的（数字在详情里）。坏道一般会越来越多，电脑也会越来越卡、偶尔卡死。 }
+      wear: { zh-CN: 它是固态硬盘，已经用掉了厂商标称寿命的九成以上。 }
 references:
   - https://learn.microsoft.com/en-us/powershell/module/storage/get-physicaldisk
   - https://learn.microsoft.com/en-us/powershell/module/storage/get-storagereliabilitycounter
