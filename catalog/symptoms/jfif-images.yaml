@@ -1,0 +1,30 @@
+# 症状：网页上「图片另存为」、下载的照片变成了 .jfif，传到网站、别的软件时提示格式不对。查 Windows 给 JPEG 登记的扩展名
+# （system.jpeg-extension），是 .jfif 的给修复 explorer.jpeg-extension（改回 .jpg）。.jfif 本来就是 JPEG 图片，改扩展名就能用。
+id: jfif-images
+schema_version: 1
+title: { zh-CN: 保存的图片变成了 .jfif，上传不了 }
+summary:
+  zh-CN: 在浏览器里「图片另存为」、下载的照片，文件名后面是 .jfif 不是 .jpg，传到网站、发给别的软件时提示格式不对、打不开。
+keywords:
+  - jfif
+  - 图片变成jfif
+  - 图片另存为jfif
+  - 保存图片是jfif
+  - 下载的图片是jfif
+  - jfif格式
+  - jfif转jpg
+  - jfif怎么改成jpg
+  - jfif打不开
+  - 图片格式不支持
+  - 上传图片格式不对
+causes:
+  - zh-CN: Windows 登记的 JPEG 图片扩展名被改成了 .jfif（Windows 更新会改它），Chrome、Edge 存图片时照它起名
+maturity: semi
+steps:
+  - check: system.jpeg-extension
+    fixes: [explorer.jpeg-extension]
+guide:
+  zh-CN: |
+    1. 以后存下来就是 .jpg：上面的检查说扩展名是 .jfif 的，点它下面的修复，再把浏览器关掉重新打开。Windows 大更新以后如果又变回 .jfif，再执行一次。
+    2. 已经存成 .jfif 的：它们本来就是 JPEG 图片，在资源管理器里把文件名最后的 .jfif 改成 .jpg 就能用（看不到文件名后面的 .jfif 的，先在「常用设置」里打开「显示文件扩展名」）。很多张的，用工具箱的「批量重命名」一次把扩展名改成 .jpg，或者用「图片批量处理」转成 JPG。
+    3. 只是急着用这一张：在浏览器里右键图片选「复制图片」，直接粘贴到微信、QQ 的聊天框里发出去。

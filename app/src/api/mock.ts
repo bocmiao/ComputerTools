@@ -314,6 +314,25 @@ const FEATURE_LIST: MockFeature[] = [
   // ── 常用设置：桌面 ──
   defineFeature(
     {
+      id: 'explorer.jpeg-extension',
+      title: '网页上保存的图片是 .jpg，不是 .jfif',
+      description:
+        '在 Chrome、Edge 里「图片另存为」、在 Teams 这些软件里下载照片，文件名后面变成了 .jfif，有的软件、网站上传时不认。这里把 Windows 登记的 JPEG 图片扩展名改回 .jpg，以后存下来的就是 .jpg；重新打开浏览器以后生效，能撤销。',
+      category: 'explorer',
+    },
+    {
+      changes: [
+        {
+          target: 'HKLM\\SOFTWARE\\Classes\\MIME\\Database\\Content Type\\image/jpeg\\Extension',
+          initial: '字符串 .jfif',
+          planned: '字符串 .jpg',
+        },
+      ],
+      notes: ['Windows 大更新以后可能又被改回 .jfif，到时候再执行一次就行。'],
+    },
+  ),
+  defineFeature(
+    {
       id: 'desktop.show-this-pc',
       title: '桌面显示「此电脑」',
       description: '在桌面上放一个「此电脑」图标，双击就能打开 C 盘、D 盘。',
@@ -1033,6 +1052,23 @@ const CHECKS: Record<string, MockCheck> = {
       facts: { count: 2, desktop: false, display_on: 'integrated' },
     }),
   },
+  'system.jpeg-extension': {
+    title: '网页上保存的图片的扩展名',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return { status: 'ok', resultCode: 'jpg', message: 'Windows 给 JPEG 图片登记的扩展名是 .jpg，浏览器存下来的图片就是 .jpg。' }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'jfif',
+        message: 'Windows 给 JPEG 图片登记的扩展名是 .jfif，所以 Chrome、Edge「图片另存为」出来的是 .jfif，有的软件、网站上传时不认。',
+        fixer: 'medkit',
+        next: '点下面的「网页上保存的图片是 .jpg，不是 .jfif」改回 .jpg，再把浏览器关掉重新打开。',
+        links: ['feature:explorer.jpeg-extension'],
+        facts: { where: 'machine', value: '.jfif' },
+      }
+    },
+  },
   'system.managed': {
     title: '单位管理',
     evaluate: () => ({ status: 'ok', message: '这台电脑没有被单位管理（没有加入域，也没有设备管理）。', facts: { domain_joined: false, mdm: false } }),
@@ -1283,6 +1319,14 @@ const SYMPTOMS: MockSymptom[] = [
     causes: ['删的时候没进回收站：按了 Shift + Delete、在 U 盘和存储卡上删的、文件太大放不进回收站', '回收站被清空了，或者被「清理垃圾」的软件清掉了'],
     guide: '先按 Ctrl + Z 撤销、看回收站、看文件夹属性里的「以前的版本」和网盘的回收站。都找不到的话，别再往那个盘里存东西，用下面的「拼出恢复命令」和微软的 Windows File Recovery 找。',
     steps: [],
+  },
+  {
+    id: 'jfif-images', title: '保存的图片变成了 .jfif，上传不了',
+    summary: '在浏览器里「图片另存为」、下载的照片，文件名后面是 .jfif 不是 .jpg，传到网站、发给别的软件时提示格式不对、打不开。',
+    keywords: ['jfif', '图片变成jfif', 'jfif转jpg'], maturity: 'semi',
+    causes: ['Windows 登记的 JPEG 图片扩展名被改成了 .jfif（Windows 更新会改它），Chrome、Edge 存图片时照它起名'],
+    guide: '以后存下来就是 .jpg：上面的检查说扩展名是 .jfif 的，点它下面的修复，再把浏览器关掉重新打开。已经存成 .jfif 的，把文件名最后的 .jfif 改成 .jpg 就能用。',
+    steps: [{ check: 'system.jpeg-extension', fixes: ['explorer.jpeg-extension'] }],
   },
   {
     id: 'gpu-not-used', title: '玩游戏卡，没用上独立显卡',

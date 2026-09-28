@@ -1,0 +1,36 @@
+# 网页上保存的 JPEG 图片用什么扩展名。脚本：scripts/checks/system/jpeg-extension.ps1（读登录用户和电脑的注册表，只读）。
+# Chrome、Edge 存图片时读 HKEY_CLASSES_ROOT\MIME\Database\Content Type\image/jpeg 的 Extension；用户和电脑哪一份生效，规则写在
+# 共享块 jpeg-extension 里（和修复 explorer.jpeg-extension 共用）。
+# 结果：jpg（.jpg 或 .jpeg）、jfif（别的，一般是 .jfif：Windows 更新会改成它）、missing（没有登记，程序按自己的默认起名）。
+# 事实：where（user、machine 或空）、value（扩展名或空）。
+id: system.jpeg-extension
+schema_version: 1
+title: { zh-CN: 网页上保存的图片的扩展名 }
+description:
+  zh-CN: 看看 Windows 给 JPEG 图片登记的扩展名是 .jpg 还是 .jfif：Chrome、Edge「图片另存为」时照它起名。
+category: system
+requires_admin: false
+user_hive: true
+timeout_sec: 30
+probe:
+  script: checks/system/jpeg-extension.ps1
+results:
+  jpg:
+    status: ok
+    message:
+      zh-CN: "Windows 给 JPEG 图片登记的扩展名是 {value}，浏览器存下来的图片就是 {value}。"
+  jfif:
+    status: advice
+    message:
+      zh-CN: "Windows 给 JPEG 图片登记的扩展名是 {value}，所以 Chrome、Edge「图片另存为」出来的是 {value}，有的软件、网站上传时不认。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的「网页上保存的图片是 .jpg，不是 .jfif」改回 .jpg，再把浏览器关掉重新打开。
+    links: ["feature:explorer.jpeg-extension"]
+  missing:
+    status: ok
+    message:
+      zh-CN: Windows 没有给 JPEG 图片登记扩展名，浏览器会按自己的默认起名，一般不会是 .jfif。
+references:
+  - https://source.chromium.org/chromium/chromium/src/+/main:net/base/platform_mime_util_win.cc
+  - https://learn.microsoft.com/en-us/windows/win32/sysinfo/merged-view-of-hkey-classes-root

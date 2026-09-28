@@ -1,0 +1,44 @@
+# 网页上保存的图片是 .jpg，不是 .jfif（脚本类功能）。脚本在 scripts/features/explorer/ 下，共享块 jpeg-extension。
+# Chrome、Edge（还有 Teams 这些用 Chromium 的程序）存图片时问 Windows「image/jpeg 用哪个扩展名」，读的是
+# HKEY_CLASSES_ROOT\MIME\Database\Content Type\image/jpeg 的 Extension（Chromium 的 platform_mime_util_win.cc）。它是 .jfif 时，
+# 「图片另存为」出来的就是 .jfif，有的软件、网站上传时不认；微软问答上说 Windows 更新会把它改成 .jfif。办法和 FixWin 的
+# 「JPG 被存成 JFIF」、微软问答里的一样：改回 .jpg。
+# HKEY_CLASSES_ROOT 是用户的 Software\Classes 和电脑的合起来看的，微软《Merged View of HKEY_CLASSES_ROOT》把
+# Mime\Database\Content Type 列在「两边都有」的键里：用户那边有 image/jpeg 这个键时，电脑那边同名的键整个看不到。所以用户有
+# 这个键就改用户的，没有就改电脑的（要管理员）；不新建键（在用户那边新建会把电脑那边的 CLSID 这些值也遮住）。键名里有斜杠，
+# PowerShell 的注册表驱动器会当成路径分隔符，脚本里用 .NET 读写。
+#   jpeg-extension-detect.ps1  生效的那个值是 .jpg 或 .jpeg → applied；是别的（一般是 .jfif）→ not-applied；两边都没有这个键、
+#                              或者键里没有这个值 → unknown
+#   jpeg-extension-run.ps1     -Prepare：before = { where, value }；执行：变了、两边都没有键、本来就是 .jpg → 跳过；改成 .jpg、
+#                              读回来确认，失败时改回原来的值再报错
+#   jpeg-extension-undo.ps1    改回原来的值（原来没有这个值就删掉）
+#   jpeg-extension-break.ps1   只在测试中使用：改成 .jfif
+# 重新打开浏览器以后生效；Windows 大更新以后可能又被改回 .jfif，再执行一次就好。
+id: explorer.jpeg-extension
+schema_version: 1
+title: { zh-CN: 网页上保存的图片是 .jpg，不是 .jfif }
+description:
+  zh-CN: 在 Chrome、Edge 里「图片另存为」、在 Teams 这些软件里下载照片，文件名后面变成了 .jfif，有的软件、网站上传时不认。这里把 Windows 登记的 JPEG 图片扩展名改回 .jpg，以后存下来的就是 .jpg；重新打开浏览器以后生效，能撤销。已经存成 .jfif 的，把文件名最后的 .jfif 改成 .jpg 就能用（它们本来就是 JPEG 图片）。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: none
+target: current-user
+detect:
+  script: features/explorer/jpeg-extension-detect.ps1
+prepare:
+  script: features/explorer/jpeg-extension-run.ps1
+run:
+  script: features/explorer/jpeg-extension-run.ps1
+undo:
+  script: features/explorer/jpeg-extension-undo.ps1
+break:
+  script: features/explorer/jpeg-extension-break.ps1
+references:
+  - https://source.chromium.org/chromium/chromium/src/+/main:net/base/platform_mime_util_win.cc
+  - https://learn.microsoft.com/en-us/windows/win32/sysinfo/merged-view-of-hkey-classes-root
+  - https://learn.microsoft.com/en-us/answers/questions/4284215/why-are-default-jpg-files-automatically-changed-to
+  - https://learn.microsoft.com/en-us/answers/questions/3273393/jpg-vs-jfif-extension
