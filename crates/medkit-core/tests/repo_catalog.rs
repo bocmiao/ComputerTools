@@ -122,6 +122,10 @@ fn common_error_messages_find_their_symptom() {
         ("进程无法访问此文件，因为另一个程序正在使用此文件。", "file-in-use"),
         ("此应用无法在你的电脑上运行 若要找到适用于你的电脑的版本，请咨询软件发布者。 关闭", "app-cannot-run"),
         ("D:\\下载\\setup.exe 不是有效的 Win32 应用程序。", "app-cannot-run"),
+        (
+            "你已使用临时配置文件登录。你无法访问你的文件，并且在此配置文件中创建的文件将在你注销时删除。若要解决此问题，请注销并稍后尝试登录。",
+            "temp-profile",
+        ),
     ];
     let wrong: Vec<String> = cases
         .iter()

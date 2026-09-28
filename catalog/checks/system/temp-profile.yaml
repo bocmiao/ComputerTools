@@ -1,0 +1,33 @@
+# 登录用户是不是用的临时配置文件。脚本：scripts/checks/system/temp-profile.ps1（读登录用户 -UserHive 的注册表，只读）
+# Windows 加载不了用户的配置文件时，会用一个临时的登录（通知里说「你已使用临时配置文件登录」）：桌面、文档看起来都是空的，
+# 在这里存的东西注销以后就删掉了；原来的文件一般还在。看这次登录实际用的配置文件夹（用户的 Volatile Environment 里的
+# USERPROFILE）是不是叫 TEMP、TEMP.xxx；另外记下 ProfileList 里有没有 <SID>.bak（Windows 把加载不了的那一项改了名，
+# 常见的修法是改回来，要动注册表，只说明、不替用户改）和最近 30 天的事件 1511（「找不到本地配置文件，使用临时配置文件登录」）。
+# 只输出有没有、次数，没有 SID、用户名和路径。
+# 结果：temp（这次登录用的是临时配置文件）、ok。事实：bak、events（读不了日志时是 -1）。
+id: system.temp-profile
+schema_version: 1
+title: { zh-CN: 是不是用临时配置文件登录的 }
+description:
+  zh-CN: 看看这次是不是 Windows 加载不了你的账户配置、用一个临时的登录了：这时桌面、文档看起来都是空的，在上面存的东西注销以后就没了。
+category: system
+requires_admin: false
+user_hive: true
+timeout_sec: 30
+probe:
+  script: checks/system/temp-profile.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 这次登录用的是你自己的账户配置，不是临时配置文件。
+  temp:
+    status: manual
+    message:
+      zh-CN: 这次是用临时配置文件登录的：Windows 没能加载你账户原来的配置，桌面、文档、浏览器收藏看起来都是空的，在这里存的东西注销以后就删掉了。你原来的文件一般还在，别慌。
+    fixer: helper
+    next:
+      zh-CN: 先别在现在的桌面上存东西，已经存了的先拷到 U 盘。重启电脑一两次试试（有时是开机时杀毒、同步软件占着配置文件）；还是这样的，照下面的步骤请懂哥修，改注册表之前先备份。
+references:
+  - https://learn.microsoft.com/en-us/answers/questions/1572853/local-user-profile-issue-temporary-profile-is-unab
+  - https://learn.microsoft.com/en-us/windows/win32/shell/user-profiles

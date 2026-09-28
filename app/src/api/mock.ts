@@ -1018,6 +1018,10 @@ const CHECKS: Record<string, MockCheck> = {
     title: '系统恢复环境',
     evaluate: () => ({ status: 'ok', message: '系统恢复环境（WinRE）正常，电脑启动不了时可以进恢复模式。', facts: { enabled: true } }),
   },
+  'system.temp-profile': {
+    title: '是不是用临时配置文件登录的',
+    evaluate: () => ({ status: 'ok', resultCode: 'ok', message: '这次登录用的是你自己的账户配置，不是临时配置文件。', facts: { bak: false, events: 0 } }),
+  },
   'system.managed': {
     title: '单位管理',
     evaluate: () => ({ status: 'ok', message: '这台电脑没有被单位管理（没有加入域，也没有设备管理）。', facts: { domain_joined: false, mdm: false } }),
@@ -1239,6 +1243,26 @@ const SYMPTOMS: MockSymptom[] = [
       { check: 'disk.error-events', fixes: [] },
       { check: 'disk.smart-health', fixes: [] },
     ],
+  },
+  {
+    id: 'temp-profile', title: '提示「你已使用临时配置文件登录」，桌面和文件全没了',
+    summary: '开机登录以后右下角提示「你已使用临时配置文件登录」，桌面、文档、浏览器收藏都空了，像是个新账户。',
+    keywords: ['临时配置文件', '你已使用临时配置文件登录', '桌面全没了'], maturity: 'semi',
+    causes: ['开机时杀毒软件、同步软件正好占着你的配置文件，Windows 没能加载它', 'C 盘满了，配置文件加载不了', '上次关机时断电、强制关机，配置文件损坏了'],
+    guide: '先别慌：你原来的文件一般还在 C:\\Users 下面你自己的那个文件夹里。现在别往桌面、文档里存东西；重启电脑一两次，还是这样的请懂哥帮忙。',
+    steps: [
+      { check: 'system.temp-profile', fixes: [] },
+      { check: 'disk.system-free-space', fixes: ['disk.cleanup-temp'] },
+      { check: 'disk.error-events', fixes: [] },
+    ],
+  },
+  {
+    id: 'screen-rotated', title: '屏幕倒过来了、横过来了',
+    summary: '画面上下颠倒了，或者转了 90 度变成竖着的，鼠标也跟着反了方向。',
+    keywords: ['屏幕倒过来了', '屏幕旋转了', '显示方向'], maturity: 'guide',
+    causes: ['不小心按到了 Ctrl + Alt + 方向键：有的电脑（Intel 显卡）的显卡驱动把它当成转屏的快捷键', '「显示设置」里的「显示方向」被改成了纵向或者翻转'],
+    guide: '先同时按 Ctrl + Alt + ↑ 试试；没反应的，在「设置 → 系统 → 屏幕」的「显示方向」里选「横向」，再点「保留更改」。',
+    steps: [],
   },
 ]
 

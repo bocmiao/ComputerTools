@@ -2,7 +2,8 @@
 # 能撤销）；别的原因给图文指引：只是「此电脑」「回收站」不见了（桌面图标设置、常用设置里的「桌面显示「此电脑」」）、
 # 任务栏也一起不见了（资源管理器卡住，重启资源管理器）、自己放在桌面上的文件不见了（桌面被 OneDrive 接管，文件在
 # OneDrive 的「桌面」文件夹里；用临时配置文件登录了）、Windows 10 的平板模式。桌面等文件夹指向的位置没了的，查
-# system.shell-folders（修复 system.shell-folders-default：改回默认位置，不搬文件，能撤销）。
+# system.shell-folders（修复 system.shell-folders-default：改回默认位置，不搬文件，能撤销）；用临时配置文件登录的查
+# system.temp-profile（只查不改，详见症状 temp-profile）。
 id: desktop-icons-missing
 schema_version: 1
 title: { zh-CN: 桌面图标不见了 }
@@ -46,6 +47,7 @@ steps:
     fixes: [desktop.show-desktop-icons]
   - check: system.shell-folders
     fixes: [system.shell-folders-default]
+  - check: system.temp-profile
 guide:
   zh-CN: |
     先看上面的检查结果：「显示桌面图标」没勾上的，点「显示桌面图标」就回来了（也可以自己在桌面空白处点右键 →「查看」→「显示桌面图标」）。
@@ -55,6 +57,6 @@ guide:
     1. 只是「此电脑」「回收站」不见了：在「常用设置」里打开「桌面显示「此电脑」」；别的图标到「设置 → 个性化 → 主题 → 桌面图标设置」里勾上。
     2. 任务栏也一起不见了，或者桌面点了没反应：打开小工具「重启资源管理器」（用 Ctrl + Shift + Esc 打开任务管理器，也能在里面重启「Windows 资源管理器」）。
     3. 自己放在桌面上的文件不见了：打开资源管理器，看左边 OneDrive 里有没有「桌面」文件夹，文件多半在那里（微软的说明：桌面备份到 OneDrive 以后，位置不对时桌面会显示成另一个文件夹）。找不到的话，在资源管理器右上角的搜索框里搜文件名。
-    4. 开机时提示「你已使用临时配置文件登录」：这时别往桌面上存东西，先重启电脑；重启以后还是这样，请懂哥帮忙看看。
+    4. 开机时提示「你已使用临时配置文件登录」（上面的检查会查出来）：这时别往桌面上存东西，先重启电脑；重启以后还是这样，看「提示『你已使用临时配置文件登录』」。
     5. Windows 10 上整个桌面变成了一块块的开始屏幕：点右下角的通知中心，关掉「平板模式」。
-links: ["tool:system.restart-explorer"]
+links: ["tool:system.restart-explorer", "symptom:temp-profile"]

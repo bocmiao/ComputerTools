@@ -1,0 +1,44 @@
+# 症状：登录以后提示「你已使用临时配置文件登录」，桌面、文档全空了。查这次登录是不是临时配置文件（system.temp-profile，
+# 只查不改）；常见的起因是开机时配置文件被占着（杀毒、同步软件）、C 盘满了、硬盘有问题，所以也查 C 盘剩余空间、硬盘读写错误。
+# 修法（把 ProfileList 里带 .bak 的那一项改回来）要动注册表，交给懂哥，指引里写清楚先备份。
+id: temp-profile
+schema_version: 1
+title: { zh-CN: 提示「你已使用临时配置文件登录」，桌面和文件全没了 }
+summary:
+  zh-CN: 开机登录以后右下角提示「你已使用临时配置文件登录。你无法访问你的文件，并且在此配置文件中创建的文件将在你注销时删除」，桌面、文档、浏览器收藏都空了，像是个新账户。
+keywords:
+  - 临时配置文件
+  - 你已使用临时配置文件登录
+  - 使用临时配置文件登录
+  - 在此配置文件中创建的文件将在你注销时删除
+  - 你无法访问你的文件
+  - 我们无法登录到你的账户
+  - 无法登录到你的账户
+  - user profile service 服务登录失败
+  - 无法加载用户配置文件
+  - 桌面全没了
+  - 桌面变成新的了
+  - 文件全没了
+  - 开机以后桌面空了
+  - temporary profile
+  - you've been signed in with a temporary profile
+causes:
+  - zh-CN: 开机时杀毒软件、同步软件正好占着你的配置文件，Windows 没能加载它
+  - zh-CN: C 盘满了，配置文件加载不了
+  - zh-CN: 上次关机时断电、强制关机，配置文件（NTUSER.DAT）损坏了
+  - zh-CN: 硬盘有坏道或者文件系统出了错
+maturity: semi
+steps:
+  - check: system.temp-profile
+  - check: disk.system-free-space
+  - check: disk.error-events
+guide:
+  zh-CN: |
+    先别慌：你原来的文件一般还在 C:\Users 下面你自己的那个文件夹里，只是这次登录没有加载它。
+
+    1. 现在别往桌面、文档里存东西：临时配置文件里的东西注销以后就删掉了。已经存了的，先拷到 U 盘或者别的盘。
+    2. 重启电脑一两次（不是注销）：开机时配置文件被占着引起的，重启常常就好了。
+    3. C 盘满了的，先腾出空间（看上面的检查），再重启。
+    4. 还是这样：请懂哥帮忙。常见的修法是用管理员身份打开注册表编辑器，先导出备份，再到 HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList 里，找到 ProfileImagePath 是你的用户文件夹、名字带 .bak 的那一项：把同名不带 .bak 的那一项删掉，再把带 .bak 的改名去掉 .bak，把它的 State、RefCount 改成 0，重启。
+    5. 修不好也能把文件拿回来：新建一个账户，登录以后到 C:\Users\原来的用户名 里把桌面、文档这些文件夹里的东西拷过来。
+links: ["tool:disk.usage"]
