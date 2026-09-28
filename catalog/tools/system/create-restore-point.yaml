@@ -1,0 +1,50 @@
+# 一键创建还原点（action）。脚本：scripts/tools/system/create-restore-point.ps1
+# 和「系统保护」里的「创建」按钮一样（Checkpoint-Computer），名字是「小药箱手动创建」。Windows 24 小时里只建一个还原点，
+# 这里和修复前自动建还原点（scripts/host/restore-point.ps1）一样，用微软给开发者的官方开关
+# SystemRestorePointCreationFrequency = 0 临时放开，建完马上改回原样（原来没有就删掉），所以不算改设置，做成小工具。
+# 结果：created（ok）、skipped（advice：Windows 没建）、failed（advice：多半是系统盘的系统保护没开）、
+# unsupported（na：没有系统还原，比如服务器版）。事实：before、after（还原点个数）、error（失败时的错误文字）。
+id: system.create-restore-point
+schema_version: 1
+group: action
+title: { zh-CN: 创建还原点 }
+description:
+  zh-CN: 马上给系统建一个还原点。装驱动、装软件、改系统设置之前建一个，出了问题可以用「系统还原」退回到现在的样子（你的文档、照片不受影响）。一般要一两分钟。
+category: system
+requires_admin: true
+timeout_sec: 300
+confirm: { zh-CN: 现在创建一个还原点吗？一般要一两分钟，期间可以照常用电脑。 }
+run:
+  script: tools/system/create-restore-point.ps1
+results:
+  created:
+    status: ok
+    message:
+      zh-CN: "已经创建了还原点「小药箱手动创建」，现在一共有 {after} 个还原点。"
+    next:
+      zh-CN: 以后出了问题，打开「系统还原」，选这个时间的还原点就能退回到现在的样子。还原点会占一点 C 盘空间，旧的会被自动删掉。
+    links: ["tool:open.system-restore"]
+  skipped:
+    status: advice
+    message:
+      zh-CN: Windows 这次没有建新的还原点（有时候刚建过一个，或者磁盘空间不够）。
+    fixer: user
+    next:
+      zh-CN: 过一会儿再试一次；还不行的，打开「系统保护」，看看系统盘（C 盘）的保护是不是「启用」、给还原点的空间是不是太小。
+    links: ["tool:open.system-protection"]
+  failed:
+    status: advice
+    message:
+      zh-CN: "没能创建还原点，多半是系统盘（C 盘）的「系统保护」没有打开（很多「优化」软件会关掉它来省空间）。Windows 给的原因：{error}"
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开「系统保护」，选中 C 盘，点「配置」，选「启用系统保护」，把最大使用量拉到 5% 左右，点「确定」，再回来创建一次。
+    links: ["tool:open.system-protection"]
+  unsupported:
+    status: na
+    message:
+      zh-CN: 这台电脑上没有系统还原（比如服务器版的 Windows），建不了还原点。
+references:
+  - https://support.microsoft.com/en-us/windows/system-protection-e9126e6e-fa64-4f5f-874d-9db90e57645a
+  - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/checkpoint-computer
+  - https://learn.microsoft.com/en-us/windows/win32/api/srrestoreptapi/nf-srrestoreptapi-srsetrestorepointw

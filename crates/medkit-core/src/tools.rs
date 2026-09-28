@@ -28,6 +28,8 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     ("disk-management", Program { exe: "mmc.exe", args: &["diskmgmt.msc"], console: &[] }),
     ("disk-cleanup", Program { exe: "cleanmgr.exe", args: &[], console: &[] }),
     ("system-restore", Program { exe: "rstrui.exe", args: &[], console: &[] }),
+    // 「系统属性」的「系统保护」页（微软《Executing Control Panel Items》）：开关系统保护、手动创建还原点
+    ("system-protection", Program { exe: "SystemPropertiesProtection.exe", args: &[], console: &[] }),
     ("reliability", Program { exe: "perfmon.exe", args: &["/rel"], console: &[] }),
     ("memory-diagnostic", Program { exe: "MdSched.exe", args: &[], console: &[] }),
     ("system-information", Program { exe: "msinfo32.exe", args: &[], console: &[] }),
