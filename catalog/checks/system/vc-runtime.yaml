@@ -1,0 +1,49 @@
+# 微软 VC++ 运行库（v14，Visual Studio 2015～2026 共用一个）装了没有。脚本：scripts/checks/system/vc-runtime.ps1
+# 很多软件、游戏是用 Visual C++ 编的，没有它就打不开（「找不到 VCRUNTIME140.dll」「丢失 MSVCP140.dll」；只装了 32 位、
+# 64 位其中一个时常见 0xc000007b）。32 位程序要 x86 的，64 位程序要 x64 的：64 位 Windows 两个都要，32 位 Windows 只要 x86。
+# 读 HKLM\SOFTWARE[\WOW6432Node]\Microsoft\VisualStudio\14.0\VC\Runtimes\<x64|x86> 的 Installed、Version（微软《Redistribute
+# Visual C++ files》），再看程序要加载的 vcruntime140.dll、msvcp140.dll 在不在（「清理」软件有时会删掉）。
+# 结果（按这个顺序判断）：missing、broken（登记了、文件没了）、old（比 14.40 老：用 VS 2022 17.10 以后编的程序可能崩溃）、ok。
+# 不进体检（没问题时不用管），「软件打不开，提示缺少 dll」里查。事实：x64、x86（装的版本）、versions（装了的，「x64 14.51.36247.00, x86 …」）、
+# missing、broken、old（哪几个）。
+id: system.vc-runtime
+schema_version: 1
+title: { zh-CN: 微软 VC++ 运行库 }
+description:
+  zh-CN: 看看微软的 VC++ 运行库装了没有。很多软件、游戏要用它，没有的话打不开，提示缺少 VCRUNTIME140.dll、MSVCP140.dll。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/vc-runtime.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 微软 VC++ 运行库装好了（{versions}）。
+  missing:
+    status: advice
+    message:
+      zh-CN: "没装微软 VC++ 运行库（缺 {missing}；x64 是 64 位程序用的，x86 是 32 位程序用的）。用它编的软件、游戏打不开，会提示缺少 VCRUNTIME140.dll、MSVCP140.dll，或者 0xc000007b。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮从微软官网下载安装（32 位和 64 位的都装上），装好以后再打开刚才打不开的软件。
+    links: ["tool:system.install-vc-runtime"]
+  broken:
+    status: advice
+    message:
+      zh-CN: "微软 VC++ 运行库登记着装了，可是文件不见了（{broken}），多半是「清理」软件删掉的。用它的软件会提示缺少 VCRUNTIME140.dll、MSVCP140.dll。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮从微软官网重新下载安装（会把文件补回来）。
+    links: ["tool:system.install-vc-runtime"]
+  old:
+    status: advice
+    message:
+      zh-CN: "微软 VC++ 运行库版本太老了（{versions}，{old} 的比 14.40 老）。新一点的软件用它可能一打开就崩溃，或者提示找不到某个函数。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮从微软官网下载安装最新版。
+    links: ["tool:system.install-vc-runtime"]
+references:
+  - https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
+  - https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files

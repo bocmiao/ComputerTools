@@ -219,10 +219,19 @@ verify:  disk.hiberfile                                         # 能不能执�
 - **禁止**（CI 会检查）：
   - `Write-Host`
   - `Invoke-Expression` / `iex`
-  - `DownloadString` / `DownloadFile` / `Invoke-WebRequest` / `Invoke-RestMethod` / `Start-BitsTransfer` / `Net.WebClient`
+  - 下载：`DownloadString` / `DownloadFile` / `DownloadData` / `Invoke-WebRequest` / `Invoke-RestMethod` / `Start-BitsTransfer` / `Net.WebClient` /
+    `[Net.WebRequest]::Create` / `HttpWebRequest` / `HttpClient` / `curl` / `wget` / `bitsadmin` / `certutil -urlcache`
   - `-EncodedCommand` / `FromBase64String`
   - `Set-MpPreference` / `Add-MpPreference`
   - `vssadmin` / `wevtutil cl` / `bcdedit`
+- **唯一能下载的：从微软官网下载官方安装包**（现在只有小工具「安装微软 VC++ 运行库」）。计划书第五节第 8 条不做的是下载脚本来执行，
+  这里下载的是微软签名的安装程序（计划书 4.2「软件打不开，提示缺少 xxx.dll」：用微软官网的官方运行库，绝不单独下载 DLL）。
+  能下载的脚本写在代码里（`crates/medkit-core/src/lint.rs` 的 `DOWNLOAD_SCRIPTS`），改名单要过代码审核。这些脚本另有要求（前两条 CI 会检查）：
+  - 网址只能以 `https://aka.ms/`、`https://download.microsoft.com/`、`https://download.visualstudio.microsoft.com/` 开头；跳转以后也要是 https 的 `*.microsoft.com`；
+  - 用 `Get-AuthenticodeSignature` 核对下载的文件：签名有效、签名者是 Microsoft Corporation，才运行；
+  - 下载到 `%SystemRoot%\Temp` 下新建的、只有 SYSTEM 和 Administrators 能打开的文件夹（没有管理员权限的程序换不了核对过签名的文件），用完删掉；
+  - 先下载完、再动手：下载限时，失败了电脑上什么都不改；安装程序也要在小工具的超时以前结束或者不再等它（超时只会结束 PowerShell，
+    结束不了它启动的安装程序）。
 
 ### 5.2 参数
 
@@ -597,6 +606,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `uac-settings` | `UserAccountControlSettings.exe` |
 | `firewall` | `control.exe firewall.cpl` |
 | `indexing-options` | `control.exe srchadmin.dll` |
+| `windows-features` | `OptionalFeatures.exe` |
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 
 settings 页面：`windowsupdate`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、

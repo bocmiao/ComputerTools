@@ -1,0 +1,75 @@
+# 症状：软件打不开，提示缺少 dll（「由于找不到 VCRUNTIME140.dll，无法继续执行代码」「计算机中丢失 MSVCP140.dll」
+# 「应用程序无法正常启动(0xc000007b)」）。最常见的是没装微软 VC++ 运行库，或者文件被「清理」软件删了：
+# 查 system.vc-runtime，给小工具「安装微软 VC++ 运行库」（从微软官网下载，核对签名再装）。
+# 别的情况按缺的文件名给图文指引：老版本的运行库（120、110、100）、DirectX 的老组件（d3dx9、xinput1_3）、
+# .NET Framework 3.5（「启用或关闭 Windows 功能」）、新的 .NET、api-ms-win 开头的（系统文件坏了）、软件自己的文件。
+# 提醒别从「dll 下载站」下载单个文件：常夹带病毒，版本不对还会让更多软件打不开。
+id: app-missing-dll
+schema_version: 1
+title: { zh-CN: 软件打不开，提示缺少 dll }
+summary:
+  zh-CN: 打开软件、游戏时弹出「找不到 VCRUNTIME140.dll」「丢失 MSVCP140.dll」「应用程序无法正常启动(0xc000007b)」，或者提示要装 .NET Framework。
+keywords:
+  - 缺少dll
+  - 找不到dll
+  - dll
+  - 丢失dll
+  - dll丢失
+  - dll缺失
+  - 缺少dll文件
+  - 计算机中丢失
+  - 找不到指定的模块
+  - 无法继续执行代码
+  - vcruntime140.dll
+  - vcruntime140_1.dll
+  - msvcp140.dll
+  - msvcp140_1.dll
+  - msvcr120.dll
+  - msvcp120.dll
+  - msvcr100.dll
+  - msvcp100.dll
+  - mfc140u.dll
+  - "0xc000007b"
+  - 应用程序无法正常启动
+  - 运行库
+  - vc运行库
+  - vc++
+  - visual c++
+  - d3dx9
+  - d3dx9_43.dll
+  - xinput1_3.dll
+  - directx
+  - .net framework
+  - net3.5
+  - 软件打不开
+  - 游戏打不开
+  - 程序打不开
+  - 软件闪退
+  - 游戏闪退
+causes:
+  - zh-CN: 没装微软的 VC++ 运行库：很多软件、游戏要用它（缺 VCRUNTIME140.dll、MSVCP140.dll 这些带 140 的文件）
+  - zh-CN: VC++ 运行库的文件被「清理」「优化」软件当成垃圾删掉了，或者只装了 32 位、64 位其中一个（常见 0xc000007b）
+  - zh-CN: 软件要的是老版本的运行库（带 120、110、100 的文件），或者 DirectX 的老组件（d3dx9、xinput1_3，老游戏常见）
+  - zh-CN: 老软件要 .NET Framework 3.5，新软件要新版的 .NET，Windows 没有自带
+  - zh-CN: 软件没装完整，或者它自己的文件被杀毒软件删掉了
+maturity: semi
+steps:
+  - check: system.vc-runtime
+guide:
+  zh-CN: |
+    先看上面的检查结果：没装、文件被删了、版本太老的，点「安装微软 VC++ 运行库」，装好以后再打开软件试试。
+
+    还是打不开的，看看提示框里缺的是哪个文件：
+
+    1. 带 140 的（VCRUNTIME140.dll、VCRUNTIME140_1.dll、MSVCP140.dll、MSVCP140_1.dll、CONCRT140.dll、MFC140U.dll 这些）：就是上面的 VC++ 运行库。检查结果正常还缺的，也可以再点一次小工具「安装微软 VC++ 运行库」，它会把文件修复回来。
+    2. 带 120、110、100 的（MSVCR120.dll、MSVCP120.dll、MSVCR110.dll、MSVCR100.dll、MSVCP100.dll 这些）：是老版本的 VC++ 运行库（2013、2012、2010 年的），和上面的是分开装的。在微软官网的「最新受支持的 Visual C++ 可再发行程序包下载」页面往下找对应的年份，x86 和 x64 的都下载安装。
+    3. d3dx9 开头的（d3dx9_43.dll 这些），或者 xinput1_3.dll、d3dcompiler_43.dll、X3DAudio1_7.dll（多半是老游戏）：是 DirectX 的老组件，Windows 10、11 没有自带。在微软官网下载安装「DirectX 最终用户运行时」（DirectX End-User Runtime）。
+    4. 提示「应用程序无法正常启动(0xc000007b)」：一般是 32 位、64 位的运行库只装了一个，或者软件文件夹里放着别的版本的运行库文件。先点「安装微软 VC++ 运行库」（两个都会装），再按第 3 条装 DirectX 老组件；还不行，卸载这个软件以后重新安装。
+    5. 提示要装 .NET Framework 3.5（或者 2.0、3.0）：打开小工具「启用或关闭 Windows 功能」，勾上「.NET Framework 3.5（包括 .NET 2.0 和 3.0）」，点「确定」，再选「让 Windows 更新为你下载文件」。要联网，一般几分钟。
+    6. 提示「要运行此应用程序，必须安装或更新 .NET」：点提示框里的「是」，会打开微软的下载页面，照着下载安装「.NET 桌面运行时」。
+    7. api-ms-win 开头的（api-ms-win-crt-runtime-l1-1-0.dll 这些）：Windows 10、11 本来就有，缺了说明系统文件坏了，打开小工具「检查并修复系统文件」。
+    8. 名字和这个软件有关的（不是上面这几类）：是软件自己的文件，多半是没装完整，或者被杀毒软件当成病毒删掉了。先在「Windows 安全中心 → 病毒和威胁防护 → 保护历史记录」里看看是不是被隔离了；不是的话，卸载以后重新安装这个软件。
+
+    不要从网上搜「某某.dll 下载」的网站下载单个文件放进 System32：那些文件常常夹带病毒，版本不对还会让更多软件打不开。上面这些缺的文件，都能从微软官方的安装包装回来。
+
+    都试过还是不行，把提示框截个图，连同软件的名字发给懂哥。

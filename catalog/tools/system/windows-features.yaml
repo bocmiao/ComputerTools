@@ -1,0 +1,12 @@
+# 打开「启用或关闭 Windows 功能」（OptionalFeatures.exe）。症状「软件打不开，提示缺少 dll」里用：老软件要 .NET Framework 3.5
+# 时，在这里勾上「.NET Framework 3.5（包括 .NET 2.0 和 3.0）」，Windows 会从 Windows 更新下载。服务器版没有这个程序。
+id: open.windows-features
+schema_version: 1
+group: open
+title: { zh-CN: 启用或关闭 Windows 功能 }
+description:
+  zh-CN: 打开「启用或关闭 Windows 功能」：老软件提示需要 .NET Framework 3.5 时，在这里勾上「.NET Framework 3.5（包括 .NET 2.0 和 3.0）」，点「确定」，Windows 会自己下载装好。
+category: system
+open: { program: windows-features }
+references:
+  - https://learn.microsoft.com/en-us/dotnet/framework/install/dotnet-35-windows

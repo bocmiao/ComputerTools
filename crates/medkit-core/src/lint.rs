@@ -14,6 +14,25 @@ struct Rule {
     message: &'static str,
 }
 
+/// 下载内容的写法（计划书第五节第 8 条：不从网上下载脚本来执行）。
+static DOWNLOAD: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)DownloadString|DownloadFile|DownloadData|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|Net\.WebClient|WebRequest\]::Create|HttpWebRequest|HttpClient|\biwr\b|\birm\b|\bcurl\b|\bwget\b|\bbitsadmin\b|urlcache",
+    )
+    .expect("下载规则")
+});
+
+/// 例外：这几个脚本从微软官网下载官方安装包（VC++ 运行库），核对是微软签名的才运行（docs/architecture.md 5.1）。
+/// 下载的永远不是脚本。它们另有两条要求：网址只能以 [`DOWNLOAD_PREFIXES`] 里的开头（也不能有 http://），
+/// 要用 `Get-AuthenticodeSignature` 核对签名。名单写在代码里，改名单要过代码审核。
+pub const DOWNLOAD_SCRIPTS: &[&str] = &["tools/system/install-vc-runtime.ps1"];
+
+/// [`DOWNLOAD_SCRIPTS`] 里能写的网址开头：都是微软的下载地址
+pub const DOWNLOAD_PREFIXES: &[&str] =
+    &["https://aka.ms/", "https://download.microsoft.com/", "https://download.visualstudio.microsoft.com/"];
+
+static URL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(https?|ftp)://[^\s'\x22)]*").expect("网址"));
+
 static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
     let rule = |p: &str, message: &'static str| Rule {
         pattern: Regex::new(&format!("(?i){p}")).expect("lint 规则"),
@@ -22,10 +41,6 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
     vec![
         rule(r"\bWrite-Host\b", "不要用 Write-Host：只输出一个结果对象"),
         rule(r"\bInvoke-Expression\b|(^|[\s;|(])iex\b", "不要用 Invoke-Expression / iex"),
-        rule(
-            r"DownloadString|DownloadFile|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|Net\.WebClient|\biwr\b|\birm\b",
-            "脚本不允许下载内容（计划书第五节第 8 条）",
-        ),
         rule(r"-EncodedCommand|FromBase64String", "不要用编码命令或 Base64（会触发杀软，也无法审核）"),
         rule(r"\b(Set|Add)-MpPreference\b", "不改 Defender 设置（计划书第五节第 4 条）"),
         rule(r"\bvssadmin\b", "不删卷影副本（计划书第五节第 24 条）"),
@@ -51,6 +66,8 @@ pub fn lint_script(rel: &str, content: &str) -> Vec<Problem> {
         out.push(Problem::error(&file, "文件开头有 BOM；脚本只用 ASCII，不需要 BOM".to_owned()));
     }
 
+    let downloads = DOWNLOAD_SCRIPTS.contains(&rel);
+    let mut verifies = false;
     for (i, line) in content.lines().enumerate() {
         let code = strip_comment(line);
         for rule in RULES.iter() {
@@ -58,6 +75,29 @@ pub fn lint_script(rel: &str, content: &str) -> Vec<Problem> {
                 out.push(Problem::error(&file, format!("第 {} 行：{}", i + 1, rule.message)));
             }
         }
+        if !downloads {
+            if DOWNLOAD.is_match(code) {
+                out.push(Problem::error(&file, format!("第 {} 行：脚本不允许下载内容（计划书第五节第 8 条）", i + 1)));
+            }
+            continue;
+        }
+        verifies |= code.to_ascii_lowercase().contains("get-authenticodesignature");
+        for url in URL.find_iter(code) {
+            if !DOWNLOAD_PREFIXES.iter().any(|p| url.as_str().starts_with(p)) {
+                out.push(Problem::error(
+                    &file,
+                    format!(
+                        "第 {} 行：只能从微软的下载地址下载（{}）：{}",
+                        i + 1,
+                        DOWNLOAD_PREFIXES.join("、"),
+                        url.as_str()
+                    ),
+                ));
+            }
+        }
+    }
+    if downloads && !verifies {
+        out.push(Problem::error(&file, "下载安装包的脚本要用 Get-AuthenticodeSignature 核对是微软签名的".to_owned()));
     }
 
     if !content.contains("[CmdletBinding()]") {
@@ -177,6 +217,44 @@ mod tests {
             let script = format!("{OK}{bad}\n");
             assert!(!lint_script("checks/a.ps1", &script).is_empty(), "应该拦住：{bad}");
         }
+    }
+
+    #[test]
+    fn catches_other_ways_to_download() {
+        for bad in [
+            "Invoke-WebRequest -Uri $u -OutFile $f",
+            "$r = [Net.WebRequest]::Create($u)",
+            "$r = [System.Net.HttpWebRequest]::Create($u)",
+            "$c = New-Object System.Net.Http.HttpClient",
+            "curl.exe -o $f $u",
+            "bitsadmin /transfer x $u $f",
+            "certutil -urlcache -split -f $u $f",
+        ] {
+            let script = format!("{OK}{bad}\n");
+            assert!(!lint_script("tools/a.ps1", &script).is_empty(), "应该拦住：{bad}");
+        }
+    }
+
+    #[test]
+    fn download_scripts_only_fetch_signed_installers_from_microsoft() {
+        let rel = DOWNLOAD_SCRIPTS[0];
+        let good = format!(
+            "{OK}$r = [Net.WebRequest]::Create('https://aka.ms/vc14/vc_redist.' + $a + '.exe')\n\
+             $s = Get-AuthenticodeSignature -FilePath $f\n"
+        );
+        assert!(lint_script(rel, &good).is_empty(), "{:?}", lint_script(rel, &good));
+        // 别的地址、http://、不核对签名，都不行
+        for (bad, why) in [
+            (good.replace("https://aka.ms/", "https://example.com/"), "别的网址"),
+            (good.replace("https://aka.ms/", "http://aka.ms/"), "http"),
+            (good.replace("Get-AuthenticodeSignature", "Get-Item"), "不核对签名"),
+        ] {
+            assert!(!lint_script(rel, &bad).is_empty(), "应该拦住：{why}");
+        }
+        // 名单外的脚本照样不能下载
+        assert!(!lint_script("tools/system/other.ps1", &good).is_empty());
+        // 其他规则照样管
+        assert!(!lint_script(rel, &format!("{good}iex $s\n")).is_empty());
     }
 
     #[test]

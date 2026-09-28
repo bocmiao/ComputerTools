@@ -37,6 +37,7 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     ("uac-settings", Program { exe: "UserAccountControlSettings.exe", args: &[], console: &[] }),
     ("firewall", Program { exe: "control.exe", args: &["firewall.cpl"], console: &[] }),
     ("indexing-options", Program { exe: "control.exe", args: &["srchadmin.dll"], console: &[] }),
+    ("windows-features", Program { exe: "OptionalFeatures.exe", args: &[], console: &[] }),
     // 微软《使用系统文件检查器工具修复丢失或损坏的系统文件》：先用 DISM 修复映像，再运行 sfc
     (
         "system-file-repair",

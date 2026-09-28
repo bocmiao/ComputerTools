@@ -1,0 +1,59 @@
+# 安装微软 VC++ 运行库：从微软的永久链接（https://aka.ms/vc14/vc_redist.x64.exe、…x86.exe；微软《Latest supported Visual C++
+# Redistributable downloads》）下载最新版，签名有效、签名者是 Microsoft Corporation 的才运行；/install /quiet /norestart 安装
+# （微软《Redistribute Visual C++ files》里的参数）。这是脚本唯一能做的下载（docs/architecture.md 5.1）：只从微软的地址下载，
+# 放进 %SystemRoot%\Temp 下新建的、只有管理员能打开的文件夹（没有管理员权限的程序换不了核对过签名的文件），装完删掉。
+# 64 位 Windows 装 x64 和 x86 两个（ARM64 的电脑上 x64 的包里带着 ARM64 的文件），32 位 Windows 只装 x86。
+# 先把两个都下载好（最多 5 分钟，下载失败什么都不改），再安装：已经装着这个版本、文件也都在的不装；装着这个版本、文件没了的
+# 用 /repair 修。安装程序的退出代码：0 装好了，3010 装好了、要重启，1638 已经装着这个或者更新的版本，1618 有别的安装程序在运行。
+# 过了 9 分钟还没装完的不等了（slow），让它自己装完。
+id: system.install-vc-runtime
+schema_version: 1
+group: action
+title: { zh-CN: 安装微软 VC++ 运行库 }
+description:
+  zh-CN: 软件、游戏打不开，提示缺少 VCRUNTIME140.dll、MSVCP140.dll，或者 0xc000007b 时用：从微软官网下载最新的 VC++ 运行库（32 位和 64 位两个，一共二三十 MB），核对是微软签名的再安装。已经装着最新版的不会重复装。不要从网上的「dll 下载站」下载单个 dll，那里的文件常夹带病毒。
+category: system
+requires_admin: true
+timeout_sec: 600
+run:
+  script: tools/system/install-vc-runtime.ps1
+confirm:
+  zh-CN: 要从微软官网下载二三十 MB 的安装包，装的时候不弹窗口，一般一两分钟。现在安装吗？
+results:
+  installed:
+    status: ok
+    message: { zh-CN: "装好了微软 VC++ 运行库（{done}）。" }
+    next: { zh-CN: 再打开一次刚才打不开的软件。还是不行，看看「软件打不开，提示缺少 dll」里的其他办法。 }
+    links: ["symptom:app-missing-dll"]
+  restart:
+    status: ok
+    message: { zh-CN: "装好了微软 VC++ 运行库（{done}），要重启电脑才能完全生效。" }
+    next: { zh-CN: 重启电脑以后再打开刚才打不开的软件。 }
+  already:
+    status: ok
+    message: { zh-CN: 这台电脑上已经装着最新的微软 VC++ 运行库，文件也都在，不用重复装。 }
+    next: { zh-CN: 还是提示缺少 dll 的话，看看缺的是哪个文件：带 120、100 的是老版本的运行库，d3dx9 开头的是 DirectX 的老组件，「软件打不开，提示缺少 dll」里有办法。 }
+    links: ["symptom:app-missing-dll"]
+  busy:
+    status: advice
+    message: { zh-CN: 有别的安装程序正在运行（Windows 更新或者别的软件在安装），没法同时装。 }
+    next: { zh-CN: 等它装完（或者重启电脑）以后再试一次。 }
+  slow:
+    status: advice
+    message: { zh-CN: "安装程序（{arch}）过了好几分钟还没装完，可能是电脑比较忙。它会在后台接着装。" }
+    next: { zh-CN: 过几分钟再打开刚才打不开的软件；还不行，重启电脑以后再点一次这个小工具。 }
+  download-failed:
+    status: advice
+    message: { zh-CN: "没能从微软官网下载运行库（{arch}）：可能是没联网，或者网络太慢，5 分钟没下载完。电脑上什么都没改。" }
+    next: { zh-CN: 联网以后再试一次；也可以在浏览器里打开 https://aka.ms/vc14/vc_redist.x64.exe 和 https://aka.ms/vc14/vc_redist.x86.exe 自己下载安装。 }
+  not-signed:
+    status: advice
+    message: { zh-CN: "下载下来的文件（{arch}）没有微软的有效签名，已经删掉了，没有运行。可能是网络被劫持了，或者连着需要登录的 WiFi。" }
+    next: { zh-CN: 换一个网络再试一次。 }
+  failed:
+    status: manual
+    message: { zh-CN: "安装程序出错了（{arch}，退出代码 {code}）。" }
+    next: { zh-CN: 重启电脑以后再试一次；还不行，请懂哥看看（在「设置 → 应用」里找名字是 Microsoft Visual C++ 开头、带 Redistributable 的两项，x64 和 x86 各一个，试试「修改 → 修复」）。 }
+references:
+  - https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
+  - https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files

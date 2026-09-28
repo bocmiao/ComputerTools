@@ -1386,3 +1386,35 @@ fn print_queue_is_cleared_and_the_spooler_comes_back() {
         assert!(again.message.contains("本来就没有"), "{again:?}");
     }
 }
+
+/// 微软 VC++ 运行库：小工具真的从微软官网下载（核对签名）、安装，或者确认已经装着最新版；之后检测要说「装好了」，
+/// 下载用的文件夹要删掉。CI 机器上本来就装着：镜像里的不比微软官网的旧时是「已经装着最新的」，旧的话是「装好了」。
+/// 和小工具的冒烟测试错开（它也会跑这个小工具，同时装的话第二个会说「有别的安装程序正在运行」）。
+#[test]
+#[ignore = "会从微软官网下载 VC++ 运行库并安装；需要管理员权限"]
+fn vc_runtime_is_installed_from_microsoft_and_then_checks_ok() {
+    use medkit_core::model::Status;
+
+    let _update = update_lock();
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+    let before = engine.run_check("system.vc-runtime").unwrap();
+    eprintln!("装之前：{:?} {}", before.status, before.message);
+    let r = engine.tool_run("system.install-vc-runtime").unwrap();
+    eprintln!("{:?} {:>6} ms  {}", r.status, r.duration_ms, r.message);
+    assert!(r.error.is_none(), "{r:?}");
+    assert!(["装好了", "已经装着最新的"].iter().any(|m| r.message.contains(m)), "{r:?}");
+    let after = engine.run_check("system.vc-runtime").unwrap();
+    eprintln!("装之后：{:?} {}", after.status, after.message);
+    assert_eq!(after.status, Status::Ok, "{after:?}");
+    let temp = PathBuf::from(std::env::var("SystemRoot").unwrap()).join("Temp");
+    let left: Vec<String> = std::fs::read_dir(&temp)
+        .map(|d| {
+            d.filter_map(Result::ok)
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.starts_with("medkit-vc-"))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(left.is_empty(), "下载用的文件夹没删掉：{left:?}");
+}
