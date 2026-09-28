@@ -1,0 +1,70 @@
+# 局域网共享用到的服务有没有被关掉。脚本：scripts/checks/network/sharing-services.ps1
+# Workstation（LanmanWorkstation，默认「自动」）：没有它打不开任何共享，报「找不到网络路径」（0x80070035）。
+# Server（LanmanServer，默认「自动」，微软写着「不要禁用」）：没有它别人打不开这台电脑共享的文件夹、打印机。
+# 2017 年「永恒之蓝」时很多教程让关掉它来堵 445 端口（现在的 Windows 早修补了，SMB1 也默认没装）。
+# 功能发现资源发布（FDResPub）、功能发现提供程序主机（fdPHost），默认「手动」：让这台电脑出现在别人的「网络」里、找到别人。
+# 微软的建议（《SMBv1 not installed by default》）：家庭和小单位要在「网络」里看到 Windows 电脑，把这两个启动并设成
+# 「自动（延迟启动）」。TCP/IP NetBIOS Helper（lmhosts，默认「手动」）：没有 DNS 服务器的小网络里按电脑名字找电脑。
+# 结果（按这个顺序）：missing（有一个不在，na）、client-disabled、server-disabled、discovery-disabled（FDResPub 或 fdPHost 被禁用）、
+# netbios-disabled、not-announced（FDResPub 或 fdPHost 是「手动」、没在运行：别的电脑的「网络」里看不到这台）、ok。
+# 除 missing 以外都由修复 network.enable-sharing-services 处理，它的 verify 用这个检测。
+# 事实：workstation、server、fdrespub、fdphost、lmhosts（Start 值，不在时为空）、announcing。
+id: network.sharing-services
+schema_version: 1
+title: { zh-CN: 局域网共享用到的服务 }
+description:
+  zh-CN: 看看打开共享文件夹、让别人看到这台电脑要用的几个系统服务有没有被「优化」软件、安全教程关掉。
+category: network
+requires_admin: false
+probe:
+  script: checks/network/sharing-services.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: 局域网共享用到的服务都开着。 }
+  client-disabled:
+    status: advice
+    message:
+      zh-CN: 「Workstation」服务被禁用了：这台电脑打不开任何共享文件夹，会提示「找不到网络路径」（0x80070035）。多半是「优化」类软件关的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后重启电脑。
+    links: ["feature:network.enable-sharing-services"]
+  server-disabled:
+    status: advice
+    message:
+      zh-CN: 「Server」服务被禁用了：别的电脑打不开这台电脑共享的文件夹和打印机。2017 年「永恒之蓝」病毒流行时，很多教程让关掉它来堵 445 端口；现在的 Windows 早就修补了那个漏洞，打开是安全的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后重启电脑。
+    links: ["feature:network.enable-sharing-services"]
+  discovery-disabled:
+    status: advice
+    message:
+      zh-CN: 「功能发现」的服务被禁用了：「网络」里看不到别的电脑，别的电脑也看不到这台。多半是「优化」类软件关的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后重启电脑。
+    links: ["feature:network.enable-sharing-services"]
+  netbios-disabled:
+    status: advice
+    message:
+      zh-CN: 「TCP/IP NetBIOS Helper」服务被禁用了：用电脑名字（像 \\DESKTOP-ABC）打开共享可能找不到，用 IP 地址（像 \\192.168.1.5）才行。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后重启电脑。
+    links: ["feature:network.enable-sharing-services"]
+  not-announced:
+    status: advice
+    message:
+      zh-CN: 让这台电脑出现在局域网里的两个「功能发现」服务没在运行，所以别的电脑的「网络」里看不到它，它也看不到别的电脑。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮按微软的建议把它们设成「自动（延迟启动）」，改完重启电脑。直接在地址栏输入 \\对方电脑的 IP 地址（像 \\192.168.1.5）打开共享，不受这个影响。
+    links: ["feature:network.enable-sharing-services"]
+  missing:
+    status: na
+    message: { zh-CN: 这台电脑的 Windows 里少了局域网共享用的系统服务（可能是被精简过的系统）。 }
+references:
+  - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server
+  - https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/smbv1-not-installed-by-default-in-windows

@@ -1,0 +1,13 @@
+# 打开「高级共享设置」（open）：control.exe /name Microsoft.NetworkAndSharingCenter /page Advanced。Win11 22H2 起控制面板的这一页
+# 转到「设置 → 网络和 Internet → 高级网络设置 → 高级共享设置」。这里按网络类型（专用、公用、所有网络）开关「网络发现」「文件和
+# 打印机共享」「密码保护的共享」。检测 network.sharing-firewall 报这两项没开时给这个按钮（小药箱只查不改防火墙规则）。
+id: open.advanced-sharing
+schema_version: 1
+group: open
+title: { zh-CN: 高级共享设置 }
+description:
+  zh-CN: 打开 Windows 的「高级共享设置」：在「专用网络」下面打开「网络发现」和「文件和打印机共享」，局域网里的电脑就能互相看到、打开共享的文件夹和打印机；「密码保护的共享」也在这里。
+category: network
+open: { program: advanced-sharing }
+references:
+  - https://support.microsoft.com/en-us/windows/experience/connectivity-networking/file-sharing-over-a-network-in-windows

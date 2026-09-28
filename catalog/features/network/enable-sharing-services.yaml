@@ -1,0 +1,38 @@
+# 恢复局域网共享用到的服务：Workstation（LanmanWorkstation）、Server（LanmanServer）改回 Windows 默认的「自动」，
+# TCP/IP NetBIOS Helper（lmhosts）改回默认的「手动」；两个「功能发现」服务（FDResPub、fdPHost）按微软《SMBv1 not installed
+# by default》里的建议设成「自动（延迟启动）」：家庭和小单位的网络里，这样别的电脑的「网络」里才看得到这台。
+# 只改启动类型，不启动服务：改完重启电脑。检测 network.sharing-services 报问题时给这个按钮；verify 用这个检测
+# （有服务不在时 na，不给执行）。break_actions（测试用）：FDResPub、lmhosts 设成禁用（不动 Server、Workstation）。
+id: network.enable-sharing-services
+schema_version: 1
+title: { zh-CN: 恢复局域网共享用到的服务 }
+description:
+  zh-CN: 把打开共享文件夹、让别人看到这台电脑要用的五个系统服务打开：Server、Workstation 改回 Windows 默认的自动启动，两个「功能发现」服务按微软的建议设成自动（延迟启动）。改完重启电脑，能撤销。
+category: network
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+verify: network.sharing-services
+actions:
+  - service: { name: LanmanWorkstation, start_type: auto }
+  - service: { name: LanmanServer, start_type: auto }
+  - service: { name: FDResPub, start_type: delayed-auto }
+  - service: { name: fdPHost, start_type: delayed-auto }
+  - service: { name: lmhosts, start_type: manual }
+windows_default:
+  - service: { name: LanmanWorkstation, start_type: auto }
+  - service: { name: LanmanServer, start_type: auto }
+  - service: { name: FDResPub, start_type: manual }
+  - service: { name: fdPHost, start_type: manual }
+  - service: { name: lmhosts, start_type: manual }
+break_actions:
+  - service: { name: FDResPub, start_type: disabled }
+  - service: { name: lmhosts, start_type: disabled }
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server
+  - https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/smbv1-not-installed-by-default-in-windows

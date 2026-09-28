@@ -38,6 +38,17 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     ("firewall", Program { exe: "control.exe", args: &["firewall.cpl"], console: &[] }),
     ("indexing-options", Program { exe: "control.exe", args: &["srchadmin.dll"], console: &[] }),
     ("windows-features", Program { exe: "OptionalFeatures.exe", args: &[], console: &[] }),
+    // 「高级共享设置」：网络发现、文件和打印机共享的开关（Win11 22H2 起会转到「设置」里的同一页）
+    (
+        "advanced-sharing",
+        Program {
+            exe: "control.exe",
+            args: &["/name", "Microsoft.NetworkAndSharingCenter", "/page", "Advanced"],
+            console: &[],
+        },
+    ),
+    // 「高级安全 Windows Defender 防火墙」：看入站规则（小药箱只查不改）
+    ("firewall-advanced", Program { exe: "mmc.exe", args: &["wf.msc"], console: &[] }),
     // 微软《使用系统文件检查器工具修复丢失或损坏的系统文件》：先用 DISM 修复映像，再运行 sfc
     (
         "system-file-repair",

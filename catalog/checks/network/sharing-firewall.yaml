@@ -1,0 +1,55 @@
+# Windows 防火墙在专用网络上放不放行局域网共享。脚本：scripts/checks/network/sharing-firewall.ps1
+# 只查不改（计划书第五节第 22 条：小药箱不改防火墙）：用户在「高级共享设置」里打开「网络发现」「文件和打印机共享」，
+# 这两个开关打开的正是这里查的两组规则（按规则组的资源名找，和系统语言无关：文件和打印机共享 @FirewallAPI.dll,-28502，
+# 网络发现 @FirewallAPI.dll,-32752）。还查有没有启用的入站「阻止」规则挡住 TCP 445、139 端口（阻止优先于允许）：
+# 多半是 2017 年「永恒之蓝」时的「关闭 445 端口」教程或者安全软件加的。专用网络的防火墙整个关着时不算问题
+# （security.firewall 另外报防火墙被关）。
+# 结果（按这个顺序）：blocked、sharing-off、discovery-off（都是 manual）、ok；读不了防火墙（比如防火墙服务被停了）是 unreadable。
+# 事实：firewall_private、sharing、discovery（on / off）、blocked_count、rule（第一条挡住的规则的名字，方便找到它；
+# 规则名是软件、教程起的）。
+id: network.sharing-firewall
+schema_version: 1
+title: { zh-CN: 防火墙放不放行局域网共享 }
+description:
+  zh-CN: 看看 Windows 防火墙在专用网络上有没有打开「网络发现」「文件和打印机共享」，有没有规则挡住了共享用的端口。只查不改。
+category: network
+requires_admin: true
+timeout_sec: 30
+probe:
+  script: checks/network/sharing-firewall.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: Windows 防火墙在专用网络上放行局域网共享。 }
+  blocked:
+    status: manual
+    message:
+      zh-CN: "防火墙里有规则挡住了局域网共享用的端口（445、139），别的电脑打不开这台电脑的共享。挡住的规则：{rule}。多半是 2017 年「永恒之蓝」病毒流行时，按教程或者安全软件加的。"
+    fixer: user
+    next:
+      zh-CN: 点「防火墙的入站规则」，在「入站规则」里找到这条规则，右键 →「禁用规则」。现在的 Windows 早就修补了那个漏洞，而且只在专用网络上放行。要是安全软件加的，在安全软件的设置里关掉「关闭 445 端口」这类选项。
+    links: ["tool:open.firewall-advanced"]
+  sharing-off:
+    status: manual
+    message:
+      zh-CN: 专用网络上的「文件和打印机共享」没有打开，别的电脑打不开这台电脑共享的文件夹和打印机。
+    fixer: user
+    next:
+      zh-CN: 点「高级共享设置」，在「专用网络」下面打开「文件和打印机共享」。只是要打开别人电脑上的共享的话，这一项不用管。
+    links: ["tool:open.advanced-sharing"]
+  discovery-off:
+    status: manual
+    message:
+      zh-CN: 专用网络上的「网络发现」没有打开：「网络」里看不到别的电脑，别的电脑也看不到这台。
+    fixer: user
+    next:
+      zh-CN: 点「高级共享设置」，在「专用网络」下面打开「网络发现」。直接在地址栏输入 \\对方电脑的 IP 地址（像 \\192.168.1.5）打开共享，不受这个影响。
+    links: ["tool:open.advanced-sharing"]
+  unreadable:
+    status: unknown
+    message: { zh-CN: 读不到 Windows 防火墙的规则（防火墙服务可能被停了，或者装了别的防火墙）。 }
+    next:
+      zh-CN: 装了 360、火绒这类安全软件的，看看它的防火墙里有没有拦截局域网共享、445 端口的设置。
+references:
+  - https://support.microsoft.com/en-us/windows/experience/connectivity-networking/file-sharing-over-a-network-in-windows
+  - https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/configure

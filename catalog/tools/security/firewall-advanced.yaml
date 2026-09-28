@@ -1,0 +1,12 @@
+# 打开「高级安全 Windows Defender 防火墙」（open：mmc.exe wf.msc），左边「入站规则」里能看到每一条规则、禁用或者删除。
+# 检测 network.sharing-firewall 报有规则挡住了共享用的端口时给这个按钮（小药箱只查不改防火墙：计划书第五节第 22 条）。
+id: open.firewall-advanced
+schema_version: 1
+group: open
+title: { zh-CN: 防火墙的入站规则 }
+description:
+  zh-CN: 打开「高级安全 Windows Defender 防火墙」，左边点「入站规则」能看到所有规则。某条规则挡住了局域网共享，在它上面点右键 →「禁用规则」。
+category: security
+open: { program: firewall-advanced }
+references:
+  - https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/configure

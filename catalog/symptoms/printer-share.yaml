@@ -13,6 +13,10 @@ steps:
   - check: printer.spooler
     stop_on: [advice, manual]
   - check: printer.offline
+  - check: network.network-category
+    fixes: [network.private-network]
+  - check: network.sharing-services
+    fixes: [network.enable-sharing-services]
 guide:
   zh-CN: |
     先检查打印机是否开机、缺纸或卡纸；USB 线和 Wi-Fi / 网线是否连好。共享打印机还要确认主机已经开机。
@@ -23,5 +27,7 @@ guide:
 
     如果错误码是 0x00000709，在症状列表里选“连接共享打印机报 0x00000709”，到连接方电脑上处理。
     如果错误码是 0x0000011b，选“共享打印机报 0x0000011b”，到共享打印机的主机上处理。
+
+    共享打印机连不上、在「网络」里看不到共享主机的，两台电脑上都看一下「网络类型」「局域网共享用到的服务」这两步；防火墙、输入账户密码这些，见症状「共享文件夹打不开、看不到别的电脑」。
 
     打印机本身有网口或 Wi-Fi 时，优先在每台电脑上直接按它的 IP 地址添加打印机，省去电脑之间的共享环节。

@@ -1,0 +1,42 @@
+# 最近有没有因为对方太老、不安全，Windows 拒绝打开共享。脚本：scripts/checks/network/smb-client.ps1
+# 读 Microsoft-Windows-SmbClient/Security 日志最近 30 天的两种事件：
+# 32000（对方只支持 SMB1，微软《SMBv1 not installed by default》：老 NAS、路由器、老的 Linux 设备；微软强烈建议不要重新装 SMB1）；
+# 31017（拒绝了不安全的来宾登录，微软《Enable insecure guest logons in SMB2 and SMB3》：共享只让不输密码的「来宾」进，
+# Win10 企业版、教育版、Win11 专业版起默认不让；Win11 24H2 还默认要求 SMB 签名，来宾做不到；微软不建议打开来宾登录）。
+# 只查不改：这两样都是在降低安全（计划书第五节第 22 条）。事实里另外给出客户端的「要求签名」「允许来宾」设置（没设为空）。
+# 结果：smb1-device、guest-rejected（manual）、ok、unreadable（日志读不了，unknown）。
+# 事实：smb1_events、guest_events（次数；事件里对方的名字、地址不输出）、signing_required、guest_allowed。
+id: network.smb-client
+schema_version: 1
+title: { zh-CN: 最近被拒绝的共享 }
+description:
+  zh-CN: 看看最近 30 天 Windows 有没有因为对方的共享太老（只支持 SMB1）、或者只让「来宾」不输密码进去，拒绝打开它。常见于老的 NAS、路由器上的 U 盘共享。
+category: network
+requires_admin: true
+timeout_sec: 30
+probe:
+  script: checks/network/smb-client.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: 最近 30 天没有因为对方太老、只让来宾进而被拒绝的记录。 }
+  smb1-device:
+    status: manual
+    message:
+      zh-CN: 最近打开的共享在一台只支持老的 SMB1 协议的设备上（老的 NAS、路由器上的 U 盘共享、老的 Linux 设备），Windows 为了安全已经不用这个协议了，所以打不开（会提示「找不到网络路径」「未指定的错误 0x80004005」或者「不安全」）。
+    fixer: helper
+    next:
+      zh-CN: 到那台设备的管理页面里升级固件，或者在它的文件共享设置里打开 SMB2、SMB3（有的叫「最低 SMB 版本」）。设备太老没法升级的，换一台新的。不要在电脑上重新打开 SMB1：「永恒之蓝」勒索病毒就是通过它传播的，微软也强烈建议不要装。
+  guest-rejected:
+    status: manual
+    message:
+      zh-CN: 最近打开的共享只让不输密码的「来宾」进去，Windows 为了安全默认不允许（Win11 专业版、24H2 起的所有版本都这样），会提示「你不能访问此共享文件夹，因为你组织的安全策略阻止未经身份验证的来宾访问」。
+    fixer: helper
+    next:
+      zh-CN: 在 NAS、路由器的管理页面里建一个带密码的账户，给它共享文件夹的权限，电脑上用这个账户和密码登录。共享在另一台 Windows 电脑上的：在那台电脑的「高级共享设置」里打开「密码保护的共享」，这边输入那台电脑的登录账户和密码。不建议打开「来宾登录」，微软也不推荐。
+  unreadable:
+    status: unknown
+    message: { zh-CN: 读不到 Windows 打开共享的记录（这个日志可能被关掉了，或者被清理软件清空了）。 }
+references:
+  - https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/smbv1-not-installed-by-default-in-windows
+  - https://learn.microsoft.com/en-us/windows-server/storage/file-server/enable-insecure-guest-logons-smb2-and-smb3

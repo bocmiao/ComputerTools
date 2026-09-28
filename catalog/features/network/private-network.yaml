@@ -1,0 +1,39 @@
+# 把现在连的「公用网络」改成「专用网络」（脚本类功能），和在「设置」里这个网络的属性中选「专用网络」一样
+# （Set-NetConnectionProfile -NetworkCategory Private）。只改接在实体网卡上、现在是公用的网络；单位的域网络不动。
+# 脚本在 scripts/features/network/ 下，和检测 network.network-category 共用共享块 network-profile。
+#   private-network-detect.ps1  撤销前核对：连着的网络都不是公用 → applied；有公用的 → not-applied；没连网 → unknown
+#   private-network-run.ps1     -Prepare：before = { networks: [ { index（网卡编号）, guid（Windows 记下的这个网络的编号） } ] }；
+#                               执行：公用的网络变了就跳过；逐个改成专用、读回来确认，失败时把已经改的改回公用再报错
+#   private-network-undo.ps1    改回公用：还连着的用 Set-NetConnectionProfile；已经断开的改它在注册表里记下的 Category
+#                               （NetworkList\Profiles\{GUID}，下次连上时生效）
+#   private-network-break.ps1   只在测试中使用：连着的专用网络改成公用
+# 只记网络的编号，不记网络名字（就是 WiFi 名字）。verify 用 network.network-category：没连网（na）时不给执行。
+# 这是降低一点防护换取局域网共享：在公共场所的网络上不该改，说明里写清楚。
+# 待真机验证：见 docs/real-machine-checklist.md。
+id: network.private-network
+schema_version: 1
+title: { zh-CN: 改成「专用网络」 }
+description:
+  zh-CN: 把现在连的网络从「公用网络」改成「专用网络」，局域网里的电脑才能互相看到、打开共享。和在「设置」里这个网络的属性中选「专用网络」一样。只在家里、单位自己的网络上这样改，咖啡馆、机场、酒店的网络不要改。能撤销。
+category: network
+risk: safe
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/network/private-network-detect.ps1
+prepare:
+  script: features/network/private-network-run.ps1
+run:
+  script: features/network/private-network-run.ps1
+undo:
+  script: features/network/private-network-undo.ps1
+break:
+  script: features/network/private-network-break.ps1
+verify: network.network-category
+references:
+  - https://support.microsoft.com/en-us/windows/experience/connectivity-networking/essential-network-settings-and-tasks-in-windows
+  - https://learn.microsoft.com/en-us/powershell/module/netconnection/set-netconnectionprofile

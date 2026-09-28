@@ -1,0 +1,35 @@
+# 现在连的网络是「公用网络」还是「专用网络」。脚本：scripts/checks/network/network-category.ps1（和修复 network.private-network
+# 的脚本共用共享块 network-profile）。
+# 只看接在实体网卡上的网络（VPN、Hyper-V 和 WSL 的虚拟交换机常常是「未识别的网络」、公用，不算）。
+# 公用网络上 Windows 不让别的电脑看到这台，也不去找别的电脑（网络发现、文件和打印机共享在公用网络上是关着的），
+# 所以局域网共享两头都打不开。家里、单位自己的网络应该是专用网络。
+# 结果：private（ok：都是专用网络或者单位的域网络）、public（advice：有一个是公用网络，修复 network.private-network）、
+# none（na：没连网，或者读不到）。事实：public_count、private_count、domain_count（不输出网络名字：那就是 WiFi 名字）。
+id: network.network-category
+schema_version: 1
+title: { zh-CN: 网络类型（专用还是公用） }
+description:
+  zh-CN: 看看 Windows 把现在连的网络当成了「专用网络」还是「公用网络」。当成公用网络时，局域网里的电脑互相看不到，共享也打不开。
+category: network
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/network/network-category.ps1
+results:
+  private:
+    status: ok
+    message: { zh-CN: 现在连的网络是「专用网络」，局域网里的电脑可以互相找到。 }
+  public:
+    status: advice
+    message:
+      zh-CN: Windows 把现在连的网络当成了「公用网络」（像咖啡馆、机场那样），所以不让别的电脑看到这台电脑，也不去找别的电脑，局域网共享两头都打不开。
+    fixer: medkit
+    next:
+      zh-CN: 在家里、单位自己的网络上，点下面的按钮改成「专用网络」；在咖啡馆、机场、酒店这些公共场所不要改。能撤销。
+    links: ["feature:network.private-network"]
+  none:
+    status: na
+    message: { zh-CN: 电脑现在没有连上网络（网线、WiFi 都没连），看不出网络类型。 }
+references:
+  - https://support.microsoft.com/en-us/windows/experience/connectivity-networking/essential-network-settings-and-tasks-in-windows
+  - https://learn.microsoft.com/en-us/powershell/module/netconnection/set-netconnectionprofile
