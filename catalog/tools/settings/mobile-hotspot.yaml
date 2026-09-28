@@ -1,0 +1,13 @@
+# 打开「设置」里的一页（open）：ms-settings:network-mobilehotspot，由系统打开。「网络和 Internet → 移动热点」：选共享哪个连接、
+# 网络名称和密码（「属性 → 编辑」）、网络频段，最上面是开关（微软《将 Windows 设备用作移动热点》）。
+id: settings.mobile-hotspot
+schema_version: 1
+group: open
+title: { zh-CN: 移动热点（电脑开热点给手机用） }
+description:
+  zh-CN: 打开「设置」里的移动热点：选电脑现在上网用的连接，看网络名称和密码（「属性 → 编辑」），老手机搜不到时把网络频段改成 2.4 GHz，再打开最上面的开关。
+category: settings
+open: { settings: network-mobilehotspot }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
+  - https://support.microsoft.com/zh-cn/windows/experience/connectivity-networking/use-your-windows-device-as-a-mobile-hotspot

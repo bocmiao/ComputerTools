@@ -1,0 +1,12 @@
+# 打开「设置」里的一页（open）：ms-settings:devices-touchpad，由系统打开（微软：只有带触摸板的电脑有这一页）。「蓝牙和其他设备 →
+# 触摸板」：触摸板的开关、「连接鼠标时让触摸板保持打开状态」、灵敏度和手势。
+id: settings.touchpad
+schema_version: 1
+group: open
+title: { zh-CN: 触摸板设置 }
+description:
+  zh-CN: 打开「设置」里的触摸板：看触摸板的开关是不是开着，接了鼠标触摸板就不能用的，勾上「连接鼠标时让触摸板保持打开状态」；还能调灵敏度和手势。只有笔记本有这一页。
+category: settings
+open: { settings: devices-touchpad }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

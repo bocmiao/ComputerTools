@@ -1,0 +1,46 @@
+# 症状：电脑开不了移动热点（提示「我们无法设置移动热点」），或者手机搜不到、连上了上不了网（调研 B2）。先查热点要用的两个服务
+# 有没有被关掉（network.hotspot-services，修复 network.enable-hotspot-services），再查 WiFi 要用的服务、无线网卡（和「WiFi 不见了」
+# 一样的两步）。打开方法照微软《将 Windows 设备用作移动热点》。宽带拨号（PPPoE）上网的电脑常常开不了，只说明。
+id: mobile-hotspot
+schema_version: 1
+title: { zh-CN: 电脑开不了移动热点，手机连不上 }
+summary:
+  zh-CN: 想让电脑开个热点给手机用，打开「移动热点」提示「我们无法设置移动热点」；或者开了以后手机搜不到、连上了却上不了网。
+keywords:
+  - 移动热点
+  - 开热点
+  - 电脑开热点
+  - 电脑热点
+  - 共享网络给手机
+  - 电脑共享网络
+  - 无法设置移动热点
+  - 我们无法设置移动热点
+  - 热点打不开
+  - 热点开不了
+  - 手机连电脑热点
+  - 电脑热点连不上
+  - 手机搜不到电脑热点
+  - wifi共享
+causes:
+  - zh-CN: 热点要用的系统服务（Windows 移动热点服务、Internet 连接共享）被「优化」软件关掉了
+  - zh-CN: WiFi 被关了、开着飞行模式，或者无线网卡被禁用、驱动有问题
+  - zh-CN: 电脑是用「宽带连接」拨号上网的，Windows 的移动热点常常共享不了拨号连接
+  - zh-CN: 手机不支持 5 GHz 频段，或者校园网、公司网不让共享
+maturity: semi
+steps:
+  - check: network.hotspot-services
+    fixes: [network.enable-hotspot-services]
+  - check: network.wireless-services
+    fixes: [network.enable-wireless-services]
+  - check: network.wifi-adapter
+    fixes: [network.enable-wifi-adapter]
+guide:
+  zh-CN: |
+    先看上面的检查，有问题的点修复。然后这样开热点：
+
+    1. 点下面的「移动热点」，在「共享我的 Internet 连接」里选电脑现在上网用的那个（以太网或者 WLAN），在「属性 → 编辑」里看网络名称和密码，再打开最上面的开关。手机在 WLAN 里找这个名字，输入密码连上。
+    2. 手机搜不到：在「编辑」里把「网络频段」改成 2.4 GHz（有的手机不支持 5 GHz），手机离电脑近一点；电脑的 WLAN 要开着、飞行模式要关着。
+    3. 提示「我们无法设置移动热点，因为你的电脑未建立以太网、Wi-Fi 或手机网络数据连接」：先确认电脑自己能上网。电脑用「宽带连接」拨号上网的，Windows 的移动热点常常共享不了拨号连接，最省事的是用路由器拨号、开 WiFi。
+    4. 手机连上了却上不了网：先关掉电脑上的 VPN、加速器、「梯子」再试，把热点关掉重开一次；学校、公司的网络常常不让共享，这是网络那边的限制。
+    5. 还是不行：无线网卡驱动太旧或者不支持热点，到电脑品牌官网下载最新的无线网卡驱动装上。
+links: ["tool:settings.mobile-hotspot", "tool:settings.network"]

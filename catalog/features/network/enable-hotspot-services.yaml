@@ -1,0 +1,30 @@
+# 恢复移动热点用到的服务：Windows 移动热点服务（icssvc）和 Internet 连接共享（SharedAccess）都改回 Windows 默认的「手动」
+# （微软《Guidance on disabling system services on Windows Server》），开热点时 Windows 自己启动它们。只改启动类型，不启动服务。
+# 检测 network.hotspot-services 报 disabled 时给这个按钮；verify 用这个检测：有一个服务不在（na）时不给执行，改好没有也看它。
+# break_actions（测试用）：两个都设成禁用。
+id: network.enable-hotspot-services
+schema_version: 1
+title: { zh-CN: 恢复移动热点用到的服务 }
+description:
+  zh-CN: 把被「优化」软件关掉的两个系统服务（Windows 移动热点服务、Internet 连接共享）改回 Windows 默认的「手动」：开热点、无线投屏的时候 Windows 自己启动它们。关掉以后打开移动热点会提示「我们无法设置移动热点」。能撤销。
+category: network
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+verify: network.hotspot-services
+actions:
+  - service: { name: icssvc, start_type: manual }
+  - service: { name: SharedAccess, start_type: manual }
+windows_default:
+  - service: { name: icssvc, start_type: manual }
+  - service: { name: SharedAccess, start_type: manual }
+break_actions:
+  - service: { name: icssvc, start_type: disabled }
+  - service: { name: SharedAccess, start_type: disabled }
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server

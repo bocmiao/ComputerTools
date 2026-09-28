@@ -118,6 +118,9 @@ pub const SETTINGS_PAGES: &[&str] = &[
     // 「账户 → 登录选项」：密码、PIN、离开后要不要重新登录、动态锁；「个性化 → 锁屏界面」：最下面是「屏幕保护程序」
     "signinoptions",
     "lockscreen",
+    // 「网络和 Internet → 移动热点」；「触摸板」（只有带触摸板的电脑有这一页）
+    "network-mobilehotspot",
+    "devices-touchpad",
     // 「疑难解答」：Windows 11 在「系统」里（「其他疑难解答」是「获取帮助」的那几个），Windows 10 在「更新和安全」里
     "troubleshoot",
 ];

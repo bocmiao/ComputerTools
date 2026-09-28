@@ -1132,6 +1132,10 @@ const CHECKS: Record<string, MockCheck> = {
       facts: { ac: 1, dc: 1 },
     }),
   },
+  'network.hotspot-services': {
+    title: '移动热点用到的服务',
+    evaluate: () => ({ status: 'ok', resultCode: 'ok', message: '移动热点用到的服务都没有被关掉。', facts: { icssvc: 3, sharedaccess: 3 } }),
+  },
   'system.managed': {
     title: '单位管理',
     evaluate: () => ({ status: 'ok', message: '这台电脑没有被单位管理（没有加入域，也没有设备管理）。', facts: { domain_joined: false, mdm: false } }),
@@ -1382,6 +1386,24 @@ const SYMPTOMS: MockSymptom[] = [
     causes: ['删的时候没进回收站：按了 Shift + Delete、在 U 盘和存储卡上删的、文件太大放不进回收站', '回收站被清空了，或者被「清理垃圾」的软件清掉了'],
     guide: '先按 Ctrl + Z 撤销、看回收站、看文件夹属性里的「以前的版本」和网盘的回收站。都找不到的话，别再往那个盘里存东西，用下面的「拼出恢复命令」和微软的 Windows File Recovery 找。',
     steps: [],
+  },
+  {
+    id: 'mobile-hotspot', title: '电脑开不了移动热点，手机连不上',
+    summary: '想让电脑开个热点给手机用，打开「移动热点」提示「我们无法设置移动热点」；或者开了以后手机搜不到、连上了却上不了网。',
+    keywords: ['移动热点', '开热点', '无法设置移动热点'], maturity: 'semi',
+    causes: ['热点要用的系统服务（Windows 移动热点服务、Internet 连接共享）被「优化」软件关掉了', 'WiFi 被关了、开着飞行模式，或者无线网卡被禁用、驱动有问题', '电脑是用「宽带连接」拨号上网的，Windows 的移动热点常常共享不了拨号连接'],
+    guide: '点「移动热点」，在「共享我的 Internet 连接」里选电脑现在上网用的连接，看好网络名称和密码，打开最上面的开关。手机搜不到的，把网络频段改成 2.4 GHz。',
+    steps: [{ check: 'network.hotspot-services', fixes: [] }],
+    links: ['tool:settings.mobile-hotspot'],
+  },
+  {
+    id: 'touchpad', title: '笔记本触摸板没反应',
+    summary: '笔记本的触摸板用手指划了没反应，鼠标指针不动，或者一插上鼠标触摸板就不能用了。',
+    keywords: ['触摸板没反应', '触摸板失灵', '触控板'], maturity: 'semi',
+    causes: ['不小心按到了关触摸板的快捷键（一般是 F6、F9 这类，有的要加 Fn）', '「设置」里的触摸板开关被关了，或者设成了接上鼠标就关掉触摸板', '触摸板驱动坏了、没装好'],
+    guide: '先按一下键盘上画着触摸板图标的键；再点「触摸板设置」确认开关开着，接了鼠标就不能用的勾上「连接鼠标时让触摸板保持打开状态」。',
+    steps: [{ check: 'system.device-problems', fixes: [] }],
+    links: ['tool:settings.touchpad'],
   },
   {
     id: 'screen-goes-dark', title: '电脑一会儿不动就黑屏、睡着了',
@@ -2142,6 +2164,22 @@ const TOOL_LIST: MockTool[] = [
     'settings',
     'settings',
     'ms-settings:display-advancedgraphics',
+  ),
+  openTool(
+    'settings.mobile-hotspot',
+    '移动热点（电脑开热点给手机用）',
+    '打开「设置」里的移动热点：选电脑现在上网用的连接，看网络名称和密码，老手机搜不到时把网络频段改成 2.4 GHz，再打开最上面的开关。',
+    'settings',
+    'settings',
+    'ms-settings:network-mobilehotspot',
+  ),
+  openTool(
+    'settings.touchpad',
+    '触摸板设置',
+    '打开「设置」里的触摸板：看开关是不是开着，接了鼠标触摸板就不能用的，勾上「连接鼠标时让触摸板保持打开状态」。',
+    'settings',
+    'settings',
+    'ms-settings:devices-touchpad',
   ),
   openTool(
     'settings.sign-in-options',

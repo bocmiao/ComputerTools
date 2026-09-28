@@ -1,0 +1,33 @@
+# 移动热点用到的服务有没有被关掉。脚本：scripts/checks/network/hotspot-services.ps1（只读）
+# Windows 移动热点服务（icssvc）和 Internet 连接共享（SharedAccess）默认都是「手动」（开热点时 Windows 自己拉起来），微软《Guidance on
+# disabling system services on Windows Server》里写着 SharedAccess「电脑当 WiFi 热点、无线投屏两端都要用」。被「优化」软件、
+# 「关闭无用服务」教程设成「禁用」以后，打开移动热点提示「我们无法设置移动热点」。
+# 结果（按这个顺序）：missing（有一个不在：精简过的系统、没有桌面体验的服务器版，na）、disabled（有一个被禁用）、ok。
+# 修复 network.enable-hotspot-services 把两个都改回「手动」，它的 verify 用这个检测。事实：icssvc、sharedaccess（Start 值）。
+id: network.hotspot-services
+schema_version: 1
+title: { zh-CN: 移动热点用到的服务 }
+description:
+  zh-CN: 看看电脑开移动热点要用的两个系统服务有没有被「优化」软件关掉。关掉以后打开移动热点会提示「我们无法设置移动热点」。
+category: network
+requires_admin: false
+probe:
+  script: checks/network/hotspot-services.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: 移动热点用到的服务都没有被关掉。 }
+  disabled:
+    status: advice
+    message:
+      zh-CN: 开移动热点要用的系统服务（Windows 移动热点服务，或者 Internet 连接共享）被禁用了，所以打开移动热点时提示「我们无法设置移动热点」。多半是「优化」类软件关的；无线投屏也要用 Internet 连接共享。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮把两个服务改回 Windows 默认的「手动」（开热点时 Windows 自己启动它们），再关掉「设置」重新打开移动热点。
+    links: ["feature:network.enable-hotspot-services", "tool:settings.mobile-hotspot"]
+  missing:
+    status: na
+    message:
+      zh-CN: 这台电脑的 Windows 里没有移动热点要用的系统服务，多半是装了被精简过的系统，只能重装原版 Windows 才能开热点。
+references:
+  - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server
