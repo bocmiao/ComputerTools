@@ -1,0 +1,12 @@
+# 打开「设置」里的一页（open）：ms-settings:signinoptions，由系统打开。「账户 → 登录选项」：PIN、密码、Windows Hello，
+# 「如果你已离开，Windows 应在何时要求你重新登录」，还有「动态锁」（带着配对的手机走远了就锁屏）。
+id: settings.sign-in-options
+schema_version: 1
+group: open
+title: { zh-CN: 登录选项（密码、PIN、离开后要不要重新登录） }
+description:
+  zh-CN: 打开「设置」里的登录选项：改开机密码和 PIN，设置电脑醒来要不要重新登录（「如果你已离开，Windows 应在何时要求你重新登录」），关掉或者打开「动态锁」。
+category: settings
+open: { settings: signinoptions }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

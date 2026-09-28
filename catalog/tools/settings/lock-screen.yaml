@@ -1,0 +1,12 @@
+# 打开「设置」里的一页（open）：ms-settings:lockscreen，由系统打开。「个性化 → 锁屏界面」：锁屏的图片，最下面有「屏幕保护程序」
+# 的链接（打开老的「屏幕保护程序设置」对话框：等待时间、「在恢复时显示登录屏幕」）。
+id: settings.lock-screen
+schema_version: 1
+group: open
+title: { zh-CN: 锁屏界面和屏幕保护程序 }
+description:
+  zh-CN: 打开「设置」里的锁屏界面：换锁屏图片；最下面的「屏幕保护程序」里能改屏保的等待时间、取消「在恢复时显示登录屏幕」，或者不用屏保。
+category: settings
+open: { settings: lockscreen }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app

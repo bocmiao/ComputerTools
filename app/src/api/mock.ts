@@ -436,6 +436,37 @@ const FEATURE_LIST: MockFeature[] = [
   // ── 常用设置：电源 ──
   defineFeature(
     {
+      id: 'power.longer-timeouts',
+      title: '插着电源时，15 分钟不动才关屏幕、30 分钟才睡眠',
+      description:
+        '看文档、看网课、离开一会儿，屏幕就黑了、电脑睡着了？插着电源时改成 15 分钟不动才关屏幕、30 分钟不动才睡眠；本来就更长或者设成「从不」的不动，用电池时的设置也不变。马上生效，能撤销。',
+      category: 'power',
+      subjective: true,
+    },
+    {
+      changes: [
+        { target: '当前电源计划：插电时关闭屏幕', initial: '5 分钟', planned: '15 分钟' },
+        { target: '当前电源计划：插电时睡眠', initial: '10 分钟', planned: '30 分钟' },
+      ],
+      notes: ['改的是整台电脑的电源计划，这台电脑上所有用户都会受影响。'],
+    },
+  ),
+  defineFeature(
+    {
+      id: 'power.lid-close-do-nothing',
+      title: '插着电源时，合上笔记本盖子不睡眠',
+      description:
+        '笔记本接了显示器、键盘鼠标，想把盖子合上接着用：插着电源时合上盖子电脑什么都不做、照常运行。用电池时照旧睡眠，免得放进包里还开着发烫。马上生效，能撤销。',
+      category: 'power',
+      subjective: true,
+    },
+    {
+      changes: [{ target: '当前电源计划：插电时合上盖子', initial: '睡眠', planned: '不采取任何操作' }],
+      notes: ['用电池时合上盖子还是会睡眠。'],
+    },
+  ),
+  defineFeature(
+    {
       id: 'power.disable-fast-startup',
       title: '关闭快速启动',
       description: '快速启动让「关机」其实只是半休眠。装了双系统，或者关机后 U 盘、网卡偶尔不正常时才需要关；关掉后开机会慢几秒。',
@@ -1069,6 +1100,38 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'system.power-timeouts': {
+    title: '多久不动就关屏幕、睡眠',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return {
+          status: 'ok',
+          message: '插着电源时，关屏幕和睡眠的等待时间都不算短（关屏幕在 5 分钟以上、睡眠在 10 分钟以上，或者设成了「从不」），也没有很快就要重新登录的屏幕保护程序。',
+        }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'short-display',
+        message: '插着电源时，电脑 3 分钟不动就会关掉屏幕，所以看文档、看视频、离开一会儿屏幕就黑了。',
+        fixer: 'medkit',
+        next: '点下面的修复，改成插着电源时 15 分钟不动才关屏幕、30 分钟不动才睡眠（用电池时的设置不变），马上生效、能撤销。也可以在「电源」设置里自己选时间。',
+        links: ['feature:power.longer-timeouts'],
+        facts: { display_ac: 3, sleep_ac: 10 },
+      }
+    },
+  },
+  'system.lid-action': {
+    title: '合上笔记本盖子时做什么',
+    evaluate: () => ({
+      status: 'advice',
+      resultCode: 'acts',
+      message: '插着电源时合上笔记本的盖子，电脑会睡眠；用电池时会睡眠。所以接着外接显示器、合上盖子用的时候，电脑就停了。',
+      fixer: 'medkit',
+      next: '想合上盖子接着用（接了显示器、键盘鼠标），点下面的修复，改成插着电源时合上盖子什么都不做；用电池时照旧，免得放进包里还开着发烫。马上生效，能撤销。',
+      links: ['feature:power.lid-close-do-nothing'],
+      facts: { ac: 1, dc: 1 },
+    }),
+  },
   'system.managed': {
     title: '单位管理',
     evaluate: () => ({ status: 'ok', message: '这台电脑没有被单位管理（没有加入域，也没有设备管理）。', facts: { domain_joined: false, mdm: false } }),
@@ -1319,6 +1382,17 @@ const SYMPTOMS: MockSymptom[] = [
     causes: ['删的时候没进回收站：按了 Shift + Delete、在 U 盘和存储卡上删的、文件太大放不进回收站', '回收站被清空了，或者被「清理垃圾」的软件清掉了'],
     guide: '先按 Ctrl + Z 撤销、看回收站、看文件夹属性里的「以前的版本」和网盘的回收站。都找不到的话，别再往那个盘里存东西，用下面的「拼出恢复命令」和微软的 Windows File Recovery 找。',
     steps: [],
+  },
+  {
+    id: 'screen-goes-dark', title: '电脑一会儿不动就黑屏、睡着了',
+    summary: '看文档、看网课时，一会儿不动屏幕就黑了，或者电脑睡着了、要重新输密码；笔记本接着显示器合上盖子，电脑就停了。',
+    keywords: ['自动黑屏', '自动息屏', '自动锁屏', '合盖不休眠'], maturity: 'semi',
+    causes: ['电源设置里「关闭屏幕」「睡眠」的时间太短（有的电脑出厂只有几分钟）', '开着屏幕保护程序，还勾着「在恢复时显示登录屏幕」', '笔记本合上盖子默认会睡眠，接着外接显示器也一样'],
+    guide: '先看上面的检查结果，时间太短的点修复就行。醒来要输密码的，在「设置 → 账户 → 登录选项」里改；笔记本接显示器合上盖子的，点合盖那一项下面的修复。',
+    steps: [
+      { check: 'system.power-timeouts', fixes: ['power.longer-timeouts'] },
+      { check: 'system.lid-action', fixes: ['power.lid-close-do-nothing'] },
+    ],
   },
   {
     id: 'jfif-images', title: '保存的图片变成了 .jfif，上传不了',
@@ -2068,6 +2142,22 @@ const TOOL_LIST: MockTool[] = [
     'settings',
     'settings',
     'ms-settings:display-advancedgraphics',
+  ),
+  openTool(
+    'settings.sign-in-options',
+    '登录选项（密码、PIN、离开后要不要重新登录）',
+    '打开「设置」里的登录选项：改开机密码和 PIN，设置电脑醒来要不要重新登录，关掉或者打开「动态锁」。',
+    'settings',
+    'settings',
+    'ms-settings:signinoptions',
+  ),
+  openTool(
+    'settings.lock-screen',
+    '锁屏界面和屏幕保护程序',
+    '打开「设置」里的锁屏界面：换锁屏图片；最下面的「屏幕保护程序」里能改屏保的等待时间、取消「在恢复时显示登录屏幕」。',
+    'settings',
+    'settings',
+    'ms-settings:lockscreen',
   ),
 ]
 

@@ -1,0 +1,65 @@
+# 电脑一会儿不动就黑屏、睡着、锁屏的原因。脚本：scripts/checks/system/power-timeouts.ps1（共享块 power-plan；读登录用户的
+# 屏幕保护设置，只读）。
+# 当前电源计划的「关闭显示器」（VIDEOIDLE，3c0bc021-…）和「睡眠」（STANDBYIDLE，29f6c1db-…）等待时间，单位秒，0 是从不（微软
+# 《Display idle timeout》《Sleep idle timeout》）；屏幕保护程序（Control Panel\Desktop 的 ScreenSaveActive、ScreenSaveTimeOut、
+# ScreenSaverIsSecure「在恢复时显示登录屏幕」，策略里有的以策略为准）；安全策略「交互式登录：计算机不活动限制」
+# （Policies\System 的 InactivityTimeoutSecs，到时间就锁屏，一般是单位或者安全软件设的，只说明、不改）。
+# 结果（按这个顺序）：missing（读不到电源设置）、policy-lock、short-display（插着电源时 5 分钟内关屏幕）、short-sleep（插着电源时
+# 10 分钟内睡眠）、screensaver（5 分钟内启动、要重新登录的屏幕保护）、ok。short-display、short-sleep 的修复是 power.longer-timeouts。
+# 事实：display_ac、display_dc、sleep_ac、sleep_dc（分钟，0 是从不）、saver_min、saver_lock、policy_min。
+id: system.power-timeouts
+schema_version: 1
+title: { zh-CN: 多久不动就关屏幕、睡眠 }
+description:
+  zh-CN: 看看电脑多久不动就会关掉屏幕、进入睡眠，有没有很快就要重新登录的屏幕保护程序，或者单位设的「多久不动就锁屏」。
+category: system
+requires_admin: false
+user_hive: true
+timeout_sec: 30
+probe:
+  script: checks/system/power-timeouts.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 插着电源时，关屏幕和睡眠的等待时间都不算短（关屏幕在 5 分钟以上、睡眠在 10 分钟以上，或者设成了「从不」），也没有很快就要重新登录的屏幕保护程序。
+  missing:
+    status: unknown
+    message:
+      zh-CN: 读不到电源计划里关屏幕、睡眠的时间。
+  policy-lock:
+    status: manual
+    message:
+      zh-CN: 这台电脑设了「{policy_min} 分钟不动就锁屏」的安全策略（交互式登录：计算机不活动限制），多半是单位或者安全软件设的，到时间就会锁屏，要重新输入密码。
+    fixer: helper
+    next:
+      zh-CN: 单位的电脑请找单位的电脑管理员，这是按规定设的。自己的电脑，可以在「本地安全策略」里改：安全设置 → 本地策略 → 安全选项 →「交互式登录：计算机不活动限制」，改成 0 就不限制；家庭版没有这个工具，请懂哥帮忙。小药箱不改安全策略。
+  short-display:
+    status: advice
+    message:
+      zh-CN: 插着电源时，电脑 {display_ac} 分钟不动就会关掉屏幕，所以看文档、看视频、离开一会儿屏幕就黑了。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的修复，改成插着电源时 15 分钟不动才关屏幕、30 分钟不动才睡眠（用电池时的设置不变），马上生效、能撤销。也可以在「电源」设置里自己选时间。
+    links: ["feature:power.longer-timeouts", "tool:settings.power"]
+  short-sleep:
+    status: advice
+    message:
+      zh-CN: 插着电源时，电脑 {sleep_ac} 分钟不动就会睡眠，下载、放着的程序都会停下来，要按一下键盘或者电源键才醒。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的修复，改成插着电源时 15 分钟不动才关屏幕、30 分钟不动才睡眠（用电池时的设置不变），马上生效、能撤销。要下载一晚上的，在「电源」设置里把睡眠改成「从不」。
+    links: ["feature:power.longer-timeouts", "tool:settings.power"]
+  screensaver:
+    status: advice
+    message:
+      zh-CN: 开着屏幕保护程序，{saver_min} 分钟不动就会启动，而且勾着「在恢复时显示登录屏幕」，所以一会儿不动就要重新输入密码。
+    fixer: user
+    next:
+      zh-CN: 点下面的按钮打开锁屏界面，在最下面的「屏幕保护程序」里把「等待」的时间调长，或者取消勾选「在恢复时显示登录屏幕」，不想要屏幕保护的选「无」。
+    links: ["tool:settings.lock-screen"]
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/display-settings-display-idle-timeout
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/sleep-settings-sleep-idle-timeout
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/interactive-logon-machine-inactivity-limit
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/troubleshoot-unexpected-rds-session-locks-or-disconnections

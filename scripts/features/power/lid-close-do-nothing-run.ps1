@@ -1,20 +1,17 @@
-# Check: system.power-plan
-# Is the power plan holding the processor back? (See the shared block for
-# what is read.) Read-only. Result codes (in this order):
-#   saver       the Power saver plan is active (fix: power.balanced-plan)
-#   throttled   "Maximum processor state" of the active plan is below 80
-#               percent plugged in, or below 50 percent on battery on a PC
-#               that has a battery (fix: power.processor-full-speed)
-#   efficiency  Windows 11 power mode "Best power efficiency" while plugged
-#               in: ActiveOverlayAcPowerScheme
-#               961cc777-2547-4f9d-8174-7d86181b8a7a (Microsoft, "Customize
-#               the Windows performance power slider"); changed in Settings
-#   ok
-# Facts: plan (saver, balanced, high, ultimate or custom), ac, dc ("Maximum
-# processor state" in percent, '' when unknown), battery (true / false).
+# Feature: power.lid-close-do-nothing -- run (and prepare)
+# Plugged in, closing the lid does nothing: "Lid close action" (LIDACTION) of
+# the active plan becomes 0 plugged in; on battery it stays (so a laptop put
+# into a bag still goes to sleep). Works at once. Its state comes from the
+# check system.lid-action (verify), which also keeps it away from desktops.
+# -Prepare: returns before = { plan, ac, dc }.
+# Run: -Before is that JSON. Skipped when the plan or a value changed since,
+#   or when it does nothing already; otherwise sets it and reads it back.
 
 [CmdletBinding()]
-param()
+param(
+    [bool]$Prepare = $false,
+    [string]$Before = ''
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -76,54 +73,25 @@ function Set-PowerSetting {
 }
 # ---- end of shared block power-plan ----
 
-$maxProcessorState = 'bc5038f7-23e0-4960-96da-33abaf5935ec'
-$powerSaverPlan = 'a1841308-3541-4fab-bc81-f71556f20b4a'
-$balancedPlan = '381b4222-f694-41f0-9685-ff5bb260df2e'
-$bestEfficiencyMode = '961cc777-2547-4f9d-8174-7d86181b8a7a'
-
-$planNames = @{
-    'a1841308-3541-4fab-bc81-f71556f20b4a' = 'saver'
-    '381b4222-f694-41f0-9685-ff5bb260df2e' = 'balanced'
-    '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' = 'high'
-    'e9a42b02-d5df-448d-aa00-03f14749eb61' = 'ultimate'
-}
+$buttonsGroup = '4f971e89-eebd-4455-a8de-9e59040e7347'
+$lidAction = '5ca83367-6e45-459f-a27b-476b1d01c936'
 
 $plan = Get-ActivePlan
-$ac = Get-PowerSetting $plan 'AC' $maxProcessorState
-$dc = Get-PowerSetting $plan 'DC' $maxProcessorState
-$battery = @(Get-CimInstance -ClassName 'Win32_Battery' -ErrorAction SilentlyContinue).Count -gt 0
-$overlay = ''
-try {
-    $overlay = ([string](Get-ItemProperty -LiteralPath $powerSchemesKey -Name 'ActiveOverlayAcPowerScheme' -ErrorAction Stop).ActiveOverlayAcPowerScheme).Trim().Trim('{', '}').ToLowerInvariant()
-}
-catch {
-    Write-Verbose 'No power mode (Windows 10, or not the Balanced plan)'
+$ac = Get-PowerSetting $plan 'AC' $lidAction
+$dc = Get-PowerSetting $plan 'DC' $lidAction
+if ($Prepare) {
+    return [pscustomobject]@{ before = [ordered]@{ plan = $plan; ac = $ac; dc = $dc } }
 }
 
-$name = 'custom'
-if ($planNames.ContainsKey($plan)) {
-    $name = $planNames[$plan]
+$recorded = ConvertFrom-Json -InputObject $Before
+if (($null -eq $ac) -or ($null -eq $dc) -or ([string]$recorded.plan -ne $plan) -or ([string]$recorded.ac -ne [string]$ac) -or ([string]$recorded.dc -ne [string]$dc)) {
+    return [pscustomobject]@{ skipped = $true }
 }
-$facts = [ordered]@{ plan = $name; ac = ''; dc = ''; battery = $battery }
-if ($null -ne $ac) {
-    $facts.ac = $ac
+if ($ac -eq 0) {
+    return [pscustomobject]@{ skipped = $true }
 }
-if ($null -ne $dc) {
-    $facts.dc = $dc
+$ok = Set-PowerSetting $plan $buttonsGroup $lidAction 0 $dc
+if ((-not $ok) -or ((Get-PowerSetting $plan 'AC' $lidAction) -ne 0)) {
+    throw 'The lid close action could not be changed'
 }
-
-$result = 'ok'
-if ($plan -eq $powerSaverPlan) {
-    $result = 'saver'
-}
-elseif ((($null -ne $ac) -and ($ac -lt 80)) -or ($battery -and ($null -ne $dc) -and ($dc -lt 50))) {
-    $result = 'throttled'
-}
-elseif (($plan -eq $balancedPlan) -and ($overlay -eq $bestEfficiencyMode)) {
-    $result = 'efficiency'
-}
-
-[pscustomobject]@{
-    result = $result
-    facts  = $facts
-}
+[pscustomobject]@{ after = [ordered]@{ plan = $plan; ac = 0; dc = $dc } }

@@ -1,0 +1,54 @@
+# 合上笔记本盖子时电脑做什么。脚本：scripts/checks/system/lid-action.ps1（共享块 power-plan，只读）。
+# 当前电源计划的「合上盖子时」（LIDACTION，5ca83367-…，电源按钮和盖子子组）：0 不采取任何操作、1 睡眠、2 休眠、3 关机（微软
+# 《Lid switch close action》）。只有笔记本、平板有盖子：PCSystemType 是 2（移动设备，电池拆了也算）或者有电池。
+# 结果：no-lid（不是笔记本，na：修复 power.lid-close-do-nothing 用它核对，这时不给执行）、missing（读不到）、nothing（插着电源时
+# 合上盖子什么都不做）、acts（插着电源时合上盖子会睡眠、休眠或者关机：修复是 power.lid-close-do-nothing）。
+# 不进体检（合盖睡眠是 Windows 默认的样子），「电脑一会儿不动就黑屏、睡着了」里查。事实：ac、dc。
+id: system.lid-action
+schema_version: 1
+title: { zh-CN: 合上笔记本盖子时做什么 }
+description:
+  zh-CN: 看看合上笔记本的盖子时，电脑是睡眠、休眠、关机，还是什么都不做。
+category: system
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/system/lid-action.ps1
+results:
+  no-lid:
+    status: na
+    message:
+      zh-CN: 这台电脑不是笔记本，没有盖子。
+  missing:
+    status: unknown
+    message:
+      zh-CN: 读不到合上盖子时做什么。
+  nothing:
+    status: ok
+    message:
+      zh-CN: "插着电源时合上盖子，电脑什么都不做、照常运行；用电池时合上盖子会{dc_text}。"
+  acts:
+    status: advice
+    message:
+      zh-CN: "插着电源时合上笔记本的盖子，电脑会{ac_text}；用电池时会{dc_text}。所以接着外接显示器、合上盖子用的时候，电脑就停了。"
+    fixer: medkit
+    next:
+      zh-CN: 想合上盖子接着用（接了显示器、键盘鼠标），点下面的修复，改成插着电源时合上盖子什么都不做；用电池时照旧，免得放进包里还开着发烫。马上生效，能撤销。
+    links: ["feature:power.lid-close-do-nothing"]
+fact_labels:
+  ac_text:
+    from: ac
+    values:
+      "0": { zh-CN: 什么都不做 }
+      "1": { zh-CN: 睡眠 }
+      "2": { zh-CN: 休眠 }
+      "3": { zh-CN: 关机 }
+  dc_text:
+    from: dc
+    values:
+      "0": { zh-CN: 什么都不做 }
+      "1": { zh-CN: 睡眠 }
+      "2": { zh-CN: 休眠 }
+      "3": { zh-CN: 关机 }
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/power-button-and-lid-settings-lid-switch-close-action

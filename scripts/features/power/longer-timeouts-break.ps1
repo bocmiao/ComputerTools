@@ -1,17 +1,6 @@
-# Check: system.power-plan
-# Is the power plan holding the processor back? (See the shared block for
-# what is read.) Read-only. Result codes (in this order):
-#   saver       the Power saver plan is active (fix: power.balanced-plan)
-#   throttled   "Maximum processor state" of the active plan is below 80
-#               percent plugged in, or below 50 percent on battery on a PC
-#               that has a battery (fix: power.processor-full-speed)
-#   efficiency  Windows 11 power mode "Best power efficiency" while plugged
-#               in: ActiveOverlayAcPowerScheme
-#               961cc777-2547-4f9d-8174-7d86181b8a7a (Microsoft, "Customize
-#               the Windows performance power slider"); changed in Settings
-#   ok
-# Facts: plan (saver, balanced, high, ultimate or custom), ac, dc ("Maximum
-# processor state" in percent, '' when unknown), battery (true / false).
+# Feature: power.longer-timeouts -- break (tests only)
+# Plugged in, the display turns off after 2 minutes and the PC sleeps after 5
+# (on battery nothing changes).
 
 [CmdletBinding()]
 param()
@@ -76,54 +65,21 @@ function Set-PowerSetting {
 }
 # ---- end of shared block power-plan ----
 
-$maxProcessorState = 'bc5038f7-23e0-4960-96da-33abaf5935ec'
-$powerSaverPlan = 'a1841308-3541-4fab-bc81-f71556f20b4a'
-$balancedPlan = '381b4222-f694-41f0-9685-ff5bb260df2e'
-$bestEfficiencyMode = '961cc777-2547-4f9d-8174-7d86181b8a7a'
-
-$planNames = @{
-    'a1841308-3541-4fab-bc81-f71556f20b4a' = 'saver'
-    '381b4222-f694-41f0-9685-ff5bb260df2e' = 'balanced'
-    '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' = 'high'
-    'e9a42b02-d5df-448d-aa00-03f14749eb61' = 'ultimate'
-}
+$videoGroup = '7516b95f-f776-4464-8c53-06167f40cc99'
+$sleepGroup = '238c9fa8-0aad-41ed-83f4-97be242c8f20'
+$display = '3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e'
+$sleep = '29f6c1db-86da-48c5-9fdb-f2b67b1f44da'
 
 $plan = Get-ActivePlan
-$ac = Get-PowerSetting $plan 'AC' $maxProcessorState
-$dc = Get-PowerSetting $plan 'DC' $maxProcessorState
-$battery = @(Get-CimInstance -ClassName 'Win32_Battery' -ErrorAction SilentlyContinue).Count -gt 0
-$overlay = ''
-try {
-    $overlay = ([string](Get-ItemProperty -LiteralPath $powerSchemesKey -Name 'ActiveOverlayAcPowerScheme' -ErrorAction Stop).ActiveOverlayAcPowerScheme).Trim().Trim('{', '}').ToLowerInvariant()
+$displayDc = Get-PowerSetting $plan 'DC' $display
+$sleepDc = Get-PowerSetting $plan 'DC' $sleep
+if (($null -eq $displayDc) -or ($null -eq $sleepDc)) {
+    throw 'The timeouts cannot be read'
 }
-catch {
-    Write-Verbose 'No power mode (Windows 10, or not the Balanced plan)'
+if (-not (Set-PowerSetting $plan $videoGroup $display 120 $displayDc)) {
+    throw 'The display timeout could not be shortened'
 }
-
-$name = 'custom'
-if ($planNames.ContainsKey($plan)) {
-    $name = $planNames[$plan]
+if (-not (Set-PowerSetting $plan $sleepGroup $sleep 300 $sleepDc)) {
+    throw 'The sleep timeout could not be shortened'
 }
-$facts = [ordered]@{ plan = $name; ac = ''; dc = ''; battery = $battery }
-if ($null -ne $ac) {
-    $facts.ac = $ac
-}
-if ($null -ne $dc) {
-    $facts.dc = $dc
-}
-
-$result = 'ok'
-if ($plan -eq $powerSaverPlan) {
-    $result = 'saver'
-}
-elseif ((($null -ne $ac) -and ($ac -lt 80)) -or ($battery -and ($null -ne $dc) -and ($dc -lt 50))) {
-    $result = 'throttled'
-}
-elseif (($plan -eq $balancedPlan) -and ($overlay -eq $bestEfficiencyMode)) {
-    $result = 'efficiency'
-}
-
-[pscustomobject]@{
-    result = $result
-    facts  = $facts
-}
+[pscustomobject]@{ result = 'ok' }

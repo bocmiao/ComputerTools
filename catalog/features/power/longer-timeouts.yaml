@@ -1,0 +1,35 @@
+# 插着电源时 15 分钟不动才关屏幕、30 分钟不动才睡眠（脚本类功能）。脚本在 scripts/features/power/ 下，和检测
+# system.power-timeouts 共用共享块 power-plan。当前电源计划的「关闭显示器」（VIDEOIDLE）、「睡眠」（STANDBYIDLE）插电时的等待时间
+# 比这短的才调长，「从不」（0）和更长的不动；用电池时的不变（笔记本省电）。powercfg /setacvalueindex 以后 /setactive，马上生效。
+#   longer-timeouts-detect.ps1  插电时关屏幕 ≥ 15 分钟（或从不）而且睡眠 ≥ 30 分钟（或从不）→ applied；读不到 → unknown
+#   longer-timeouts-run.ps1     -Prepare：before = { plan, display_ac, display_dc, sleep_ac, sleep_dc }；执行：计划或者值变了、
+#                               都不短 → 跳过；调长，读回来不对就报错
+#   longer-timeouts-undo.ps1    当前计划还是原来那个的，两项都改回原来的值
+#   longer-timeouts-break.ps1   只在测试中使用：插电时 2 分钟关屏幕、5 分钟睡眠
+id: power.longer-timeouts
+schema_version: 1
+title: { zh-CN: 插着电源时，15 分钟不动才关屏幕、30 分钟才睡眠 }
+description:
+  zh-CN: 看文档、看网课、离开一会儿，屏幕就黑了、电脑睡着了？插着电源时改成 15 分钟不动才关屏幕、30 分钟不动才睡眠；本来就更长或者设成「从不」的不动，用电池时的设置也不变。马上生效，能撤销。
+category: power
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/power/longer-timeouts-detect.ps1
+prepare:
+  script: features/power/longer-timeouts-run.ps1
+run:
+  script: features/power/longer-timeouts-run.ps1
+undo:
+  script: features/power/longer-timeouts-undo.ps1
+break:
+  script: features/power/longer-timeouts-break.ps1
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/display-settings-display-idle-timeout
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/sleep-settings-sleep-idle-timeout
+  - https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options

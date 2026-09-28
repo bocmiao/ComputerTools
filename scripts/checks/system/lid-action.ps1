@@ -1,17 +1,18 @@
-# Check: system.power-plan
-# Is the power plan holding the processor back? (See the shared block for
-# what is read.) Read-only. Result codes (in this order):
-#   saver       the Power saver plan is active (fix: power.balanced-plan)
-#   throttled   "Maximum processor state" of the active plan is below 80
-#               percent plugged in, or below 50 percent on battery on a PC
-#               that has a battery (fix: power.processor-full-speed)
-#   efficiency  Windows 11 power mode "Best power efficiency" while plugged
-#               in: ActiveOverlayAcPowerScheme
-#               961cc777-2547-4f9d-8174-7d86181b8a7a (Microsoft, "Customize
-#               the Windows performance power slider"); changed in Settings
-#   ok
-# Facts: plan (saver, balanced, high, ultimate or custom), ac, dc ("Maximum
-# processor state" in percent, '' when unknown), battery (true / false).
+# Check: system.lid-action
+# What closing a laptop's lid does: "Lid close action" (LIDACTION,
+# 5ca83367-6e45-459f-a27b-476b1d01c936 in the power buttons and lid subgroup)
+# of the active plan, plugged in (AC) and on battery (DC): 0 Do nothing,
+# 1 Sleep, 2 Hibernate, 3 Shut down (Microsoft, "Lid switch close action"; see
+# the shared block for how it is read). Only laptops and tablets have a lid:
+# PCSystemType 2 (mobile, also with the battery taken out) or a battery.
+# Read-only. Result codes:
+#   no-lid   not a laptop (status na: power.lid-close-do-nothing, which
+#            verifies with this check, is then not offered)
+#   missing  the setting cannot be read
+#   nothing  plugged in, closing the lid does nothing
+#   acts     plugged in, closing the lid makes it sleep, hibernate or shut
+#            down (fixed by power.lid-close-do-nothing)
+# Facts: ac, dc (the values).
 
 [CmdletBinding()]
 param()
@@ -76,35 +77,15 @@ function Set-PowerSetting {
 }
 # ---- end of shared block power-plan ----
 
-$maxProcessorState = 'bc5038f7-23e0-4960-96da-33abaf5935ec'
-$powerSaverPlan = 'a1841308-3541-4fab-bc81-f71556f20b4a'
-$balancedPlan = '381b4222-f694-41f0-9685-ff5bb260df2e'
-$bestEfficiencyMode = '961cc777-2547-4f9d-8174-7d86181b8a7a'
+$lidAction = '5ca83367-6e45-459f-a27b-476b1d01c936'
 
-$planNames = @{
-    'a1841308-3541-4fab-bc81-f71556f20b4a' = 'saver'
-    '381b4222-f694-41f0-9685-ff5bb260df2e' = 'balanced'
-    '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' = 'high'
-    'e9a42b02-d5df-448d-aa00-03f14749eb61' = 'ultimate'
-}
+$computer = Get-CimInstance -ClassName Win32_ComputerSystem
+$mobile = ([int]$computer.PCSystemType -eq 2) -or (@(Get-CimInstance -ClassName Win32_Battery -ErrorAction SilentlyContinue).Count -gt 0)
 
 $plan = Get-ActivePlan
-$ac = Get-PowerSetting $plan 'AC' $maxProcessorState
-$dc = Get-PowerSetting $plan 'DC' $maxProcessorState
-$battery = @(Get-CimInstance -ClassName 'Win32_Battery' -ErrorAction SilentlyContinue).Count -gt 0
-$overlay = ''
-try {
-    $overlay = ([string](Get-ItemProperty -LiteralPath $powerSchemesKey -Name 'ActiveOverlayAcPowerScheme' -ErrorAction Stop).ActiveOverlayAcPowerScheme).Trim().Trim('{', '}').ToLowerInvariant()
-}
-catch {
-    Write-Verbose 'No power mode (Windows 10, or not the Balanced plan)'
-}
-
-$name = 'custom'
-if ($planNames.ContainsKey($plan)) {
-    $name = $planNames[$plan]
-}
-$facts = [ordered]@{ plan = $name; ac = ''; dc = ''; battery = $battery }
+$ac = Get-PowerSetting $plan 'AC' $lidAction
+$dc = Get-PowerSetting $plan 'DC' $lidAction
+$facts = [ordered]@{ ac = ''; dc = '' }
 if ($null -ne $ac) {
     $facts.ac = $ac
 }
@@ -112,15 +93,15 @@ if ($null -ne $dc) {
     $facts.dc = $dc
 }
 
-$result = 'ok'
-if ($plan -eq $powerSaverPlan) {
-    $result = 'saver'
+$result = 'acts'
+if (-not $mobile) {
+    $result = 'no-lid'
 }
-elseif ((($null -ne $ac) -and ($ac -lt 80)) -or ($battery -and ($null -ne $dc) -and ($dc -lt 50))) {
-    $result = 'throttled'
+elseif ($null -eq $ac) {
+    $result = 'missing'
 }
-elseif (($plan -eq $balancedPlan) -and ($overlay -eq $bestEfficiencyMode)) {
-    $result = 'efficiency'
+elseif ($ac -eq 0) {
+    $result = 'nothing'
 }
 
 [pscustomobject]@{
