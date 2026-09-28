@@ -163,7 +163,8 @@ results:
     message:
       zh-CN: 电脑和路由器之间是通的，也能查到网址。Windows 自带的联网检测被关掉或者改过了（常见于各种「优化」软件），所以它说的「没有网络」不一定准，右下角可能一直显示「无 Internet」。
     next:
-      zh-CN: 网页能正常打开的话，网络本身没问题，只是这个显示不准；不过 Office、应用商店这类软件也会跟着以为没联网。想恢复的话，请懂哥把注册表 HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet 里的 EnableActiveProbing 改回 1、ActiveWebProbeHost 改回 www.msftconnecttest.com，组策略「关闭 Windows 网络连接状态指示器活动测试」改回「未配置」（单位的电脑请找网管）。网页打不开的话，看看小药箱对代理设置的检查结果；酒店、学校的 WiFi 也可能要先在网页上登录。
+      zh-CN: 网页能正常打开的话，网络本身没问题，只是这个显示不准；不过 Office、应用商店这类软件也会跟着以为没联网。小药箱能把联网检测改回 Windows 的默认设置，在「按症状修」里的「显示「无 Internet」，其实能上网」；是组策略关掉的，单位的电脑请找网管。网页打不开的话，看看小药箱对代理设置的检查结果；酒店、学校的 WiFi 也可能要先在网页上登录。
+    links: ["symptom:no-internet-icon", "feature:network.ncsi-defaults"]
   dns-untested:
     status: unknown
     message:

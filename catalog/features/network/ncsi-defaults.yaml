@@ -1,0 +1,145 @@
+# 恢复 Windows 联网检测（网络连接状态指示器 NCSI）的默认设置：HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+# 下的 EnableActiveProbing 和 IPv4、IPv6 两套探测网址、路径、内容，写成微软《NCSI troubleshooting guidance》里 Win10 1607
+# 以后的默认值（和检测 network.ncsi-settings 对照的一样）。只改这 11 个值，别的（超时、被动探测）不动。
+# 组策略 NoActiveProbe 不改（检测只说明）。不写 verify：改好没有按这 11 个值本身看，组策略开着时检测照样报 policy。
+# break_actions（测试用）：关掉主动探测，把网址改成 1607 以前的旧地址（网上教程常这样改）。
+id: network.ncsi-defaults
+schema_version: 1
+title: { zh-CN: 恢复联网检测的默认设置 }
+description:
+  zh-CN: 把 Windows 用来判断「能不能上网」的联网检测改回微软的默认设置。被「优化」软件、网上的教程关掉或改掉以后，明明能上网，右下角也会显示「无 Internet」，Office、应用商店、微软账户也会以为没联网。改完重启电脑，能撤销。
+category: network
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: EnableActiveProbing
+      type: dword
+      value: 1
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbeHost
+      type: string
+      value: "www.msftconnecttest.com"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbePath
+      type: string
+      value: "connecttest.txt"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbeContent
+      type: string
+      value: "Microsoft Connect Test"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveDnsProbeHost
+      type: string
+      value: "dns.msftncsi.com"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveDnsProbeContent
+      type: string
+      value: "131.107.255.255"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbeHostV6
+      type: string
+      value: "ipv6.msftconnecttest.com"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbePathV6
+      type: string
+      value: "connecttest.txt"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbeContentV6
+      type: string
+      value: "Microsoft Connect Test"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveDnsProbeHostV6
+      type: string
+      value: "dns.msftncsi.com"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveDnsProbeContentV6
+      type: string
+      value: "fd3e:4f5a:5b81::1"
+windows_default:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: EnableActiveProbing
+      type: dword
+      value: 1
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbeHost
+      type: string
+      value: "www.msftconnecttest.com"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbePath
+      type: string
+      value: "connecttest.txt"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbeContent
+      type: string
+      value: "Microsoft Connect Test"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveDnsProbeHost
+      type: string
+      value: "dns.msftncsi.com"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveDnsProbeContent
+      type: string
+      value: "131.107.255.255"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbeHostV6
+      type: string
+      value: "ipv6.msftconnecttest.com"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbePathV6
+      type: string
+      value: "connecttest.txt"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbeContentV6
+      type: string
+      value: "Microsoft Connect Test"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveDnsProbeHostV6
+      type: string
+      value: "dns.msftncsi.com"
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveDnsProbeContentV6
+      type: string
+      value: "fd3e:4f5a:5b81::1"
+break_actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: EnableActiveProbing
+      type: dword
+      value: 0
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+      name: ActiveWebProbeHost
+      type: string
+      value: "www.msftncsi.com"
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/troubleshoot-ncsi-guidance
+  - https://learn.microsoft.com/en-us/windows-server/networking/ncsi/ncsi-overview

@@ -1,0 +1,51 @@
+# Windows 自带的联网检测（网络连接状态指示器 NCSI）有没有被关掉、改掉。脚本：scripts/checks/network/ncsi-settings.ps1
+# 默认值见微软《NCSI troubleshooting guidance》（Win10 1607 起）：HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet
+# 下 EnableActiveProbing = 1，探测用的网址、路径、内容 IPv4、IPv6 各一套（脚本里的 $defaults，和修复 network.ncsi-defaults 写的一样）。
+# 微软明确说不要用关闭主动探测来「解决」问题；国内教程常把探测地址改成 1607 以前的 www.msftncsi.com。
+# 组策略「关闭 Windows 网络连接状态指示器活动测试」（Policies\...\NetworkConnectivityStatusIndicator 的 NoActiveProbe = 1）
+# 只检测、说明，不改（策略留给设它的人）。
+# 结果（按这个顺序）：policy（manual）、probe-off（主动探测被关掉）、changed（探测用的网址、内容被改过或者没了）、ok；
+# 整个 Internet 键都没有是 missing（na）。事实：probing（EnableActiveProbing）、changed（不一样的值的名字，不输出值本身：
+# 可能是单位自己的服务器）、policy。
+id: network.ncsi-settings
+schema_version: 1
+title: { zh-CN: Windows 的联网检测 }
+description:
+  zh-CN: 看看 Windows 用来判断「能不能上网」的联网检测有没有被关掉、改掉。被改过以后，明明能上网，右下角也可能一直显示「无 Internet」，Office、应用商店也会以为没联网。
+category: network
+requires_admin: false
+probe:
+  script: checks/network/ncsi-settings.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: Windows 的联网检测是默认设置，没有被改过。 }
+  probe-off:
+    status: advice
+    message:
+      zh-CN: Windows 的联网检测被关掉了（多半是「优化」软件或者网上的教程关的），所以明明能上网，右下角也可能显示「无 Internet」，Office、应用商店、微软账户也会以为没联网。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮把联网检测改回 Windows 的默认设置，改完重启电脑。
+    links: ["feature:network.ncsi-defaults"]
+  changed:
+    status: advice
+    message:
+      zh-CN: "Windows 联网检测用的网址被改过了（多半是网上的「解决无 Internet」教程或者「优化」软件改的），检测可能走不通，右下角会显示「无 Internet」。改过的地方：{changed}。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回 Windows 的默认设置，改完重启电脑。
+    links: ["feature:network.ncsi-defaults"]
+  policy:
+    status: manual
+    message:
+      zh-CN: 组策略「关闭 Windows 网络连接状态指示器活动测试」开着，Windows 不去主动检测能不能上网，右下角显示的「无 Internet」不一定准。单位的电脑常这样设置。
+    fixer: helper
+    next:
+      zh-CN: 单位的电脑请找网管，不要自己改。自己的电脑：专业版在「组策略编辑器」（Win + R 输入 gpedit.msc）里打开「计算机配置 → 管理模板 → 系统 → Internet 通信管理 → Internet 通信设置」，把「关闭 Windows 网络连接状态指示器活动测试」改回「未配置」，再重启电脑；家庭版没有组策略编辑器，多半是「优化」软件改的，请懂哥帮忙。
+  missing:
+    status: na
+    message: { zh-CN: 这台电脑的 Windows 里没有联网检测的设置（可能是被精简过的系统）。 }
+references:
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/troubleshoot-ncsi-guidance
+  - https://learn.microsoft.com/en-us/windows-server/networking/ncsi/ncsi-overview

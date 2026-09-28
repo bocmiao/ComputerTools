@@ -1,12 +1,14 @@
 # WiFi 和飞行模式用到的服务有没有被关掉。脚本：scripts/checks/network/wireless-services.ps1
-# WLAN AutoConfig（WlanSvc，默认「自动」）负责找 WiFi、连 WiFi：它没在运行时，网络列表里没有 WLAN 这一栏，也搜不到任何
-# 无线网络（微软《Wireless LAN Service Overview》）；它依赖 Windows 连接管理器（Wcmsvc，默认「自动（触发启动）」），
-# 后者被禁用时它也起不来。无线电管理服务（RmSvc，默认「手动」，微软的说明是「Radio Management and Airplane Mode
-# Service」）被禁用时，飞行模式的按钮点了没反应或者是灰的。这几个常被「优化」软件和网上的「关闭无用服务」教程关掉。
-# 结果（按这个顺序）：missing（有一个不在：服务器版默认不装 WLAN AutoConfig，或者是被精简过的系统，na）、
-# disabled（WlanSvc 或 Wcmsvc 被禁用）、manual（WlanSvc 被改成「手动」而且没在运行）、radio-disabled（只有 RmSvc 被禁用）、ok。
-# 修复 network.enable-wireless-services 把三个一起改回默认，它的 verify 用这个检测。
-# 事实：wlansvc、wcmsvc、rmsvc（Start 值，不在时为空）、wlansvc_running。
+# WLAN AutoConfig（WlanSvc）负责找 WiFi、连 WiFi：它没在运行时，网络列表里没有 WLAN 这一栏，也搜不到任何无线网络（微软
+# 《Wireless LAN Service Overview》）。它的默认启动方式 Win11 是「自动」，Win10 大多数版本和 Windows Server 2025 是「手动」
+# （要用 WiFi 时由系统拉起来；CI 的 Server 2025 上就是手动），所以「手动」不算问题，只有「禁用」才算。它依赖 Windows 连接管理器
+# （Wcmsvc，默认「自动（触发启动）」），后者被禁用时它也起不来。无线电管理服务（RmSvc，默认「手动」，微软的说明是
+# 「Radio Management and Airplane Mode Service」）被禁用时，飞行模式的按钮点了没反应或者是灰的。
+# 这几个常被「优化」软件和网上的「关闭无用服务」教程关掉。
+# 结果（按这个顺序）：missing（有一个不在：服务器版没装无线局域网服务，或者是被精简过的系统，na）、
+# disabled（WlanSvc 或 Wcmsvc 被禁用）、radio-disabled（只有 RmSvc 被禁用）、ok。
+# 修复 network.enable-wireless-services 把三个一起改好，它的 verify 用这个检测。
+# 事实：wlansvc、wcmsvc、rmsvc（Start 值，不在时为空）。
 id: network.wireless-services
 schema_version: 1
 title: { zh-CN: WiFi 和飞行模式用到的服务 }
@@ -23,18 +25,10 @@ results:
   disabled:
     status: advice
     message:
-      zh-CN: 无线网络服务（WLAN AutoConfig）被禁用了，所以设置里、任务栏右下角都找不到 WiFi，也搜不到无线网络，只剩有线网络。多半是「优化」类软件关的。
+      zh-CN: WiFi 用的系统服务（WLAN AutoConfig，或者它离不开的 Windows 连接管理器）被禁用了，所以设置里、任务栏右下角都找不到 WiFi，也搜不到无线网络，只剩有线网络。多半是「优化」类软件关的。
     fixer: medkit
     next:
       zh-CN: 点下面的按钮恢复，恢复以后重启电脑。
-    links: ["feature:network.enable-wireless-services"]
-  manual:
-    status: advice
-    message:
-      zh-CN: 无线网络服务（WLAN AutoConfig）被改成了「手动」启动，现在没有运行，所以找不到 WiFi，也搜不到无线网络。多半是「优化」类软件改的。
-    fixer: medkit
-    next:
-      zh-CN: 点下面的按钮改回「自动」，改完重启电脑。
     links: ["feature:network.enable-wireless-services"]
   radio-disabled:
     status: advice

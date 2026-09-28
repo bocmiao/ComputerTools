@@ -1,0 +1,62 @@
+# 症状：右下角显示「无 Internet」、小地球，其实能上网。Windows 自己的联网检测（NCSI）没走通：先看网络本身通不通
+# （network.connectivity），再看联网检测有没有被关掉、改掉（network.ncsi-settings → 修复 network.ncsi-defaults；组策略只说明），
+# 再看代理软件、加速器留下的失效代理（network.proxy-dead → 修复 network.proxy-off），最后看 DNS（检测用的网址要查得到）。
+# 微软的排查顺序（《NCSI troubleshooting guidance》）：浏览器打开检测地址、查代理、看 NCSI 日志；不要用关掉主动检测来「解决」。
+# 「上不了网」（network）管的是真的上不了网；这里管的是能上网、只是显示不对（以及跟着它以为没网的 Office、应用商店）。
+id: no-internet-icon
+schema_version: 1
+title: { zh-CN: 显示「无 Internet」，其实能上网 }
+summary:
+  zh-CN: 任务栏右下角的网络图标变成小地球或者带黄色感叹号，说「无 Internet」「无网络访问」，可网页明明能打开；Office、应用商店、微软账户也说没联网。
+keywords:
+  - 无internet
+  - 无 Internet 访问
+  - 无internet访问
+  - 已连接无internet
+  - 无internet但能上网
+  - 显示无网络但能上网
+  - 显示没网但能上网
+  - 有网但显示没网
+  - 能上网但显示无internet
+  - 无法连接到internet
+  - 无网络访问
+  - 小地球
+  - 网络图标小地球
+  - 网络图标变成地球
+  - 网络图标感叹号
+  - 网络图标黄色感叹号
+  - 黄色感叹号
+  - 网络受限
+  - office提示没网
+  - 应用商店提示没网
+  - 微软商店没网
+  - 微软账户登录没网
+  - ncsi
+  - msftconnecttest
+causes:
+  - zh-CN: 开着代理软件、加速器、VPN，或者它们退出时没把系统代理改回去，Windows 的联网检测走不通
+  - zh-CN: Windows 自带的联网检测被「优化」软件或者网上的「解决无 Internet」教程关掉、改掉了
+  - zh-CN: 组策略关掉了联网检测（单位的电脑常见）
+  - zh-CN: 酒店、学校、商场的 WiFi 要先在网页上登录，或者宽带欠费被转到了缴费页面
+  - zh-CN: DNS 有问题，检测用的网址查不到
+maturity: semi
+steps:
+  - check: network.connectivity
+  - check: network.ncsi-settings
+    fixes: [network.ncsi-defaults]
+  - check: network.proxy-dead
+    fixes: [network.proxy-off]
+  - check: network.dns
+guide:
+  zh-CN: |
+    先看上面的检查结果：联网检测被改掉、代理残留的点修复；网络本身有问题的照提示处理。
+
+    其他情况：
+
+    1. 网页、微信都能正常用的话，网络本身没问题，只是这个显示不准。不影响用的可以不管；Office、应用商店、微软账户说没联网的，按下面几步试。
+    2. 关掉代理软件、加速器、VPN（在它的设置里关掉「系统代理」，或者正常退出它），再断开 WiFi 重新连一次。代理软件、加速器开着「TUN 模式」「虚拟网卡模式」时，右下角也可能一直显示小地球，关掉这个模式再看。
+    3. 用浏览器打开 http://www.msftconnecttest.com/connecttest.txt ：页面上只有一行「Microsoft Connect Test」就是正常的；跳到了登录页面，先登录（酒店、学校的 WiFi）；打不开，多半是代理或者防火墙拦住了，按第 2 步处理。
+    4. 断开网络再连一次，或者重启电脑；Windows 在网络变化时才会重新检测。
+    5. 还不行，用 Windows 自带的「网络重置」：Windows 11 在「设置 → 网络和 Internet → 高级网络设置 → 网络重置」，Windows 10 在「设置 → 网络和 Internet → 状态」页的最下面。VPN、代理软件、虚拟机的虚拟网卡要重新装，WiFi 密码要重新输入，做完会重启电脑。
+
+    不要照网上的教程去关掉联网检测或者改注册表里的检测地址：微软明确说不要这样「解决」，改完以后更多软件会以为没联网。
