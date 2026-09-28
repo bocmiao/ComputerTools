@@ -580,11 +580,12 @@ impl Engine {
         self.resolve_key(&r.key)
     }
 
-    /// 带根的键（`HKLM\…`、`HKCU\…`）换成根和子键；HKCU 换成登录用户的。
+    /// 带根的键（`HKLM\…`、`HKCU\…`、`HKU\.DEFAULT\…`）换成根和子键；HKCU 换成登录用户的。
     fn resolve_key(&self, key: &str) -> Result<(RegRoot, String)> {
         let (spec_root, sub) = split_key(key).map_err(Error::Catalog)?;
         let root = match spec_root {
             SpecRoot::Hklm => RegRoot::LocalMachine,
+            SpecRoot::DefaultUser => RegRoot::DefaultUser,
             SpecRoot::Hkcu => match self.platform.interactive_user() {
                 Some(u) if is_sid(&u.sid) => RegRoot::User(u.sid),
                 _ => RegRoot::CurrentUser,
@@ -600,6 +601,7 @@ impl Engine {
                     RegRoot::LocalMachine => "HKLM".to_owned(),
                     RegRoot::CurrentUser => "HKCU（当前账户）".to_owned(),
                     RegRoot::User(_) => "HKCU（登录用户）".to_owned(),
+                    RegRoot::DefaultUser => "HKU\\.DEFAULT（登录界面）".to_owned(),
                 };
                 let name = if name.is_empty() { "（默认值）" } else { name };
                 format!("{root}\\{key} → {name}")

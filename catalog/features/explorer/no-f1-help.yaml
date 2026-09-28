@@ -1,0 +1,33 @@
+# 在桌面、资源管理器里按 F1 不再弹出「获取帮助」（Windows 会打开浏览器，用必应搜「如何在 Windows 中获取帮助」）。
+# 做法照 Sophia Script for Windows（MIT，farag2/Sophia-Script-for-Windows，Windows 10、11 的模块里都一样）的
+# F1HelpPage -Disable：在 HKCU\Software\Classes\Typelib\{8cec5860-07a1-11d9-b15e-000d56bfe6ee}\1.0\0\win64 写一个空字符串的
+# 默认值。这是 Windows 帮助（HelpPane）用的类型库，当前用户这里放一个空路径，F1 就叫不起它了。和「恢复经典右键菜单」一样，
+# 关键是「值为空字符串」，恢复默认（windows_default）删掉这个默认值；撤销时引擎连同新建的空键一起删掉（Sophia 的 Enable
+# 是删掉整个键）。32 位的 Windows 用 win32 这一项，这里没管（Sophia 也只写 win64）。
+# 只管 Windows 自己的帮助：Office、WPS 这些软件里按 F1 打开的是它们自己的帮助，不受影响。
+id: explorer.no-f1-help
+schema_version: 1
+title: { zh-CN: 按 F1 不再弹出「获取帮助」 }
+description:
+  zh-CN: 在桌面、资源管理器里不小心按到 F1，Windows 会打开浏览器搜「如何获取帮助」。关掉以后在这些地方按 F1 就没反应了；Office、WPS 这些软件里按 F1 照样打开它们自己的帮助。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+target: current-user
+actions:
+  - registry:
+      key: 'HKCU\Software\Classes\Typelib\{8cec5860-07a1-11d9-b15e-000d56bfe6ee}\1.0\0\win64'
+      name: ""
+      type: string
+      value: ""
+windows_default:
+  - registry:
+      key: 'HKCU\Software\Classes\Typelib\{8cec5860-07a1-11d9-b15e-000d56bfe6ee}\1.0\0\win64'
+      name: ""
+      delete: true
+undo: auto
+references:
+  - https://github.com/farag2/Sophia-Script-for-Windows/blob/main/src/Sophia_Script_for_Windows_11/Module/Sophia.psm1

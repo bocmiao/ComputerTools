@@ -309,7 +309,11 @@ fn snapshot(p: &WindowsPlatform, f: &Feature) -> Vec<Saved> {
         match a {
             Action::Registry(r) => {
                 let (spec, sub) = split_key(&r.key).unwrap();
-                let root = if spec == SpecRoot::Hkcu { user_root.clone() } else { RegRoot::LocalMachine };
+                let root = match spec {
+                    SpecRoot::Hkcu => user_root.clone(),
+                    SpecRoot::Hklm => RegRoot::LocalMachine,
+                    SpecRoot::DefaultUser => RegRoot::DefaultUser,
+                };
                 let v = p.reg_get(&root, sub, &r.name).unwrap();
                 out.push(Saved::Reg(root, sub.to_owned(), r.name.clone(), v));
             }

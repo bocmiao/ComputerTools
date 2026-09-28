@@ -115,6 +115,7 @@ fn base(root: &RegRoot, key: &str) -> (RegKey, String) {
         RegRoot::LocalMachine => (RegKey::predef(HKEY_LOCAL_MACHINE), key.to_owned()),
         RegRoot::CurrentUser => (RegKey::predef(HKEY_CURRENT_USER), key.to_owned()),
         RegRoot::User(sid) => (RegKey::predef(HKEY_USERS), format!("{sid}\\{key}")),
+        RegRoot::DefaultUser => (RegKey::predef(HKEY_USERS), format!(".DEFAULT\\{key}")),
     }
 }
 

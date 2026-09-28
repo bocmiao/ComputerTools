@@ -162,9 +162,9 @@ references:
 
 **registry 原语**
 
-- `key`：必须以 `HKCU\` 或 `HKLM\` 开头。
+- `key`：必须以 `HKCU\`、`HKLM\` 或 `HKU\.DEFAULT\` 开头。
   - `target: current-user` 时只能用 `HKCU\`。引擎会把它解析成**登录用户**的 `HKU\<SID>\…`，而不是提权后的账户。
-  - `target: machine` 时只能用 `HKLM\`。
+  - `target: machine` 时只能用 `HKLM\` 或 `HKU\.DEFAULT\`。后者是还没有人登录时（登录界面）和系统账户用的那一份用户设置，不属于哪个用户，所以和 HKLM 一样算整台电脑的、要管理员（例如登录界面上 Num Lock 开不开：`HKU\.DEFAULT\Control Panel\Keyboard` 的 `InitialKeyboardIndicators`）。别的用户的 `HKU\<SID>` 一律不能写。
 - `name`：值的名字；`""` 表示默认值。
 - `type`：`dword` / `qword` / `string` / `expand-string` / `multi-string` / `binary`。
 - `value`：

@@ -152,3 +152,40 @@ references: [ "https://example.com" ]
     let e: Vec<String> = catalog::validate(&data, &BTreeSet::new()).into_iter().map(|p| p.message).collect();
     assert!(e.iter().any(|m| m.contains("recommended")), "{e:?}");
 }
+
+/// HKU\.DEFAULT（登录界面用的那一份用户设置）和 HKLM 一样算整台电脑的：target 是 machine 时能写，current-user 不行；
+/// 别的用户的 HKU\<SID> 一律不能写。
+#[test]
+fn the_logon_screen_defaults_are_machine_wide() {
+    let key = r"HKU\.DEFAULT\Control Panel\Keyboard";
+    assert!(errors_for(key, "InitialKeyboardIndicators").is_empty());
+    let yaml = format!(
+        r#"
+id: test.user
+schema_version: 1
+title: {{ zh-CN: 测试 }}
+description: {{ zh-CN: 测试 }}
+category: test
+risk: safe
+level: light
+recommend: optional
+target: current-user
+actions:
+  - registry: {{ key: '{key}', name: X, type: dword, value: 1 }}
+windows_default:
+  - registry: {{ key: '{key}', name: X, delete: true }}
+undo: auto
+references: [ "https://example.com" ]
+"#
+    );
+    let f: Feature = catalog::parse_typed(&yaml).unwrap();
+    let data = CatalogData { features: vec![f], ..Default::default() };
+    let e: Vec<String> = catalog::validate(&data, &BTreeSet::new())
+        .into_iter()
+        .filter(|p| p.severity == Severity::Error)
+        .map(|p| p.message)
+        .collect();
+    assert!(e.iter().any(|m| m.contains("target 和注册表根对不上")), "{e:?}");
+    let other = errors_for(r"HKU\S-1-5-18\Software\MedkitTest", "Flag");
+    assert!(other.iter().any(|m| m.contains("开头")), "{other:?}");
+}

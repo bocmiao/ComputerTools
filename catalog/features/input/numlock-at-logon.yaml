@@ -1,0 +1,38 @@
+# 开机到登录界面时 Num Lock 自动打开，输数字密码、PIN 不用先按一下 Num Lock。
+# HKU\.DEFAULT\Control Panel\Keyboard 的 InitialKeyboardIndicators（字符串）：还没有人登录时（登录界面）用的就是 .DEFAULT 这一份
+# 用户设置。Windows 8 起默认是 "2147483648"（0x80000000），打开 Num Lock 是 "2147483650"（0x80000002，低位的 2 就是 Num Lock）。
+# 值照 Sophia Script for Windows（MIT）的 NumLock -Enable / -Disable；默认值、要重启、「快速启动」可能让它不生效，对照了微软问答
+# 《How do you default NumLock on at startup?》和 Winaero 的教程（微软问答里写的 DWORD 不对，实际是字符串，Sophia、Winaero 都是）。
+# 登录以后用的是各人自己的设置（HKCU 里的同名值，注销时 Windows 会记住当时的状态），这里不改。
+# 有的老笔记本没有独立的小键盘，Num Lock 开着时字母键会打出数字（U I O 变 4 5 6），登录界面上输密码也一样：说明里写清楚，
+# recommend 只是 optional。HKU\.DEFAULT 不属于哪个用户，和 HKLM 一样要管理员、target 是 machine。
+id: input.numlock-at-logon
+schema_version: 1
+title: { zh-CN: 开机以后 Num Lock 自动打开 }
+description:
+  zh-CN: 开机到输入密码的界面时，右边的数字键直接能用，输数字密码、PIN 不用先按一下 Num Lock。改完重启一次生效（开着「快速启动」的要点「重启」，关机再开可能还是老样子）；有的电脑 BIOS 里也有同样的开关。没有独立小键盘的老笔记本别开：开着 Num Lock 时字母键会打出数字，密码就输不对了。
+category: input
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: true
+reboot: reboot
+target: machine
+actions:
+  - registry:
+      key: 'HKU\.DEFAULT\Control Panel\Keyboard'
+      name: InitialKeyboardIndicators
+      type: string
+      value: "2147483650"
+windows_default:
+  - registry:
+      key: 'HKU\.DEFAULT\Control Panel\Keyboard'
+      name: InitialKeyboardIndicators
+      type: string
+      value: "2147483648"
+undo: auto
+references:
+  - https://github.com/farag2/Sophia-Script-for-Windows/blob/main/src/Sophia_Script_for_Windows_11/Module/Sophia.psm1
+  - https://learn.microsoft.com/en-us/answers/questions/4030434/how-do-you-default-numlock-on-at-startup
+  - https://winaero.com/enable-numlock-logon-screen-windows-10/

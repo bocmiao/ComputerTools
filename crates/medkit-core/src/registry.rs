@@ -14,6 +14,8 @@ pub enum RegRoot {
     CurrentUser,
     /// `HKU\<SID>`
     User(String),
+    /// `HKU\.DEFAULT`：登录界面（还没有人登录时）和系统账户用的那一份用户设置，比如登录界面上 Num Lock 开不开
+    DefaultUser,
 }
 
 impl RegRoot {
@@ -21,6 +23,7 @@ impl RegRoot {
         match s {
             "HKLM" => Some(Self::LocalMachine),
             "HKCU" => Some(Self::CurrentUser),
+            "HKU\\.DEFAULT" => Some(Self::DefaultUser),
             _ => {
                 let sid = s.strip_prefix("HKU\\")?;
                 is_sid(sid).then(|| Self::User(sid.to_owned()))
@@ -35,6 +38,7 @@ impl fmt::Display for RegRoot {
             Self::LocalMachine => f.write_str("HKLM"),
             Self::CurrentUser => f.write_str("HKCU"),
             Self::User(sid) => write!(f, "HKU\\{sid}"),
+            Self::DefaultUser => f.write_str("HKU\\.DEFAULT"),
         }
     }
 }
@@ -59,11 +63,12 @@ pub fn is_sid(s: &str) -> bool {
         && s[4..].split('-').all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// 数据文件里写的根：只允许 HKCU 和 HKLM。
+/// 数据文件里写的根：只允许 HKCU、HKLM 和 HKU\.DEFAULT（登录界面用的那一份用户设置，和 HKLM 一样算整台电脑的）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpecRoot {
     Hkcu,
     Hklm,
+    DefaultUser,
 }
 
 /// 把 `HKCU\Software\…` 拆成根和子键。子键不能为空，不能有空段，也不能以 `\` 结尾。
@@ -72,8 +77,10 @@ pub fn split_key(key: &str) -> Result<(SpecRoot, &str), String> {
         (SpecRoot::Hkcu, rest)
     } else if let Some(rest) = key.strip_prefix("HKLM\\") {
         (SpecRoot::Hklm, rest)
+    } else if let Some(rest) = key.strip_prefix("HKU\\.DEFAULT\\") {
+        (SpecRoot::DefaultUser, rest)
     } else {
-        return Err(format!("注册表路径必须以 HKCU\\ 或 HKLM\\ 开头：{key}"));
+        return Err(format!("注册表路径必须以 HKCU\\、HKLM\\ 或 HKU\\.DEFAULT\\ 开头：{key}"));
     };
     if rest.is_empty() || rest.split('\\').any(str::is_empty) {
         return Err(format!("注册表路径格式不对：{key}"));
@@ -227,15 +234,22 @@ mod tests {
         assert!(split_key(r"HKLM\").is_err());
         assert!(split_key(r"HKLM\A\\B").is_err());
         assert!(split_key(r"HKLM\A\").is_err());
+        let (root, sub) = split_key(r"HKU\.DEFAULT\Control Panel\Keyboard").unwrap();
+        assert_eq!((root, sub), (SpecRoot::DefaultUser, r"Control Panel\Keyboard"));
+        // 别的用户的配置单元、HKU 本身都不能写
+        assert!(split_key(r"HKU\S-1-5-18\Software").is_err());
+        assert!(split_key(r"HKU\.DEFAULT").is_err());
+        assert!(split_key(r"HKU\.DEFAULTX\Software").is_err());
     }
 
     #[test]
     fn roots_round_trip() {
-        for s in ["HKLM", "HKCU", r"HKU\S-1-5-21-111-222-333-1001"] {
+        for s in ["HKLM", "HKCU", r"HKU\S-1-5-21-111-222-333-1001", r"HKU\.DEFAULT"] {
             assert_eq!(RegRoot::parse(s).unwrap().to_string(), s);
         }
+        assert_eq!(RegRoot::parse(r"HKU\.DEFAULT"), Some(RegRoot::DefaultUser));
         assert!(RegRoot::parse(r"HKU\S-1-5-21-1\..\x").is_none());
-        assert!(RegRoot::parse(r"HKU\.DEFAULT").is_none());
+        assert!(RegRoot::parse(r"HKU\.default").is_none());
     }
 
     #[test]

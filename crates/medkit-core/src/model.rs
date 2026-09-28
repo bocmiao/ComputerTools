@@ -328,7 +328,7 @@ pub enum Action {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RegistryAction {
-    /// 以 `HKCU\` 或 `HKLM\` 开头
+    /// 以 `HKCU\`、`HKLM\` 或 `HKU\.DEFAULT\`（登录界面用的那一份用户设置，target 要写 machine）开头
     pub key: String,
     /// 值的名字，`""` 表示默认值
     #[serde(default)]

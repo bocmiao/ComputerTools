@@ -647,12 +647,12 @@ impl Validator<'_> {
     fn registry_action(&mut self, file: &str, target: Target, r: &RegistryAction, at: &str) {
         match split_key(&r.key) {
             Ok((root, _)) => {
-                let expected = match target {
-                    Target::CurrentUser => SpecRoot::Hkcu,
-                    Target::Machine => SpecRoot::Hklm,
+                // HKU\.DEFAULT（登录界面用的那一份用户设置）不属于哪个用户，和 HKLM 一样算整台电脑的
+                let (fits, want) = match target {
+                    Target::CurrentUser => (root == SpecRoot::Hkcu, "HKCU\\"),
+                    Target::Machine => (root != SpecRoot::Hkcu, "HKLM\\ 或 HKU\\.DEFAULT\\"),
                 };
-                if root != expected {
-                    let want = if expected == SpecRoot::Hkcu { "HKCU\\" } else { "HKLM\\" };
+                if !fits {
                     self.err(file, format!("{at}：target 和注册表根对不上，这个功能只能写 {want}"));
                 }
             }

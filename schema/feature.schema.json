@@ -283,7 +283,7 @@
           "default": false
         },
         "key": {
-          "description": "以 `HKCU\\` 或 `HKLM\\` 开头",
+          "description": "以 `HKCU\\`、`HKLM\\` 或 `HKU\\.DEFAULT\\`（登录界面用的那一份用户设置，target 要写 machine）开头",
           "type": "string"
         },
         "name": {
