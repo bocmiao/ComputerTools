@@ -11,11 +11,16 @@
 # The recognizer takes pictures up to MaxImageDimension pixels on a side
 # (10000 on Windows Server 2025). Wider pictures are scaled down to that
 # width. Taller ones (long screenshots) are read in pieces of at most 4000
-# pixels that overlap by a strip: in 10000-pixel pieces the recognizer lost
-# the first letters of words and whole words (a test on Windows found it). A
-# line belongs to the piece where its middle lies outside the overlap, so
-# every line is read once and none is cut in half. At most 30 pieces are read
-# (truncated).
+# pixels that overlap by 400: in 10000-pixel pieces the recognizer lost the
+# first letters of words and whole words (a test on Windows found it). A
+# piece keeps the lines whose middle lies in its own part of the picture or
+# at most a quarter of the overlap into a strip it shares, so a line cut by
+# a piece's edge is left to the piece that sees it whole. A line the piece
+# before already kept (on the same row: middles closer than half the taller
+# line or 8 pixels, and overlapping from left to right) is not kept again.
+# The same line comes out a few pixels higher or lower in different pieces,
+# so one strict cut through the strip lost or doubled lines lying on it (a
+# test on Windows found that too). At most 30 pieces are read (truncated).
 # Output: result = ok / no-language (no recognizer installed) / unsupported
 #   (no Windows OCR here) / bad-image (Windows cannot read the picture);
 #   language (the tag used), languages (every installed tag), lines (top to
@@ -163,9 +168,12 @@ try {
     $scaledHeight = [int][Math]::Max(1, [Math]::Floor($height * $scale))
     $pieceMax = [int][Math]::Max(1000, [Math]::Min($max, $PieceHeight))
     $overlap = [int][Math]::Min(400, [Math]::Floor($pieceMax / 4))
+    $margin = [int][Math]::Floor($overlap / 4)
 
     $lines = New-Object System.Collections.Generic.List[object]
     $traced = New-Object System.Collections.Generic.List[object]
+    # Where the lines kept from the piece before are (whole picture's pixels).
+    $before = @()
     $top = 0
     $pieces = 0
     $truncated = $false
@@ -211,21 +219,24 @@ try {
         }
         $pieces++
 
-        # Lines whose middle is in the strip shared with the piece before or
-        # after belong to that piece.
+        # This piece's part: from the middle of the strip shared with the
+        # piece before to the middle of the one shared with the piece after,
+        # and a margin further into each strip.
         $keepFrom = [double]::MinValue
         if ($top -gt 0) {
-            $keepFrom = $overlap / 2
+            $keepFrom = ($overlap / 2) - $margin
         }
         $keepTo = [double]::MaxValue
         if (-not $last) {
-            $keepTo = $pieceHeight - ($overlap / 2)
+            $keepTo = $pieceHeight - ($overlap / 2) + $margin
         }
+        $kept = New-Object System.Collections.Generic.List[object]
         foreach ($line in $recognized.Lines) {
             $words = New-Object System.Collections.Generic.List[string]
             $lineTop = [double]::MaxValue
             $lineBottom = [double]::MinValue
             $lineLeft = [double]::MaxValue
+            $lineRight = [double]::MinValue
             foreach ($word in $line.Words) {
                 $text = [string]$word.Text
                 if ($text.Length -eq 0) {
@@ -236,26 +247,50 @@ try {
                 $lineTop = [Math]::Min($lineTop, [double]$rect.Y)
                 $lineBottom = [Math]::Max($lineBottom, [double]$rect.Y + [double]$rect.Height)
                 $lineLeft = [Math]::Min($lineLeft, [double]$rect.X)
+                $lineRight = [Math]::Max($lineRight, [double]$rect.X + [double]$rect.Width)
             }
             if ($words.Count -eq 0) {
                 continue
             }
             $middle = ($lineTop + $lineBottom) / 2
-            $keep = (($middle -ge $keepFrom) -and ($middle -lt $keepTo))
+            $place = [pscustomobject]@{
+                middle = $top + $middle
+                half   = ($lineBottom - $lineTop) / 2
+                left   = $lineLeft
+                right  = $lineRight
+            }
+            $why = ''
+            if (($middle -lt $keepFrom) -or ($middle -ge $keepTo)) {
+                $why = 'outside'
+            }
+            else {
+                foreach ($seen in $before) {
+                    $near = [Math]::Max([double]8, [Math]::Max($seen.half, $place.half))
+                    if (([Math]::Abs($seen.middle - $place.middle) -le $near) -and
+                        ($seen.left -lt $place.right) -and ($place.left -lt $seen.right)) {
+                        $why = 'read-before'
+                        break
+                    }
+                }
+            }
             if ($null -ne $pieceTrace) {
                 $pieceTrace.lines.Add([pscustomobject]@{
                         text   = ($words.ToArray() -join ' ')
                         left   = [int]$lineLeft
+                        right  = [int]$lineRight
                         top    = [int]$lineTop
                         bottom = [int]$lineBottom
-                        kept   = $keep
+                        kept   = ($why.Length -eq 0)
+                        why    = $why
                     })
             }
-            if (-not $keep) {
+            if ($why.Length -gt 0) {
                 continue
             }
             $lines.Add([pscustomobject]@{ words = [string[]]$words.ToArray() })
+            $kept.Add($place)
         }
+        $before = $kept.ToArray()
 
         if ($last) {
             break

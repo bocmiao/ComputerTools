@@ -1582,26 +1582,37 @@ fn ocr_reads_the_text_in_a_picture() {
 }
 
 /// 长图分块认：比一块高的图片，脚本分成几块（每块最多 4000 像素，也不超过文字识别能认的大小）、块和块之间重叠一段来认。
-/// 在第一块和第二块、第二块和第三块的交界附近放几行字（只在第一块里的、在重叠的那段里的、跨过分给哪一块的那条线的、
-/// 被第一块的下边切开的、只在第二块里的），每一行都要认出来、而且只出现一次。这台机器认不了字时只提示。
-/// 没通过时打出脚本的分块记录（每一块认出来的每一行、在哪、算不算这一块的），再用 10000 像素一块认一次对照。
+/// 在第一块和第二块、第二块和第三块的交界附近放几行字（只在第一块里的、在重叠的那段里的、中间正好在分界线上的、
+/// 两块都要的、被第一块的下边切开的、只在第二块里的），每一行都要认出来、而且只出现一次。这台机器认不了字时只提示。
+/// 没通过时打出脚本的分块记录（每一块认出来的每一行、在哪、要不要、不要的原因），再用 10000 像素一块认一次对照。
 #[test]
 fn ocr_reads_tall_pictures_in_pieces_without_losing_or_repeating_lines() {
     let Some(max) = ocr_max_dimension().filter(|m| *m >= 2000) else {
         println!("::notice title=ocr::这台 CI 机器上没有 Windows 的文字识别，跳过长图测试");
         return;
     };
-    // 和脚本一样：一块最多 min(max, 4000)，重叠 min(400, 一块 / 4)；一行字的中间在「下一块的上边 + 重叠的一半」以上的算上一块
+    // 和脚本一样：一块最多 min(max, 4000)，重叠 min(400, 一块 / 4)。相邻两块的分界线在重叠的正中间，一块认到分界线再往
+    // 重叠里多四分之一个重叠；前一块认过的同一行，后一块不再要。字的上边大约在给的位置往下 10 像素，大约 40 像素高。
     let piece = max.min(4000);
     let overlap = 400.min(piece / 4);
+    let first = piece - overlap / 2;
+    let second = 2 * piece - overlap - overlap / 2;
     let words = [
+        // 只在第一块里
         ("ALPHA", piece - overlap - 150),
+        // 离第二块的上边很近：第二块也看得到整行，但不在它那部分里
         ("BRAVO", piece - overlap + 20),
-        ("CHARLIE", piece - overlap / 2 - 30),
-        ("DELTA", piece - 40),
-        ("ECHO", piece + 120),
-        // 第二块和第三块之间分给哪一块的那条线
-        ("FOXTROT", 2 * piece - overlap - overlap / 2 - 30),
+        // 中间正好在分界线上
+        ("CHARLIE", first - 30),
+        // 两块都要，后一块的算重复
+        ("DELTA", first + 40),
+        // 被第一块的下边切开
+        ("ECHO", piece - 40),
+        // 只在第二块里
+        ("FOXTROT", piece + 120),
+        // 中间正好在第二条分界线上：Windows 上两块认出来的位置差了 11 像素，原来只按分界线分，这一行认了两次
+        ("GOLF", second - 30),
+        ("HOTEL", second + 60),
     ];
     let dir = tempfile::tempdir().unwrap();
     let (engine, _bundle, _platform) = real_engine(dir.path());
