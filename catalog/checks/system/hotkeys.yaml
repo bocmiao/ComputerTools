@@ -1,11 +1,12 @@
 # 常用的快捷键有没有被别的程序占着。内置检测（Rust 实现，见 crates/medkit-core/src/builtin.rs 的 hotkeys 和 platform/windows.rs）：
-# 照 heathhenley/windows_hotkey_checker（MIT）的办法，把 Ctrl、Alt、Shift 的 7 种组合配上字母、数字、F1～F12、方向键，再加上单独
-# 按的 F1～F11，一共 375 个，挨个用 RegisterHotKey 登记一次：登记不上、报 ERROR_HOTKEY_ALREADY_REGISTERED（1409）的，就是被别的
+# 照 heathhenley/windows_hotkey_checker（MIT）的办法，把 Ctrl、Alt、Shift 的 7 种组合配上字母、数字、F1～F11、方向键（Alt + F4 除外），
+# 再加上单独按的 F1～F11，一共 367 个，挨个用 RegisterHotKey 登记一次：登记不上、报 ERROR_HOTKEY_ALREADY_REGISTERED（1409）的，就是被别的
 # 程序登记成了全局快捷键（按下去只有它收得到，在别的软件里就「没反应」）；登记上的马上注销，不留下改动。看不出是哪个程序占的，
 # 常见软件的默认快捷键写在括号里当线索（只写查证过的：QQ 截图 Ctrl + Alt + A、微信截图 Alt + A 和「显示微信窗口」Ctrl + Alt + W、
-# 钉钉截图 Ctrl + Shift + A、Snipaste 的 F1 和 F3、英特尔显卡的 Ctrl + Alt + 方向键和 Ctrl + Alt + F12、NVIDIA 的 Alt + Z）。
-# 不试：带 Win 键的（归操作系统用）、单独的 F12（微软：留给调试器）、Print Screen 和 Tab、Esc 这些系统自己处理的键；用低级键盘钩子
-# 截按键的程序也看不出来。
+# 钉钉截图 Ctrl + Shift + A、Snipaste 的 F1 和 F3、英特尔显卡的 Ctrl + Alt + 方向键、NVIDIA 的 Alt + Z）。
+# 不试：带 Win 键的（归操作系统用）；F12，单独按和带修饰键的都不试（微软：留给调试器；CI 154 的机器上 Shift + F12 就登记不上）；
+# Alt + F4（Windows 自己关窗口的快捷键，CI 154 的 Windows Server 上登记不上，不知道是谁占的，不能说成被别的程序占着）；
+# Print Screen 和 Tab、Esc 这些系统自己处理的键。用低级键盘钩子截按键的程序也看不出来。
 # 结果：taken（有被占着的）、ok。事实：taken（被占着的，用「、」隔开）、taken_count、checked（试了几个）。
 id: system.hotkeys
 schema_version: 1

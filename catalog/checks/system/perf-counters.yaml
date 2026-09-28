@@ -3,10 +3,14 @@
 # 关掉的地方有两处（值叫「Disable Performance Counters」，中间有空格；微软较新的排错文章写成 DisablePerformanceCounters，
 # 两种写法都看）：HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Perflib 下的是总开关，默认 0，1 是关掉整个系统的
 # （V1）计数器（微软《Using the Registry Functions to Consume Counter Data》）；每个服务的 Performance 键下的应该是 0
-# （1 是关掉，2 是关掉 32 位的，4 是关掉 64 位的，微软《Manually rebuild performance counters》）。重建（lodctr /R）要用
-# System32 下的 PerfStringBackup.INI。
-# 结果（按这个顺序）：disabled（有计数器被关掉，一键处理「重建性能计数器」会打开它们）、no-backup（PerfStringBackup.INI
-# 不见了，重建不了）、ok。事实：disabled（总开关写 Perflib，其余是服务名，用「、」隔开）、disabled_count。
+# （1 是关掉，2 是关掉 32 位的，4 是关掉 64 位的，微软《Manually rebuild performance counters》）。
+# 性能库（Perflib）发现哪个服务的计数器 DLL 出严重错误时，会自己把它的开关设成 1（微软《Disable Performance Counters
+# Entry》），所以别的软件、服务有几组被关掉很常见（CI 154 的 Windows Server 上就有 ASP.NET_2.0.50727、Dnscache、NetBT），
+# 和「性能」页没关系；只有总开关和系统自己的基本计数器（PerfOS：处理器、内存、系统；PerfProc：进程；PerfDisk：硬盘；
+# PerfNet、Tcpip：网络）被关掉才会让图表空掉。重建（lodctr /R）要用 System32 下的 PerfStringBackup.INI。
+# 结果（按这个顺序）：disabled（总开关或者基本计数器被关掉，一键处理「重建性能计数器」会打开它们）、no-backup
+# （PerfStringBackup.INI 不见了，重建不了）、others（只有别的软件、服务的计数器被关掉，算正常）、ok。
+# 事实：disabled（总开关写 Perflib，其余是服务名）、disabled_count、others、others_count，名字用「、」隔开。
 id: system.perf-counters
 schema_version: 1
 title: { zh-CN: 性能计数器 }
@@ -26,10 +30,15 @@ results:
   disabled:
     status: advice
     message:
-      zh-CN: 有 {disabled_count} 处性能计数器被关掉了（{disabled}），任务管理器的「性能」页、资源监视器会显示不出来、一直 0%。多半是「优化」软件关的。
+      zh-CN: 系统自己的基本性能计数器被关掉了（{disabled}），任务管理器的「性能」页、资源监视器会显示不出来、一直 0%。可能是「优化」软件关的，也可能是 Windows 发现它们出错自动关的。
     fixer: user
     next:
       zh-CN: 点下面的「重建性能计数器」，它会把这些计数器重新打开、再重建一遍，做完重启电脑。
+    links: ["tool:system.perf-counters-rebuild"]
+  others:
+    status: ok
+    message:
+      zh-CN: 系统自己的基本性能计数器都开着。有 {others_count} 组别的软件、服务的计数器被关掉了（{others}），一般是 Windows 发现它们出错自动关的，和任务管理器的「性能」页没关系。「性能」页还是空的、一直 0% 的，可以点「重建性能计数器」重建一次。
     links: ["tool:system.perf-counters-rebuild"]
   no-backup:
     status: advice
@@ -42,3 +51,4 @@ results:
 references:
   - https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/manually-rebuild-performance-counters
   - https://learn.microsoft.com/en-us/windows/win32/perfctrs/using-the-registry-functions-to-consume-counter-data
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc737243(v=ws.10)

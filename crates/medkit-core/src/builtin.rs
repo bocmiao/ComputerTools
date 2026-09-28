@@ -172,6 +172,7 @@ fn mouse_settings(m: &MouseSettings) -> Value {
 
 const VK_F1: u32 = 0x70;
 const VK_F3: u32 = 0x72;
+const VK_F4: u32 = 0x73;
 const VK_F11: u32 = 0x7A;
 const VK_F12: u32 = 0x7B;
 const VK_LEFT: u32 = 0x25;
@@ -179,9 +180,12 @@ const VK_UP: u32 = 0x26;
 const VK_RIGHT: u32 = 0x27;
 const VK_DOWN: u32 = 0x28;
 
-/// 要试的全局快捷键：Ctrl、Alt、Shift 的每一种组合（7 种）配上字母、数字、F1～F12、四个方向键，再加上单独按的
-/// F1～F11，一共 375 个。照 heathhenley/windows_hotkey_checker（MIT）的枚举。不试的：带 Win 键的（微软：
-/// 归操作系统用）、单独的 F12（微软 RegisterHotKey：一直留给调试器）、Print Screen 和 Tab、Esc 这些系统自己处理的键。
+/// 要试的全局快捷键：Ctrl、Alt、Shift 的每一种组合（7 种）配上字母、数字、F1～F11、四个方向键（Alt + F4 除外），再加上
+/// 单独按的 F1～F11，一共 367 个。照 heathhenley/windows_hotkey_checker（MIT）的枚举。不试的：
+/// - 带 Win 键的（微软：归操作系统用）；
+/// - F12，单独按和带修饰键的都不试（微软 RegisterHotKey：F12 一直留给调试器；CI 154 的机器上 Shift + F12 就登记不上）；
+/// - Alt + F4（Windows 自己关窗口的快捷键；CI 154 的 Windows Server 上登记不上，不知道是谁占的，不能说成「被别的程序占着」）；
+/// - Print Screen 和 Tab、Esc 这些系统自己处理的键。
 fn hotkey_candidates() -> Vec<Hotkey> {
     const MODIFIERS: [u32; 7] = [
         Hotkey::CONTROL,
@@ -194,11 +198,15 @@ fn hotkey_candidates() -> Vec<Hotkey> {
     ];
     let keys: Vec<u32> = (u32::from(b'A')..=u32::from(b'Z'))
         .chain(u32::from(b'0')..=u32::from(b'9'))
-        .chain(VK_F1..=VK_F12)
+        .chain(VK_F1..=VK_F11)
         .chain([VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN])
         .collect();
-    let mut out: Vec<Hotkey> =
-        MODIFIERS.iter().flat_map(|&modifiers| keys.iter().map(move |&vk| Hotkey { modifiers, vk })).collect();
+    let alt_f4 = Hotkey { modifiers: Hotkey::ALT, vk: VK_F4 };
+    let mut out: Vec<Hotkey> = MODIFIERS
+        .iter()
+        .flat_map(|&modifiers| keys.iter().map(move |&vk| Hotkey { modifiers, vk }))
+        .filter(|&h| h != alt_f4)
+        .collect();
     out.extend((VK_F1..=VK_F11).map(|vk| Hotkey { modifiers: 0, vk }));
     out
 }
@@ -232,7 +240,6 @@ fn hotkey_hint(h: Hotkey) -> Option<&'static str> {
         (0, VK_F1) => Some("Snipaste 截图默认用的"),
         (0, VK_F3) => Some("Snipaste 贴图默认用的"),
         (CTRL_ALT, VK_LEFT | VK_UP | VK_RIGHT | VK_DOWN) => Some("英特尔显卡旋转屏幕的快捷键"),
-        (CTRL_ALT, VK_F12) => Some("英特尔显卡控制面板的快捷键"),
         (Hotkey::ALT, 0x5A) => Some("NVIDIA 游戏内覆盖默认用的"),
         _ => None,
     }
@@ -704,13 +711,15 @@ mod tests {
     #[test]
     fn hotkeys_are_tried_without_win_or_a_lone_f12_and_written_the_usual_way() {
         let all = hotkey_candidates();
-        assert_eq!(all.len(), 7 * (26 + 10 + 12 + 4) + 11);
+        assert_eq!(all.len(), 7 * (26 + 10 + 11 + 4) - 1 + 11);
         let unique: std::collections::HashSet<Hotkey> = all.iter().copied().collect();
         assert_eq!(unique.len(), all.len(), "不能重复");
         let ctrl_alt = Hotkey::CONTROL | Hotkey::ALT;
         assert!(all.contains(&Hotkey { modifiers: ctrl_alt, vk: u32::from(b'A') }));
         assert!(all.contains(&Hotkey { modifiers: 0, vk: VK_F1 }));
-        assert!(!all.contains(&Hotkey { modifiers: 0, vk: VK_F12 }), "单独的 F12 留给调试器");
+        assert!(all.iter().all(|h| h.vk != VK_F12), "F12 留给调试器，带修饰键的也不试");
+        assert!(!all.contains(&Hotkey { modifiers: Hotkey::ALT, vk: VK_F4 }), "Alt + F4 是 Windows 自己关窗口的");
+        assert!(all.contains(&Hotkey { modifiers: Hotkey::CONTROL, vk: VK_F4 }));
         assert!(all.iter().all(|h| h.modifiers & !(Hotkey::CONTROL | Hotkey::ALT | Hotkey::SHIFT) == 0), "不试 Win 键");
         assert!(
             all.iter().filter(|h| h.modifiers == 0).all(|h| (VK_F1..=VK_F11).contains(&h.vk)),
@@ -727,7 +736,7 @@ mod tests {
         let v = hotkeys(&[], all.len());
         assert_eq!(v["result"], "ok");
         assert_eq!(v["facts"]["taken"], "");
-        assert_eq!(v["facts"]["checked"], 375);
+        assert_eq!(v["facts"]["checked"], 367);
         let v = hotkeys(
             &[
                 Hotkey { modifiers: ctrl_alt, vk: u32::from(b'A') },

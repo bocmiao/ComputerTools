@@ -1226,18 +1226,18 @@ const CHECKS: Record<string, MockCheck> = {
           resultCode: 'ok',
           message: '没有被关掉的性能计数器。任务管理器的「性能」页还是空的、一直 0% 的，可以点「重建性能计数器」重建一次。',
           links: ['tool:system.perf-counters-rebuild'],
-          facts: { disabled: '', disabled_count: 0 },
+          facts: { disabled: '', disabled_count: 0, others: '', others_count: 0 },
         }
       }
       // 说法和 catalog/checks/system/perf-counters.yaml 一样
       return {
         status: 'advice',
         resultCode: 'disabled',
-        message: '有 2 处性能计数器被关掉了（PerfOS、PerfProc），任务管理器的「性能」页、资源监视器会显示不出来、一直 0%。多半是「优化」软件关的。',
+        message: '系统自己的基本性能计数器被关掉了（PerfOS、PerfProc），任务管理器的「性能」页、资源监视器会显示不出来、一直 0%。可能是「优化」软件关的，也可能是 Windows 发现它们出错自动关的。',
         fixer: 'user',
         next: '点下面的「重建性能计数器」，它会把这些计数器重新打开、再重建一遍，做完重启电脑。',
         links: ['tool:system.perf-counters-rebuild'],
-        facts: { disabled: 'PerfOS、PerfProc', disabled_count: 2 },
+        facts: { disabled: 'PerfOS、PerfProc', disabled_count: 2, others: '', others_count: 0 },
       }
     },
   },
@@ -1248,8 +1248,8 @@ const CHECKS: Record<string, MockCheck> = {
         return {
           status: 'ok',
           resultCode: 'ok',
-          message: '试了 375 个常用的 Ctrl、Alt、Shift 组合键和 F1～F11，都没有被别的程序占着。',
-          facts: { taken: '', taken_count: 0, checked: 375 },
+          message: '试了 367 个常用的 Ctrl、Alt、Shift 组合键和 F1～F11，都没有被别的程序占着。',
+          facts: { taken: '', taken_count: 0, checked: 367 },
         }
       }
       // 说法和 catalog/checks/system/hotkeys.yaml 一样
@@ -1259,7 +1259,7 @@ const CHECKS: Record<string, MockCheck> = {
         message: '这 3 个快捷键被别的程序登记成了全局快捷键：Ctrl + Alt + A（QQ 截图默认用的）、Alt + A（微信截图默认用的）、Ctrl + Alt + ↓（英特尔显卡旋转屏幕的快捷键）。按下去只有占着它的程序收得到，在别的软件里按就没反应，或者弹出来的是那个程序。',
         fixer: 'user',
         next: '你按了没反应的快捷键在上面的话，到占着它的软件的「设置 → 快捷键（热键）」里改掉或者关掉它（括号里写的是常见软件的默认快捷键，只是线索）。不知道是哪个软件的：把开着的软件一个一个退出（右下角托盘里的也算），每退出一个就点「重新检查」，哪个退出以后这一项没了就是它。英特尔显卡的 Ctrl + Alt + 方向键在英特尔显卡的控制面板（英特尔显卡控制中心）里关掉「热键」。',
-        facts: { taken: 'Ctrl + Alt + A（QQ 截图默认用的）、Alt + A（微信截图默认用的）、Ctrl + Alt + ↓（英特尔显卡旋转屏幕的快捷键）', taken_count: 3, checked: 375 },
+        facts: { taken: 'Ctrl + Alt + A（QQ 截图默认用的）、Alt + A（微信截图默认用的）、Ctrl + Alt + ↓（英特尔显卡旋转屏幕的快捷键）', taken_count: 3, checked: 367 },
       }
     },
   },

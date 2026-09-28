@@ -410,7 +410,7 @@ const NOT_RUN_FOR_REAL: &[&str] = &["system.edge-repair"];
 /// （CI 机器上有桌面，Winlogon 会把它拉起来）。表格里不能有没定义的文字，也不能出现电脑名、用户名。
 /// 遮住的值（WiFi 密码）不打印。
 #[test]
-#[ignore = "会重启资源管理器、刷新 DNS 缓存"]
+#[ignore = "会重启资源管理器、刷新 DNS 缓存、重建性能计数器"]
 fn every_tool_runs_cleanly_on_windows_powershell() {
     let _update = update_lock();
     let _desktop = desktop_lock();
