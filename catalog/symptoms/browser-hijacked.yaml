@@ -41,9 +41,10 @@ steps:
     fixes: [security.browser-shortcuts-clean]
   - check: network.hosts
     fixes: [network.hosts-cleanup]
+  - check: security.default-browser
 guide:
   zh-CN: |
-    先看上面的检查结果：浏览器快捷方式后面被加了网址的，点「去掉浏览器快捷方式后面被加的网址」，只去掉网址，能撤销。改完以后，从桌面、任务栏打开浏览器就不会再先打开导航网站了。
+    先看上面的检查结果：浏览器快捷方式后面被加了网址的，点「去掉浏览器快捷方式后面被加的网址」，只去掉网址，能撤销。改完以后，从桌面、任务栏打开浏览器就不会再先打开导航网站了。上面说默认浏览器不是你平时用的那个（被改成了别的浏览器）的，点下面的「默认应用」改回来。
 
     然后把改它的软件找出来，不然过些天又会被改回去：
 
@@ -53,4 +54,4 @@ guide:
     4. 用 Windows 安全中心全盘扫描一次（「设置 → 隐私和安全性 → Windows 安全中心 → 病毒和威胁防护 → 扫描选项 → 完全扫描」）。
 
     浏览器设置里写着「由你的组织管理」、主页那一项是灰的改不了：是有软件用策略锁住了主页。单位、学校的电脑是正常的，找管理员；自己的电脑请懂哥帮忙看看。
-links: ["tool:system.installed-programs"]
+links: ["tool:system.installed-programs", "tool:settings.default-apps"]

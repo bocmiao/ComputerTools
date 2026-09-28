@@ -1137,6 +1137,17 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'security.default-browser': {
+    title: '默认浏览器',
+    evaluate: () => ({
+      status: 'ok',
+      resultCode: 'found',
+      message: '点网页链接时用的是 Google Chrome（默认浏览器）。',
+      next: '不是你平时用的那个（比如装别的软件时被悄悄改成了别的浏览器），点下面的「默认应用」改回来。',
+      links: ['tool:settings.default-apps'],
+      facts: { name: 'Google Chrome', file: 'chrome.exe' },
+    }),
+  },
   'system.taskbar-flashing': {
     title: '任务栏闪烁提醒',
     evaluate: () => {

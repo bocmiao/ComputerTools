@@ -1,0 +1,45 @@
+# 点网页链接时用哪个浏览器（登录用户的默认浏览器）。脚本：scripts/checks/security/default-browser.ps1（-UserHive），只读不改：
+# 默认应用只能由用户在「设置」里改（Windows 用 UserChoice 的哈希、UCPD 驱动保护它）。
+# 读 Shell\Associations\UrlAssociations 下 https（再 http）的选择：Windows 11 25H2 起「设置」写到 UserChoiceLatest\ProgId
+# （子键 ProgId 里的值 ProgId，哈希是 UserChoiceLatest 的值，照 SetUserFTA 作者 Kolbicz 的博客），不再同步旧的 UserChoice，
+# 所以先读 UserChoiceLatest，再读 UserChoice。名字从 ProgId 的 Application\ApplicationName、shell\open\command 里程序的产品名
+# 或文件名来，只报名字和文件名，不报路径（程序的文件夹里可能有用户名）。命令里只有程序名、或者路径里有 %LOCALAPPDATA% 这类
+# 变量的（管理员身份下会展开成别的账户），不拿来判断程序在不在。
+# 结果：unset（没选过，由 Windows 决定）、found、missing（选的程序已经不在了，多半是卸载了）。事实：name、file。
+# 不在体检里：只在症状「浏览器主页被改了」里查。
+id: security.default-browser
+schema_version: 1
+title: { zh-CN: 默认浏览器 }
+description:
+  zh-CN: 看看点网页链接时用的是哪个浏览器。装软件时被悄悄改成别的浏览器、原来的浏览器卸载了以后链接打不开，都能从这里看出来。
+category: security
+requires_admin: false
+user_hive: true
+probe:
+  script: checks/security/default-browser.ps1
+results:
+  found:
+    status: ok
+    message:
+      zh-CN: "点网页链接时用的是 {name}（默认浏览器）。"
+    next:
+      zh-CN: 不是你平时用的那个（比如装别的软件时被悄悄改成了别的浏览器），点下面的「默认应用」改回来：Windows 11 在列表里点你常用的浏览器，再点「设为默认值」；Windows 10 点「Web 浏览器」下面的图标换一个。
+    links: ["tool:settings.default-apps"]
+  unset:
+    status: ok
+    message:
+      zh-CN: 没有单独选过默认浏览器，点网页链接时由 Windows 决定用哪个（一般是 Microsoft Edge）。
+    next:
+      zh-CN: 想换成你常用的浏览器，点下面的「默认应用」。
+    links: ["tool:settings.default-apps"]
+  missing:
+    status: advice
+    message:
+      zh-CN: 默认浏览器登记的那个程序已经找不到了（多半是卸载了），点网页链接时可能打不开，或者弹出「你要如何打开」。
+    next:
+      zh-CN: 点下面的「默认应用」，重新选一个浏览器设为默认。
+    fixer: user
+    links: ["tool:settings.default-apps"]
+references:
+  - https://kolbi.cz/blog/2025/04/20/userchoicelatest-microsofts-new-protection-for-file-type-associations/
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-default-apps-settings
