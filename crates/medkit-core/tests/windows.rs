@@ -1531,7 +1531,8 @@ fn window_owner_names_the_program_under_the_mouse() {
     use medkit_core::window_owner::{self, is_generic, owning_program, program_folders};
     use windows_sys::Win32::Foundation::{POINT, RECT};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, GetCursorPos, GetWindowRect, GetWindowThreadProcessId, SetCursorPos,
+        FindWindowW, GetCursorPos, GetWindowRect, GetWindowThreadProcessId, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE,
+        SWP_SHOWWINDOW, SetCursorPos, SetWindowPos,
     };
 
     struct Kill(std::process::Child);
@@ -1600,6 +1601,9 @@ fn window_owner_names_the_program_under_the_mouse() {
         println!("::notice title=window owner::这台 CI 机器上没等到记事本的窗口，跳过鼠标那一段");
         return;
     }
+    // 别的测试同时会打开任务管理器这些窗口：把记事本放到最上面，免得被盖住
+    // SAFETY: window 是记事本的窗口；只改前后顺序，不移动、不改大小
+    unsafe { SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW) };
     let mut rect = RECT::default();
     // SAFETY: rect 是有效的输出位置
     assert_ne!(unsafe { GetWindowRect(window, &mut rect) }, 0);

@@ -65,6 +65,10 @@ pub fn find(platform: &dyn Platform) -> PResult<(WindowOwnerReport, Option<PathB
         if let Some(p) = owning_program(&text, &programs) {
             out.installed = Some(p.name.clone());
             out.publisher = p.publisher.clone();
+        } else if normalize(&text).contains("\\windowsapps\\") {
+            // 应用商店的应用不在卸载信息里，它自己就是一个「已安装的应用」
+            out.installed = out.product.clone().or_else(|| out.description.clone());
+            out.publisher = out.company.clone();
         }
     }
     out.exe = Some(exe);
@@ -429,6 +433,25 @@ mod tests {
         mock.point_at(None);
         let (r, path) = find(&mock).unwrap();
         assert_eq!((r.kind, r.position, path), (WindowOwnerKind::Nothing, None, None));
+    }
+
+    #[test]
+    fn a_store_app_is_its_own_installed_app() {
+        let mock = MockPlatform::new();
+        let exe = r"C:\Program Files\WindowsApps\Example.News_1.0.0.0_x64__abc\News.exe";
+        mock.point_at(Some(window(600, "Windows.UI.Core.CoreWindow", Some(exe))));
+        mock.set_file_strings(
+            Path::new(exe),
+            FileStrings {
+                description: Some("资讯".into()),
+                company: Some("示例公司".into()),
+                product: Some("示例资讯".into()),
+            },
+        );
+        let (r, _) = find(&mock).unwrap();
+        assert_eq!(r.kind, WindowOwnerKind::Program);
+        assert_eq!(r.installed.as_deref(), Some("示例资讯"));
+        assert_eq!(r.publisher.as_deref(), Some("示例公司"));
     }
 
     #[test]

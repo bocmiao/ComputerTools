@@ -2,6 +2,7 @@
 //!
 //! - 窗口：GetCursorPos + WindowFromPoint，再用 GetAncestor(GA_ROOT) 找到最外层的窗口（网页、广告内容常在别的进程的
 //!   子窗口里，最外层的窗口才是弹出它的那个程序的）。看鼠标下面的窗口而不是激活的窗口：有的弹窗点了也不会被激活。
+//!   应用商店的应用反过来：外框 ApplicationFrameWindow 是系统进程的，取鼠标下面那个子窗口的进程。
 //! - 版本信息：GetFileVersionInfoW + VerQueryValueW，只读资源，不加载、不运行这个程序。优先读简体中文的那一份。
 //! - 程序：卸载信息（HKLM 64 位、32 位两份，加上登录用户自己的），不列系统组件和补丁。
 
@@ -10,7 +11,7 @@ use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 use std::ptr::null_mut;
 
-use windows_sys::Win32::Foundation::{CloseHandle, POINT, RECT};
+use windows_sys::Win32::Foundation::{CloseHandle, HWND, POINT, RECT};
 use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow};
 use windows_sys::Win32::Storage::FileSystem::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
 use windows_sys::Win32::System::Threading::{
@@ -50,17 +51,19 @@ pub fn pointed_window() -> PResult<Option<PointedWindow>> {
     // SAFETY: hit 是窗口句柄；窗口刚好关掉时下面的查询都会失败，不会出错
     let root = unsafe { GetAncestor(hit, GA_ROOT) };
     let window = if root.is_null() { hit } else { root };
-    let mut pid = 0u32;
-    // SAFETY: pid 是有效的输出位置
-    unsafe { GetWindowThreadProcessId(window, &mut pid) };
+    let mut pid = window_pid(window);
     if pid == 0 {
         // 窗口已经关了
         return Ok(None);
     }
-    let mut class = [0u16; 256];
-    // SAFETY: 缓冲区的长度如实传入
-    let len = unsafe { GetClassNameW(window, class.as_mut_ptr(), class.len() as i32) };
-    let class = String::from_utf16_lossy(&class[..usize::try_from(len).unwrap_or(0).min(class.len())]);
+    let class = class_name(window);
+    // 应用商店的应用：外框（ApplicationFrameWindow）是系统的 ApplicationFrameHost 画的，里面的内容才是应用自己的进程
+    if class == "ApplicationFrameWindow" {
+        let inner = window_pid(hit);
+        if inner != 0 {
+            pid = inner;
+        }
+    }
     let mut rect = RECT::default();
     // SAFETY: rect 是有效的输出位置；失败时保持全 0
     unsafe { GetWindowRect(window, &mut rect) };
@@ -74,6 +77,20 @@ pub fn pointed_window() -> PResult<Option<PointedWindow>> {
         ScreenRect::default()
     };
     Ok(Some(PointedWindow { pid, class, rect: to_rect(rect), screen, path: process_path(pid) }))
+}
+
+fn window_pid(window: HWND) -> u32 {
+    let mut pid = 0u32;
+    // SAFETY: pid 是有效的输出位置；窗口已经关了时返回 0
+    unsafe { GetWindowThreadProcessId(window, &mut pid) };
+    pid
+}
+
+fn class_name(window: HWND) -> String {
+    let mut class = [0u16; 256];
+    // SAFETY: 缓冲区的长度如实传入
+    let len = unsafe { GetClassNameW(window, class.as_mut_ptr(), class.len() as i32) };
+    String::from_utf16_lossy(&class[..usize::try_from(len).unwrap_or(0).min(class.len())])
 }
 
 /// 进程的程序文件的完整路径；进程已经退出、打不开（受保护的系统进程）时为 `None`。
