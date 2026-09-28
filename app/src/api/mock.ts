@@ -1597,6 +1597,14 @@ const SYMPTOMS: MockSymptom[] = [
     links: ['tool:system.office-repair', 'tool:web.office-uninstall', 'tool:web.office-install', 'tool:settings.apps'],
   },
   {
+    id: 'downloads-grouped', title: '下载文件夹里的文件按日期分组了',
+    summary: '打开「下载」文件夹，文件被分成「今天」「昨天」「本周早些时候」「上周」「很久以前」一组一组的，找文件很麻烦；另存为的窗口里也是这样。',
+    keywords: ['按日期分组', '下载文件夹分组', '取消分组', '很久以前'], maturity: 'guide',
+    causes: ['Windows 11 的「下载」文件夹默认就按修改日期分组，不是出了毛病', '在一个文件夹里改了分组，别的「下载」类型的文件夹、软件的「另存为」窗口还是按原来的方式分组'],
+    guide: '打开「下载」文件夹，在空白的地方点右键 →「分组依据」→「（无）」。再点上面的「…」→「选项」→「查看」→「应用到文件夹」，别的下载文件夹也一样。软件的「另存为」窗口里同样改一次。',
+    steps: [],
+  },
+  {
     id: 'wifi-slow', title: 'WiFi 信号差、网速慢',
     summary: 'WiFi 只有一两格信号，网页打开慢、视频卡、下载慢；离路由器远一点就不行；Windows 提示这个 WiFi「不安全」「使用较旧的安全标准」。',
     keywords: ['wifi信号差', 'wifi网速慢', '信号只有一格', 'wifi不安全'], maturity: 'semi',

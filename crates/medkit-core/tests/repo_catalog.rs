@@ -153,6 +153,8 @@ fn common_error_messages_find_their_symptom() {
         ("家里的wifi信号很差，网页打开特别慢", "wifi-slow"),
         ("WiFi 网速很慢，只有一格信号", "wifi-slow"),
         ("此 Wi-Fi 网络使用较旧的安全标准，该标准正在逐步淘汰", "wifi-slow"),
+        ("下载文件夹里的文件都按日期分组了，怎么取消", "downloads-grouped"),
+        ("文件夹里显示今天、昨天、很久以前，一组一组的", "downloads-grouped"),
     ];
     let wrong: Vec<String> = cases
         .iter()
