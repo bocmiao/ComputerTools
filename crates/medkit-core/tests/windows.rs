@@ -1465,3 +1465,62 @@ fn usb_settings_are_detected_and_fixed() {
         assert_ne!(code(check), broken, "{feature}：修复以后检测还是这样");
     }
 }
+
+/// 在这台机器上运行一段 PowerShell，返回标准输出（去掉首尾空白）。
+fn powershell(script: &str) -> String {
+    let out =
+        Command::new("powershell.exe").args(["-NoProfile", "-NonInteractive", "-Command", script]).output().unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_owned()
+}
+
+/// 打印机脱机：在一台虚拟打印机（Microsoft Print to PDF 这类，CI 机器上没有真的打印机）上勾上「脱机使用打印机」、
+/// 再暂停它，检测要查出来；小工具让它恢复工作以后，检测要查不出来。结束时（包括断言失败时）改回原样。
+/// 一台打印机都没有时跳过。和小工具的冒烟测试错开（它也会跑这个小工具）。
+#[test]
+#[ignore = "会临时改一台虚拟打印机的「脱机使用」「暂停」（结束时恢复）；需要管理员权限"]
+fn offline_and_paused_printers_are_put_back_to_work() {
+    const WMI: &str = "$l = New-Object -ComObject WbemScripting.SWbemLocator; $w = $l.ConnectServer('.', 'root\\cimv2'); \
+                       $null = $w.Security_.Privileges.AddAsString('SeLoadDriverPrivilege', $true);";
+    struct Restore(String);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            powershell(&format!(
+                "{WMI} foreach ($p in @($w.ExecQuery(\"SELECT * FROM Win32_Printer WHERE Name = '{}'\"))) {{ \
+                 $p.Properties_.Item('WorkOffline').Value = $false; $null = $p.Put_(); $null = $p.ExecMethod_('Resume') }}",
+                self.0
+            ));
+        }
+    }
+
+    let _update = update_lock();
+    let name = powershell(
+        "@(Get-CimInstance Win32_Printer | Where-Object { $_.PortName -eq 'PORTPROMPT:' -and -not $_.WorkOffline -and $_.ExtendedPrinterStatus -ne 8 })[0].Name",
+    );
+    if name.is_empty() || name.contains(['\'', '\\', '"']) {
+        println!("::notice title=printer offline::这台 CI 机器上没有能用来测试的虚拟打印机，跳过");
+        return;
+    }
+    eprintln!("用来测试的打印机：{name}");
+    let _restore = Restore(name.clone());
+    let set = powershell(&format!(
+        "{WMI} $p = @($w.ExecQuery(\"SELECT * FROM Win32_Printer WHERE Name = '{name}'\"))[0]; \
+         $p.Properties_.Item('WorkOffline').Value = $true; $null = $p.Put_(); \
+         $r = $p.ExecMethod_('Pause'); $r.Properties_.Item('ReturnValue').Value"
+    ));
+    eprintln!("暂停的返回值：{set}");
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, _platform) = real_engine(dir.path());
+    let code = || {
+        let r = engine.run_check("printer.offline").unwrap();
+        eprintln!("{:?} {:?} {}", r.status, r.result_code, r.message);
+        r.result_code.unwrap_or_default()
+    };
+    assert_eq!(code(), "work-offline", "勾上「脱机使用打印机」以后检测没查出来");
+    let r = engine.tool_run("printer.resume").unwrap();
+    eprintln!("{:?} {}", r.status, r.message);
+    assert!(r.error.is_none(), "{r:?}");
+    assert_eq!(r.result_code.as_deref(), Some("done"), "{r:?}");
+    let after = code();
+    assert!(!["work-offline", "paused"].contains(&after.as_str()), "恢复以后还是：{after}");
+}

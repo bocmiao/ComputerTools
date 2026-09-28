@@ -1,0 +1,66 @@
+# 打印机有没有脱机、暂停。脚本：scripts/checks/printer/offline.ps1（读 Win32_Printer，不用管理员权限）。
+# 按这个顺序判断：
+#   work-offline：有打印机勾上了「脱机使用打印机」（WorkOffline，打印队列窗口的「打印机」菜单里）：文档都存在队列里，
+#                 不会送到打印机；
+#   paused：有打印机勾上了「暂停打印」（ExtendedPrinterStatus = 8）。这两种小工具 printer.resume 能改回来，虚拟打印机也算；
+#   offline-network：有网络打印机显示「脱机」（PrinterStatus 或 ExtendedPrinterStatus = 7）：连的是别的电脑共享的打印机，
+#                 或者端口不是 USB、DOT4、LPT、COM 的；
+#   offline-usb：有 USB 打印机显示「脱机」；
+#   ok；none：一台真的打印机都没有（Microsoft Print to PDF、XPS、OneNote、传真、远程桌面转过来的打印机按端口认出来，不算）。
+# 打印机的名字常是用户自己起的，不输出。事实：printers（真的打印机有几台）、work_offline、paused、offline。
+id: printer.offline
+schema_version: 1
+title: { zh-CN: 打印机脱机了吗 }
+description:
+  zh-CN: 看看打印机有没有显示「脱机」，或者被勾上了「脱机使用打印机」「暂停打印」。
+category: printer
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/printer/offline.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: "有 {printers} 台打印机，都没有脱机，也没有暂停。"
+  none:
+    status: advice
+    message:
+      zh-CN: 这台电脑上还没有添加打印机（只有「打印到 PDF」这类虚拟打印机）。
+    fixer: user
+    next:
+      zh-CN: 打开「打印机和扫描仪」，点「添加设备」；网络打印机搜不到的，点「我需要的打印机不在列表中」，按打印机的 IP 地址添加（IP 地址可以在打印机的屏幕上，或者打印一张「网络配置页」看到）。
+    links: ["tool:settings.printers"]
+  work-offline:
+    status: advice
+    message:
+      zh-CN: "有 {work_offline} 台打印机被勾上了「脱机使用打印机」：打印的文档都存在电脑上的队列里，不会送到打印机，看起来就是打印没反应。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮让打印机恢复工作，队列里的文档会接着打出来（也可以自己打开打印队列，在「打印机」菜单里取消勾选「脱机使用打印机」）。
+    links: ["tool:printer.resume"]
+  paused:
+    status: advice
+    message:
+      zh-CN: "有 {paused} 台打印机被勾上了「暂停打印」，所以文档一直排着不打。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮让打印机恢复工作，队列里的文档会接着打出来（也可以自己打开打印队列，在「打印机」菜单里取消勾选「暂停打印」）。
+    links: ["tool:printer.resume"]
+  offline-network:
+    status: advice
+    message:
+      zh-CN: "有 {offline} 台网络打印机显示「脱机」：电脑联系不上它。"
+    fixer: user
+    next:
+      zh-CN: 看看打印机开着没有、屏幕上有没有报错；打印机和电脑连的是不是同一个路由器、同一个 WiFi。连的是别的电脑共享的打印机的，那台电脑要开着。按 IP 地址添加的打印机，IP 地址可能变了（路由器重新分配了），下面的「手动步骤」里有办法。
+  offline-usb:
+    status: advice
+    message:
+      zh-CN: "有 {offline} 台 USB 打印机显示「脱机」：打印机没开、USB 线没插好，或者电脑没认出来。"
+    fixer: user
+    next:
+      zh-CN: 打开打印机的电源，把 USB 线两头都拔下来重新插紧，换一个电脑上的 USB 口（台式机插机箱后面的口）；还不行，重启一下打印机和电脑。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-printer
+  - https://support.microsoft.com/en-us/windows/fix-printer-connection-and-printing-problems-in-windows-fb830bff-7702-6349-33cd-9443fe987f73

@@ -1,0 +1,38 @@
+# 让打印机恢复工作：把所有打印机的「脱机使用打印机」（WorkOffline）取消勾选，被「暂停打印」的恢复打印（Win32_Printer 的
+# Resume）。用 WMI 脚本接口（SWbemLocator）并打开 SeLoadDriverPrivilege，保存 Win32_Printer 要这个权限（微软《Win32_Printer
+# class》）。别的设置、队列里的文档都不动（恢复以后接着打）。不输出打印机的名字。
+# 结果：done（fixed）、partial（fixed、left）、none、failed（left）。
+id: printer.resume
+schema_version: 1
+group: action
+title: { zh-CN: 让打印机恢复工作 }
+description:
+  zh-CN: 打印没反应、文档一直排着不打时用：把被勾上的「脱机使用打印机」「暂停打印」取消掉，队列里的文档会接着打出来。别的设置不动。
+category: printer
+requires_admin: true
+timeout_sec: 60
+run:
+  script: tools/printer/resume.ps1
+results:
+  done:
+    status: ok
+    message: { zh-CN: "让 {fixed} 台打印机恢复了工作（取消了「脱机使用打印机」「暂停打印」）。" }
+    next: { zh-CN: 队列里的文档会接着打出来；没有的话，再打印一次试试。 }
+  partial:
+    status: advice
+    message: { zh-CN: "让 {fixed} 台打印机恢复了工作，还有 {left} 台没改成。" }
+    next: { zh-CN: 没改成的，打开它的打印队列，在「打印机」菜单里自己取消勾选「脱机使用打印机」「暂停打印」。 }
+    links: ["tool:settings.printers"]
+  none:
+    status: ok
+    message: { zh-CN: 没有打印机被勾上「脱机使用打印机」或者「暂停打印」。 }
+    next: { zh-CN: 打印机显示「脱机」的，是电脑联系不上它：看看「打印机显示脱机」里的办法。 }
+    links: ["symptom:printer-offline"]
+  failed:
+    status: manual
+    message: { zh-CN: "有 {left} 台打印机没改成。" }
+    next: { zh-CN: 打开它的打印队列，在「打印机」菜单里自己取消勾选「脱机使用打印机」「暂停打印」；还不行，重启打印服务再试。 }
+    links: ["tool:printer.restart-spooler", "tool:settings.printers"]
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-printer
+  - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/resume-method-in-class-win32-printer
