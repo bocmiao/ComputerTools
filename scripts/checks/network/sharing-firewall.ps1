@@ -85,10 +85,26 @@ function Test-SharingPort {
     return $false
 }
 
+# Get-NetFirewallRule with a filter reports "no rule matches" as an error
+# (category ObjectNotFound); here that is an empty list. Other errors stay
+# errors.
+function Get-Rules {
+    param([hashtable]$Filter)
+    try {
+        return @(Get-NetFirewallRule @Filter -ErrorAction Stop)
+    }
+    catch {
+        if ([string]$_.CategoryInfo.Category -eq 'ObjectNotFound') {
+            return @()
+        }
+        throw
+    }
+}
+
 # 'on' when an enabled inbound Allow rule of the group covers private networks.
 function Get-GroupState {
     param([string]$Group)
-    foreach ($rule in @(Get-NetFirewallRule -Group $Group -ErrorAction Stop)) {
+    foreach ($rule in @(Get-Rules @{ Group = $Group })) {
         if (($null -ne $rule) -and (Test-Enabled $rule.Enabled) -and ((Get-Text $rule.Direction) -match '(?i)^(Inbound|1)$') -and ((Get-Text $rule.Action) -match '(?i)^(Allow|2)$') -and (Test-CoversPrivate $rule.Profile)) {
             return 'on'
         }
@@ -104,7 +120,7 @@ try {
     $facts.sharing = Get-GroupState $sharingGroup
     $facts.discovery = Get-GroupState $discoveryGroup
     $blocking = New-Object System.Collections.Generic.List[string]
-    foreach ($rule in @(Get-NetFirewallRule -Direction Inbound -Action Block -Enabled True -ErrorAction Stop)) {
+    foreach ($rule in @(Get-Rules @{ Direction = 'Inbound'; Action = 'Block'; Enabled = 'True' })) {
         if (($null -eq $rule) -or (-not (Test-CoversPrivate $rule.Profile))) {
             continue
         }
