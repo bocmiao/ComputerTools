@@ -15,6 +15,7 @@ checks:
   - system.reliability-recent
   - boot.last-boot-duration
   - system.winre-status
+  - system.windows-search
   - system.managed-device
   # 网络（DNS 只在「上不了网」里查：断网时它只会说「查不了」）
   - network.connectivity

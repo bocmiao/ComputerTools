@@ -1,0 +1,43 @@
+# Windows 搜索服务有没有被关掉。脚本：scripts/checks/system/windows-search.ps1
+# Windows 搜索服务（WSearch）给文件建搜索索引，开始菜单、资源管理器里搜文件才快，还能按内容搜到。Windows 默认让它自动启动
+# （延迟启动）。很多「优化」软件和教程会把它关掉（说能让电脑变快）：关掉以后搜索很慢，开始菜单里很多文件搜不到。
+# 结果（按这个顺序判断）：missing（没有这个服务：服务器版 Windows、在「启用或关闭 Windows 功能」里关掉了、精简过的系统，
+# 不适用）→ disabled（被设成禁用）→ manual（被改成手动：没人启动它）→ ok。disabled、manual 带修复
+# system.enable-windows-search（改回自动（延迟启动））。事实：status（Running、Stopped……）、start（Automatic、Manual、Disabled）。
+id: system.windows-search
+schema_version: 1
+title: { zh-CN: Windows 搜索服务 }
+description:
+  zh-CN: 看看 Windows 搜索服务有没有被关掉。它给文件建搜索索引，关掉以后在开始菜单、资源管理器里搜文件很慢，很多文件搜不到。
+category: system
+requires_admin: false
+probe:
+  script: checks/system/windows-search.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: Windows 搜索服务会自动启动，没问题。
+  disabled:
+    status: advice
+    message:
+      zh-CN: Windows 搜索服务被关掉了（设成了「禁用」），多半是「优化」软件或者教程让关的。关掉以后没有搜索索引，在开始菜单、资源管理器里搜文件很慢，很多文件搜不到。关掉它并不会让电脑变快多少。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回 Windows 默认的「自动（延迟启动）」，重启电脑以后生效。Windows 会在后台重新建索引，建好之前搜索还是慢，一般要几十分钟到几个小时（电脑空闲时建得快）。能撤销。
+    links: ["feature:system.enable-windows-search"]
+  manual:
+    status: advice
+    message:
+      zh-CN: Windows 搜索服务被改成了「手动」，开机以后没人启动它，也就不建搜索索引：在开始菜单、资源管理器里搜文件很慢，很多文件搜不到。Windows 默认是自动启动的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回 Windows 默认的「自动（延迟启动）」，重启电脑以后生效。Windows 会在后台重新建索引，建好之前搜索还是慢。能撤销。
+    links: ["feature:system.enable-windows-search"]
+  missing:
+    status: na
+    message:
+      zh-CN: 这台电脑上没有 Windows 搜索服务（服务器版 Windows、在「启用或关闭 Windows 功能」里关掉了，或者用的是精简过的系统）。开始菜单和资源管理器照样能搜，只是慢一些。
+references:
+  - https://support.microsoft.com/en-us/windows/experience/performance-optimization/search-indexing-in-windows
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/fix-problems-in-windows-search

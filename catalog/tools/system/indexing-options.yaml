@@ -1,0 +1,12 @@
+# 打开 Windows 的「索引选项」（control.exe srchadmin.dll）：能看到索引建到哪了（「已为 N 个项目编制索引」）、给哪些位置
+# 建了索引，「高级」里能重建索引。症状「搜不到文件」里用。没有 Windows 搜索服务的电脑上打开会说服务没运行。
+id: open.indexing-options
+schema_version: 1
+group: open
+title: { zh-CN: 索引选项 }
+description:
+  zh-CN: 打开 Windows 的「索引选项」：能看到搜索索引建好了多少、给哪些文件夹建了索引。搜不到文件、搜出来的结果不对时，点「高级」→「重建」重新建一遍（要一段时间，这期间搜索会慢）。
+category: system
+open: { program: indexing-options }
+references:
+  - https://support.microsoft.com/en-us/windows/experience/performance-optimization/search-indexing-in-windows

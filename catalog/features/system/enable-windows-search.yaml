@@ -1,0 +1,27 @@
+# 恢复 Windows 搜索服务：把 Windows Search（WSearch）的启动类型改回 Windows 默认的「自动（延迟启动）」。只改启动类型，
+# 不启动服务：重启电脑以后它自己启动，在后台重新建搜索索引。检测 system.windows-search 报 disabled、manual 时给这个按钮；
+# verify 用这个检测：没有这个服务（na）时不给执行，改好没有也看它。break_actions（测试用）：设成禁用。
+id: system.enable-windows-search
+schema_version: 1
+title: { zh-CN: 恢复 Windows 搜索服务 }
+description:
+  zh-CN: 把被关掉的 Windows 搜索服务改回 Windows 默认的「自动（延迟启动）」。它被「优化」类软件关掉以后，在开始菜单、资源管理器里搜文件很慢，很多文件搜不到。重启电脑以后生效，Windows 会在后台重新建索引（建好之前搜索还是慢），能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+verify: system.windows-search
+actions:
+  - service: { name: WSearch, start_type: delayed-auto }
+windows_default:
+  - service: { name: WSearch, start_type: delayed-auto }
+break_actions:
+  - service: { name: WSearch, start_type: disabled }
+undo: auto
+references:
+  - https://support.microsoft.com/en-us/windows/experience/performance-optimization/search-indexing-in-windows
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sc-config

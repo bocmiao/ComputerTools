@@ -33,6 +33,7 @@ pub const OPEN_PROGRAMS: &[(&str, Program)] = &[
     ("control-panel", Program { exe: "control.exe", args: &[] }),
     ("uac-settings", Program { exe: "UserAccountControlSettings.exe", args: &[] }),
     ("firewall", Program { exe: "control.exe", args: &["firewall.cpl"] }),
+    ("indexing-options", Program { exe: "control.exe", args: &["srchadmin.dll"] }),
 ];
 
 /// 「设置」里能打开的页面（ms-settings:<页面>）。
