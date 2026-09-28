@@ -18,6 +18,7 @@ use crate::hidden::{self, HiddenReport, HiddenRestore, HiddenUndo};
 use crate::images;
 use crate::long_image;
 use crate::pdf;
+use crate::recycle_bin::{RecycleDriveView, RecycleRepairView};
 use crate::rename::{self, RenamePreview, RenameRules};
 use crate::setup::AppState;
 use crate::shutdown::{ShutdownCancel, ShutdownStatus};
@@ -545,6 +546,21 @@ pub async fn hidden_undo(state: State<'_, AppState>) -> CmdResult<HiddenUndo> {
 #[tauri::command]
 pub async fn disk_speed_drives() -> CmdResult<Vec<DriveView>> {
     tauri::async_runtime::spawn_blocking(crate::disk_speed::drives).await.map_err(|e| format!("内部错误：{e}"))
+}
+
+/// 回收站坏了：各个盘的回收站里有多少东西（只有个数和大小，没有文件名）。
+#[tauri::command]
+pub async fn recycle_drives() -> CmdResult<Vec<RecycleDriveView>> {
+    tauri::async_runtime::spawn_blocking(crate::recycle_bin::drives).await.map_err(|e| format!("内部错误：{e}"))
+}
+
+/// 回收站坏了：清空并重建一个盘的回收站（删掉 `<盘>:\$Recycle.Bin`，照微软的办法），里面所有账户的东西都会删掉。
+/// 只收现在还在的盘符。
+#[tauri::command]
+pub async fn recycle_repair(letter: String) -> CmdResult<RecycleRepairView> {
+    tauri::async_runtime::spawn_blocking(move || crate::recycle_bin::repair(&letter))
+        .await
+        .map_err(|e| format!("内部错误：{e}"))?
 }
 
 /// 硬盘测速：在这个盘的根目录写一个关掉就删的临时文件，测顺序写、顺序读、4 KB 随机读，一共大约 20 秒。

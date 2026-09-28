@@ -16,6 +16,8 @@ import type {
   NewMenuItem,
   OcrView,
   Preview,
+  RecycleDriveView,
+  RecycleRepairView,
   RenamePreview,
   RenameRules,
   ShellPlaceItem,
@@ -83,6 +85,8 @@ export type CommandMap = {
   hidden_undo: { args: NoArgs; result: HiddenUndo }
   disk_speed_drives: { args: NoArgs; result: DriveView[] }
   disk_speed_run: { args: { letter: string }; result: SpeedResult }
+  recycle_drives: { args: NoArgs; result: RecycleDriveView[] }
+  recycle_repair: { args: { letter: string }; result: RecycleRepairView }
   screen_fullscreen: { args: { on: boolean }; result: null }
   awake_get: { args: NoArgs; result: AwakeStatus }
   awake_set: { args: { on: boolean; display: boolean }; result: AwakeStatus }

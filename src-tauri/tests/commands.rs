@@ -366,6 +366,21 @@ fn ocr_command_passes_the_permission_check_and_leaves_no_file() {
     assert_eq!(std::fs::read_dir(dir).unwrap().count(), 0, "认完就删");
 }
 
+/// 回收站坏了：列各盘的回收站（只读）、清空重建一个盘的。盘符不对的在碰盘之前就拒绝。
+#[test]
+fn recycle_bin_commands_pass_the_permission_check() {
+    let win = app();
+    assert!(ok(&win, "recycle_drives", json!({})).is_array());
+    let e = invoke(&win, "recycle_repair", json!({ "letter": "..\\" })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("盘符不对")), "{e}");
+    // 这里没有盘，给哪个盘符都是「不在了」。Windows 上不试：C 盘真的在，会把真的回收站删掉
+    #[cfg(not(windows))]
+    {
+        let e = invoke(&win, "recycle_repair", json!({ "letter": "C" })).unwrap_err();
+        assert!(e.as_str().is_some_and(|m| m.contains("不在了")), "{e}");
+    }
+}
+
 /// 图片合成 PDF 的命令也要登记进权限清单；PDF 内容走二进制请求体，存到哪里只能在系统的「另存为」对话框里选。
 #[test]
 fn pdf_commands_pass_the_permission_check() {

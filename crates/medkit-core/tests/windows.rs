@@ -1011,6 +1011,44 @@ fn file_attributes_can_be_hidden_and_shown_again() {
     assert_ne!(file_attributes(&link).unwrap() & 0x400, 0, "联接带「重解析点」属性");
 }
 
+/// 回收站坏了：在临时文件夹里照真的回收站的样子摆一个 `$Recycle.Bin`（按账户分的文件夹、desktop.ini、$I 和 $R 文件），
+/// 文件和文件夹都带只读、隐藏、系统属性，里面还有一个指向别处的目录联接。要数对（联接不算），删干净，联接指向的地方
+/// 不能动。不碰真的盘上的回收站。
+#[test]
+fn a_protected_recycle_bin_is_removed_without_following_junctions() {
+    use medkit_core::platform::windows::set_file_attributes;
+    use medkit_core::recycle_bin::{self, Contents, Removed};
+    const READONLY: u32 = 0x1;
+    const HIDDEN: u32 = 0x2;
+    const SYSTEM: u32 = 0x4;
+    let root = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    std::fs::write(elsewhere.path().join("precious.txt"), b"keep").unwrap();
+
+    let bin = recycle_bin::folder(root.path());
+    let user = bin.join("S-1-5-21-1-2-3-1001");
+    let moved = user.join("$RABC123");
+    std::fs::create_dir_all(&moved).unwrap();
+    for (path, len) in [(user.join("desktop.ini"), 100), (user.join("$IABC123"), 544), (moved.join("inner.txt"), 1000)]
+    {
+        std::fs::write(&path, vec![7u8; len]).unwrap();
+        set_file_attributes(&path, READONLY | HIDDEN | SYSTEM).unwrap();
+    }
+    for folder in [&moved, &user, &bin] {
+        set_file_attributes(folder, READONLY | HIDDEN | SYSTEM).unwrap();
+    }
+    let link = user.join("link");
+    let status = Command::new("cmd").args(["/c", "mklink", "/J"]).arg(&link).arg(elsewhere.path()).output().unwrap();
+    assert!(status.status.success(), "{}", String::from_utf8_lossy(&status.stderr));
+
+    let c = recycle_bin::measure(root.path(), Duration::from_secs(5), 100);
+    assert_eq!(c, Some(Contents { files: 3, bytes: 1644, complete: true }));
+    assert_eq!(recycle_bin::remove(root.path()).unwrap(), Removed::Done);
+    assert!(!bin.exists(), "回收站文件夹要删干净");
+    assert_eq!(std::fs::read(elsewhere.path().join("precious.txt")).unwrap(), b"keep", "联接指向的地方不能动");
+    assert_eq!(recycle_bin::remove(root.path()).unwrap(), Removed::Absent);
+}
+
 /// 为「找回 Windows 照片查看器」「管理新建菜单」收集这台机器上的实际情况（照片查看器的 ProgID、系统自带的图片
 /// 文件类型写了什么、PhotoViewer.dll 里的文字，每一个「新建」菜单项和资源管理器的缓存），打印出来。只读。
 #[test]

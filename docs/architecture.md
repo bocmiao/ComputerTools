@@ -390,6 +390,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `hidden_undo` | — | `HiddenUndo`（把上一次「显示出来」改过的属性都改回去） |
 | `disk_speed_drives` | — | `DriveView[]`（本机固定的和可移动的盘：盘符、卷标、文件系统、大小、剩余空间，剩余不到 2 GB 的 `canTest` 为 false） |
 | `disk_speed_run` | `letter` | `SpeedResult`（在这个盘的根目录写一个关掉就删的临时文件，不经过系统缓存，测顺序写、顺序读、4 KB 随机读，最多写 1 GB、每步限时；只收现在列出来、能测的盘符，同一时间只测一个） |
+| `recycle_drives` | — | `RecycleDriveView[]`（本机固定的和可移动的盘上有没有回收站文件夹（`<盘>:\$Recycle.Bin`）、里面有多少个文件、一共多大：只有个数和大小，没有文件名，也没有按账户分的文件夹名（SID）；所有盘一共最多数 8 秒、一个盘最多数 20 万个文件，没数完的 `complete` 为 false；不跟着链接走，链接也不算） |
+| `recycle_repair` | `letter` | `RecycleRepairView`（回收站坏了：删掉这个盘的 `$Recycle.Bin`，重启以后 Windows 重新建一个；里面所有账户的东西都删掉、找不回来，界面先确认。只收现在还在的盘的盘符；`outcome`：absent（本来就没有）/ done / partly（有的删不掉，`left` 是还剩几个文件）） |
 | `screen_fullscreen` | `on` | `null`（屏幕坏点测试：窗口进入、退出全屏） |
 | `awake_get` | — | `AwakeStatus`（`{ on, display }`：「别让电脑自己睡着」开没开） |
 | `awake_set` | `on`、`display` | `AwakeStatus`（SetThreadExecutionState，只在小药箱开着时有效，不改电源设置） |
@@ -454,6 +456,13 @@ checks: [disk.system-free-space, system.pending-reboot]
 - **认程序**：`OpenProcess`（只查询）+ `QueryFullProcessImageNameW` 得到程序文件；版本信息（`GetFileVersionInfoW`、`VerQueryValueW`，优先简体中文那一份）给说明、公司、产品名，只读资源，不加载、不运行这个程序。任务栏、桌面按窗口类名认；`ShellExperienceHost.exe` 画的是 Windows 通知（别的软件、网站发的通知也是它显示的），Windows 文件夹里的算 Windows 自带的；小药箱自己的窗口单独说。
 - **属于哪个软件**：按程序所在的文件夹对上「应用和功能」里的软件（HKLM 的 64 位、32 位卸载信息，加上登录用户自己的；系统组件、补丁不算）：安装位置、图标、卸载程序所在的文件夹里包含这个程序，有好几个时取最具体的那个。Program Files、ProgramData、用户的 AppData、下载、桌面、Windows 文件夹这些太宽的文件夹不拿来认。
 - **路径**：结果里的文件夹把用户文件夹名换成 `*`；完整路径只留在后端，「打开所在的文件夹」不收界面传来的路径。结果不进诊断报告。
+
+回收站坏了（`crates/medkit-core/src/recycle_bin.rs`、`src-tauri/src/recycle_bin.rs`、`app/src/components/RecycleBinRepair.vue`，放在症状「提示『回收站已损坏』」的页面上）：
+
+- **办法**：照微软《[The Recycle Bin is corrupted](https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/recycle-bin-corrupted)》：提示「X:\ 上的回收站已损坏」时，删掉那个盘根目录下的 `$Recycle.Bin` 文件夹（原文是在管理员命令提示符里运行 `RD <盘>\$Recycle.bin /s /q`），再重启，Windows 会重新建一个。症状的手动步骤先让用户点提示框里的「是」，一再提示才用这个。
+- **先数再删**：列出各个盘的回收站里有多少个文件、多大，确认框里说清楚：这台电脑上所有账户放进这个盘回收站的都会删掉、找不回来，要留的先从回收站里还原。结果和确认框里只有个数和大小。
+- **只删这一个位置**：盘符只能是一个字母、而且是现在还在的盘；删的就是 `<盘的根目录>\$Recycle.Bin`。它是链接（符号链接、目录联接）时只删链接本身；是文件夹时用 `remove_dir_all`（里面的链接也只删链接，不跟着走到别处）。NTFS 上只读、系统、隐藏属性不挡删除；删不掉时把只读都去掉再删一次（FAT32、exFAT 的盘上要这样）。还是删不干净的（文件正被别的程序用着）再数一次还剩多少，让用户重启以后再来。
+- **不记修改日志**：删掉的东西没法撤销，和「清空打印队列」「重建图标和缩略图缓存」这些小工具一样不进修改日志，确认框就是最后一道。Windows 上的测试在临时文件夹里摆一个带只读、隐藏、系统属性和目录联接的 `$Recycle.Bin`，核对数得对、删得干净、联接指向的地方不动；不碰真的盘上的回收站。
 
 找大文件和重复文件（`src-tauri/src/space.rs`、`app/src/components/SpaceFinder.vue`）：
 

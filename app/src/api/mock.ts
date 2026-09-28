@@ -664,6 +664,14 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'disk.error-events': {
+    title: '硬盘读写错误',
+    evaluate: () => ({ status: 'ok', resultCode: 'none', message: '最近 30 天没有硬盘读写出错的记录。', facts: { days: 30, total: 0 } }),
+  },
+  'disk.smart-health': {
+    title: '硬盘健康',
+    evaluate: () => ({ status: 'ok', resultCode: 'healthy', message: '硬盘状态良好（共 2 块）。', facts: { known_count: 2 } }),
+  },
   'disk.hiberfile': {
     title: '休眠文件',
     evaluate: () => {
@@ -1189,6 +1197,17 @@ const SYMPTOMS: MockSymptom[] = [
     steps: [
       { check: 'printer.spooler', stopOn: ['advice', 'manual'], fixes: [] },
       { check: 'printer.rpc-privacy', stopOn: ['manual'], fixes: ['printer.rpc-privacy-compat'] },
+    ],
+  },
+  {
+    id: 'recycle-bin-corrupted', title: '提示「回收站已损坏」',
+    summary: '删文件、打开回收站或者开机时弹出「C:\\ 上的回收站已损坏。是否清空该驱动器上的回收站?」，点了「是」还是一再弹出来。',
+    keywords: ['回收站已损坏', '回收站损坏', '是否清空该驱动器上的回收站', '回收站打不开', '回收站清空不了'], maturity: 'semi',
+    causes: ['删东西的时候断电、强制关机，回收站里的记录没写完', '移动硬盘没点「安全弹出」就拔掉了，或者盘上有坏道、文件系统出了错'],
+    guide: '先点提示框里的「是」；还是一再提示的，用上面的「清空并重建回收站」清空提示里说的那个盘，再重启电脑。',
+    steps: [
+      { check: 'disk.error-events', fixes: [] },
+      { check: 'disk.smart-health', fixes: [] },
     ],
   },
 ]
@@ -2552,6 +2571,23 @@ const handlers: Handlers = {
     return null
   },
   disk_speed_drives: () => DEMO_DRIVES,
+  // 回收站（演示）：C 盘的回收站里有东西，D 盘的是空的，U 盘上没有回收站文件夹；清空以后记着
+  recycle_drives: () =>
+    DEMO_DRIVES.map((d) => {
+      const emptied = demoRecycleEmptied.has(d.letter)
+      const files = d.letter === 'C' && !emptied ? 356 : 0
+      return {
+        letter: d.letter, label: d.label, removable: d.removable, system: d.system,
+        exists: !d.removable && !emptied, files, bytes: files ? 1_288_490_188 : 0, complete: true,
+      }
+    }),
+  recycle_repair: ({ letter }) => {
+    const drive = DEMO_DRIVES.find((d) => d.letter === letter.toUpperCase())
+    if (!drive) throw '这个盘现在不在了，请刷新一下列表。'
+    const outcome = drive.removable || demoRecycleEmptied.has(drive.letter) ? 'absent' : 'done'
+    demoRecycleEmptied.add(drive.letter)
+    return { letter: drive.letter, outcome, left: 0 }
+  },
   // 演示：每个盘给一组典型的速度（不真的测）
   disk_speed_run: ({ letter }) => {
     const drive = DEMO_DRIVES.find((d) => d.letter === letter.toUpperCase())
@@ -2732,6 +2768,8 @@ const demoSaved = new Set<string>()
 // ── 批量重命名的演示文件（浏览器里预览界面用，不碰真实文件）──
 const DEMO_FOLDER = '演示文件夹（不会改动真实文件）'
 let demoFiles = ['IMG_0001.JPG', 'IMG_0002.JPG', '海边.png', '说明.txt']
+/** 演示里清空过回收站的盘 */
+const demoRecycleEmptied = new Set<string>()
 let demoPlan: { source: string; target: string; changed: boolean }[] = []
 let demoLast: { source: string; target: string; changed: boolean }[] = []
 

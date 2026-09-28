@@ -47,6 +47,8 @@
     "allow-hidden-undo",
     "allow-disk-speed-drives",
     "allow-disk-speed-run",
+    "allow-recycle-drives",
+    "allow-recycle-repair",
     "allow-screen-fullscreen",
     "allow-awake-get",
     "allow-awake-set",

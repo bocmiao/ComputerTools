@@ -113,6 +113,11 @@ fn common_error_messages_find_their_symptom() {
         ("USB 设备无法识别 你连接到此计算机的最后一个 USB 设备发生故障，Windows 无法识别它。", "usb-drive"),
         ("该设备无法启动。 (代码 10)", "device-error"),
         ("Windows 已停止此设备，因为它已报告了问题。 (代码 43)", "device-error"),
+        ("C:\\ 上的回收站已损坏。是否清空该驱动器上的回收站?", "recycle-bin-corrupted"),
+        (
+            "The Recycle Bin on D:\\ is corrupted. Do you want to empty the Recycle Bin for this drive?",
+            "recycle-bin-corrupted",
+        ),
     ];
     let wrong: Vec<String> = cases
         .iter()

@@ -18,6 +18,8 @@ import type {
   NewMenuItem,
   OcrView,
   Preview,
+  RecycleDriveView,
+  RecycleRepairView,
   RenamePreview,
   RenameRules,
   ShellPlaceItem,
@@ -297,6 +299,16 @@ export function diskSpeedDrives(): Promise<DriveView[]> {
 /** 硬盘测速：测这个盘（写一个关掉就删的临时文件，大约 20 秒） */
 export function diskSpeedRun(letter: string): Promise<SpeedResult> {
   return call('disk_speed_run', { letter })
+}
+
+/** 回收站坏了：各个盘的回收站里有多少东西 */
+export function recycleDrives(): Promise<RecycleDriveView[]> {
+  return call('recycle_drives', {})
+}
+
+/** 回收站坏了：清空并重建这个盘的回收站（里面所有账户的东西都会删掉，找不回来） */
+export function recycleRepair(letter: string): Promise<RecycleRepairView> {
+  return call('recycle_repair', { letter })
 }
 
 /** 屏幕坏点测试：小药箱窗口进入、退出全屏 */

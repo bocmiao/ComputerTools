@@ -7,6 +7,7 @@ import BusySpinner from '../components/BusySpinner.vue'
 import ErrorShotSearch from '../components/ErrorShotSearch.vue'
 import PopupOwner from '../components/PopupOwner.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
+import RecycleBinRepair from '../components/RecycleBinRepair.vue'
 import ResultLinks from '../components/ResultLinks.vue'
 import StatusLamp, { type LampState } from '../components/StatusLamp.vue'
 import TagPill from '../components/TagPill.vue'
@@ -506,6 +507,7 @@ watch(
         </section>
 
         <PopupOwner v-if="detail.id === 'popup-ads'" class="block" />
+        <RecycleBinRepair v-if="detail.id === 'recycle-bin-corrupted'" class="block" />
 
         <section v-if="showsStartup(detail.id)" class="card block" aria-labelledby="startup-title">
           <div class="steps-head">

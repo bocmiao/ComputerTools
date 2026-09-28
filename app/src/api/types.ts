@@ -197,6 +197,21 @@ export interface SpaceReport {
   comparedAll: boolean
 }
 
+// 回收站坏了
+/** 一个盘的回收站里有多少东西（只有个数和大小） */
+export interface RecycleDriveView {
+  letter: string
+  label: string
+  removable: boolean
+  system: boolean
+  exists: boolean              // 这个盘上有回收站文件夹
+  files: number
+  bytes: number
+  complete: boolean            // 数完了；没数完的是「至少这么多」
+}
+/** absent：本来就没有；done：删干净了；partly：有的删不掉（left 个） */
+export interface RecycleRepairView { letter: string; outcome: 'absent' | 'done' | 'partly'; left: number }
+
 // 硬盘测速
 export interface DriveView {
   /** 盘符，比如「C」 */
