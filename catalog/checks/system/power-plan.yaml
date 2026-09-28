@@ -1,0 +1,54 @@
+# 电源计划有没有把处理器压着跑。脚本：scripts/checks/system/power-plan.ps1（共享块 power-plan）
+# 当前计划读 HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes 的 ActivePowerScheme；「最大处理器状态」
+# （处理器子组的 PROCTHROTTLEMAX）读 root\cimv2\power 的 Win32_PowerSettingDataIndex（Windows 实际用的值，不解析 powercfg
+# 的输出）。按这个顺序判断：
+#   saver：用的是「节能」计划（修复 power.balanced-plan）；
+#   throttled：当前计划的最大处理器状态插着电源时低于 80%，或者有电池的电脑用电池时低于 50%（「降温」「省电」软件和教程
+#              常这样改；修复 power.processor-full-speed）；
+#   efficiency：Windows 11 的电源模式在插着电源时是「最佳能效」（ActiveOverlayAcPowerScheme 是 961cc777-…，微软《Customize
+#              the Windows performance power slider》），在设置里改；
+#   ok。
+# 不进体检（笔记本用电池时选「节能」可能是故意的），「电脑卡」里查。事实：plan（saver、balanced、high、ultimate、custom）、
+# ac、dc（最大处理器状态，百分比）、battery。
+id: system.power-plan
+schema_version: 1
+title: { zh-CN: 电源计划 }
+description:
+  zh-CN: 看看电源计划有没有为了省电把处理器压着跑：用的是「节能」计划、处理器最高速度被调低了，电脑都会卡。
+category: system
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/system/power-plan.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: 电源计划没有把处理器压着跑。
+  saver:
+    status: advice
+    message:
+      zh-CN: 电源计划是「节能」：为了省电，处理器被压着跑，电脑会明显变卡。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回 Windows 默认的「平衡」，马上生效（笔记本想省电时，Windows 在用电池时会自己省电）。
+    links: ["feature:power.balanced-plan"]
+  throttled:
+    status: advice
+    message:
+      zh-CN: "电源计划里的「最大处理器状态」被调低了（插着电源时 {ac}%，用电池时 {dc}%）：处理器最快只能跑到这么快，电脑会卡。「降温」「省电」类的软件和教程常这样改。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回 Windows 默认的 100%，马上生效。改完风扇可能转得多一些；电脑很烫的话，先清一清出风口的灰。
+    links: ["feature:power.processor-full-speed"]
+  efficiency:
+    status: advice
+    message:
+      zh-CN: 插着电源时，Windows 11 的电源模式是「最佳能效」：为了省电，电脑会慢一些。
+    fixer: user
+    next:
+      zh-CN: 打开「电源和睡眠」（Windows 11 叫「电源和电池」），把「电源模式」改成「平衡」或者「最佳性能」。
+    links: ["tool:settings.power"]
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/customize-power-slider
+  - https://learn.microsoft.com/en-us/microsoftteams/troubleshoot/teams-rooms-and-devices/cpu-performance-limited-status-unhealthy

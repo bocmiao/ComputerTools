@@ -1,0 +1,33 @@
+# 处理器改回全速（脚本类功能）：把当前电源计划的「最大处理器状态」改回 Windows 默认的 100%（插着电源和用电池时都是），
+# powercfg /setacvalueindex、/setdcvalueindex 以后再 /setactive 让它马上生效。脚本在 scripts/features/power/ 下，和检测
+# system.power-plan 共用共享块 power-plan。
+#   processor-full-speed-detect.ps1  插着电源时低于 80%、或者用电池时低于 50% → not-applied；读不到 → unknown
+#   processor-full-speed-run.ps1     -Prepare：before = { plan, ac, dc }；执行：计划或者值变了就跳过；两个都改成 100，读回来不是就报错
+#   processor-full-speed-undo.ps1    当前计划还是原来那个的，改回原来的值
+#   processor-full-speed-break.ps1   只在测试中使用：两个都改成 30%
+# 分类写 system，不放进「常用设置」的「电源」里（只从检测的结论进来）。
+id: power.processor-full-speed
+schema_version: 1
+title: { zh-CN: 处理器改回全速 }
+description:
+  zh-CN: 把电源计划里被调低的「最大处理器状态」改回 Windows 默认的 100%：调低以后处理器最快只能跑到那么快，电脑会卡。改完风扇可能转得多一些。马上生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/power/processor-full-speed-detect.ps1
+prepare:
+  script: features/power/processor-full-speed-run.ps1
+run:
+  script: features/power/processor-full-speed-run.ps1
+undo:
+  script: features/power/processor-full-speed-undo.ps1
+break:
+  script: features/power/processor-full-speed-break.ps1
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options

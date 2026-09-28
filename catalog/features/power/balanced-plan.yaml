@@ -1,0 +1,32 @@
+# 电源计划改回「平衡」（脚本类功能）：把当前计划从「节能」换成 Windows 默认的「平衡」（powercfg /setactive），马上生效。
+# 脚本在 scripts/features/power/ 下，和检测 system.power-plan 共用共享块 power-plan。
+#   balanced-plan-detect.ps1  当前是「节能」→ not-applied，别的计划 → applied
+#   balanced-plan-run.ps1     -Prepare：before = { plan }；执行：计划变了、或者不是「节能」就跳过；换成「平衡」，读回来不是就报错
+#   balanced-plan-undo.ps1    现在还是「平衡」的，换回原来的计划
+#   balanced-plan-break.ps1   只在测试中使用：换成「节能」
+# 分类写 system，不放进「常用设置」的「电源」里（只从检测的结论进来）。
+id: power.balanced-plan
+schema_version: 1
+title: { zh-CN: 电源计划改回「平衡」 }
+description:
+  zh-CN: 把电源计划从「节能」改回 Windows 默认的「平衡」：「节能」为了省电把处理器压着跑，电脑会明显变卡。「平衡」平时省电、要用时全速，笔记本用电池时 Windows 也会自己省电。马上生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/power/balanced-plan-detect.ps1
+prepare:
+  script: features/power/balanced-plan-run.ps1
+run:
+  script: features/power/balanced-plan-run.ps1
+undo:
+  script: features/power/balanced-plan-undo.ps1
+break:
+  script: features/power/balanced-plan-break.ps1
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options

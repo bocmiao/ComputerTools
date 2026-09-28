@@ -1,0 +1,12 @@
+# 打开「设置」里的一页（open）：ms-settings:powersleep，由系统打开。Windows 11 叫「电源和电池」（笔记本）或者「电源」，
+# 在这里改「电源模式」；Windows 10 叫「电源和睡眠」。
+id: settings.power
+schema_version: 1
+group: open
+title: { zh-CN: 电源和睡眠 }
+description:
+  zh-CN: 打开「设置」里的电源页面：改多久关屏幕、多久睡眠，Windows 11 还能在这里选「电源模式」（平衡、最佳性能、最佳能效）。
+category: settings
+open: { settings: powersleep }
+references:
+  - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
