@@ -619,6 +619,7 @@ open: { settings: windowsupdate }   # 「设置」里的一页（ms-settings:<�
 | `advanced-sharing` | `control.exe /name Microsoft.NetworkAndSharingCenter /page Advanced`（「高级共享设置」；Win11 22H2 起转到「设置」里的同一页） |
 | `firewall-advanced` | `mmc.exe wf.msc`（高级安全 Windows Defender 防火墙） |
 | `region` | `control.exe intl.cpl`（控制面板的「区域」，「管理」页里改「非 Unicode 程序的语言」） |
+| `network-connections` | `control.exe netconnections`（控制面板的「网络连接」：网卡的禁用、启用和属性） |
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 
 settings 页面：`windowsupdate`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、

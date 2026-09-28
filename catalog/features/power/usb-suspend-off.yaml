@@ -1,0 +1,34 @@
+# 关掉「USB 选择性暂停」（脚本类功能）：当前电源计划里插电、用电池两种情况都改成「已禁用」（0），powercfg 设完再 /setactive
+# 让它马上生效。脚本在 scripts/features/power/ 下，和检测 hardware.usb-suspend 共用共享块 power-plan。
+#   usb-suspend-off-detect.ps1  都是 0 → applied；有一个不是 → not-applied；读不到 → unknown
+#   usb-suspend-off-run.ps1     -Prepare：before = { plan, ac, dc }；执行：计划或者值变了就跳过；两个都改成 0，读回来不是就报错
+#   usb-suspend-off-undo.ps1    当前计划还是原来那个的，改回原来的值
+#   usb-suspend-off-break.ps1   只在测试中使用：两个都改成 1（Windows 默认）
+# 微软排查 USB 设备不稳定（例如 Teams Rooms 设备）时也是关掉这一项。分类写 system，不放进「常用设置」。
+id: power.usb-suspend-off
+schema_version: 1
+title: { zh-CN: 关掉 USB 选择性暂停 }
+description:
+  zh-CN: 不让 Windows 为了省电暂停 USB 设备：鼠标一顿一顿、键盘偶尔没反应、U 盘和移动硬盘断开又连上、USB 网卡掉线时用。笔记本会稍微费一点电。马上生效，能撤销。
+category: system
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/power/usb-suspend-off-detect.ps1
+prepare:
+  script: features/power/usb-suspend-off-run.ps1
+run:
+  script: features/power/usb-suspend-off-run.ps1
+undo:
+  script: features/power/usb-suspend-off-undo.ps1
+break:
+  script: features/power/usb-suspend-off-break.ps1
+verify: hardware.usb-suspend
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/usb-selective-suspend
+  - https://learn.microsoft.com/en-us/troubleshoot/microsoftteams/teams-rooms-and-devices/usb-selective-suspend-status-unhealthy

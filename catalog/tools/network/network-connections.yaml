@@ -1,0 +1,13 @@
+# 打开控制面板的「网络连接」（open：control.exe netconnections，微软《Executing Control Panel Items》里写的命令）。
+# 这里能看到每个网卡连着没有，右键「禁用」再「启用」能让网卡重新连一次；右键「属性 → 配置」里有「电源管理」（「允许计算机关闭此设备
+# 以节约电源」）和「高级」（「节能以太网」「绿色以太网」这类省电项）两页。症状「WiFi、网线隔一会儿就断」的指引里用。
+id: open.network-connections
+schema_version: 1
+group: open
+title: { zh-CN: 网络连接（网卡） }
+description:
+  zh-CN: 打开控制面板的「网络连接」：看每个网卡连着没有；在网卡上点右键「禁用」再「启用」，能让它重新连一次；右键「属性」→「配置」里有「电源管理」和「高级」两页，网卡的省电设置都在这里。
+category: network
+open: { program: network-connections }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/executing-control-panel-items

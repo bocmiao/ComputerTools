@@ -1,6 +1,6 @@
-# Feature: power.processor-full-speed -- break (tests only)
-# Holds the processor down to 30 percent in the active plan, plugged in and on
-# battery, the way "cooler laptop" tweaks do.
+# Feature: power.usb-suspend-off -- break (tests only)
+# Turns USB selective suspend on in the active plan, plugged in and on
+# battery (the Windows default).
 
 [CmdletBinding()]
 param()
@@ -65,11 +65,10 @@ function Set-PowerSetting {
 }
 # ---- end of shared block power-plan ----
 
-$processorGroup = '54533251-82be-4824-96c1-47b60b740d00'
-$maxProcessorState = 'bc5038f7-23e0-4960-96da-33abaf5935ec'
+$usbGroup = '2a737441-1930-4402-8d77-b2bebba308a3'
+$usbSuspend = '48e6b7a6-50f5-4782-a5d4-53bb8f07e226'
 
-$plan = Get-ActivePlan
-if (-not (Set-PowerSetting $plan $processorGroup $maxProcessorState 30 30)) {
-    throw 'Maximum processor state could not be set'
+if (-not (Set-PowerSetting (Get-ActivePlan) $usbGroup $usbSuspend 1 1)) {
+    throw 'USB selective suspend could not be turned on'
 }
 [pscustomobject]@{ result = 'ok' }

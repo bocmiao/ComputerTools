@@ -1,9 +1,11 @@
-# Feature: power.processor-full-speed -- break (tests only)
-# Holds the processor down to 30 percent in the active plan, plugged in and on
-# battery, the way "cooler laptop" tweaks do.
+# Feature: power.usb-suspend-off -- undo
+# Puts the recorded values back when the active plan is still the recorded
+# one.
 
 [CmdletBinding()]
-param()
+param(
+    [string]$Before = ''
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -65,11 +67,14 @@ function Set-PowerSetting {
 }
 # ---- end of shared block power-plan ----
 
-$processorGroup = '54533251-82be-4824-96c1-47b60b740d00'
-$maxProcessorState = 'bc5038f7-23e0-4960-96da-33abaf5935ec'
+$usbGroup = '2a737441-1930-4402-8d77-b2bebba308a3'
+$usbSuspend = '48e6b7a6-50f5-4782-a5d4-53bb8f07e226'
 
-$plan = Get-ActivePlan
-if (-not (Set-PowerSetting $plan $processorGroup $maxProcessorState 30 30)) {
-    throw 'Maximum processor state could not be set'
+$recorded = ConvertFrom-Json -InputObject $Before
+$plan = ([string]$recorded.plan).ToLowerInvariant()
+if (((Get-ActivePlan) -eq $plan) -and ($null -ne $recorded.ac) -and ($null -ne $recorded.dc)) {
+    if (-not (Set-PowerSetting $plan $usbGroup $usbSuspend ([int]$recorded.ac) ([int]$recorded.dc))) {
+        throw 'USB selective suspend could not be set back'
+    }
 }
 [pscustomobject]@{ result = 'ok' }

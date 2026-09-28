@@ -15,7 +15,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# ---- shared block power-plan: identical in checks/system/power-plan.ps1, checks/system/wake-timers.ps1, tools/system/wake-sources.ps1 and features/power/*.ps1 (medkit-data check compares them) ----
+# ---- shared block power-plan: identical in checks/system/power-plan.ps1, checks/system/wake-timers.ps1, checks/hardware/usb-suspend.ps1, tools/system/wake-sources.ps1 and features/power/*.ps1 (medkit-data check compares them) ----
 # The active power plan: ActivePowerScheme under
 # HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes (a GUID). The
 # built-in plans: Power saver a1841308-3541-4fab-bc81-f71556f20b4a, Balanced

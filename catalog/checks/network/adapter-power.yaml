@@ -1,0 +1,34 @@
+# 网卡有没有勾「允许计算机关闭此设备以节约电源」。脚本：scripts/checks/network/adapter-power.ps1（和修复
+# network.adapter-power-off 共用共享块 adapter-power）。只看现在连着的实体网卡，用 Get-NetAdapterPowerManagement 读
+# AllowComputerToTurnOffDevice（Enabled / Disabled / Unsupported）。大多数网卡默认勾着，有的 WiFi、有线网卡省电时会掉线，
+# 或者睡眠醒来以后连不上。结果：allowed（advice，修复 network.adapter-power-off）、off（ok）、none（没连网，或者没有网卡有这个设置，na）。
+# 事实：checked_count、allowed_count、adapter（网卡型号）。
+id: network.adapter-power
+schema_version: 1
+title: { zh-CN: 网卡的省电设置 }
+description:
+  zh-CN: 看看网卡有没有勾「允许计算机关闭此设备以节约电源」。勾着时，有的 WiFi、有线网卡会时不时掉线，或者睡眠醒来以后连不上网。
+category: network
+requires_admin: true
+timeout_sec: 30
+probe:
+  script: checks/network/adapter-power.ps1
+results:
+  allowed:
+    status: advice
+    message:
+      zh-CN: "网卡（{adapter}）勾着「允许计算机关闭此设备以节约电源」（大多数电脑默认这样）：Windows 省电时会关掉它，有的网卡就会时不时掉线，或者睡眠醒来以后连不上网。"
+    fixer: medkit
+    next:
+      zh-CN: 网络老是隔一会儿就断的，点下面的按钮取消这个勾，重启电脑以后生效（现在不会断网），能撤销。
+    links: ["feature:network.adapter-power-off"]
+  off:
+    status: ok
+    message: { zh-CN: 连着的网卡都没有勾「允许计算机关闭此设备以节约电源」。 }
+  none:
+    status: na
+    message: { zh-CN: 现在没有连着的网卡有这个省电设置（没连网，或者网卡不支持）。 }
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/netadapter/get-netadapterpowermanagement
+  - https://github.com/farag2/Sophia-Script-for-Windows
+  - https://learn.microsoft.com/en-us/answers/questions/5762553/how-to-disable-allow-the-computer-to-turn-off-this

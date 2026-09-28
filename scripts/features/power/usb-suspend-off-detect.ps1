@@ -1,6 +1,7 @@
-# Feature: power.processor-full-speed -- break (tests only)
-# Holds the processor down to 30 percent in the active plan, plugged in and on
-# battery, the way "cooler laptop" tweaks do.
+# Feature: power.usb-suspend-off -- detect
+# Checked before an undo: applied when USB selective suspend is off in the
+# active plan, plugged in and on battery; not-applied when it is on;
+# unknown when the plan does not have the setting.
 
 [CmdletBinding()]
 param()
@@ -65,11 +66,16 @@ function Set-PowerSetting {
 }
 # ---- end of shared block power-plan ----
 
-$processorGroup = '54533251-82be-4824-96c1-47b60b740d00'
-$maxProcessorState = 'bc5038f7-23e0-4960-96da-33abaf5935ec'
+$usbSuspend = '48e6b7a6-50f5-4782-a5d4-53bb8f07e226'
 
 $plan = Get-ActivePlan
-if (-not (Set-PowerSetting $plan $processorGroup $maxProcessorState 30 30)) {
-    throw 'Maximum processor state could not be set'
+$ac = Get-PowerSetting $plan 'AC' $usbSuspend
+$dc = Get-PowerSetting $plan 'DC' $usbSuspend
+$state = 'applied'
+if (($null -eq $ac) -or ($null -eq $dc)) {
+    $state = 'unknown'
 }
-[pscustomobject]@{ result = 'ok' }
+elseif (($ac -ne 0) -or ($dc -ne 0)) {
+    $state = 'not-applied'
+}
+[pscustomobject]@{ state = $state; facts = [ordered]@{ ac = $ac; dc = $dc } }

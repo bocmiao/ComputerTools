@@ -1,0 +1,31 @@
+# 当前电源计划里的「USB 选择性暂停」开着没有。脚本：scripts/checks/hardware/usb-suspend.ps1（共享块 power-plan）
+# 开着时（Windows 默认），Windows 会把一会儿没动的 USB 设备暂停来省电，有的鼠标、键盘、USB 网卡、移动硬盘、USB 集线器醒不过来：
+# 鼠标一顿一顿、设备断开又连上。电源设置 48e6b7a6-50f5-4782-a5d4-53bb8f07e226（USB 设置 2a737441-1930-4402-8d77-b2bebba308a3）：
+# 1 = 开，0 = 关。结果：on（advice，修复 power.usb-suspend-off）、off（ok）、missing（这个计划里没有这项，na）。事实：ac、dc。
+id: hardware.usb-suspend
+schema_version: 1
+title: { zh-CN: USB 选择性暂停 }
+description:
+  zh-CN: 看看电源计划里的「USB 选择性暂停」开着没有。开着时 Windows 会暂停一会儿没动的 USB 设备来省电，有的鼠标、键盘、U 盘醒不过来，就会卡顿、断开。
+category: hardware
+requires_admin: false
+probe:
+  script: checks/hardware/usb-suspend.ps1
+results:
+  on:
+    status: advice
+    message:
+      zh-CN: 「USB 选择性暂停」开着（Windows 默认这样）：USB 设备一会儿不用就被暂停来省电，有的鼠标、键盘、U 盘、移动硬盘、USB 网卡醒不过来，就会一顿一顿、断开又连上。
+    fixer: medkit
+    next:
+      zh-CN: USB 设备老断开、鼠标卡顿的，点下面的按钮关掉它（笔记本会稍微费一点电），马上生效，能撤销。
+    links: ["feature:power.usb-suspend-off"]
+  off:
+    status: ok
+    message: { zh-CN: 「USB 选择性暂停」关着，Windows 不会为了省电暂停 USB 设备。 }
+  missing:
+    status: na
+    message: { zh-CN: 当前电源计划里没有「USB 选择性暂停」这一项。 }
+references:
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/usb-selective-suspend
+  - https://learn.microsoft.com/en-us/troubleshoot/microsoftteams/teams-rooms-and-devices/usb-selective-suspend-status-unhealthy

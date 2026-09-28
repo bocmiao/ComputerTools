@@ -1,6 +1,13 @@
-# Feature: power.processor-full-speed -- break (tests only)
-# Holds the processor down to 30 percent in the active plan, plugged in and on
-# battery, the way "cooler laptop" tweaks do.
+# Check: hardware.usb-suspend
+# Is "USB selective suspend" on in the active power plan? Windows then
+# suspends USB devices that seem idle, to save power; some mice, keyboards,
+# USB network adapters, drives and hubs do not wake up properly: the mouse
+# stutters, devices disconnect and come back. It is on by default (power
+# setting 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 in the USB settings subgroup
+# 2a737441-1930-4402-8d77-b2bebba308a3: 1 = enabled, 0 = disabled). Read-only.
+# Result codes: on (advice; fixed by power.usb-suspend-off) / off (ok) /
+# missing (the plan does not have the setting, na).
+# Facts: ac, dc ('' when missing).
 
 [CmdletBinding()]
 param()
@@ -65,11 +72,28 @@ function Set-PowerSetting {
 }
 # ---- end of shared block power-plan ----
 
-$processorGroup = '54533251-82be-4824-96c1-47b60b740d00'
-$maxProcessorState = 'bc5038f7-23e0-4960-96da-33abaf5935ec'
+$usbSuspend = '48e6b7a6-50f5-4782-a5d4-53bb8f07e226'
 
 $plan = Get-ActivePlan
-if (-not (Set-PowerSetting $plan $processorGroup $maxProcessorState 30 30)) {
-    throw 'Maximum processor state could not be set'
+$ac = Get-PowerSetting $plan 'AC' $usbSuspend
+$dc = Get-PowerSetting $plan 'DC' $usbSuspend
+$facts = [ordered]@{ ac = ''; dc = '' }
+if ($null -ne $ac) {
+    $facts.ac = $ac
 }
-[pscustomobject]@{ result = 'ok' }
+if ($null -ne $dc) {
+    $facts.dc = $dc
+}
+
+$result = 'off'
+if (($null -eq $ac) -and ($null -eq $dc)) {
+    $result = 'missing'
+}
+elseif (($ac -eq 1) -or ($dc -eq 1)) {
+    $result = 'on'
+}
+
+[pscustomobject]@{
+    result = $result
+    facts  = $facts
+}

@@ -1,9 +1,17 @@
-# Feature: power.processor-full-speed -- break (tests only)
-# Holds the processor down to 30 percent in the active plan, plugged in and on
-# battery, the way "cooler laptop" tweaks do.
+# Feature: power.usb-suspend-off -- run (and prepare)
+# Turns "USB selective suspend" off in the active plan, plugged in and on
+# battery, and applies it now.
+# -Prepare: returns before = { plan, ac, dc }.
+# Run: -Before is that JSON. Returns skipped (nothing changed) when the active
+#   plan or the values are no longer the recorded ones. Otherwise sets both
+#   to 0 and reads them back: they must be 0 now, or the script throws (the
+#   engine then runs the undo script).
 
 [CmdletBinding()]
-param()
+param(
+    [bool]$Prepare = $false,
+    [string]$Before = ''
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -65,11 +73,22 @@ function Set-PowerSetting {
 }
 # ---- end of shared block power-plan ----
 
-$processorGroup = '54533251-82be-4824-96c1-47b60b740d00'
-$maxProcessorState = 'bc5038f7-23e0-4960-96da-33abaf5935ec'
+$usbGroup = '2a737441-1930-4402-8d77-b2bebba308a3'
+$usbSuspend = '48e6b7a6-50f5-4782-a5d4-53bb8f07e226'
 
 $plan = Get-ActivePlan
-if (-not (Set-PowerSetting $plan $processorGroup $maxProcessorState 30 30)) {
-    throw 'Maximum processor state could not be set'
+$ac = Get-PowerSetting $plan 'AC' $usbSuspend
+$dc = Get-PowerSetting $plan 'DC' $usbSuspend
+if ($Prepare) {
+    return [pscustomobject]@{ before = [ordered]@{ plan = $plan; ac = $ac; dc = $dc } }
 }
-[pscustomobject]@{ result = 'ok' }
+
+$recorded = ConvertFrom-Json -InputObject $Before
+if (($null -eq $ac) -or ($null -eq $dc) -or ([string]$recorded.plan -ne $plan) -or ([string]$recorded.ac -ne [string]$ac) -or ([string]$recorded.dc -ne [string]$dc)) {
+    return [pscustomobject]@{ skipped = $true }
+}
+$ok = Set-PowerSetting $plan $usbGroup $usbSuspend 0 0
+if ((-not $ok) -or ((Get-PowerSetting $plan 'AC' $usbSuspend) -ne 0) -or ((Get-PowerSetting $plan 'DC' $usbSuspend) -ne 0)) {
+    throw 'USB selective suspend could not be turned off'
+}
+[pscustomobject]@{ after = [ordered]@{ plan = $plan; ac = 0; dc = 0 } }

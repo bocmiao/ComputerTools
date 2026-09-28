@@ -1,0 +1,38 @@
+# 网卡取消「允许计算机关闭此设备以节约电源」（脚本类功能），和在设备管理器里网卡的「电源管理」页取消这个勾一样。
+# 做法照 Sophia Script（MIT），微软问答里提问的人最后用的也是这个（直接改注册表的 PnPCapabilities 重启以后没生效）：
+# Get-NetAdapterPowerManagement 读出来，把 AllowComputerToTurnOffDevice 改成 Disabled，再交给
+# Set-NetAdapterPowerManagement；加 -NoRestart，不重启网卡、现在不断网，重启电脑以后生效。只改现在连着、勾着的实体网卡。
+# 脚本在 scripts/features/network/ 下，和检测 network.adapter-power 共用共享块 adapter-power。
+#   adapter-power-detect.ps1  撤销前核对：都没勾 → applied；有勾着的 → not-applied；没有网卡有这个设置 → unknown
+#   adapter-power-run.ps1     -Prepare：before = { adapters: [勾着的网卡的 DeviceID] }；执行：变了就跳过；逐个取消、读回来确认，
+#                             失败时把已经改的勾回去再报错
+#   adapter-power-undo.ps1    记下的、现在连着、没勾的网卡再勾上
+#   adapter-power-break.ps1   只在测试中使用：连着的网卡都勾上（CI 的虚拟网卡多半不支持这个设置，verify 为 na，测试跳过）
+id: network.adapter-power-off
+schema_version: 1
+title: { zh-CN: 不让 Windows 为了省电关掉网卡 }
+description:
+  zh-CN: 取消网卡的「允许计算机关闭此设备以节约电源」，和在设备管理器里网卡的「电源管理」页取消这个勾一样。WiFi、网线隔一会儿就断，或者睡眠醒来以后连不上网时用。重启电脑以后生效（现在不会断网），能撤销。
+category: network
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+detect:
+  script: features/network/adapter-power-detect.ps1
+prepare:
+  script: features/network/adapter-power-run.ps1
+run:
+  script: features/network/adapter-power-run.ps1
+undo:
+  script: features/network/adapter-power-undo.ps1
+break:
+  script: features/network/adapter-power-break.ps1
+verify: network.adapter-power
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/netadapter/set-netadapterpowermanagement
+  - https://github.com/farag2/Sophia-Script-for-Windows
+  - https://learn.microsoft.com/en-us/answers/questions/5762553/how-to-disable-allow-the-computer-to-turn-off-this
