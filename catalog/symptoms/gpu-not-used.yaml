@@ -62,4 +62,4 @@ guide:
     5. 台式机：显示器的线要插在独立显卡的接口上（机箱背面下方横着的那一排），不要插在主板的接口上（上方和 USB 口挨在一起的那一块）。打开 NVIDIA 控制面板提示「您当前未使用连接到 NVIDIA GPU 的显示器」，多半就是插错了。
     6. 更新显卡驱动：笔记本到电脑品牌官网、台式机到 NVIDIA 或 AMD 官网，按型号下载最新的显卡驱动；刚更新驱动就变卡的，在设备管理器里回退驱动。
     7. 都做了还卡：可能是显卡本身性能不够，把游戏的画质、分辨率调低；或者机身很烫、风扇狂转，散热不好让显卡降频了，看「电脑卡、风扇狂转」。
-links: ["tool:settings.graphics", "tool:open.task-manager", "tool:settings.power", "tool:open.device-manager", "symptom:slow-pc"]
+links: ["tool:settings.graphics", "tool:open.task-manager", "tool:settings.power", "tool:open.device-manager", "symptom:slow-pc", "tool:web.oem-drivers"]

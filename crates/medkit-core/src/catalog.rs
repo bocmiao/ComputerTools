@@ -462,18 +462,16 @@ impl Validator<'_> {
                 if t.requires_admin || t.user_hive {
                     self.err(&file, "open 小工具不跑脚本，不要写 requires_admin、user_hive".into());
                 }
-                match t
-                    .open
-                    .as_ref()
-                    .map(|o| (o.program.as_deref(), o.settings.as_deref(), o.troubleshooter.as_deref()))
-                {
-                    Some((Some(p), None, None)) => {
+                match t.open.as_ref().map(|o| {
+                    (o.program.as_deref(), o.settings.as_deref(), o.troubleshooter.as_deref(), o.website.as_deref())
+                }) {
+                    Some((Some(p), None, None, None)) => {
                         if crate::tools::program(p).is_none() {
                             let names: Vec<&str> = crate::tools::OPEN_PROGRAMS.iter().map(|(n, _)| *n).collect();
                             self.err(&file, format!("open.program 不在名单里：{p}（可用：{}）", names.join("、")));
                         }
                     }
-                    Some((None, Some(page), None)) => {
+                    Some((None, Some(page), None, None)) => {
                         if crate::tools::settings_page(page).is_none() {
                             self.err(
                                 &file,
@@ -484,7 +482,7 @@ impl Validator<'_> {
                             );
                         }
                     }
-                    Some((None, None, Some(name))) => {
+                    Some((None, None, Some(name), None)) => {
                         if crate::tools::troubleshooter(name).is_none() {
                             self.err(
                                 &file,
@@ -495,7 +493,18 @@ impl Validator<'_> {
                             );
                         }
                     }
-                    _ => self.err(&file, "open 必须且只能写 program、settings、troubleshooter 之一".into()),
+                    Some((None, None, None, Some(name))) => {
+                        if crate::tools::website(name).is_none() {
+                            self.err(
+                                &file,
+                                format!(
+                                    "open.website 不在名单里：{name}（可用：{}）",
+                                    crate::tools::WEBSITES.join("、")
+                                ),
+                            );
+                        }
+                    }
+                    _ => self.err(&file, "open 必须且只能写 program、settings、troubleshooter、website 之一".into()),
                 }
             }
         }

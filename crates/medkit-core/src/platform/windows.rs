@@ -634,6 +634,7 @@ impl Platform for WindowsPlatform {
             OpenRequest::Program { exe, args, console } => open_program(exe, args, console),
             OpenRequest::Settings(page) => open_settings(page),
             OpenRequest::GetHelp(name) => open_get_help(name),
+            OpenRequest::Web(url) => open_web(url),
         }
     }
 
@@ -762,6 +763,21 @@ fn open_get_help(name: &str) -> PResult<()> {
             SHELL_TIMEOUT.as_secs()
         )),
         code => PlatformError::Other(format!("系统没有响应（错误代码 {code}）")),
+    })
+}
+
+/// 网页：请资源管理器用登录用户的普通权限打开（见 explorer_exec），浏览器不会跟着小药箱以管理员身份运行。
+fn open_web(url: &str) -> PResult<()> {
+    use super::explorer_exec::{self, Error};
+    if !url.starts_with("https://") {
+        return Err(PlatformError::Other(format!("只打开 https 网址：{url}")));
+    }
+    explorer_exec::shell_execute(url, None).map_err(|e| match e {
+        Error::NoDesktop => PlatformError::NotFound("资源管理器".into()),
+        Error::TimedOut => {
+            PlatformError::Other(format!("等了 {} 秒资源管理器还没有响应", explorer_exec::TIMEOUT.as_secs()))
+        }
+        Error::Failed(hr) => PlatformError::Other(format!("资源管理器没能打开（错误代码 0x{:08X}）", hr as u32)),
     })
 }
 

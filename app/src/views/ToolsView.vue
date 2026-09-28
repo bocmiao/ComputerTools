@@ -118,7 +118,7 @@ function actionButtonText(s: RunState): string {
   return s.result ? '再做一次' : '开始'
 }
 
-// ── 打开系统工具、「设置」里的页面 ──
+// ── 打开系统工具、「设置」里的页面、网页 ──
 
 const opener = useToolOpen()
 
@@ -127,6 +127,7 @@ const openGroups = computed(() => {
   const programs = open.filter((t) => t.opens === 'program' || t.opens === null)
   const settings = open.filter((t) => t.opens === 'settings')
   const troubleshooters = open.filter((t) => t.opens === 'get-help')
+  const websites = open.filter((t) => t.opens === 'website')
   const helperNote = programs.some((t) => t.audience === 'helper')
     ? '标着「给懂哥」的比较专业，不熟悉的话别动里面的东西。'
     : ''
@@ -148,6 +149,12 @@ const openGroups = computed(() => {
       title: '微软的疑难解答',
       note: 'Windows「获取帮助」应用里微软自己的自动疑难解答：它会检查一遍，能修的直接修，要联网。小药箱只负责打开，它改了什么不会记进「修改日志」。精简过的系统可能没有「获取帮助」，会提示你。',
       tools: troubleshooters,
+    },
+    {
+      id: 'website',
+      title: '打开官方网页',
+      note: '在浏览器里打开核实过的官方网站。浏览器用你自己的账户打开，不会跟着小药箱以管理员身份运行。',
+      tools: websites,
     },
   ]
     .filter((g) => g.tools.length > 0)

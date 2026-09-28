@@ -57,7 +57,7 @@ export type CommandMap = {
   journal_undo_session: { args: { sessionId: string }; result: UndoResult[] }
   report_generate: { args: { note?: string }; result: string }
   tool_run: { args: { id: string }; result: ToolResult }
-  tool_open: { args: { id: string }; result: null }
+  tool_open: { args: { id: string }; result: string | null }
   startup_list: { args: NoArgs; result: StartupItem[] }
   startup_set: { args: { id: string; enabled: boolean }; result: ApplyResult }
   context_menu_list: { args: NoArgs; result: ContextMenuItem[] }

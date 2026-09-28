@@ -146,7 +146,7 @@
       ]
     },
     "OpenTarget": {
-      "description": "open 小工具打开什么：`program`、`settings`、`troubleshooter` 三选一，都必须在引擎的名单里。",
+      "description": "open 小工具打开什么：`program`、`settings`、`troubleshooter`、`website` 四选一，都必须在引擎的名单里。",
       "type": "object",
       "properties": {
         "program": {
@@ -167,6 +167,14 @@
         },
         "troubleshooter": {
           "description": "「获取帮助」应用里微软的自动疑难解答，例如 `AudioTroubleshooter`\n（打开 ms-contact-support://smc-to-emerald/AudioTroubleshooter）",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "website": {
+          "description": "网页，例如 `oem-drivers`（按这台电脑的品牌打开官网的驱动下载页）。网址写在引擎里，数据文件只能挑名字；\n由资源管理器用登录用户的普通权限在默认浏览器里打开",
           "type": [
             "string",
             "null"

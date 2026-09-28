@@ -105,7 +105,7 @@ pub async fn tool_run(state: State<'_, AppState>, id: String) -> CmdResult<ToolR
 }
 
 #[tauri::command]
-pub async fn tool_open(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+pub async fn tool_open(state: State<'_, AppState>, id: String) -> CmdResult<Option<String>> {
     with_engine(state, move |e| e.tool_open(&id)).await
 }
 

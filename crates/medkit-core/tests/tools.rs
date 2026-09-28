@@ -10,6 +10,7 @@ use medkit_core::journal::Journal;
 use medkit_core::model::{Check, Status, Symptom, Tool, ToolGroup};
 use medkit_core::platform::OpenRequest;
 use medkit_core::platform::mock::MockPlatform;
+use medkit_core::registry::{RegRoot, RegValue};
 use medkit_core::script::{MockRunner, ScriptError};
 use medkit_core::views::ToolOpens;
 use serde_json::{Value, json};
@@ -108,6 +109,16 @@ category: audio
 open: { troubleshooter: AudioTroubleshooter }
 references: [ "https://example.com" ]
 "#,
+    r#"
+id: test.oem-drivers
+schema_version: 1
+group: open
+title: { zh-CN: 品牌官网的驱动 }
+description: { zh-CN: 按这台电脑的品牌打开官网的驱动下载页。 }
+category: hardware
+open: { website: oem-drivers }
+references: [ "https://example.com" ]
+"#,
 ];
 
 fn tools() -> Vec<Tool> {
@@ -171,9 +182,14 @@ fn open_tools_can_only_name_allowlisted_programs_and_pages() {
     let e = errors_after("test.windows-update", |t| t.open.as_mut().unwrap().settings = Some("../x".into()));
     assert!(e.iter().any(|m| m.contains("不在名单里：../x")), "{e:?}");
     let e = errors_after("test.cleanup", |t| t.open.as_mut().unwrap().settings = Some("windowsupdate".into()));
-    assert!(e.iter().any(|m| m.contains("只能写 program、settings、troubleshooter 之一")), "{e:?}");
+    assert!(e.iter().any(|m| m.contains("只能写 program、settings、troubleshooter、website 之一")), "{e:?}");
     let e = errors_after("test.cleanup", |t| t.open = None);
-    assert!(e.iter().any(|m| m.contains("只能写 program、settings、troubleshooter 之一")), "{e:?}");
+    assert!(e.iter().any(|m| m.contains("只能写 program、settings、troubleshooter、website 之一")), "{e:?}");
+    // 网页只能从名单里挑名字，不能写网址
+    let e = errors_after("test.oem-drivers", |t| t.open.as_mut().unwrap().website = Some("https://example.com".into()));
+    assert!(e.iter().any(|m| m.contains("open.website 不在名单里：https://example.com")), "{e:?}");
+    let e = errors_after("test.oem-drivers", |t| t.open.as_mut().unwrap().program = Some("task-manager".into()));
+    assert!(e.iter().any(|m| m.contains("之一")), "{e:?}");
     let e = errors_after("test.sound-troubleshooter", |t| {
         t.open.as_mut().unwrap().troubleshooter = Some("ms-msdt:/id x".into())
     });
@@ -279,6 +295,8 @@ fn catalog_summary_lists_tools() {
     assert_eq!(by_id("test.windows-update").opens, Some(ToolOpens::Settings));
     assert_eq!(by_id("test.sound-troubleshooter").opens, Some(ToolOpens::GetHelp));
     assert_eq!(serde_json::to_value(ToolOpens::GetHelp).unwrap(), "get-help");
+    assert_eq!(by_id("test.oem-drivers").opens, Some(ToolOpens::Website));
+    assert_eq!(serde_json::to_value(ToolOpens::Website).unwrap(), "website");
     let dm = serde_json::to_value(by_id("test.device-manager")).unwrap();
     assert_eq!(dm["audience"], "helper");
     assert_eq!(dm["group"], "open");
@@ -415,6 +433,100 @@ fn missing_programs_are_explained() {
     w.platform.remove_program("cleanmgr.exe");
     let e = w.engine.tool_open("test.cleanup").unwrap_err().to_string();
     assert!(e.contains("这台电脑上没有「磁盘清理」") && e.contains("cleanmgr.exe"), "{e}");
+}
+
+/// 在模拟的注册表里写上 BIOS 的厂商和型号。
+fn seed_bios(w: &World, values: &[(&str, &str)]) {
+    for (name, value) in values {
+        w.platform.seed_value(
+            &RegRoot::LocalMachine,
+            r"HARDWARE\DESCRIPTION\System\BIOS",
+            name,
+            RegValue::String((*value).to_owned()),
+        );
+    }
+}
+
+/// 品牌机：打开品牌官网的驱动下载页，告诉用户在网页上搜哪个型号（联想的型号名在 SystemVersion 里）。
+#[test]
+fn oem_driver_pages_are_opened_for_the_brand_with_the_model_to_search() {
+    let w = world();
+    seed_bios(
+        &w,
+        &[
+            ("SystemManufacturer", "LENOVO"),
+            ("SystemProductName", "20XWCTO1WW"),
+            ("SystemVersion", "ThinkPad X1 Carbon Gen 9"),
+            ("BaseBoardManufacturer", "LENOVO"),
+        ],
+    );
+    let notice = w.engine.tool_open("test.oem-drivers").unwrap().unwrap();
+    assert!(notice.contains("联想官网的驱动下载页") && notice.contains("「ThinkPad X1 Carbon Gen 9」"), "{notice}");
+    assert_eq!(
+        w.platform.opened(),
+        vec![OpenRequest::Web("https://newsupport.lenovo.com.cn/driveDownloads_index.html")]
+    );
+    // 别的小工具打开以后没有要多说的
+    assert_eq!(w.engine.tool_open("test.cleanup").unwrap(), None);
+
+    // Surface：品牌名是英文结尾，和「官网」之间留空格
+    let w = world();
+    seed_bios(&w, &[("SystemManufacturer", "Microsoft Corporation"), ("SystemProductName", "Surface Laptop 4")]);
+    let notice = w.engine.tool_open("test.oem-drivers").unwrap().unwrap();
+    assert!(notice.contains("微软 Surface 官网的驱动下载页") && notice.contains("「Surface Laptop 4」"), "{notice}");
+}
+
+/// 自己组装的电脑：系统厂商是占位文字，按主板品牌打开，给出主板型号。
+#[test]
+fn home_built_pcs_open_the_motherboard_brand() {
+    let w = world();
+    seed_bios(
+        &w,
+        &[
+            ("SystemManufacturer", "To Be Filled By O.E.M."),
+            ("SystemProductName", "To Be Filled By O.E.M."),
+            ("BaseBoardManufacturer", "ASRock"),
+            ("BaseBoardProduct", "B450M Steel Legend"),
+        ],
+    );
+    let notice = w.engine.tool_open("test.oem-drivers").unwrap().unwrap();
+    assert!(
+        notice.contains("自己组装") && notice.contains("华擎") && notice.contains("「B450M Steel Legend」"),
+        "{notice}"
+    );
+    assert_eq!(w.platform.opened(), vec![OpenRequest::Web("https://www.asrock.com/support/index.cn.asp")]);
+}
+
+/// 虚拟机、认不出的品牌：不打开网页，说明原因；认不出时提醒别用搜索结果里的驱动下载站。
+#[test]
+fn virtual_machines_and_unknown_brands_are_explained_without_opening_anything() {
+    let w = world();
+    seed_bios(&w, &[("SystemManufacturer", "Microsoft Corporation"), ("SystemProductName", "Virtual Machine")]);
+    let e = w.engine.tool_open("test.oem-drivers").unwrap_err().to_string();
+    assert!(e.contains("虚拟机"), "{e}");
+
+    let w = world();
+    seed_bios(&w, &[("SystemManufacturer", "MECHREVO"), ("BaseBoardManufacturer", "MECHREVO")]);
+    let e = w.engine.tool_open("test.oem-drivers").unwrap_err().to_string();
+    assert!(e.contains("「MECHREVO」") && e.contains("服务与支持") && e.contains("驱动下载站"), "{e}");
+    assert!(w.platform.opened().is_empty());
+
+    // BIOS 里什么都没写（或者读不到）
+    let w = world();
+    let e = w.engine.tool_open("test.oem-drivers").unwrap_err().to_string();
+    assert!(e.contains("没有写这台电脑的品牌"), "{e}");
+    assert!(w.platform.opened().is_empty());
+}
+
+/// 资源管理器没在运行：不退回到直接打开（浏览器会以管理员身份运行），给出网址让用户自己打开。
+#[test]
+fn without_a_desktop_the_address_is_given_instead() {
+    let w = world();
+    w.platform.stop_desktop();
+    seed_bios(&w, &[("SystemManufacturer", "HP"), ("SystemProductName", "HP Pavilion Laptop 15-eg0xxx")]);
+    let e = w.engine.tool_open("test.oem-drivers").unwrap_err().to_string();
+    assert!(e.contains("资源管理器") && e.contains("https://support.hp.com/cn-zh/drivers"), "{e}");
+    assert!(w.platform.opened().is_empty());
 }
 
 #[test]

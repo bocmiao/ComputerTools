@@ -128,7 +128,8 @@ export function toolRun(id: string): Promise<ToolResult> {
 }
 
 /** 打开一个系统自带的工具，或「设置」里的一页。打不开时 reject 一句说明（例如这台电脑上没有这个工具） */
-export function toolOpen(id: string): Promise<null> {
+/** 打开以后要告诉用户的话（网页：打开的是哪个品牌的页面、在上面搜什么）；没有时是 null */
+export function toolOpen(id: string): Promise<string | null> {
   return call('tool_open', { id })
 }
 

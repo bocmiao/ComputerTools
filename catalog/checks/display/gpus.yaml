@@ -36,7 +36,7 @@ results:
     fixer: user
     next:
       zh-CN: 说要重启的，先重启电脑。别的情况点下面的按钮打开设备管理器，展开「显示适配器」找到独立显卡：图标上有向下箭头的是被禁用了，右键选「启用设备」；带黄色感叹号或者名字是「Microsoft 基本显示适配器」的，到电脑品牌官网（笔记本）或者显卡官网（NVIDIA、AMD）下载显卡驱动重新装；刚更新驱动就这样的，右键「属性 → 驱动程序 → 回退驱动程序」。设备管理器里根本没有独立显卡的，可能是在 BIOS 里关掉了，请懂哥或者售后看看。
-    links: ["tool:open.device-manager"]
+    links: ["tool:open.device-manager", "tool:web.oem-drivers"]
   on-integrated:
     status: advice
     message:

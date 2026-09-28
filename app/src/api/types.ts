@@ -355,7 +355,7 @@ export interface WindowOwnerReport {
 // 小工具（第 11 节）
 export type ToolGroup = 'info' | 'action' | 'open'
 /** 打开的是系统工具、「设置」里的一页，还是「获取帮助」里微软的疑难解答 */
-export type ToolOpens = 'program' | 'settings' | 'get-help'
+export type ToolOpens = 'program' | 'settings' | 'get-help' | 'website'
 export type Audience = 'everyone' | 'helper'
 export interface ToolSummary {
   id: string; title: string; description: string; category: string

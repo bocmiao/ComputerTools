@@ -641,12 +641,13 @@ labels:                      # 只有 info 能写：表格里的文字（脚本�
 
 ### 11.3 `open`
 
-三选一：
+四选一：
 
 ```yaml
 open: { program: device-manager }             # 系统工具：名字必须在下面的名单里
 open: { settings: windowsupdate }             # 「设置」里的一页（ms-settings:<页面>）：页面也必须在名单里
 open: { troubleshooter: AudioTroubleshooter } # 「获取帮助」里微软的疑难解答（ms-contact-support://smc-to-emerald/<名字>）
+open: { website: oem-drivers }                # 网页：只能写名单里的名字，网址由引擎按这台电脑挑
 ```
 
 名单写在 `crates/medkit-core/src/tools.rs` 里，改名单要改代码、过代码审核，数据文件里不能随便写程序路径：
@@ -679,10 +680,47 @@ open: { troubleshooter: AudioTroubleshooter } # 「获取帮助」里微软的�
 | `system-file-repair` | 新的命令行窗口：`cmd.exe /k ""<System32>\Dism.exe" /Online /Cleanup-Image /RestoreHealth & "<System32>\sfc.exe" /scannow"`（`ShellExecute`，当前文件夹是 System32；窗口留着看结果） |
 
 settings 页面：`windowsupdate`、`windowsupdate-optionalupdates`、`windowsupdate-history`、`windowsupdate-activehours`、`storagesense`、`storagepolicies`、`appsfeatures`、`startupapps`、`defaultapps`、`network-status`、`printers`、
-`sound`、`powersleep`、`batterysaver-usagedetails`、`display`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`easeofaccess-colorfilter`、`easeofaccess-highcontrast`、`nightlight`、`regionlanguage`、`apps-volume`、`notifications`、`taskbar`、`troubleshoot`。
+`sound`、`powersleep`、`batterysaver-usagedetails`、`display`、`display-advancedgraphics`、`bluetooth`、`recovery`、`windowsdefender`、`privacy-microphone`、`privacy-webcam`、`dateandtime`、`easeofaccess-keyboard`、`easeofaccess-mouse`、`easeofaccess-colorfilter`、`easeofaccess-highcontrast`、`nightlight`、`regionlanguage`、`apps-volume`、`notifications`、`taskbar`、`signinoptions`、`lockscreen`、`network-mobilehotspot`、`devices-touchpad`、`troubleshoot`。
 
 troubleshooter（照微软《[Windows troubleshooters](https://support.microsoft.com/en-us/support/get-help/windows-troubleshooters)》列的 10 个，名字一字不差）：`AudioTroubleshooter`、`BITSTroubleshooter`、`BluetoothTroubleshooter`、`TroubleshootCamera`、`NetworkAndInternetTroubleshooter`、`PrinterTroubleshooter`、`ProgramCompatTroubleshooter`、`VideoPlaybackTroubleshooter`、`WMPTroubleshooter`、`WUTroubleshooter`。由「获取帮助」应用打开、检查和修复（要联网），小药箱只负责打开，不记修改日志；界面上按钮写「运行微软的「…」」，工具箱里单独一组。没有「获取帮助」应用的电脑（精简过的系统、服务器版）如实说明，让用户在 Microsoft Store 里装上，或者到「设置」的「疑难解答」页里找：先用 AssocQueryStringW 查有没有能打开 `ms-contact-support:` 链接的应用，没有就不去打开（不然系统会弹「需要使用新应用以打开此链接」，有的系统上 ShellExecuteExW 还会一直等着这个没人点的对话框）。打开「设置」、链接、文件夹的 ShellExecuteExW 都在单独的线程上调用，最多等 30 秒，按钮不会一直转圈。不用 `ms-msdt:` 协议（Follina 漏洞的入口），也不直接跑 msdt.exe：Windows 11 22H2 以后的版本已经把它退役了。
 
+website（网址都写在 `tools.rs` 里，数据文件只能挑名字）：
+
+- `oem-drivers`：电脑品牌官网的驱动下载页。引擎读 `HKLM\HARDWARE\DESCRIPTION\System\BIOS` 里的
+  SystemManufacturer、SystemProductName、SystemVersion、SystemFamily、BaseBoardManufacturer、BaseBoardProduct、BIOSVendor
+  （开机时系统从 SMBIOS 抄过来，这里没有序列号），按顺序认：虚拟机（照 systemd 的 `virt.c`：产品名、系统厂商、主板厂商、
+  BIOS 厂商、产品版本里有一项以 `VMware`、`QEMU`、`innotek GmbH`、`Hyper-V` 这些开头；另外 Microsoft Corporation +
+  Virtual Machine 是 Hyper-V）→ Surface（Microsoft Corporation + 产品名以 Surface 开头）→ 按系统厂商认品牌机 → 按主板
+  厂商认自己组装的电脑（华硕、微星、技嘉、华擎）→ 认不出。厂商名只留字母数字、转大写以后比较，太短的名字（`HP`、`ASUS`、
+  `MSI`、`TIMI`）要整串相等，HPE（慧与）的服务器不算惠普。各品牌的写法照 systemd 的 hwdb 和 Linux 内核里按 DMI 认
+  笔记本的表。品牌机打开品牌官网，告诉用户在网页上搜哪个型号（联想的型号名在 SystemVersion、SystemFamily 里，产品名
+  是机器类型编号）；自己组装的电脑打开主板品牌的下载页，给出主板型号；虚拟机、认不出的品牌不打开，说明原因（认不出时提醒
+  别用搜索结果里的「驱动下载站」）。
+
+  | 品牌 | 驱动下载页 |
+  |---|---|
+  | 联想 | https://newsupport.lenovo.com.cn/driveDownloads_index.html |
+  | 惠普 | https://support.hp.com/cn-zh/drivers |
+  | 戴尔（含外星人） | https://www.dell.com/support/home/zh-cn?app=drivers |
+  | 华硕 | https://www.asus.com.cn/support/download-center/ |
+  | 宏碁 | https://www.acer.com.cn/support.html?type=1 |
+  | 华为 | https://consumer.huawei.com/cn/support/ |
+  | 荣耀 | https://www.honor.com/cn/support/ |
+  | 小米 | https://www.mi.com/service/notebook/drivers |
+  | 微星 | https://cn.msi.com/service/download |
+  | 三星 | https://www.samsung.com.cn/support/ |
+  | 技嘉 | https://www.gigabyte.cn/Support/Consumer/Download |
+  | 华擎 | https://www.asrock.com/support/index.cn.asp |
+  | 微软 Surface | https://support.microsoft.com/zh-cn/surface/drivers-firmware/download-drivers-and-firmware-for-surface |
+
+  机械革命、雷神、机械师、神舟这些国产游戏本多是同方、蓝天的模具，BIOS 里的厂商随经销商变，官网也核实不了，先不收。
+- 网页不由小药箱直接打开：小药箱是管理员，直接 ShellExecute 网址的话浏览器也会以管理员身份运行（下载的安装包不再弹
+  UAC，已经开着的浏览器也接不上）。照微软的 ExecInExplorer 示例和 Raymond Chen《How can I launch an unelevated process
+  from my elevated process and vice versa?》，请桌面的资源管理器（登录用户的普通权限）替我们打开：ShellWindows →
+  桌面窗口 → 外壳视图 → Shell.Application（IShellDispatch2）→ ShellExecute，调用前照 Firefox 的做法
+  CoAllowSetForegroundWindow，浏览器窗口才会到最前面（`platform/explorer_exec.rs`）。在单独的线程上调用，最多等 30 秒。
+  找不到桌面（资源管理器没在运行）时不退回到直接打开，把网址告诉用户，让他自己在浏览器里打开。
+- `tool_open` 返回打开以后要告诉用户的话（网页：打开的是哪个品牌的页面、在上面搜什么），没有时界面说「已经打开了」。
 - 系统工具以小药箱的权限（管理员）启动，所以不会再弹一次 UAC；「设置」页面由系统打开。
 - 命令行窗口里运行的程序都写 System32 下的绝对路径（cmd 找程序时先找当前文件夹，便携版可能放在「下载」里），
   一条失败了下一条照样运行（`&`）；整串外面再包一层引号，里面有引号和 `&` 时 cmd 只去掉最外面那一对。

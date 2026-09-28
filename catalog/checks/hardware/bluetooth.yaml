@@ -34,7 +34,7 @@ results:
     fixer: vendor
     next:
       zh-CN: 先重启电脑（关机以后再开机，笔记本最好拔掉电源等一会儿）；还不行，到电脑品牌的官网按型号下载蓝牙驱动重新装。
-    links: ["tool:open.device-manager"]
+    links: ["tool:open.device-manager", "tool:web.oem-drivers"]
   no-driver:
     status: advice
     message:
@@ -42,7 +42,7 @@ results:
     fixer: vendor
     next:
       zh-CN: 打开「Windows 更新」检查更新，再看看「可选更新」里有没有蓝牙驱动；没有的话，到电脑品牌的官网按型号下载蓝牙驱动（常和无线网卡驱动放在一起）。
-    links: ["tool:settings.windows-update", "tool:open.device-manager"]
+    links: ["tool:settings.windows-update", "tool:open.device-manager", "tool:web.oem-drivers"]
   no-adapter:
     status: advice
     message:

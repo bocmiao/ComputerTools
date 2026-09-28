@@ -432,6 +432,8 @@ impl Engine {
                     ToolOpens::Program
                 } else if o.troubleshooter.is_some() {
                     ToolOpens::GetHelp
+                } else if o.website.is_some() {
+                    ToolOpens::Website
                 } else {
                     ToolOpens::Settings
                 }
@@ -506,40 +508,113 @@ impl Engine {
         result
     }
 
-    /// 打开一个 open 小工具：系统自带的工具、「设置」里的一页，或者「获取帮助」里微软的疑难解答。
-    pub fn tool_open(&self, id: &str) -> Result<()> {
+    /// 打开一个 open 小工具：系统自带的工具、「设置」里的一页、「获取帮助」里微软的疑难解答，或者一个网页。
+    /// 返回打开以后要告诉用户的话（没有时界面说「已经打开了」）：网页要说清楚打开的是哪个品牌的页面、在上面搜什么。
+    pub fn tool_open(&self, id: &str) -> Result<Option<String>> {
         let tool = self.tool(id)?;
         let title = tool.title.get(&self.lang);
-        let request = match tool
-            .open
-            .as_ref()
-            .map(|o| (o.program.as_deref(), o.settings.as_deref(), o.troubleshooter.as_deref()))
-        {
-            Some((Some(name), None, None)) => {
-                let p = tools::program(name)
-                    .ok_or_else(|| Error::Catalog(format!("{id} 的 open.program 不在名单里：{name}")))?;
-                OpenRequest::Program { exe: p.exe, args: p.args, console: p.console }
-            }
-            Some((None, Some(page), None)) => OpenRequest::Settings(
-                tools::settings_page(page)
-                    .ok_or_else(|| Error::Catalog(format!("{id} 的 open.settings 不在名单里：{page}")))?,
-            ),
-            Some((None, None, Some(name))) => OpenRequest::GetHelp(
-                tools::troubleshooter(name)
-                    .ok_or_else(|| Error::Catalog(format!("{id} 的 open.troubleshooter 不在名单里：{name}")))?,
-            ),
-            _ => return Err(Error::Invalid(format!("「{title}」不是用来打开的工具"))),
-        };
-        self.platform.open(&request).map_err(|e| match e {
-            PlatformError::NotFound(_) if matches!(request, OpenRequest::GetHelp(_)) => Error::Invalid(format!(
+        let mut notice = None;
+        let request =
+            match tool.open.as_ref().map(|o| {
+                (o.program.as_deref(), o.settings.as_deref(), o.troubleshooter.as_deref(), o.website.as_deref())
+            }) {
+                Some((Some(name), None, None, None)) => {
+                    let p = tools::program(name)
+                        .ok_or_else(|| Error::Catalog(format!("{id} 的 open.program 不在名单里：{name}")))?;
+                    OpenRequest::Program { exe: p.exe, args: p.args, console: p.console }
+                }
+                Some((None, Some(page), None, None)) => OpenRequest::Settings(
+                    tools::settings_page(page)
+                        .ok_or_else(|| Error::Catalog(format!("{id} 的 open.settings 不在名单里：{page}")))?,
+                ),
+                Some((None, None, Some(name), None)) => OpenRequest::GetHelp(
+                    tools::troubleshooter(name)
+                        .ok_or_else(|| Error::Catalog(format!("{id} 的 open.troubleshooter 不在名单里：{name}")))?,
+                ),
+                Some((None, None, None, Some(name))) => {
+                    tools::website(name)
+                        .ok_or_else(|| Error::Catalog(format!("{id} 的 open.website 不在名单里：{name}")))?;
+                    let (url, text) = self.oem_drivers_page()?;
+                    notice = Some(text);
+                    OpenRequest::Web(url)
+                }
+                _ => return Err(Error::Invalid(format!("「{title}」不是用来打开的工具"))),
+            };
+        self.platform.open(&request).map_err(|e| match (e, request) {
+            (PlatformError::NotFound(_), OpenRequest::GetHelp(_)) => Error::Invalid(format!(
                 "这台电脑上没有「获取帮助」应用（精简过的系统、服务器版常常没有），打不开微软的「{title}」。可以在 Microsoft Store 里搜「获取帮助」装上再试，或者到「设置」的「疑难解答」页里找。"
             )),
-            PlatformError::NotFound(file) => {
+            // 不退回到直接打开：那样浏览器会跟着小药箱以管理员身份运行
+            (PlatformError::NotFound(_), OpenRequest::Web(url)) => Error::Invalid(format!(
+                "桌面（资源管理器）没在运行，小药箱没法用你的账户打开浏览器。请自己打开浏览器，输入这个网址：{url}"
+            )),
+            (e, OpenRequest::Web(url)) => {
+                Error::Invalid(format!("没能打开浏览器：{}。请自己打开浏览器，输入这个网址：{url}", platform_text(&e)))
+            }
+            (PlatformError::NotFound(file), _) => {
                 Error::Invalid(format!("这台电脑上没有「{title}」（找不到 {file}），可能被精简系统删掉了。"))
             }
-            PlatformError::Other(msg) => Error::Invalid(format!("没能打开「{title}」：{msg}")),
-            other => Error::Invalid(format!("没能打开「{title}」：{other}")),
-        })
+            (e, _) => Error::Invalid(format!("没能打开「{title}」：{}", platform_text(&e))),
+        })?;
+        Ok(notice)
+    }
+
+    /// BIOS 里写的厂商和型号（见 [`tools::BiosInfo`]）。读不到的项是空字符串。
+    fn bios_info(&self) -> tools::BiosInfo {
+        let get = |name: &str| match self.platform.reg_get(&RegRoot::LocalMachine, tools::BIOS_KEY, name) {
+            Ok(Some(RegValue::String(s) | RegValue::ExpandString(s))) => s.trim().to_owned(),
+            _ => String::new(),
+        };
+        tools::BiosInfo {
+            system_manufacturer: get("SystemManufacturer"),
+            system_product: get("SystemProductName"),
+            system_version: get("SystemVersion"),
+            system_family: get("SystemFamily"),
+            board_manufacturer: get("BaseBoardManufacturer"),
+            board_product: get("BaseBoardProduct"),
+            bios_vendor: get("BIOSVendor"),
+        }
+    }
+
+    /// 这台电脑品牌官网的驱动下载页，和打开以后要告诉用户的话。认不出品牌、是虚拟机时不打开，说明原因。
+    fn oem_drivers_page(&self) -> Result<(&'static str, String)> {
+        use tools::OemMatch;
+        const SEARCH_TIP: &str = "不要从搜索结果里的「驱动下载站」下载，那些常常捆绑别的软件。";
+        match tools::oem_match(&self.bios_info()) {
+            OemMatch::Brand { site, model } => {
+                let find = match model {
+                    Some(m) => format!("这台电脑的型号是「{m}」，在网页上搜这个型号就能找到它的驱动。"),
+                    None => "在网页上搜这台电脑的型号（写在电脑底部的标签上）就能找到它的驱动。".to_owned(),
+                };
+                Ok((site.drivers, format!("已经在浏览器里打开了{}的驱动下载页。{find}", official_site(site.brand))))
+            }
+            OemMatch::Board { site, model } => {
+                let find = match model {
+                    Some(m) => format!("主板型号是「{m}」，在网页上搜这个型号。"),
+                    None => "在网页上搜主板的型号（印在主板上）。".to_owned(),
+                };
+                Ok((
+                    site.drivers,
+                    format!(
+                        "这台电脑没有写整机品牌，多半是自己组装的，驱动要按主板找：已经在浏览器里打开了主板品牌{}的下载页。{find}",
+                        official_site(site.brand)
+                    ),
+                ))
+            }
+            OemMatch::VirtualMachine => Err(Error::Invalid(
+                "这是一台虚拟机，没有品牌官网的驱动：虚拟机的驱动由虚拟机软件提供（比如 VMware Tools、VirtualBox 的增强功能），在虚拟机软件的菜单里安装。".into(),
+            )),
+            OemMatch::Unknown { manufacturer } => {
+                let what = if manufacturer.is_empty() {
+                    "BIOS 里没有写这台电脑的品牌，小药箱认不出来。".to_owned()
+                } else {
+                    format!("小药箱还不认识「{manufacturer}」这个品牌（这是 BIOS 里写的厂商），没有它的官网地址。")
+                };
+                Err(Error::Invalid(format!(
+                    "{what}看看电脑底部的标签或者包装盒上的品牌和型号，到这个品牌官网的「服务与支持」里下载驱动；{SEARCH_TIP}"
+                )))
+            }
+        }
     }
 
     // ───────────── 功能：检测、预览 ─────────────
@@ -2569,6 +2644,20 @@ pub const NOTE_MAX_CHARS: usize = 1000;
 /// 值里可能有单位名、学校名、VPN 名的检测事实，写报告时隐藏。
 const SENSITIVE_FACTS: &[&str] =
     &["proxy_address", "proxy_server", "pac_url", "connection", "dialup_proxy", "dead_dialup"];
+
+/// 「联想官网」「微软 Surface 官网」：中文和英文、数字之间留一个空格（和界面上的写法一样）。
+fn official_site(brand: &str) -> String {
+    let gap = if brand.ends_with(|c: char| c.is_ascii_alphanumeric()) { " " } else { "" };
+    format!("{brand}{gap}官网")
+}
+
+/// 平台错误说给用户听的话：`Other` 里已经是完整的一句，不再加「系统操作失败」。
+fn platform_text(e: &PlatformError) -> String {
+    match e {
+        PlatformError::Other(msg) => msg.clone(),
+        other => other.to_string(),
+    }
+}
 
 /// 指向本机的代理地址（127.x、localhost、::1），说明的是「本机有个代理软件」，不涉及隐私。
 fn is_local_address(v: &str) -> bool {

@@ -83,4 +83,4 @@ guide:
     9. 装显卡驱动：先用 Windows 更新（「可选更新」里的「驱动程序更新」有显卡的就勾上安装）；没有的话，笔记本、品牌机到电脑品牌官网按型号下载，组装机到显卡厂商（NVIDIA、AMD、Intel）的官网下载。装完重启电脑。
 
     都试过还是不行，拍一张屏幕的照片，连同电脑型号、显示器型号发给懂哥。
-links: ["tool:settings.display", "tool:settings.optional-updates", "tool:open.device-manager", "symptom:screen-colors"]
+links: ["tool:settings.display", "tool:settings.optional-updates", "tool:open.device-manager", "symptom:screen-colors", "tool:web.oem-drivers"]

@@ -470,7 +470,7 @@ pub struct ToolLabels {
     pub values: BTreeMap<String, Text>,
 }
 
-/// open 小工具打开什么：`program`、`settings`、`troubleshooter` 三选一，都必须在引擎的名单里。
+/// open 小工具打开什么：`program`、`settings`、`troubleshooter`、`website` 四选一，都必须在引擎的名单里。
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OpenTarget {
@@ -484,4 +484,8 @@ pub struct OpenTarget {
     /// （打开 ms-contact-support://smc-to-emerald/AudioTroubleshooter）
     #[serde(default)]
     pub troubleshooter: Option<String>,
+    /// 网页，例如 `oem-drivers`（按这台电脑的品牌打开官网的驱动下载页）。网址写在引擎里，数据文件只能挑名字；
+    /// 由资源管理器用登录用户的普通权限在默认浏览器里打开
+    #[serde(default)]
+    pub website: Option<String>,
 }

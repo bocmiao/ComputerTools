@@ -55,4 +55,4 @@ guide:
     5. 设备管理器里找不到出问题的设备时，点「查看 → 显示隐藏的设备」。
 
     换了驱动、换了口都不行，可能是硬件坏了，请懂哥或者售后看看。
-links: ["tool:open.device-manager", "tool:settings.windows-update", "tool:settings.optional-updates"]
+links: ["tool:open.device-manager", "tool:settings.windows-update", "tool:settings.optional-updates", "tool:web.oem-drivers"]

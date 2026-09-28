@@ -70,4 +70,4 @@ guide:
     都不行的话，可能是无线网卡坏了，或者在 BIOS 里被关掉了，请懂哥或者电脑的售后看看。
 
     还可以用微软自带的「网络和 Internet 疑难解答」自动查一遍，能修的它直接修（点下面的按钮；它在 Windows 的「获取帮助」应用里，要联网：没有 WiFi 的话先插网线或者用手机的 USB 共享网络）。
-links: ["tool:settings.windows-update", "tool:open.device-manager", "tool:network.wifi-passwords", "tool:troubleshoot.network"]
+links: ["tool:settings.windows-update", "tool:open.device-manager", "tool:network.wifi-passwords", "tool:troubleshoot.network", "tool:web.oem-drivers"]

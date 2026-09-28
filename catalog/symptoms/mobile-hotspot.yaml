@@ -43,4 +43,4 @@ guide:
     3. 提示「我们无法设置移动热点，因为你的电脑未建立以太网、Wi-Fi 或手机网络数据连接」：先确认电脑自己能上网。电脑用「宽带连接」拨号上网的，Windows 的移动热点常常共享不了拨号连接，最省事的是用路由器拨号、开 WiFi。
     4. 手机连上了却上不了网：先关掉电脑上的 VPN、加速器、「梯子」再试，把热点关掉重开一次；学校、公司的网络常常不让共享，这是网络那边的限制。
     5. 还是不行：无线网卡驱动太旧或者不支持热点，到电脑品牌官网下载最新的无线网卡驱动装上。
-links: ["tool:settings.mobile-hotspot", "tool:settings.network"]
+links: ["tool:settings.mobile-hotspot", "tool:settings.network", "tool:web.oem-drivers"]

@@ -502,8 +502,8 @@ fn open_tools_launch_or_explain_why_not() {
     let mut get_help_missing = false;
     for t in bundle.catalog.tools.iter().filter(|t| t.group == ToolGroup::Open) {
         let open = t.open.as_ref().expect("open 小工具有 open");
-        match (&open.program, &open.settings, &open.troubleshooter) {
-            (Some(name), None, None) => {
+        match (&open.program, &open.settings, &open.troubleshooter, &open.website) {
+            (Some(name), None, None, None) => {
                 let p = tools::program(name).expect("名单里有");
                 // 命令行窗口里依次运行的程序（DISM 还会再起一个 DismHost）：打开以后一起关掉
                 let mut children: Vec<&str> = p.console.iter().map(|c| c.split(' ').next().unwrap_or(c)).collect();
@@ -517,7 +517,7 @@ fn open_tools_launch_or_explain_why_not() {
                 let before_children: Vec<(&str, Vec<u32>)> = children.iter().map(|c| (*c, pids_of(c))).collect();
                 let r = engine.tool_open(&t.id);
                 match (&r, present) {
-                    (Ok(()), true) => eprintln!("打开了 {:<28} {}", t.id, p.exe),
+                    (Ok(_), true) => eprintln!("打开了 {:<28} {}", t.id, p.exe),
                     (Err(e), false) if e.to_string().contains("这台电脑上没有") => {
                         println!("::notice title={}::这台 CI 机器上没有 {}：{e}", t.id, p.exe);
                     }
@@ -544,10 +544,10 @@ fn open_tools_launch_or_explain_why_not() {
                     close_new(c, b);
                 }
             }
-            (None, Some(page), None) => {
+            (None, Some(page), None, None) => {
                 let before = pids_of("SystemSettings.exe");
                 match engine.tool_open(&t.id) {
-                    Ok(()) => eprintln!("打开了 {:<28} ms-settings:{page}", t.id),
+                    Ok(_) => eprintln!("打开了 {:<28} ms-settings:{page}", t.id),
                     Err(e) => println!("::warning title={}::ms-settings:{page} 在这台 CI 机器上打不开：{e}", t.id),
                 }
                 std::thread::sleep(Duration::from_secs(2));
@@ -555,14 +555,14 @@ fn open_tools_launch_or_explain_why_not() {
             }
             // 「获取帮助」是应用商店的应用，服务器版上多半没有：没有时要说清楚，有的话打开再关掉。
             // 10 个疑难解答走同一条路：有一个打不开，剩下的就不再试了（每个都可能要等到超时）
-            (None, None, Some(_)) if get_help_missing => {}
-            (None, None, Some(name)) => {
+            (None, None, Some(_), None) if get_help_missing => {}
+            (None, None, Some(name), None) => {
                 let before = pids_of("GetHelp.exe");
                 // 没有处理这种链接的应用时，有的系统会弹「需要使用新应用以打开此链接」（OpenWith.exe）
                 let before_open_with = pids_of("OpenWith.exe");
                 let started = Instant::now();
                 match engine.tool_open(&t.id) {
-                    Ok(()) => eprintln!("打开了 {:<28} 「获取帮助」的 {name}", t.id),
+                    Ok(_) => eprintln!("打开了 {:<28} 「获取帮助」的 {name}", t.id),
                     Err(e) if e.to_string().contains("没有「获取帮助」应用") => {
                         println!("::notice title={}::这台 CI 机器上没有「获取帮助」：{e}", t.id);
                         get_help_missing = true;
@@ -581,10 +581,71 @@ fn open_tools_launch_or_explain_why_not() {
                 close_new("GetHelp.exe", &before);
                 close_new("OpenWith.exe", &before_open_with);
             }
+            // 品牌官网的驱动下载页：CI 机器是 Azure 上的 Hyper-V 虚拟机，要如实说「这是虚拟机」、不打开网页。
+            // 把 BIOS 里写的厂商和型号打印出来（这里没有序列号），核对认虚拟机的规则
+            (None, None, None, Some(name)) => {
+                let bios = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(tools::BIOS_KEY);
+                for value in
+                    ["SystemManufacturer", "SystemProductName", "SystemVersion", "BaseBoardManufacturer", "BIOSVendor"]
+                {
+                    let v: String = bios.as_ref().ok().and_then(|k| k.get_value(value).ok()).unwrap_or_default();
+                    eprintln!("  BIOS {value:<22} {v}");
+                }
+                match engine.tool_open(&t.id) {
+                    Err(e) if e.to_string().contains("虚拟机") => {
+                        println!("::notice title={}::CI 机器是虚拟机，没有打开网页：{e}", t.id);
+                    }
+                    other => failures.push(format!("{}（{name}）：CI 机器是虚拟机，结果却是 {other:?}", t.id)),
+                }
+            }
             _ => failures.push(format!("{}：open 写得不对", t.id)),
         }
     }
     assert!(failures.is_empty(), "有打开类小工具不对：\n{}", failures.join("\n"));
+}
+
+/// 借资源管理器打开（打开网页时就是这样让浏览器用登录用户的普通权限运行的）：请资源管理器启动一个 PowerShell，
+/// 让它把自己的父进程号写进临时文件，应当是桌面窗口所属的那个资源管理器。
+#[test]
+#[ignore = "会请资源管理器启动一个 PowerShell"]
+fn explorer_launches_programs_on_our_behalf() {
+    use medkit_core::platform::explorer_exec;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetShellWindow, GetWindowThreadProcessId};
+
+    let _desktop = desktop_lock();
+    // SAFETY: 没有参数
+    let shell = unsafe { GetShellWindow() };
+    assert!(!shell.is_null(), "这台机器上没有桌面窗口（资源管理器没在运行）");
+    let mut explorer = 0u32;
+    // SAFETY: shell 是窗口句柄，explorer 可写
+    unsafe { GetWindowThreadProcessId(shell, &mut explorer) };
+    assert_ne!(explorer, 0);
+
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("parent.txt");
+    let powershell = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()))
+        .join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+    // 命令里只用单引号，外面整个包一层双引号交给 -Command
+    let command = format!(
+        "(Get-CimInstance Win32_Process -Filter ('ProcessId=' + $PID)).ParentProcessId | Set-Content -LiteralPath '{}'",
+        out.display()
+    );
+    let args = format!("-NoProfile -NonInteractive -WindowStyle Hidden -Command \"{command}\"");
+    let started = Instant::now();
+    explorer_exec::shell_execute(&powershell.to_string_lossy(), Some(&args))
+        .unwrap_or_else(|e| panic!("资源管理器没有接下：{e:?}"));
+    eprintln!("资源管理器接下了，用了 {} 毫秒", started.elapsed().as_millis());
+
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let parent = loop {
+        if let Some(pid) = std::fs::read_to_string(&out).ok().and_then(|s| s.trim().parse::<u32>().ok()) {
+            break pid;
+        }
+        assert!(Instant::now() < deadline, "等了 60 秒 PowerShell 还没有写出父进程号");
+        std::thread::sleep(Duration::from_millis(250));
+    };
+    eprintln!("PowerShell 的父进程 {parent}，桌面的资源管理器 {explorer}");
+    assert_eq!(parent, explorer, "应当是资源管理器替我们启动的");
 }
 
 /// 开机启动项：在 HKCU 的 Run 里放一个测试用的启动项（指向记事本），列出来、停用（写和任务管理器同一个开关，

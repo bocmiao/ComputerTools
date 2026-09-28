@@ -52,4 +52,4 @@ guide:
     都不行的话，可能是网卡或者路由器坏了，请懂哥帮忙。
 
     还可以用微软自带的「网络和 Internet 疑难解答」自动查一遍，能修的它直接修（点下面的按钮；它在 Windows 的「获取帮助」应用里，要联网）。
-links: ["tool:open.network-connections", "tool:troubleshoot.network"]
+links: ["tool:open.network-connections", "tool:troubleshoot.network", "tool:web.oem-drivers"]

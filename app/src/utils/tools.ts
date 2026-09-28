@@ -4,7 +4,7 @@ import type { ToolSummary } from '../api/types'
 import { toolOpenedText } from '../labels'
 import { errorText } from './format'
 
-// 打开系统工具、「设置」里的页面：小工具页的卡片和检测结果里的 tool: 按钮都用这一套。
+// 打开系统工具、「设置」里的页面、网页：小工具页的卡片和检测结果里的 tool: 按钮都用这一套。
 
 export interface ToolOpenState {
   busy: boolean
@@ -27,8 +27,8 @@ export function useToolOpen() {
     states[tool.id] = { busy: true, ok: null, text: '正在打开…' }
     let next: ToolOpenState
     try {
-      await toolOpen(tool.id)
-      next = { busy: false, ok: true, text: toolOpenedText }
+      const notice = await toolOpen(tool.id)
+      next = { busy: false, ok: true, text: notice ?? toolOpenedText }
     } catch (e) {
       next = { busy: false, ok: false, text: errorText(e) }
     }

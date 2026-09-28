@@ -52,4 +52,4 @@ guide:
     换了几个口、几个设备都这样，请懂哥看看主板和电源。
 
     鼠标点一下变成两下、滚轮乱跳，多半是鼠标的按键老化了，不是断开：点下面的「测一测鼠标按键」看看。
-links: ["test:mouse", "tool:settings.power", "tool:open.device-manager"]
+links: ["test:mouse", "tool:settings.power", "tool:open.device-manager", "tool:web.oem-drivers"]

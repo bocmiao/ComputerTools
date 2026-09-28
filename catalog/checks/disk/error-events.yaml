@@ -40,6 +40,7 @@ results:
     fixer: helper
     next:
       zh-CN: 可以请懂哥到电脑品牌官网更新芯片组、硬盘的驱动或固件（更新前先备份重要文件）。之后如果还是反复出现，再请懂哥或售后检测一下硬盘。
+    links: ["tool:web.oem-drivers"]
   fs-corrupt:
     status: manual
     message:

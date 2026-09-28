@@ -38,7 +38,7 @@ results:
       zh-CN: 这台电脑上没找到无线网卡。很多台式机本来就没有；笔记本本来能连 WiFi 的，多半是无线网卡的驱动出了问题，看看下面「设备和驱动」的结果。
     next:
       zh-CN: 台式机想连 WiFi，可以买一个 USB 无线网卡（几十块钱，选写着「免驱」的，插上就能用）。笔记本先按一下键盘上画着飞机或者信号的键（有的要和 Fn 一起按），再打开「Windows 更新」看看「可选更新」里有没有无线网卡驱动；没有的话，到电脑品牌的官网按型号下载无线网卡驱动（WLAN 驱动）。
-    links: ["tool:settings.windows-update", "tool:open.device-manager"]
+    links: ["tool:settings.windows-update", "tool:open.device-manager", "tool:web.oem-drivers"]
 references:
   - https://support.microsoft.com/en-us/windows/experience/connectivity-networking/fix-wi-fi-connection-issues-in-windows
   - https://learn.microsoft.com/en-us/powershell/module/netadapter/get-netadapter

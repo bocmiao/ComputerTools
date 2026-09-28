@@ -1,0 +1,24 @@
+# 到电脑品牌官网下载驱动（open：website）。引擎读注册表 HKLM\HARDWARE\DESCRIPTION\System\BIOS 里写的厂商和型号（这里
+# 没有序列号）认品牌：品牌机打开品牌官网的驱动下载页，并说出在网页上搜哪个型号；自己组装的电脑按主板品牌；虚拟机、
+# 认不出的品牌不打开，说明原因。网址写在引擎的名单里（crates/medkit-core/src/tools.rs），都是中国大陆的官方页面，逐个
+# 核实过。认虚拟机照 systemd 的 virt.c，各品牌在 BIOS 里的写法照 systemd 的 hwdb 和 Linux 内核的 DMI 表。
+# 小药箱以管理员身份运行，浏览器交给资源管理器用登录用户的普通权限打开（照微软的 ExecInExplorer 示例），不以管理员
+# 身份运行。
+id: web.oem-drivers
+schema_version: 1
+group: open
+title: { zh-CN: 品牌官网的驱动下载页 }
+description:
+  zh-CN: 按这台电脑的品牌（联想、惠普、戴尔、华硕、宏碁、华为、荣耀、小米、微星、三星、技嘉、华擎、微软 Surface）打开官网的驱动下载页，并告诉你在网页上搜哪个型号；自己组装的电脑按主板品牌打开。驱动只从官网下载，不要用搜索结果里的「驱动下载站」。
+category: hardware
+open: { website: oem-drivers }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/shell/samples-execinexplorer
+  - https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/Win7Samples/winui/shell/appplatform/ExecInExplorer
+  - https://devblogs.microsoft.com/oldnewthing/20131118-00/?p=2643
+  - https://github.com/systemd/systemd/blob/main/src/basic/virt.c
+  - https://newsupport.lenovo.com.cn/driveDownloads_index.html
+  - https://support.hp.com/cn-zh/drivers
+  - https://www.asus.com.cn/support/download-center/
+  - https://www.mi.com/service/notebook/drivers
+  - https://support.microsoft.com/zh-cn/surface/drivers-firmware/download-drivers-and-firmware-for-surface

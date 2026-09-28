@@ -1059,7 +1059,7 @@ const CHECKS: Record<string, MockCheck> = {
         message: '显卡驱动没装好，现在用的是「Microsoft 基本显示适配器」。屏幕分辨率可能不对，看视频、玩游戏会卡。',
         fixer: 'system',
         next: '打开「设置 → Windows 更新 → 高级选项 → 可选更新」，看看里面有没有显卡驱动；没有的话，到电脑品牌官网按型号下载。',
-        links: ['tool:settings.windows-update', 'tool:open.device-manager'],
+        links: ['tool:settings.windows-update', 'tool:open.device-manager', 'tool:web.oem-drivers'],
         facts: { problem_devices: 1, device: 'Microsoft 基本显示适配器', problem_code: 28 },
       }
     },
@@ -1755,7 +1755,7 @@ function openTool(
   title: string,
   description: string,
   category: string,
-  opens: 'program' | 'settings' | 'get-help',
+  opens: 'program' | 'settings' | 'get-help' | 'website',
   target: string,
   audience: ToolSummary['audience'] = 'everyone',
 ): MockTool {
@@ -2035,6 +2035,14 @@ const TOOL_LIST: MockTool[] = [
     'devmgmt.msc',
   ),
   openTool(
+    'web.oem-drivers',
+    '品牌官网的驱动下载页',
+    '按这台电脑的品牌（联想、惠普、戴尔、华硕、宏碁、华为、荣耀、小米、微星、三星、技嘉、华擎、微软 Surface）打开官网的驱动下载页，并告诉你在网页上搜哪个型号；自己组装的电脑按主板品牌打开。驱动只从官网下载，不要用搜索结果里的「驱动下载站」。',
+    'hardware',
+    'website',
+    'https://newsupport.lenovo.com.cn/driveDownloads_index.html',
+  ),
+  openTool(
     'open.disk-cleanup',
     '磁盘清理',
     'Windows 自带的清理工具，可以删掉临时文件、回收站和旧的更新文件。',
@@ -2236,10 +2244,17 @@ function runMockTool(id: string): ToolResult {
   }
 }
 
-function openMockTool(id: string): null {
+function openMockTool(id: string): string | null {
   const t = getTool(id)
   const title = t.summary.title
   if (t.summary.group !== 'open') throw `「${title}」不是用来打开的工具`
+  if (DEMO_OPEN_FAIL && t.summary.opens === 'website') {
+    throw `桌面（资源管理器）没在运行，小药箱没法用你的账户打开浏览器。请自己打开浏览器，输入这个网址：${t.target ?? ''}`
+  }
+  if (t.summary.opens === 'website') {
+    // 演示：一台联想 ThinkPad（说法和引擎一样）
+    return '已经在浏览器里打开了联想官网的驱动下载页。这台电脑的型号是「ThinkPad X1 Carbon Gen 9」，在网页上搜这个型号就能找到它的驱动。'
+  }
   if (DEMO_OPEN_FAIL) {
     // ShellExecuteEx 失败，GetLastError 是 2（说法和引擎一样）
     if (t.summary.opens === 'get-help') {

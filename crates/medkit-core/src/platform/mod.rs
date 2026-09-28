@@ -8,6 +8,8 @@ use serde::Serialize;
 use crate::model::{Edition, StartType};
 use crate::registry::{RegRoot, RegValue};
 
+#[cfg(windows)]
+pub mod explorer_exec;
 pub mod mock;
 #[cfg(windows)]
 mod restart_manager;
@@ -92,6 +94,9 @@ pub enum OpenRequest {
     /// 「获取帮助」里微软的疑难解答：`ms-contact-support://smc-to-emerald/<名字>`。没有「获取帮助」应用时是
     /// [`PlatformError::NotFound`]
     GetHelp(&'static str),
+    /// 网页（https，网址只能来自 [`crate::tools`] 里的表）：请资源管理器用登录用户的普通权限在默认浏览器里打开，
+    /// 不让浏览器跟着小药箱以管理员身份运行。找不到桌面（资源管理器没在运行）时是 [`PlatformError::NotFound`]
+    Web(&'static str),
 }
 
 /// 屏幕上的一块长方形（像素，和系统的 RECT 一样：右边、下边不算在里面）。

@@ -46,6 +46,8 @@ struct State {
     winsock: Option<Vec<WinsockEntry>>,
     /// 没有「获取帮助」应用
     no_get_help: bool,
+    /// 桌面（资源管理器）没在运行，网页打不开
+    no_desktop: bool,
 }
 
 pub struct MockPlatform {
@@ -128,6 +130,11 @@ impl MockPlatform {
     /// 测试用：这台电脑上没有「获取帮助」应用。
     pub fn remove_get_help(&self) {
         self.state.lock().unwrap().no_get_help = true;
+    }
+
+    /// 测试用：资源管理器没在运行，借它打开的网页打不开。
+    pub fn stop_desktop(&self) {
+        self.state.lock().unwrap().no_desktop = true;
     }
 
     /// 测试用：让 `indirect_string(source)` 返回 `text`。
@@ -299,6 +306,9 @@ impl Platform for MockPlatform {
         }
         if matches!(request, OpenRequest::GetHelp(_)) && state.no_get_help {
             return Err(PlatformError::NotFound("获取帮助".into()));
+        }
+        if matches!(request, OpenRequest::Web(_)) && state.no_desktop {
+            return Err(PlatformError::NotFound("资源管理器".into()));
         }
         state.opened.push(*request);
         Ok(())
