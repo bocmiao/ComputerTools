@@ -1,0 +1,29 @@
+# 滚动条一直显示（不自动隐藏）：HKCU\Control Panel\Accessibility 的 DynamicScrollbars = 0，就是「设置 → 辅助功能 →
+# 视觉效果」里的「始终显示滚动条」。1 或者没有 = 自动隐藏（系统默认）。已经打开的窗口要重新打开，有的程序要注销再登录。
+id: desktop.always-show-scrollbars
+schema_version: 1
+title: { zh-CN: 滚动条一直显示 }
+description:
+  zh-CN: 「设置」和商店应用里的滚动条一直显示、不再变成细细的一条自动藏起来，眼神不好、用鼠标拖的时候方便。对应「设置 → 辅助功能 → 视觉效果」里的「始终显示滚动条」。
+category: desktop
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: logoff
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Control Panel\Accessibility
+      name: DynamicScrollbars
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Control Panel\Accessibility
+      name: DynamicScrollbars
+      delete: true
+undo: auto
+references:
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json

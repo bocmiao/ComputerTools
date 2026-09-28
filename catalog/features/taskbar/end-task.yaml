@@ -1,0 +1,35 @@
+# 任务栏右键菜单里加「结束任务」（Win11）：HKCU\…\Explorer\Advanced\TaskbarDeveloperSettings 的 TaskbarEndTask = 1，
+# 就是「设置 → 系统 → 开发者选项」里的「结束任务」开关（Windows 11 22H2 的 2023 年 11 月更新起有）。软件卡死、关不掉时
+# 在任务栏上右键它就能结束，不用打开任务管理器。没有这个值 = 关（系统默认）。更老的 Windows 不认这个值，写了也没影响。
+id: taskbar.end-task
+schema_version: 1
+title: { zh-CN: 任务栏右键菜单加「结束任务」（Win11） }
+description:
+  zh-CN: 软件卡死、点关闭没反应时，在任务栏上右键它的图标就能「结束任务」，不用再打开任务管理器找。对应「设置 → 系统 → 开发者选项」里的「结束任务」开关。
+category: taskbar
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: none
+target: current-user
+applies_to:
+  min_build: 22621
+  max_build: null
+  editions: []
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings
+      name: TaskbarEndTask
+      type: dword
+      value: 1
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings
+      name: TaskbarEndTask
+      delete: true
+undo: auto
+references:
+  - https://github.com/ChrisTitusTech/winutil/blob/main/config/tweaks.json
+  - https://www.elevenforum.com/t/enable-or-disable-end-task-in-taskbar-by-right-click-in-windows-11.14325/

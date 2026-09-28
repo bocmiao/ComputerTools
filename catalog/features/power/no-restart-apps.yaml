@@ -1,0 +1,30 @@
+# 重启、更新以后不自动重新打开上次开着的软件：HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon 的 RestartApps = 0，
+# 就是「设置 → 账户 → 登录选项」里的「自动保存我的可重启应用，并在我重新登录时重启它们」。1 = 开，0 = 关；
+# 没有这个值时各版本的默认不一样（恢复默认时删掉，由 Windows 决定）。
+id: power.no-restart-apps
+schema_version: 1
+title: { zh-CN: 重启以后不自动打开上次的软件 }
+description:
+  zh-CN: 重启、装完更新以后，不再自动把上次开着的浏览器、软件重新打开。对应「设置 → 账户 → 登录选项」里的「自动保存我的可重启应用，并在我重新登录时重启它们」。
+category: power
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: none
+target: current-user
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon
+      name: RestartApps
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon
+      name: RestartApps
+      delete: true
+undo: auto
+references:
+  - https://www.elevenforum.com/t/turn-on-or-off-automatically-restart-apps-when-sign-back-in-windows-11.5176/

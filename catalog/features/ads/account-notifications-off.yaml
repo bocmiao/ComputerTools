@@ -1,0 +1,35 @@
+# 开始菜单不显示微软账户的提醒（Win11）：HKCU\…\Explorer\Advanced 的 Start_AccountNotifications = 0，就是
+# 「设置 → 个性化 → 开始」里的「显示与账户相关的通知」（点头像时出现的「备份你的文件」「登录微软账户」这类提醒）。
+# 没有这个值 = 开（系统默认）。
+id: ads.account-notifications-off
+schema_version: 1
+title: { zh-CN: 开始菜单不提醒「登录微软账户」「备份文件」（Win11） }
+description:
+  zh-CN: 开始菜单的头像上不再冒出「登录你的微软账户」「备份你的文件」「完成账户设置」这类提醒。对应「设置 → 个性化 → 开始」里的「显示与账户相关的通知」。
+category: ads
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+applies_to:
+  min_build: 22621
+  max_build: null
+  editions: []
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: Start_AccountNotifications
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: Start_AccountNotifications
+      delete: true
+undo: auto
+references:
+  - https://www.elevenforum.com/t/enable-or-disable-notification-badging-for-microsoft-accounts-on-start-menu-in-windows-11.14645/
+  - https://www.ninjaone.com/blog/show-account-related-notifications-on-the-start-menu-windows-11/

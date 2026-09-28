@@ -1,0 +1,35 @@
+# 搜索框不显示「搜索要点」（热点、节日图画、推荐的内容）：HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings 的
+# IsDynamicSearchBoxEnabled = 0，就是「设置 → 隐私和安全性 → 搜索权限」里的「显示搜索要点」。没有这个值 = 开（系统默认）。
+# Windows 10 21H2 起、Windows 11 都有。
+id: ads.search-highlights-off
+schema_version: 1
+title: { zh-CN: 搜索框不显示热点和推荐（搜索要点） }
+description:
+  zh-CN: 任务栏搜索框、搜索页面里不再显示每天换的小图画、热点新闻和推荐的内容，只留搜索。对应「设置 → 隐私和安全性 → 搜索权限」里的「显示搜索要点」。
+category: ads
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+applies_to:
+  min_build: 19044
+  max_build: null
+  editions: []
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings
+      name: IsDynamicSearchBoxEnabled
+      type: dword
+      value: 0
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings
+      name: IsDynamicSearchBoxEnabled
+      delete: true
+undo: auto
+references:
+  - https://techcommunity.microsoft.com/blog/windows-itpro-blog/group-configuration-search-highlights-in-windows/3263989
+  - https://www.elevenforum.com/t/enable-or-disable-search-highlights-in-windows-11.5735/

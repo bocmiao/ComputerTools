@@ -10,4 +10,4 @@ category: settings
 open: { settings: windowsupdate-optionalupdates }
 references:
   - https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app
-  - https://support.microsoft.com/en-us/windows/automatically-get-recommended-drivers-and-updates-for-your-hardware-aa2e8f6c-7ff1-1fe1-bf93-44ba7abc5a2e
+  - https://support.microsoft.com/en-us/windows/update-drivers-through-device-manager-in-windows-ec62f46c-ff14-c91d-eead-d7126dc1f7b6

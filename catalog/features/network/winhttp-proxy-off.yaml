@@ -35,4 +35,4 @@ break:
 verify: network.winhttp-proxy
 references:
   - https://learn.microsoft.com/en-us/windows/win32/winhttp/netsh-exe-commands
-  - https://learn.microsoft.com/en-us/windows/win32/winhttp/winhttpsetdefaultproxyconfiguration
+  - https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpsetdefaultproxyconfiguration

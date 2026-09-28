@@ -1,0 +1,35 @@
+# 按 Alt + Tab 时只列窗口、不列 Edge 的网页标签：HKCU\…\Explorer\Advanced 的 MultiTaskingAltTabFilter = 3（只显示打开的
+# 窗口），就是「设置 → 系统 → 多任务处理」里的「在贴靠或按 Alt+Tab 时显示应用中的标签页」选「不显示标签页」。
+# 没有这个值时按各版本的默认（显示最近的几个标签页）。
+id: desktop.alt-tab-no-tabs
+schema_version: 1
+title: { zh-CN: Alt + Tab 只切换窗口，不列网页标签 }
+description:
+  zh-CN: 按 Alt + Tab 切换窗口时，不再把 Edge 浏览器里的每个网页标签都单独列出来，只列打开的窗口，切换起来不乱。对应「设置 → 系统 → 多任务处理」里的「按 Alt+Tab 时显示应用中的标签页」选「不显示标签页」。
+category: desktop
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: none
+target: current-user
+applies_to:
+  min_build: 19042
+  max_build: null
+  editions: []
+actions:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: MultiTaskingAltTabFilter
+      type: dword
+      value: 3
+windows_default:
+  - registry:
+      key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: MultiTaskingAltTabFilter
+      delete: true
+undo: auto
+references:
+  - https://www.tenforums.com/tutorials/159896-how-change-what-alt-tab-shows-windows-10-a.html
+  - https://www.elevenforum.com/t/change-number-of-tabs-from-apps-to-show-when-snapping-or-alt-tab-in-windows-11.3836/

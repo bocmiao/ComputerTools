@@ -1,0 +1,31 @@
+# 「此电脑」里盘符显示在名字前面（「(C:) 本地磁盘」）：HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer 的
+# ShowDriveLettersFirst = 4（所有盘符都放在前面；0 或者没有 = 放在后面，系统默认；1 只有网络驱动器放前面；2 不显示盘符）。
+# 按登录用户设置，重新打开「此电脑」生效。
+id: explorer.drive-letters-first
+schema_version: 1
+title: { zh-CN: 盘符显示在磁盘名字前面 }
+description:
+  zh-CN: 「此电脑」和资源管理器左边列出的磁盘，把盘符放在最前面，显示成「(D:) 软件」「(E:) 新加卷」，名字很长、磁盘很多时一眼就能找到是哪个盘。
+category: explorer
+risk: safe
+level: light
+recommend: optional
+subjective: true
+requires_admin: false
+reboot: explorer
+target: current-user
+actions:
+  - registry:
+      key: HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer
+      name: ShowDriveLettersFirst
+      type: dword
+      value: 4
+windows_default:
+  - registry:
+      key: HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer
+      name: ShowDriveLettersFirst
+      delete: true
+undo: auto
+references:
+  - https://winaero.com/show-drive-letters-before-drive-names-in-this-pc-computer-folder/
+  - https://www.tenforums.com/tutorials/64249-show-drive-letters-before-after-name-windows-10-a.html

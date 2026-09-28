@@ -9,5 +9,5 @@ description:
 category: system
 open: { program: store-reset }
 references:
-  - https://support.microsoft.com/en-us/windows/troubleshoot-problems-with-apps-from-the-microsoft-store-2ee3ec2c-5c0d-4e2d-a05b-eeaf1c2d1b1e
-  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/cannot-start-microsoft-store
+  - https://support.microsoft.com/en-us/accounts-billing/fix-problems-with-apps-from-microsoft-store
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/troubleshooting-microsoft-store-apps-download-failure

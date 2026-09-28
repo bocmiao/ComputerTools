@@ -56,5 +56,5 @@ results:
     links: ["feature:hardware.class-filters-repair", "tool:open.device-manager"]
 references:
   - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/device-manager-error-messages
-  - https://support.microsoft.com/en-us/topic/your-cd-or-dvd-drive-isn-t-recognized-by-windows-or-other-programs-64da3a6b-f0d1-8c3a-9f23-8d1d6fc3d80b
+  - https://support.microsoft.com/en-us/topic/your-cd-or-dvd-drive-is-not-recognized-by-windows-or-other-programs-64da3690-4c1d-ef04-63b8-cf9cc38ca53e
   - https://learn.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-filter-driver
