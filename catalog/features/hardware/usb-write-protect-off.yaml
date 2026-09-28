@@ -1,0 +1,36 @@
+# 去掉 U 盘的写保护：删掉 HKLM\SYSTEM\CurrentControlSet\Control\StorageDevicePolicies 的 WriteProtect（Windows 默认没有这个值）。
+# 它是 1 时，所有 U 盘都变成只读，提示「磁盘被写保护」（「U 盘防毒」「防泄密」这类软件会设）。新版 Windows 上这个值
+# 不一定每种 U 盘都管用，但本来就不该有，删掉就是回到默认。重启电脑以后生效。检测 hardware.usb-storage 报 write-protect 时
+# 给这个按钮；不写 verify（那个检测还管别的设置），按目标值判断。break_actions（测试用）：设成 1。
+id: hardware.usb-write-protect-off
+schema_version: 1
+title: { zh-CN: 去掉 U 盘的写保护 }
+description:
+  zh-CN: 去掉 Windows 里的「U 盘写保护」设置：打开以后所有 U 盘都只能看、存不进去，提示「磁盘被写保护」。只是这一个 U 盘写不进去的，多半是 U 盘上的写保护开关或者 U 盘坏了，不是这个设置。重启电脑以后生效，能撤销。
+category: hardware
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\StorageDevicePolicies
+      name: WriteProtect
+      delete: true
+windows_default:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\StorageDevicePolicies
+      name: WriteProtect
+      delete: true
+break_actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Control\StorageDevicePolicies
+      name: WriteProtect
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/answers/questions/3858457/all-usb-devices-write-protected

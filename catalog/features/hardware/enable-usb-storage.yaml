@@ -1,0 +1,27 @@
+# 恢复 U 盘驱动：把 USB 大容量存储驱动（USBSTOR）的启动类型改回 Windows 默认的「手动」（Start = 3，插上 U 盘时才启动）。
+# 被改成「禁用」（Start = 4）以后，大部分 U 盘、读卡器、移动硬盘插上都没反应。只改启动类型；改完拔下 U 盘再插上就能用，
+# 不用重启。检测 hardware.usb-driver 报 disabled 时给这个按钮；verify 用这个检测：还没装过 U 盘驱动（na）时不给执行，
+# 改好没有也看它。break_actions（测试用）：设成禁用。
+id: hardware.enable-usb-storage
+schema_version: 1
+title: { zh-CN: 恢复 U 盘驱动 }
+description:
+  zh-CN: 把被禁用的 U 盘驱动（USB 大容量存储）改回 Windows 默认的「手动」：被禁用以后，大部分 U 盘、读卡器、移动硬盘插上都没反应。改完把 U 盘拔下来再插上就能用，能撤销。单位的电脑可能是管理员故意关的，先问问再改。
+category: hardware
+risk: safe
+level: light
+recommend: optional
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+verify: hardware.usb-driver
+actions:
+  - service: { name: USBSTOR, start_type: manual }
+windows_default:
+  - service: { name: USBSTOR, start_type: manual }
+break_actions:
+  - service: { name: USBSTOR, start_type: disabled }
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/troubleshoot/windows-client/prevent-users-connect-usb

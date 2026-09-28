@@ -1,0 +1,32 @@
+# U 盘驱动（USB 大容量存储，USBSTOR）有没有被禁用。脚本：scripts/checks/hardware/usb-driver.ps1
+# HKLM\SYSTEM\CurrentControlSet\Services\USBSTOR 的 Start = 4 时，大部分 U 盘、读卡器、移动硬盘插上都没反应、「此电脑」里
+# 也看不到（微软《Prevent users from connecting to a USB storage device》就是这样禁用的；「U 盘锁」「优化」类软件、有的单位
+# 也这么做）。Windows 默认是 3（插上时才启动）。走 UAS（uaspstor 驱动）的 USB 3 移动硬盘不受影响。从来没插过 U 盘的电脑上
+# 可能还没有这个键（missing，na）。修复 hardware.enable-usb-storage 的 verify 也用这个检测（没有这个驱动时不给执行）。
+# 结果：disabled、ok、missing。事实：start。
+id: hardware.usb-driver
+schema_version: 1
+title: { zh-CN: U 盘驱动 }
+description:
+  zh-CN: 看看 U 盘驱动（USB 大容量存储）有没有被禁用。被禁用以后，大部分 U 盘、读卡器、移动硬盘插上都没反应。
+category: hardware
+requires_admin: false
+probe:
+  script: checks/hardware/usb-driver.ps1
+results:
+  ok:
+    status: ok
+    message: { zh-CN: U 盘驱动没有被禁用。 }
+  disabled:
+    status: advice
+    message:
+      zh-CN: U 盘驱动（USB 大容量存储）被禁用了：大部分 U 盘、读卡器、移动硬盘插上都没反应，「此电脑」里也看不到。多半是「U 盘锁」「优化」这类软件关的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮恢复，恢复以后把 U 盘拔下来再插上。单位的电脑可能是管理员故意关的（防止拷走资料），先问问再改。
+    links: ["feature:hardware.enable-usb-storage"]
+  missing:
+    status: na
+    message: { zh-CN: 这台电脑上还没装过 U 盘驱动，插上第一个 U 盘时 Windows 会自己装。 }
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/troubleshoot/windows-client/prevent-users-connect-usb

@@ -1418,3 +1418,50 @@ fn vc_runtime_is_installed_from_microsoft_and_then_checks_ok() {
         .unwrap_or_default();
     assert!(left.is_empty(), "下载用的文件夹没删掉：{left:?}");
 }
+
+/// U 盘：在这台机器上一个个真设上「自动装载关掉」「U 盘写保护」「U 盘驱动禁用」（用各自修复的 break_actions），
+/// 检测要查出来，点修复以后要查不出来；结束时（包括断言失败时）三处都恢复原样。CI 机器上没插 U 盘：别的都正常时是
+/// 「没看到插着的 U 盘」。和往返测试错开（它也会改这几处）。
+#[test]
+#[ignore = "会临时改 U 盘相关的设置（结束时恢复）；需要管理员权限"]
+fn usb_settings_are_detected_and_fixed() {
+    struct Restore(Arc<WindowsPlatform>, Vec<Saved>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            restore(&self.0, &self.1);
+        }
+    }
+
+    let _round_trip = round_trip_lock();
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, bundle, platform) = real_engine(dir.path());
+    let features = ["hardware.usb-automount-on", "hardware.usb-write-protect-off", "hardware.enable-usb-storage"];
+    let saved: Vec<Saved> = features
+        .iter()
+        .flat_map(|id| snapshot(&platform, bundle.catalog.features.iter().find(|f| f.id == *id).unwrap()))
+        .collect();
+    let _restore = Restore(Arc::clone(&platform), saved);
+
+    let code = |check: &str| {
+        let r = engine.run_check(check).unwrap();
+        eprintln!("{check:<24} {:?} {:?} {}", r.status, r.result_code, r.message);
+        r.result_code.unwrap_or_default()
+    };
+    let before = code("hardware.usb-storage");
+    assert!(["none", "ok", "settings-ok"].contains(&before.as_str()), "CI 机器上不该有这些设置：{before}");
+    for (feature, check, broken) in [
+        ("hardware.usb-automount-on", "hardware.usb-storage", "no-automount"),
+        ("hardware.usb-write-protect-off", "hardware.usb-storage", "write-protect"),
+        ("hardware.enable-usb-storage", "hardware.usb-driver", "disabled"),
+    ] {
+        if code(check) == "missing" {
+            println!("::notice title=usb::这台 CI 机器上没有 U 盘驱动（USBSTOR），跳过 {feature}");
+            continue;
+        }
+        engine.break_feature(feature).unwrap();
+        assert_eq!(code(check), broken, "{feature}：设上以后检测没查出来");
+        let r = engine.feature_apply(feature).unwrap();
+        assert!(r.ok, "{feature}：{r:?}");
+        assert_ne!(code(check), broken, "{feature}：修复以后检测还是这样");
+    }
+}

@@ -1,0 +1,37 @@
+# 打开「自动装载」：删掉 HKLM\SYSTEM\CurrentControlSet\Services\mountmgr 的 NoAutoMount（Windows 默认没有这个值）。它是 1 时
+# （mountvol /N、diskpart 的 automount disable 会设），新插上的 U 盘、硬盘不会自动分到盘符，「此电脑」里看不到；以前插过的
+# 不受影响。和 mountvol /E 的效果一样，只是改注册表要重启电脑以后才生效。检测 hardware.usb-storage 报 no-automount 时给这个
+# 按钮；不写 verify（那个检测还管别的设置），按目标值判断。break_actions（测试用）：设成 1。
+id: hardware.usb-automount-on
+schema_version: 1
+title: { zh-CN: 新插的 U 盘自动分配盘符 }
+description:
+  zh-CN: 打开 Windows 的「自动装载」：被关掉以后，新插上的 U 盘、移动硬盘不会自动分到盘符，「此电脑」里看不到。重启电脑以后生效，能撤销。
+category: hardware
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: reboot
+target: machine
+actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\mountmgr
+      name: NoAutoMount
+      delete: true
+windows_default:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\mountmgr
+      name: NoAutoMount
+      delete: true
+break_actions:
+  - registry:
+      key: HKLM\SYSTEM\CurrentControlSet\Services\mountmgr
+      name: NoAutoMount
+      type: dword
+      value: 1
+undo: auto
+references:
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/mountvol
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/automount

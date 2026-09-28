@@ -1,0 +1,86 @@
+# 插上 U 盘、移动硬盘以后看不到、没有盘符、存不进去的那些设置，以及现在插着的 U 盘。
+# 脚本：scripts/checks/hardware/usb-storage.ps1（读登录用户 -UserHive 的注册表；U 盘驱动被禁用是 hardware.usb-driver）。
+# 按这个顺序判断：
+#   policy：组策略禁止 U 盘：RemovableStorageDevices 的 Deny_All、可移动磁盘（{53f5630d-…}）的 Deny_Read / Deny_Write，
+#           机器的或者用户的；DeviceInstall\Restrictions 的 DenyRemovableDevices。单位电脑常见，只说明、不改。
+#   no-automount：mountmgr 的 NoAutoMount = 1（mountvol /N、diskpart 的 automount disable）：新插上的盘不分配盘符。
+#           修复 hardware.usb-automount-on。
+#   write-protect：StorageDevicePolicies 的 WriteProtect = 1：U 盘都变成只读，提示「磁盘被写保护」。
+#           修复 hardware.usb-write-protect-off。
+#   hidden-drives：Policies\Explorer 的 NoDrives / NoViewOnDrive 藏起了一些盘符，或者不让打开（A、B 不算，老的「优化」
+#           会藏软驱；插着的 U 盘都有盘符、又都没被藏起来时也不算）。只说明、不改。
+#   no-letter：插着的 U 盘（Get-Disk 里总线是 USB、SD、MMC 的；没插卡的读卡器大小是 0，不算）有「脱机」的，或者一个带盘符的
+#           分区都没有（没分区、RAW）。
+#   none：没看到插着的 U 盘：没插，或者 Windows 没认出来。
+#   ok：插着的 U 盘都有盘符；settings-ok：列不出磁盘（Get-Disk 出错），设置都正常。
+# 不读磁盘的名字和卷标（卷标常是用户自己起的名字）。
+# 事实：policy（all、read、write、install）、letters（被藏起来的盘符）、usb（插着几个）、noletter、drives（U 盘的盘符）。
+id: hardware.usb-storage
+schema_version: 1
+title: { zh-CN: U 盘设置和插着的 U 盘 }
+description:
+  zh-CN: 看看有没有让 U 盘看不到、没有盘符、存不进去的设置，再看看插着的 U 盘、移动硬盘有没有分到盘符。先把 U 盘插上再查。
+category: hardware
+requires_admin: false
+user_hive: true
+timeout_sec: 30
+probe:
+  script: checks/hardware/usb-storage.ps1
+results:
+  ok:
+    status: ok
+    message:
+      zh-CN: "插着的 U 盘、移动硬盘都分到了盘符（{drives}），在「此电脑」里就能看到。"
+  settings-ok:
+    status: ok
+    message:
+      zh-CN: 没有发现让 U 盘看不到、存不进去的设置。
+  none:
+    status: advice
+    message:
+      zh-CN: 电脑现在没看到插着的 U 盘、读卡器或者移动硬盘：还没插，或者插上了电脑却没认出来。
+    fixer: user
+    next:
+      zh-CN: 插上 U 盘以后再查一次。插着还是这样的：换一个 USB 口（台式机插机箱后面的口），别接延长线、USB 集线器；U 盘有指示灯的看看亮不亮；换一台电脑也读不出来的，多半是 U 盘坏了。
+  no-letter:
+    status: advice
+    message:
+      zh-CN: "插着的 U 盘、移动硬盘里有 {noletter} 个没有盘符（或者是「脱机」的），所以「此电脑」里看不到。"
+    fixer: user
+    next:
+      zh-CN: 打开「磁盘管理」，按容量找到它：有分区的，在分区上点右键 →「更改驱动器号和路径」→「添加」，选一个盘符；左边写着「脱机」的，在那里点右键 →「联机」；显示「未分配」或者「RAW」的，是分区坏了或者还没分区，格式化会清掉里面的文件，有要紧的文件先别动，请懂哥帮忙。
+    links: ["tool:open.disk-management"]
+  write-protect:
+    status: advice
+    message:
+      zh-CN: U 盘被设成了只读（写保护）：能打开、能看，可是存不进去、删不掉，提示「磁盘被写保护」。这是 Windows 里的一个设置，所有 U 盘都受影响，多半是「U 盘防毒」「防泄密」这类软件改的。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮去掉写保护，重启电脑以后再插 U 盘。
+    links: ["feature:hardware.usb-write-protect-off"]
+  no-automount:
+    status: advice
+    message:
+      zh-CN: 新插上的 U 盘、硬盘不会自动分到盘符（Windows 的「自动装载」被关掉了），所以插上以后「此电脑」里看不到。以前插过的 U 盘不受影响。
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮打开自动装载，重启电脑以后，新插上的 U 盘会自动分到盘符。
+    links: ["feature:hardware.usb-automount-on"]
+  policy:
+    status: manual
+    message:
+      zh-CN: 这台电脑用组策略限制了 U 盘（不让读、不让写，或者不让装 U 盘这类设备）。单位的电脑常这样设，防止拷走资料。
+    fixer: helper
+    next:
+      zh-CN: 小药箱不改组策略。单位的电脑请找管理员；自己的电脑被这样设了，可能是装过「U 盘管控」「防泄密」这类软件，先把它卸载，还不行请懂哥帮忙。
+  hidden-drives:
+    status: manual
+    message:
+      zh-CN: "资源管理器里藏起了一些盘符（{letters}）：U 盘分到这些盘符时，「此电脑」里看不到，或者打不开。这是一条策略，常是病毒或者「优化」软件改的。"
+    fixer: helper
+    next:
+      zh-CN: 小药箱不改策略。临时的办法：在资源管理器上面的地址栏里输入 U 盘的盘符加冒号（比如 E:）再按回车，还能打开（打不开的是连访问也被禁止了）。要去掉这条策略，请懂哥帮忙。
+references:
+  - https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-removablestorage
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/mountvol
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/group-policy/using-group-policy-objects-hide-specified-drives
