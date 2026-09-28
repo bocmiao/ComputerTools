@@ -55,5 +55,5 @@ results:
     message:
       zh-CN: 这台电脑没有电池（台式机），不用检查。
 references:
-  - https://learn.microsoft.com/en-us/windows-hardware/drivers/battery/battery-miniclass-drivers
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/battery/
   - https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-battery

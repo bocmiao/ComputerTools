@@ -25,4 +25,4 @@ break_actions:
   - service: { name: AudioEndpointBuilder, start_type: disabled }
 undo: auto
 references:
-  - https://learn.microsoft.com/en-us/windows/win32/coreaudio/audio-endpoint-builder-service
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-endpoint-builder-algorithm

@@ -1,0 +1,59 @@
+# 最近闪退的软件（info）。脚本：scripts/tools/system/app-crashes.ps1，只读。
+# 读应用程序日志最近 14 天的 Application Error 1000（闪退：软件的文件名、出错的模块、错误代码）和 Application Hang 1002
+# （卡死、没有响应），按软件汇总（最多 8 个，次数多的在前）：闪退几次、卡死几次、最近一次、最常出错的模块和错误代码，
+# 以及按模块的文件名（再看错误代码）判断多半是什么引起的：显卡驱动、DirectX 老组件、VC++ 运行库、.NET、叠加层和录屏
+# （Steam、Discord、RivaTuner、OBS、Nahimic 音效）、输入法、游戏的反作弊、处理器不支持的指令（c000001d）、缺少或者
+# 不匹配的 dll（c0000135、c000007b）、软件自己。只输出文件名，不输出路径（路径里可能有用户名）。
+# 结果：found、none。事实：days、apps、crashes、hangs。
+id: system.app-crashes
+schema_version: 1
+group: info
+title: { zh-CN: 最近闪退的软件 }
+description:
+  zh-CN: 软件、游戏老是闪退、卡死时用：列出最近两周哪些软件闪退或者没有响应了几次、每次是哪个模块出的错，大概是显卡驱动、运行库、叠加层、输入法还是软件自己的问题。只看不改。
+category: system
+requires_admin: false
+timeout_sec: 60
+run:
+  script: tools/system/app-crashes.ps1
+results:
+  found:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天有 {apps} 个软件闪退或者卡死过（闪退 {crashes} 次、没有响应 {hangs} 次），下面按次数列出来了，「多半是」那一行是按出错的模块判断的原因。"
+    next:
+      zh-CN: 照「软件、游戏闪退、卡死」里对应原因的办法处理：显卡驱动的更新驱动，运行库的重装运行库，叠加层的先关掉叠加层，输入法的换成微软拼音或者切到英文再玩，软件自己的更新或者重装它（游戏在平台里「验证文件完整性」）。
+    links: ["symptom:app-crash", "tool:system.install-vc-runtime", "tool:settings.optional-updates"]
+  none:
+    status: ok
+    message:
+      zh-CN: "最近 {days} 天没有软件闪退或者卡死的记录。"
+    next:
+      zh-CN: 软件是一打开就消失、连窗口都没出来的，可能是缺少运行库或者被杀毒软件拦了，看「软件打不开，提示缺少 dll」。
+    links: ["symptom:app-missing-dll"]
+labels:
+  sections:
+    app: { zh-CN: 软件 }
+  rows:
+    crashes: { zh-CN: 闪退次数 }
+    hangs: { zh-CN: 没有响应的次数 }
+    last: { zh-CN: 最近一次 }
+    module: { zh-CN: 出错的模块 }
+    code: { zh-CN: 错误代码 }
+    cause: { zh-CN: 多半是 }
+  values:
+    graphics: { zh-CN: 显卡驱动的问题（更新或者重装显卡驱动） }
+    directx: { zh-CN: DirectX 老组件缺了或者坏了（装「DirectX 最终用户运行时」） }
+    vc: { zh-CN: VC++ 运行库的问题（重装微软 VC++ 运行库） }
+    dotnet: { zh-CN: .NET 的问题（修复或者重装 .NET，更新这个软件） }
+    overlay: { zh-CN: 叠加层、录屏或者音效软件插进了游戏（先关掉它们再试） }
+    ime: { zh-CN: 输入法和它冲突（换成微软拼音，或者进游戏前切到英文） }
+    anticheat: { zh-CN: 游戏的反作弊（在游戏平台里修复游戏，重装反作弊） }
+    cpu: { zh-CN: 处理器不支持它要的指令（比如 AVX），这台电脑跑不了这个版本 }
+    missing: { zh-CN: 缺少 dll，或者 32 位、64 位装错了（看「软件打不开，提示缺少 dll」） }
+    self: { zh-CN: 软件自己的问题（更新、修复或者重装它） }
+    hang: { zh-CN: 只是卡住没有响应（多等一会儿，或者看看是不是电脑太卡） }
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/wer/windows-error-reporting
+  - https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes
+  - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55

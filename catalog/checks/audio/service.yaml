@@ -42,5 +42,5 @@ results:
     next:
       zh-CN: 请懂哥帮忙看看，可能要修复或者重装系统。
 references:
-  - https://learn.microsoft.com/en-us/windows/win32/coreaudio/audio-endpoint-builder-service
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-endpoint-builder-algorithm
   - https://support.microsoft.com/en-us/windows/fix-sound-or-audio-problems-in-windows-73025246-b61c-40fb-671a-2535c7cd56c8
