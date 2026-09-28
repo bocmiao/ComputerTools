@@ -472,6 +472,98 @@ fn close_new(exe: &str, before: &[u32]) {
     }
 }
 
+/// 桌面上的顶层窗口（句柄按整数存，方便比较）。
+fn top_windows() -> Vec<isize> {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::EnumWindows;
+    use windows_sys::core::BOOL;
+
+    unsafe extern "system" fn collect(hwnd: HWND, list: LPARAM) -> BOOL {
+        // SAFETY: list 是下面那个 Vec 的地址，EnumWindows 返回之前一直有效，只有这里写它
+        unsafe { (*(list as *mut Vec<isize>)).push(hwnd as isize) };
+        1
+    }
+    let mut list: Vec<isize> = Vec::new();
+    // SAFETY: 回调只往 list 里放句柄；list 在 EnumWindows 返回之前一直有效
+    unsafe { EnumWindows(Some(collect), &mut list as *mut Vec<isize> as LPARAM) };
+    list
+}
+
+/// 窗口的类名（窗口已经关了时是空的）。
+fn window_class(hwnd: isize) -> String {
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetClassNameW;
+    let mut name = [0u16; 256];
+    // SAFETY: 只是查询；name 的长度如实传入
+    let len = unsafe { GetClassNameW(hwnd as _, name.as_mut_ptr(), name.len() as i32) };
+    String::from_utf16_lossy(&name[..usize::try_from(len).unwrap_or(0).min(name.len())])
+}
+
+/// 看得见的资源管理器窗口（控制面板的窗口也是这一类）。
+fn folder_windows() -> Vec<isize> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible;
+    let visible = |w: isize| {
+        // SAFETY: 只是查询
+        unsafe { IsWindowVisible(w as _) != 0 }
+    };
+    top_windows().into_iter().filter(|&w| visible(w) && window_class(w) == "CabinetWClass").collect()
+}
+
+/// 关掉测试打开的资源管理器窗口：控制面板的「高级共享设置」「网络连接」「防火墙」这些页面显示在 explorer.exe 里，
+/// control.exe 交代完就退出了，按它关不掉，会一直留在屏幕上（CI 139、145 里盖住了看「鼠标指着的窗口」的测试的记事本）。
+/// 只关打开之前还没有的，和点右上角的叉一样；等它们真的关掉，最多 5 秒。返回关了几个。
+fn close_new_folder_windows(before: &[isize]) -> usize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IsWindow, PostMessageW, WM_CLOSE};
+    let new: Vec<isize> = folder_windows().into_iter().filter(|w| !before.contains(w)).collect();
+    for &w in &new {
+        // SAFETY: 只是给这个窗口发一个关闭消息
+        unsafe { PostMessageW(w as _, WM_CLOSE, 0, 0) };
+    }
+    let open = |w: isize| {
+        // SAFETY: 只是查询
+        unsafe { IsWindow(w as _) != 0 }
+    };
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while new.iter().any(|&w| open(w)) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    new.len()
+}
+
+/// 窗口的类名、所属进程、位置和状态，测试失败时打印（不打印标题：资源管理器窗口的标题可能是用户文件夹的名字）。
+fn describe_window(hwnd: isize) -> String {
+    use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GWL_STYLE, GetWindowLongW, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, WS_DISABLED,
+        WS_EX_TOPMOST,
+    };
+    if hwnd == 0 {
+        return "（没有）".into();
+    }
+    let mut rect = RECT::default();
+    let mut pid = 0u32;
+    // SAFETY: 只是查询；rect、pid 是有效的输出位置
+    let (visible, style, ex_style) = unsafe {
+        GetWindowRect(hwnd as _, &mut rect);
+        GetWindowThreadProcessId(hwnd as _, &mut pid);
+        (
+            IsWindowVisible(hwnd as _) != 0,
+            GetWindowLongW(hwnd as _, GWL_STYLE) as u32,
+            GetWindowLongW(hwnd as _, GWL_EXSTYLE) as u32,
+        )
+    };
+    format!(
+        "{}（进程 {pid}），({}, {}) 到 ({}, {})，{}{}{}",
+        window_class(hwnd),
+        rect.left,
+        rect.top,
+        rect.right,
+        rect.bottom,
+        if visible { "看得见" } else { "看不见" },
+        if style & WS_DISABLED != 0 { "，被禁用" } else { "" },
+        if ex_style & WS_EX_TOPMOST != 0 { "，总在最前" } else { "" },
+    )
+}
+
 /// 查打开某种链接的应用（「获取帮助」的疑难解答先用它看有没有这个应用）：瞎编的一定没有，常见的几种总有能查到的；
 /// 每种在这台机器上是什么，打印出来看。
 #[test]
@@ -515,6 +607,9 @@ fn open_tools_launch_or_explain_why_not() {
                 }
                 let before = pids_of(p.exe);
                 let before_children: Vec<(&str, Vec<u32>)> = children.iter().map(|c| (*c, pids_of(c))).collect();
+                // 控制面板的对话框（区域、索引选项）在 control.exe 另起的 rundll32.exe 里，别的页面在资源管理器里
+                let before_rundll = pids_of("rundll32.exe");
+                let before_windows = top_windows();
                 let r = engine.tool_open(&t.id);
                 match (&r, present) {
                     (Ok(_), true) => eprintln!("打开了 {:<28} {}", t.id, p.exe),
@@ -542,6 +637,13 @@ fn open_tools_launch_or_explain_why_not() {
                 close_new(p.exe, &before);
                 for (c, b) in &before_children {
                     close_new(c, b);
+                }
+                if p.exe.eq_ignore_ascii_case("control.exe") {
+                    close_new("rundll32.exe", &before_rundll);
+                }
+                let closed = close_new_folder_windows(&before_windows);
+                if closed > 0 {
+                    eprintln!("  关掉了 {closed} 个资源管理器窗口");
                 }
             }
             (None, Some(page), None, None) => {
@@ -1944,10 +2046,10 @@ fn offline_and_paused_printers_are_put_back_to_work() {
 fn window_owner_names_the_program_under_the_mouse() {
     use medkit_core::views::WindowOwnerKind;
     use medkit_core::window_owner::{self, is_generic, owning_program, program_folders};
-    use windows_sys::Win32::Foundation::{POINT, RECT};
+    use windows_sys::Win32::Foundation::{GetLastError, POINT, RECT};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, GA_ROOT, GetAncestor, GetClassNameW, GetCursorPos, GetWindowRect, GetWindowThreadProcessId,
-        HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SetCursorPos, SetWindowPos, WindowFromPoint,
+        FindWindowW, GA_ROOT, GetAncestor, GetCursorPos, GetWindowRect, GetWindowThreadProcessId, HWND_TOPMOST,
+        SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SetCursorPos, SetWindowPos, WindowFromPoint,
     };
     let _desktop = desktop_lock();
 
@@ -1997,6 +2099,8 @@ fn window_owner_names_the_program_under_the_mouse() {
     // 鼠标指着的窗口：随便指着什么都不能出错
     let (report, _) = window_owner::find(&p).unwrap();
     eprintln!("现在鼠标指着：{report:?}");
+    // 别的测试留下的资源管理器窗口会盖住记事本：留下了多少，打印出来
+    eprintln!("屏幕上看得见的资源管理器窗口：{} 个", folder_windows().len());
 
     // 打开一个记事本，把鼠标移到它上面，应该认出是 Windows 自带的记事本
     let child = Kill(Command::new(Path::new(&windir).join(r"System32\notepad.exe")).spawn().unwrap());
@@ -2017,9 +2121,17 @@ fn window_owner_names_the_program_under_the_mouse() {
         println!("::notice title=window owner::这台 CI 机器上没等到记事本的窗口，跳过鼠标那一段");
         return;
     }
-    // 别的测试同时会打开任务管理器这些窗口：把记事本放到最上面，免得被盖住
-    // SAFETY: window 是记事本的窗口；只改前后顺序，不移动、不改大小
-    unsafe { SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW) };
+    // 屏幕上可能还有别的窗口：把记事本放到最上面，免得被盖住。放不上去时记下错误代码，失败时打印
+    let to_top = || {
+        // SAFETY: window 是记事本的窗口；只改前后顺序，不移动、不改大小
+        if unsafe { SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW) } != 0 {
+            None
+        } else {
+            // SAFETY: 没有参数
+            Some(unsafe { GetLastError() })
+        }
+    };
+    let mut to_top_error = to_top();
     let mut rect = RECT::default();
     // SAFETY: rect 是有效的输出位置
     assert_ne!(unsafe { GetWindowRect(window, &mut rect) }, 0);
@@ -2044,18 +2156,21 @@ fn window_owner_names_the_program_under_the_mouse() {
         }
         last = Some(r);
         // 还有别的窗口盖在记事本上面（比如刚打开的窗口）：再把记事本放到最上面
-        // SAFETY: window 是记事本的窗口；只改前后顺序，不移动、不改大小
-        unsafe { SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW) };
+        to_top_error = to_top().or(to_top_error);
         std::thread::sleep(Duration::from_millis(100));
     }
-    // 盖住记事本的是哪一类窗口，出问题时好查
-    let mut name = [0u16; 256];
-    // SAFETY: 只是查询；name 的长度如实传入
-    let len = unsafe {
+    // 盖住记事本的是哪个窗口、记事本自己是什么状态，出问题时好查
+    // SAFETY: 只是查询
+    let hit = unsafe {
         let hit = WindowFromPoint(at);
-        let root = if hit.is_null() { hit } else { GetAncestor(hit, GA_ROOT) };
-        if root.is_null() { 0 } else { GetClassNameW(root, name.as_mut_ptr(), name.len() as i32) }
+        if hit.is_null() { hit } else { GetAncestor(hit, GA_ROOT) }
     };
-    let class = String::from_utf16_lossy(&name[..usize::try_from(len).unwrap_or(0).min(name.len())]);
-    panic!("鼠标在记事本的窗口上，认出来的却是：{last:?}（鼠标下面的窗口的类名：{class}）");
+    panic!(
+        "鼠标在记事本的窗口上，认出来的却是：{last:?}\n鼠标下面的窗口：{}\n记事本的窗口：{}\n\
+         放到最上面：{}\n屏幕上看得见的资源管理器窗口：{} 个",
+        describe_window(hit as isize),
+        describe_window(window as isize),
+        to_top_error.map_or("都成功了".to_string(), |e| format!("失败过，错误代码 {e}")),
+        folder_windows().len(),
+    );
 }
