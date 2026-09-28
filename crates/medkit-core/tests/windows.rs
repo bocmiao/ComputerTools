@@ -1408,6 +1408,34 @@ fn wifi_status_is_read_without_the_network_name() {
     assert!(unresolved(&r.message).is_empty(), "{}", r.message);
 }
 
+/// Microsoft Edge 在「应用和功能」里登记的命令（只读，打印出来）：「设置 → 应用 → Microsoft Edge → 修改」运行的就是 ModifyPath，
+/// 给「修复 Edge」核对它长什么样、和卸载命令怎么区分。只读 HKLM（程序装在 Program Files 里，没有用户路径）。
+#[test]
+fn edge_registers_its_modify_and_uninstall_commands() {
+    use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY};
+    let hklm = winreg::RegKey::predef(HKEY_LOCAL_MACHINE);
+    let mut found = false;
+    for (label, view) in [("32 位视图", KEY_WOW64_32KEY), ("64 位视图", KEY_WOW64_64KEY)] {
+        let Ok(key) = hklm.open_subkey_with_flags(
+            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft Edge",
+            KEY_READ | view,
+        ) else {
+            continue;
+        };
+        found = true;
+        eprintln!("{label}：");
+        for name in ["DisplayName", "DisplayVersion", "Publisher", "ModifyPath", "UninstallString", "InstallLocation"] {
+            eprintln!("  {name} = {:?}", key.get_value::<String, _>(name).ok());
+        }
+        for name in ["NoModify", "NoRepair", "NoRemove", "SystemComponent"] {
+            eprintln!("  {name} = {:?}", key.get_value::<u32, _>(name).ok());
+        }
+    }
+    if !found {
+        println!("::notice title=edge::这台机器的「应用和功能」里没有 Microsoft Edge");
+    }
+}
+
 /// Winsock 目录：真的读一次（只读）。64 位的目录里要有 Windows 自己的 TCP/IP（mswsock.dll，文件在），64 位 Windows 上
 /// 还要读到 32 位程序用的那一份；检测要给出结论（CI 机器上一般是 ok）。只打印文件名和版本信息，没有路径。
 #[test]
