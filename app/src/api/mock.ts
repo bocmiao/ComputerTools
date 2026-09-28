@@ -38,6 +38,8 @@ import type {
   FileLockUser,
   JournalEntryView,
   JournalSession,
+  KeyMappingInput,
+  KeyOption,
   NewMenuItem,
   Preview,
   ShellPlaceItem,
@@ -1409,7 +1411,7 @@ function undoOne(entry: JournalEntryView, force: boolean, inSession: boolean): U
   else if (entry.pending) message = `已按修改前的记录恢复：${entry.target} 设为 ${entry.before}。`
   else message = `已恢复原状：${entry.target} 改回了 ${entry.before}。`
   // 和执行时一样：恢复以后要重启资源管理器、注销……才看得到变化
-  const reboot = FEATURES.get(entry.feature)?.summary.reboot ?? 'none'
+  const reboot = entry.feature === 'key-remap' ? 'reboot' : (FEATURES.get(entry.feature)?.summary.reboot ?? 'none')
   return { entryId: entry.id, ok: true, drift: false, message, error: null, reboot }
 }
 
@@ -2008,6 +2010,71 @@ const shellPlacesMock: ShellPlaceItem[] = (
     { id: '{679F137C-3162-45DA-BE3C-2F9C3D093F64}', title: '百度网盘', places: ['pc'], windowsOwn: false, visible: true, note: '' },
   ] satisfies ShellPlaceItem[]
 ).sort((a, b) => (a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1)) // 和引擎一样按名字排
+// 改键（演示）：能选的键挑了常用的一部分（引擎里是整个键盘）。现在的设置按修改日志里的说法存，撤销时原样放回去
+const KEYMAP_TARGET = 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Keyboard Layout\\Scancode Map'
+const KEYMAP_NONE = '没有改键（Windows 默认）'
+const keymapKey = (id: string, label: string): KeyOption => ({ id, label, targetOnly: false })
+const keymapMedia = (id: string, label: string): KeyOption => ({ id, label, targetOnly: true })
+const keymapKeys: KeyOption[] = [
+  keymapKey('Escape', 'Esc'),
+  ...Array.from({ length: 12 }, (_, i) => keymapKey(`F${i + 1}`, `F${i + 1}`)),
+  keymapKey('Backspace', 'Backspace（退格）'),
+  keymapKey('Tab', 'Tab'),
+  keymapKey('CapsLock', 'Caps Lock（大写锁定）'),
+  keymapKey('Enter', 'Enter（回车）'),
+  keymapKey('ShiftLeft', '左 Shift'),
+  keymapKey('ShiftRight', '右 Shift'),
+  keymapKey('ControlLeft', '左 Ctrl'),
+  keymapKey('MetaLeft', '左 Win'),
+  keymapKey('AltLeft', '左 Alt'),
+  keymapKey('Space', '空格'),
+  keymapKey('AltRight', '右 Alt'),
+  keymapKey('MetaRight', '右 Win'),
+  keymapKey('ContextMenu', '菜单键（右 Ctrl 左边）'),
+  keymapKey('ControlRight', '右 Ctrl'),
+  keymapKey('PrintScreen', 'Print Screen（截屏）'),
+  keymapKey('ScrollLock', 'Scroll Lock'),
+  keymapKey('Insert', 'Insert（插入）'),
+  keymapKey('Delete', 'Delete（删除）'),
+  keymapKey('Home', 'Home'),
+  keymapKey('End', 'End'),
+  keymapKey('PageUp', 'Page Up'),
+  keymapKey('PageDown', 'Page Down'),
+  keymapKey('NumLock', 'Num Lock（数字锁定）'),
+  keymapMedia('AudioVolumeMute', '静音'),
+  keymapMedia('AudioVolumeDown', '音量减小'),
+  keymapMedia('AudioVolumeUp', '音量增大'),
+  keymapMedia('MediaPlayPause', '播放 / 暂停'),
+  keymapMedia('MediaTrackPrevious', '上一首'),
+  keymapMedia('MediaTrackNext', '下一首'),
+]
+/** 修改日志里的说法 → 那时的改键 */
+const keymapStates = new Map<string, KeyMappingInput[]>([[KEYMAP_NONE, []]])
+
+function keymapText(m: KeyMappingInput): string {
+  const name = (id: string): string => keymapKeys.find((k) => k.id === id)?.label ?? id
+  return `${name(m.from)} → ${m.to === null ? '不起作用' : name(m.to)}`
+}
+
+function keymapCurrent(): KeyMappingInput[] {
+  return keymapStates.get(values.get(KEYMAP_TARGET) ?? KEYMAP_NONE) ?? []
+}
+
+/** 和引擎一样检查：键要在名单里、多媒体键只能当目标、不能改成自己、同一个键不能改两次 */
+function keymapResolve(mappings: KeyMappingInput[]): KeyMappingInput[] {
+  const seen = new Set<string>()
+  return mappings.map((m) => {
+    const from = keymapKeys.find((k) => k.id === m.from)
+    if (!from) throw `认不出这个键：${m.from}`
+    if (from.targetOnly) throw `「${from.label}」只能当「变成」的键，不能改它本身。`
+    const to = m.to ?? null
+    if (to !== null && !keymapKeys.some((k) => k.id === to)) throw `认不出这个键：${to}`
+    if (to === m.from) throw `「${from.label}」改成它自己，等于没改。`
+    if (seen.has(m.from)) throw `「${from.label}」改了两次，只能留一个。`
+    seen.add(m.from)
+    return { from: m.from, to }
+  })
+}
 const contextMenuMock: ContextMenuItem[] = [
   {
     id: 'menu-rar', kind: 'extension', title: 'WinRAR shell extension', program: 'rarext.dll',
@@ -2300,6 +2367,39 @@ const handlers: Handlers = {
     result.message = visible
       ? '已经恢复了，新打开的资源管理器窗口里就能看到；还看不到的话，重启一下资源管理器。'
       : '已经隐藏了，新打开的资源管理器窗口里就看不到了；还看得到的话，重启一下资源管理器。软件本身不受影响；想要回来，在这里点「恢复」，或者在修改日志里撤销。'
+    return result
+  },
+
+  key_remap_get: () => ({
+    keys: keymapKeys,
+    mappings: keymapCurrent().map((m) => ({ from: m.from, to: m.to, text: keymapText(m) })),
+    foreign: false,
+    foreignText: null,
+  }),
+
+  key_remap_set: ({ mappings }) => {
+    const wanted = keymapResolve(mappings)
+    const before = values.get(KEYMAP_TARGET) ?? KEYMAP_NONE
+    const after = wanted.length === 0 ? KEYMAP_NONE : wanted.map(keymapText).join('；')
+    const result: ApplyResult = {
+      feature: 'key-remap', sessionId: ensureSession().id, entryIds: [], ok: true, verified: 'applied',
+      message: '本来就是这样，不用改。', reboot: 'none', notes: [], error: null,
+    }
+    if (before === after) return result
+    keymapStates.set(after, wanted)
+    const session = ensureSession()
+    const entry: JournalEntryView = {
+      id: uuid(), sessionId: session.id, time: iso(Date.now()), feature: 'key-remap',
+      featureTitle: '键位重映射（改键）', target: KEYMAP_TARGET, before, after,
+      ok: true, pending: false, undone: false, undoneAt: null, canUndo: true, error: null,
+    }
+    session.entries.push(entry)
+    values.set(KEYMAP_TARGET, after)
+    result.entryIds = [entry.id]
+    result.reboot = 'reboot'
+    result.message = wanted.length === 0
+      ? '已经把改键全部去掉了，重启电脑以后所有键恢复原样。'
+      : `已经改好了：${after}。重启电脑以后生效。想改回来，在这里点「全部恢复」，或者在修改日志里撤销，也是重启以后生效。`
     return result
   },
 

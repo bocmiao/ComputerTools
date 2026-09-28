@@ -3,10 +3,11 @@
 use std::sync::Arc;
 
 use medkit_core::Engine;
+use medkit_core::keymap::MappingInput;
 use medkit_core::lockers::LockTarget;
 use medkit_core::views::{
     ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, FeatureState, FileLockReport, JournalSession,
-    NewMenuItem, Preview, ShellPlaceItem, StartupItem, SymptomDetail, SystemInfo, ToolResult, UndoResult,
+    KeyRemapView, NewMenuItem, Preview, ShellPlaceItem, StartupItem, SymptomDetail, SystemInfo, ToolResult, UndoResult,
     WindowOwnerReport,
 };
 use tauri::State;
@@ -151,6 +152,18 @@ pub async fn shell_places_list(state: State<'_, AppState>) -> CmdResult<Vec<Shel
 #[tauri::command]
 pub async fn shell_places_set(state: State<'_, AppState>, id: String, visible: bool) -> CmdResult<ApplyResult> {
     with_engine(state, move |e| e.shell_places_set(&id, visible)).await
+}
+
+/// 现在的改键（键位重映射），和能选的键。
+#[tauri::command]
+pub async fn key_remap_get(state: State<'_, AppState>) -> CmdResult<KeyRemapView> {
+    with_engine(state, |e| e.key_remap_get()).await
+}
+
+/// 把改键整个换成这些（空的：全部恢复），记进修改日志，重启电脑以后生效。键只能是名单里的。
+#[tauri::command]
+pub async fn key_remap_set(state: State<'_, AppState>, mappings: Vec<MappingInput>) -> CmdResult<ApplyResult> {
+    with_engine(state, move |e| e.key_remap_set(&mappings)).await
 }
 
 /// 批量重命名：用系统的文件夹选择框选一个文件夹。界面拿不到、也传不了别的路径。

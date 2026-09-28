@@ -19,6 +19,7 @@ use crate::journal::{
     ApplyRecord, CommitRecord, Entry, Journal, RECORD_VERSION, Record, State, TargetRef, UndoReason, UndoRecord,
     new_id, now_rfc3339,
 };
+use crate::keymap;
 use crate::model::{
     Action, Check, Feature, RegType, RegistryAction, Risk, StartType, Status, Symptom, Target, Tool, ToolGroup, Undo,
 };
@@ -33,9 +34,9 @@ use crate::startup;
 use crate::tools;
 use crate::views::{
     ApplyResult, CatalogSummary, CheckResult, ContextMenuItem, ContextMenuKind, FeatureState, FeatureStateKind,
-    FeatureSummary, FileLockReport, JournalEntryView, JournalSession, NewMenuItem, Preview, PreviewChange,
-    ProfileSummary, ShellPlaceItem, StartupItem, SymptomDetail, SymptomStep, SymptomSummary, SystemInfo, ToolOpens,
-    ToolResult, ToolSummary, UndoResult,
+    FeatureSummary, FileLockReport, JournalEntryView, JournalSession, KeyMappingView, KeyOption, KeyRemapView,
+    NewMenuItem, Preview, PreviewChange, ProfileSummary, ShellPlaceItem, StartupItem, SymptomDetail, SymptomStep,
+    SymptomSummary, SystemInfo, ToolOpens, ToolResult, ToolSummary, UndoResult,
 };
 
 const SCRIPT_FEATURE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -1228,6 +1229,147 @@ impl Engine {
         }
     }
 
+    // ───────────── 改键（键位重映射） ─────────────
+
+    /// 改键的那个值：`bytes` 为空时是删掉它（恢复 Windows 默认）。
+    fn key_remap_action(bytes: Option<&[u8]>) -> Action {
+        Action::Registry(RegistryAction {
+            key: keymap::KEY.to_owned(),
+            name: keymap::VALUE.to_owned(),
+            value_type: bytes.map(|_| RegType::Binary),
+            value: bytes.map(|b| Value::String(hex::encode(b))),
+            delete: bytes.is_none(),
+        })
+    }
+
+    /// 现在的 `Scancode Map`：没有这个值是 `None`；类型不对的值 Windows 也不认，当成认不出来的格式（空的字节）。
+    fn key_remap_bytes(&self) -> Result<Option<Vec<u8>>> {
+        let (_, state) = self.current(&Self::key_remap_action(None))?;
+        Ok(match state {
+            State::Registry { value: Some(RegValue::Binary(bytes)), .. } => Some(bytes),
+            State::Registry { value: Some(_), .. } => Some(Vec::new()),
+            _ => None,
+        })
+    }
+
+    /// 一条映射小药箱认不认得：按下的键和变成的键都在名单里，按下的不是只能当目标的多媒体键。
+    fn key_mapping_known(m: keymap::Mapping) -> bool {
+        keymap::by_code(m.from).is_some_and(|k| !k.target_only) && (m.to == 0 || keymap::by_code(m.to).is_some())
+    }
+
+    /// 现在的改键，和能选的键。
+    pub fn key_remap_get(&self) -> Result<KeyRemapView> {
+        let bytes = self.key_remap_bytes()?;
+        let keys = keymap::KEYS
+            .iter()
+            .map(|k| KeyOption { id: k.id.to_owned(), label: k.label.to_owned(), target_only: k.target_only })
+            .collect();
+        let mut view = KeyRemapView { keys, mappings: Vec::new(), foreign: false, foreign_text: None };
+        match bytes.as_deref().map(keymap::parse) {
+            None => {}
+            Some(None) => {
+                view.foreign = true;
+                view.foreign_text = Some(keymap::describe_value(bytes.as_deref()));
+            }
+            Some(Some(list)) => {
+                let mut unknown = Vec::new();
+                for m in list {
+                    if Self::key_mapping_known(m) {
+                        view.mappings.push(KeyMappingView {
+                            from: keymap::by_code(m.from).map(|k| k.id.to_owned()).unwrap_or_default(),
+                            to: keymap::by_code(m.to).map(|k| k.id.to_owned()),
+                            text: keymap::describe(m),
+                        });
+                    } else {
+                        unknown.push(keymap::describe(m));
+                    }
+                }
+                if !unknown.is_empty() {
+                    view.foreign = true;
+                    view.foreign_text = Some(unknown.join("；"));
+                }
+            }
+        }
+        Ok(view)
+    }
+
+    /// 把改键整个换成 `mappings`（空的：删掉这个值，恢复 Windows 默认），记进修改日志，能撤销，重启电脑以后生效。
+    /// 现在的设置里有认不出来的键（别的改键软件设的）时，只能整个清掉，不在这里接着改。
+    pub fn key_remap_set(&self, mappings: &[keymap::MappingInput]) -> Result<ApplyResult> {
+        let _guard = self.apply_lock.lock().unwrap();
+        let wanted = keymap::resolve(mappings).map_err(Error::Invalid)?;
+        let current = self.key_remap_bytes()?;
+        let current_list = current.as_deref().map(keymap::parse);
+        let foreign = match &current_list {
+            None => false,
+            Some(None) => true,
+            Some(Some(list)) => !list.iter().all(|m| Self::key_mapping_known(*m)),
+        };
+        if foreign && !wanted.is_empty() {
+            return Err(Error::Invalid(
+                "这台电脑已经有别的软件设置的改键，里面有小药箱认不出来的键。为了不弄乱，小药箱只能把它整个清掉\
+                 （点「全部恢复」），不能在这里接着改。"
+                    .to_owned(),
+            ));
+        }
+        let mut r = ApplyResult {
+            feature: keymap::FEATURE_ID.to_owned(),
+            session_id: self.session.clone(),
+            entry_ids: Vec::new(),
+            ok: true,
+            verified: FeatureStateKind::Applied,
+            message: "本来就是这样，不用改。".to_owned(),
+            reboot: crate::model::Reboot::None,
+            notes: Vec::new(),
+            error: None,
+        };
+        let same = match &current_list {
+            None => wanted.is_empty(),
+            Some(Some(list)) => *list == wanted,
+            Some(None) => false,
+        };
+        if same {
+            return Ok(r);
+        }
+        let bytes = (!wanted.is_empty()).then(|| keymap::build(&wanted));
+        let action = Self::key_remap_action(bytes.as_deref());
+        match self.apply_one(keymap::FEATURE_ID, 0, &action) {
+            Ok((rec, _)) => {
+                r.entry_ids.push(rec.id);
+                r.reboot = crate::model::Reboot::Reboot;
+                r.message = if wanted.is_empty() {
+                    "已经把改键全部去掉了，重启电脑以后所有键恢复原样。".to_owned()
+                } else {
+                    format!(
+                        "已经改好了：{}。重启电脑以后生效。想改回来，在这里点「全部恢复」，或者在修改日志里撤销，也是重启以后生效。",
+                        wanted.iter().map(|m| keymap::describe(*m)).collect::<Vec<_>>().join("；")
+                    )
+                };
+            }
+            Err(step) => {
+                r.ok = false;
+                r.verified = FeatureStateKind::Unknown;
+                r.entry_ids.extend(step.entry);
+                r.message = if step.left_changes {
+                    "没有改成功，而且改动没能自动退回，请在修改日志里手动恢复。".to_owned()
+                } else {
+                    "没有改成功，已经退回原样。".to_owned()
+                };
+                r.error = Some(step.error.to_string());
+            }
+        }
+        Ok(r)
+    }
+
+    /// 修改日志里改键的状态，说人话。
+    fn key_remap_state_label(state: &State) -> String {
+        match state {
+            State::Registry { value: Some(RegValue::Binary(bytes)), .. } => keymap::describe_value(Some(bytes)),
+            State::Registry { value: None, .. } => keymap::describe_value(None),
+            other => Self::state_label(other),
+        }
+    }
+
     // ───────────── 文件删不掉：是谁占着 ─────────────
 
     /// 哪些程序在用这些文件（或者这个文件夹里的文件）。只读：不关程序，不动文件，不记修改日志。
@@ -2105,8 +2247,12 @@ impl Engine {
         let force = force || entry.is_pending();
         let mut r = self.revert(&entry.apply, after, UndoReason::User, force)?;
         if r.ok {
-            // 恢复原状和当初修改一样，要重启资源管理器、注销之后才看得到
-            r.reboot = self.catalog.feature(&entry.apply.feature).map_or_else(Default::default, |f| f.reboot);
+            // 恢复原状和当初修改一样，要重启资源管理器、注销之后才看得到；改键要重启电脑
+            r.reboot = if entry.apply.feature == keymap::FEATURE_ID {
+                crate::model::Reboot::Reboot
+            } else {
+                self.catalog.feature(&entry.apply.feature).map_or_else(Default::default, |f| f.reboot)
+            };
         }
         Ok(r)
     }
@@ -2158,9 +2304,13 @@ impl Engine {
             };
             let pinned = matches!(&e.apply.target, TargetRef::Registry { name, .. }
                 if name.eq_ignore_ascii_case(shell_places::PINNED_VALUE));
+            // 改键：状态说成「Caps Lock → 左 Ctrl」这样，不显示一串十六进制
+            let keymap_entry = e.apply.feature == keymap::FEATURE_ID;
             let label = |s: &State| {
                 if startup_entry {
                     Self::startup_state_label(s)
+                } else if keymap_entry {
+                    Self::key_remap_state_label(s)
                 } else if menu_entry {
                     Self::menu_state_label(s)
                 } else if new_menu_entry {
@@ -2184,6 +2334,7 @@ impl Engine {
                     self.shell_place_journal_title(place_clsid.as_deref().unwrap_or_default())
                 ),
                 _ if e.apply.feature == LEGACY_STARTUP_FEATURE => "停用开机启动项".to_owned(),
+                _ if keymap_entry => "键位重映射（改键）".to_owned(),
                 _ => self
                     .catalog
                     .feature(&e.apply.feature)

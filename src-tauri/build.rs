@@ -26,6 +26,8 @@ const COMMANDS: &[&str] = &[
     "new_menu_set",
     "shell_places_list",
     "shell_places_set",
+    "key_remap_get",
+    "key_remap_set",
     "rename_select_folder",
     "rename_preview",
     "rename_apply",

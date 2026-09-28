@@ -279,6 +279,24 @@ fn shell_places_commands_pass_the_permission_check() {
     assert!(e.as_str().is_some_and(|m| m.contains("不在刚才的列表里")), "{e}");
 }
 
+#[test]
+fn key_remap_commands_pass_the_permission_check() {
+    let win = app();
+    let view = ok(&win, "key_remap_get", json!({}));
+    has_keys(&view, &["keys", "mappings", "foreign", "foreignText"]);
+    has_keys(&view["keys"][0], &["id", "label", "targetOnly"]);
+    // 「不起作用」的那条不带 to
+    let mappings = json!([{ "from": "CapsLock", "to": "ControlLeft" }, { "from": "MetaLeft" }]);
+    let r = ok(&win, "key_remap_set", json!({ "mappings": mappings }));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["reboot"], "reboot", "{r}");
+    let view = ok(&win, "key_remap_get", json!({}));
+    has_keys(&view["mappings"][1], &["from", "to", "text"]);
+    assert_eq!(view["mappings"][1]["to"], Value::Null, "{view}");
+    let e = invoke(&win, "key_remap_set", json!({ "mappings": [{ "from": "Nope" }] })).unwrap_err();
+    assert!(e.as_str().is_some_and(|m| m.contains("认不出")), "{e}");
+}
+
 /// 批量重命名的命令也要登记进权限清单（以前漏了，真程序里一点就报「不允许」）。
 #[test]
 fn rename_commands_pass_the_permission_check() {

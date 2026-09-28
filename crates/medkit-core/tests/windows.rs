@@ -1333,6 +1333,60 @@ fn shell_places_are_listed_hidden_and_restored() {
     assert_eq!(platform.reg_get(&hklm, &machine_class, PINNED).unwrap(), Some(RegValue::Dword(1)));
 }
 
+/// 改键：写进真的 `HKLM\…\Keyboard Layout\Scancode Map`，另起 PowerShell 核对类型是 REG_BINARY、字节和微软文档的
+/// 格式一样，引擎读回来说得出是哪几个键；「全部恢复」删掉这个值；撤销「全部恢复」写回同样的字节，再撤销第一次又删掉。
+/// 重启以后才生效，所以不核对按键本身。这台机器本来就有改键设置的，跳过（不去动它）；结束时（包括断言失败时）删掉测试写的值。
+#[test]
+#[ignore = "会临时写改键设置（不重启不生效，结束时删掉）；需要管理员权限"]
+fn key_remap_is_written_read_back_and_undone() {
+    use medkit_core::keymap::{self, MappingInput};
+    const SUBKEY: &str = r"SYSTEM\CurrentControlSet\Control\Keyboard Layout";
+    const WRITTEN: &str = "0000000000000000030000001D003A0000005BE000000000";
+    struct Cleanup(Arc<WindowsPlatform>);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = self.0.reg_delete_value(&RegRoot::LocalMachine, SUBKEY, keymap::VALUE);
+        }
+    }
+    let read_back = || {
+        powershell(
+            r"$k = Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Control\Keyboard Layout'
+              if ($null -eq $k.GetValue('Scancode Map')) { 'none' } else {
+                  '{0} {1}' -f $k.GetValueKind('Scancode Map'), (($k.GetValue('Scancode Map') | ForEach-Object { $_.ToString('X2') }) -join '')
+              }",
+        )
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _bundle, platform) = real_engine(dir.path());
+    assert_eq!(keymap::KEY, format!(r"HKLM\{SUBKEY}"));
+    if platform.reg_get(&RegRoot::LocalMachine, SUBKEY, keymap::VALUE).unwrap().is_some() {
+        println!("::notice title=key-remap::这台 CI 机器本来就有改键设置，跳过");
+        return;
+    }
+    let _cleanup = Cleanup(platform.clone());
+
+    let input = |from: &str, to: Option<&str>| MappingInput { from: from.into(), to: to.map(Into::into) };
+    let set = engine.key_remap_set(&[input("CapsLock", Some("ControlLeft")), input("MetaLeft", None)]).unwrap();
+    assert!(set.ok && set.entry_ids.len() == 1, "{set:?}");
+    assert_eq!(read_back(), format!("Binary {WRITTEN}"));
+    let view = engine.key_remap_get().unwrap();
+    assert!(!view.foreign, "{view:?}");
+    let texts: Vec<&str> = view.mappings.iter().map(|m| m.text.as_str()).collect();
+    assert_eq!(texts, ["Caps Lock（大写锁定） → 左 Ctrl", "左 Win → 不起作用"]);
+
+    let clear = engine.key_remap_set(&[]).unwrap();
+    assert!(clear.ok && clear.entry_ids.len() == 1, "{clear:?}");
+    assert_eq!(read_back(), "none");
+
+    let u = engine.journal_undo(&clear.entry_ids[0], false).unwrap();
+    assert!(u.ok && !u.drift, "{u:?}");
+    assert_eq!(read_back(), format!("Binary {WRITTEN}"), "撤销「全部恢复」：原样写回去");
+    let u = engine.journal_undo(&set.entry_ids[0], false).unwrap();
+    assert!(u.ok && !u.drift, "{u:?}");
+    assert_eq!(read_back(), "none", "撤销第一次改键：本来没有这个值，删掉");
+}
+
 /// 清空打印队列：在打印文件夹里放一个测试用的任务（一对 .SHD、.SPL，打印服务运行时不会去读新放进来的），用真的
 /// 脚本清空，核对这两个文件没了、别的文件还在、打印服务又在运行；再清一次是「本来就没有」。和小工具的冒烟测试错开
 /// （它也会跑这个小工具）。结束时（包括断言失败时）删掉测试文件、把打印服务启动起来。

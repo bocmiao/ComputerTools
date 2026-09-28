@@ -224,6 +224,39 @@ pub struct ApplyResult {
     pub error: Option<String>,
 }
 
+/// 改键（键位重映射）里能选的一个键（名单见 keymap.rs 的 `KEYS`）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyOption {
+    /// 和浏览器 `KeyboardEvent.code` 一样的名字
+    pub id: String,
+    pub label: String,
+    /// 只能当「变成」的键（音量、播放这类多媒体键）
+    pub target_only: bool,
+}
+
+/// 现在的一条改键：按下 `from` 变成 `to`（`to` 为空：这个键不起作用）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyMappingView {
+    pub from: String,
+    pub to: Option<String>,
+    /// 说成人话，例如「Caps Lock（大写锁定） → 左 Ctrl」
+    pub text: String,
+}
+
+/// 改键的现状。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyRemapView {
+    pub keys: Vec<KeyOption>,
+    pub mappings: Vec<KeyMappingView>,
+    /// 现在的设置里有小药箱认不出来的键或者格式（别的改键软件设的）：只能整个清掉，不能在这里改
+    pub foreign: bool,
+    /// 认不出来的那些，说成人话（扫描码），给用户看
+    pub foreign_text: Option<String>,
+}
+
 /// 开机启动项的程序签名（Get-AuthenticodeSignature 的结论）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

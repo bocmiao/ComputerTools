@@ -370,6 +370,8 @@ checks: [disk.system-free-space, system.pending-reboot]
 | `new_menu_set` | `id`（扩展名）、`visible` | `ApplyResult`（关掉：把 FileName、Command、Data、NullFile、Handler 这几个值改名成 `MedkitHidden.<原名>`，类型和数据不变；恢复：改回来。扩展名下所有 ShellNew 键一起改，每个值写新名字、删旧名字两条修改日志；只接受最近一次列表里的 ID；改完删掉资源管理器的「新建」菜单缓存，不记进日志） |
 | `shell_places_list` | — | `ShellPlaceItem[]`（软件加在资源管理器导航栏最上面一层和「此电脑」里的图标：`Explorer\Desktop\NameSpace`、`Explorer\MyComputer\NameSpace` 下登记的 CLSID，机器的和登录用户的，同一个 CLSID 算一项；Windows 自己的基本位置不列；显示不显示由引擎按注册表里现在的值读） |
 | `shell_places_set` | `id`（CLSID）、`visible` | `ApplyResult`（「此电脑」里有的：隐藏时在登录用户的 `Policies\NonEnum` 里写 `{CLSID}` = 1；只在导航栏里的：在登录用户的那份 CLSID 键里把 `System.IsPinnedToNameSpaceTree` 写成 0，32 位程序看的 WOW6432Node 那一份也一样。恢复见下面。只接受最近一次列表里的 ID，记进修改日志，`reboot` 为 `explorer`） |
+| `key_remap_get` | — | `KeyRemapView`（能选的键：名字和浏览器 `KeyboardEvent.code` 一样，多媒体键只能当「变成」的键；现在 `Scancode Map` 里的改键；有小药箱认不出来的键或者格式时 `foreign` 为 true，认不出来的那些写进 `foreignText`） |
+| `key_remap_set` | `mappings`（`{ from, to }`，`to` 为 null 是这个键不起作用） | `ApplyResult`（整张表换成这些，空的就删掉 `Scancode Map`；键只能是名单里的，同一个键不能改两次、不能改成自己，最多 24 个；现在的设置里有认不出来的键时只接受空的（全部恢复）；和现在一样时什么都不改；记进修改日志，`reboot` 为 `reboot`） |
 | `rename_select_folder` | — | `string \| null`（系统对话框选定的目录；取消返回 null） |
 | `rename_preview` | `rules` | `RenamePreview`（最多 500 个直属普通文件的原名、新名、名字变不变；不处理的文件数） |
 | `rename_apply` | — | `number`（执行已预览、文件夹没有变化的改名，返回改了几个） |
@@ -426,6 +428,13 @@ checks: [disk.system-free-space, system.pending-reboot]
 - **导航栏的开关**：资源管理器读合并视图 HKEY_CLASSES_ROOT：用户的 `Software\Classes\CLSID\{CLSID}` 里有这个值就用它的，没有用机器的（一个值一个值地合并，Windows 上的测试里核对过）；1 显示、0 不显示（微软《Integrate a Cloud Storage Provider》）。只在导航栏里的图标，隐藏时在用户那份里写 0（没有这份键就新建一个，和资源管理器「显示库」选项的做法一样），只影响当前用户；恢复时用户那份是 0、机器那份是显示的，就删掉用户的值（键空了一起删），回到软件自己登记的样子，不然写 1；只有机器那份、是 0 的（别的工具在所有用户的设置里隐藏的），写在机器那份里（界面上说明恢复以后所有用户都能看到）。32 位程序（它们的打开、保存对话框）看的 `WOW6432Node\CLSID` 那一份有这个值的，一样改。
 - **「此电脑」里的**：隐藏时在登录用户的 `Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum` 里写一个名字是 `{CLSID}`、值是 1 的 DWORD：外壳哪里都不列它（「此电脑」、导航栏、桌面、打开和保存对话框），组策略「删除桌面上的回收站图标」就是这么做的（微软《ADMX_Desktop Policy CSP》）。网上常说的 `HideMyComputerIcons` 没用：Windows 上的测试里外壳照样列出来。恢复时删掉这个值（所有用户的 NonEnum 里有的也删）。
 - **修改日志**：功能 ID 是 `shell-places`，标题用图标的名字（程序重启以后没有列表时，用 CLSID 键里登记的名字），状态说「显示 / 不显示（已隐藏）」，用户那份里原来没有这个值的说「没有单独设置」。一次开关的几处改动当成一个整体，中途失败按倒序退回。Windows 上的测试照网盘的做法登记三个测试用的图标，另起进程用 Shell.Application 核对「此电脑」里还列不列、外壳读到的导航栏开关是多少。
+
+改键（`crates/medkit-core/src/keymap.rs`）：
+
+- **做法**：Windows 自带的扫描码映射（微软《Keyboard and mouse class drivers》的「Scan code mapper for keyboards」）：`HKLM\SYSTEM\CurrentControlSet\Control\Keyboard Layout` 的 `Scancode Map`（REG_BINARY）。开头 8 个字节是 0，接着 4 个字节是条数（算上最后的结束标记），每条 4 个字节（低 16 位是按下以后变成的扫描码、高 16 位是实际按下的键，变成 0 是不起作用），最后 4 个字节的 0。对所有账户、所有键盘有效，重启以后生效；不装驱动、不在后台运行。
+- **能选的键**：写在代码里（主键区、功能键、编辑键、方向键、小键盘，扩展键写成 0xE0xx），名字和浏览器 `KeyboardEvent.code` 一样，界面上的键盘测试用的也是这套名字；音量、播放这几个多媒体键只能当「变成」的键。Fn 键和不少厂商自己的功能键（调亮度、开关触摸板这些）是键盘或者厂商的驱动自己处理的，不经过扫描码映射，改不了。
+- **别的软件设的**：`Scancode Map` 格式不对、类型不是 REG_BINARY、或者里面有名单外的键（别的改键工具设的）时，界面只列认得出来的那几条，只给「全部恢复」（删掉整个值），不在上面接着改。
+- **修改日志**：功能 ID 是 `key-remap`，标题是「键位重映射（改键）」，状态说成「Caps Lock（大写锁定） → 左 Ctrl；左 Win → 不起作用」这样，没有这个值说「没有改键（Windows 默认）」；撤销把原来的字节原样写回（原来没有就删掉），也是重启以后生效。Windows 上的测试写真的注册表，另起 PowerShell 核对类型和字节，再撤销。
 
 文件删不掉：是谁占着（`crates/medkit-core/src/lockers.rs`、`crates/medkit-core/src/platform/restart_manager.rs`）：
 

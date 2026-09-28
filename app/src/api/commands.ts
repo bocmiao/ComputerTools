@@ -11,6 +11,8 @@ import type {
   HiddenRestore,
   HiddenUndo,
   JournalSession,
+  KeyMappingInput,
+  KeyRemapView,
   NewMenuItem,
   Preview,
   RenamePreview,
@@ -60,6 +62,8 @@ export type CommandMap = {
   new_menu_set: { args: { id: string; visible: boolean }; result: ApplyResult }
   shell_places_list: { args: NoArgs; result: ShellPlaceItem[] }
   shell_places_set: { args: { id: string; visible: boolean }; result: ApplyResult }
+  key_remap_get: { args: NoArgs; result: KeyRemapView }
+  key_remap_set: { args: { mappings: KeyMappingInput[] }; result: ApplyResult }
   rename_select_folder: { args: NoArgs; result: string | null }
   rename_preview: { args: { rules: RenameRules }; result: RenamePreview }
   rename_apply: { args: NoArgs; result: number }

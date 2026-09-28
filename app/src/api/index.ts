@@ -13,6 +13,8 @@ import type {
   HiddenRestore,
   HiddenUndo,
   JournalSession,
+  KeyMappingInput,
+  KeyRemapView,
   NewMenuItem,
   Preview,
   RenamePreview,
@@ -164,6 +166,16 @@ export function shellPlacesList(): Promise<ShellPlaceItem[]> {
 /** 隐藏（visible 为 false）或者恢复一个图标，记进修改日志；只接受最近一次列表里的 ID */
 export function shellPlacesSet(id: string, visible: boolean): Promise<ApplyResult> {
   return call('shell_places_set', { id, visible })
+}
+
+/** 现在的改键（键位重映射），和能选的键 */
+export function keyRemapGet(): Promise<KeyRemapView> {
+  return call('key_remap_get', {})
+}
+
+/** 把改键整个换成这些（空的：全部恢复），记进修改日志，重启电脑以后生效 */
+export function keyRemapSet(mappings: KeyMappingInput[]): Promise<ApplyResult> {
+  return call('key_remap_set', { mappings })
 }
 
 /** 批量重命名：用系统的选择框选文件夹；取消返回 null */

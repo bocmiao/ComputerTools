@@ -124,6 +124,24 @@ export interface ShellPlaceItem {
   note: string                 // 要特别说明的，多数是空的
 }
 
+/** 改键能选的一个键：id 和浏览器 KeyboardEvent.code 的名字一样 */
+export interface KeyOption {
+  id: string
+  label: string
+  targetOnly: boolean          // 只能当「变成」的键（音量、播放这类多媒体键）
+}
+/** 已经设置的一条改键：按下 from 变成 to；to 为 null 是这个键不起作用 */
+export interface KeyMappingView { from: string; to: string | null; text: string }
+/** 改键的现状 */
+export interface KeyRemapView {
+  keys: KeyOption[]
+  mappings: KeyMappingView[]
+  foreign: boolean             // 有别的软件设的、小药箱认不出来的键：只能「全部恢复」，不能在这里改
+  foreignText: string | null   // 认不出来的那些，说成人话
+}
+/** 保存改键时的一条；to 为 null：这个键不起作用 */
+export interface KeyMappingInput { from: string; to: string | null }
+
 /** 别让电脑自己睡着：只在小药箱开着时有效 */
 export interface AwakeStatus { on: boolean; display: boolean }
 

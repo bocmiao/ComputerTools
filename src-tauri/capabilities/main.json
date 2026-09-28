@@ -27,6 +27,8 @@
     "allow-new-menu-set",
     "allow-shell-places-list",
     "allow-shell-places-set",
+    "allow-key-remap-get",
+    "allow-key-remap-set",
     "allow-rename-select-folder",
     "allow-rename-preview",
     "allow-rename-apply",
