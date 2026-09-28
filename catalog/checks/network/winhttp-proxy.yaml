@@ -1,0 +1,48 @@
+# WinHTTP 代理（系统服务用的代理）。脚本：scripts/checks/network/winhttp-proxy.ps1
+# Windows 更新、BITS、传递优化、商店的下载和很多系统服务走的是 WinHTTP 的代理，和浏览器的代理（network.proxy-dead）是两套。
+# 「netsh winhttp set proxy」，或者一些代理、加速器软件和网上教程运行的「netsh winhttp import proxy source=ie」会设上它；
+# 软件卸载了，它还指向 127.0.0.1:端口、那里没有程序在听，Windows 更新就下载失败（0x80072EFD、0x80072EE2、0x8024402C 这类）。
+# 存在 HKLM\...\Internet Settings\Connections\WinHttpSettings（REG_BINARY，32 位程序另有一份在 WOW6432Node 下），格式和浏览器的
+# 连接设置一样（偏移 8 的标志 0x02 = 开着代理，偏移 12 起是代理地址）。本机代理的测法和 network.proxy-dead 完全一样（共享块
+# proxy-test：500 毫秒试连）。别的机器上的代理（单位的代理服务器）不测、不改。隐私：只报本机代理的端口，不报地址。
+# 结果（先满足哪个算哪个）：dead（修复 network.winhttp-proxy-off）、remote、alive、direct。事实：port。
+id: network.winhttp-proxy
+schema_version: 1
+title: { zh-CN: Windows 更新用的系统代理（WinHTTP） }
+description:
+  zh-CN: 看看 Windows 更新、应用商店这些系统服务用的代理（WinHTTP 代理，和浏览器的代理是两套）是不是还指向一个已经不在运行的代理软件、加速器。是的话，Windows 更新会下载失败。
+category: network
+requires_admin: false
+timeout_sec: 30
+probe:
+  script: checks/network/winhttp-proxy.ps1
+results:
+  direct:
+    status: ok
+    message:
+      zh-CN: Windows 更新这些系统服务直接连网，没有设代理（WinHTTP 代理是「直接访问」）。
+  dead:
+    status: advice
+    message:
+      zh-CN: "Windows 更新、应用商店这些系统服务被设置成通过这台电脑上的代理（端口 {port}）上网，可是那里已经没有程序在运行了（多半是卸载了的代理软件、加速器留下的）。系统服务连不上网，Windows 更新会下载失败，常见错误 0x80072EFD、0x80072EE2、0x8024402C。"
+    fixer: medkit
+    next:
+      zh-CN: 点下面的按钮改回「直接访问」（只改这一个开关，代理地址留着），能撤销。改完到「Windows 更新」里再检查一次更新。
+    links: ["feature:network.winhttp-proxy-off", "tool:settings.windows-update"]
+  remote:
+    status: manual
+    message:
+      zh-CN: Windows 更新、应用商店这些系统服务被设置成通过另一台电脑上的代理服务器上网。单位的电脑一般是网管这样设的，不用管；小药箱不改它。
+    fixer: helper
+    next:
+      zh-CN: 单位的电脑更新失败请找网管。自己家里的电脑上不认识这个设置、Windows 更新又总是下载失败的，请懂哥看看（用管理员命令行运行 netsh winhttp show proxy 查看，netsh winhttp reset proxy 改回直接访问）。
+  alive:
+    status: ok
+    message:
+      zh-CN: "Windows 更新这些系统服务现在通过这台电脑上的代理（端口 {port}）上网，那里有程序在运行（多半是开着的代理软件、加速器）。"
+    next:
+      zh-CN: 现在能用。以后关掉或者卸载了这个软件，Windows 更新可能下载失败，到时候再来查一次。
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/winhttp/netsh-exe-commands
+  - https://learn.microsoft.com/en-us/windows/win32/winhttp/winhttpsetdefaultproxyconfiguration
+  - https://techcommunity.microsoft.com/blog/coreinfrastructureandsecurityblog/proxies-proxies-everywhere-but-still-no-internet-overview-of-the-windows-proxies/4108939

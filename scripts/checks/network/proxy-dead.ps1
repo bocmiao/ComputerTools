@@ -62,7 +62,7 @@ function Get-PropertyText {
     return ([string]$prop.Value).Trim()
 }
 
-# ---- shared block proxy-test: identical in checks/network/proxy-dead.ps1, features/network/proxy-off-detect.ps1 and proxy-off-run.ps1 (medkit-data check compares them) ----
+# ---- shared block proxy-test: identical in checks/network/proxy-dead.ps1, checks/network/winhttp-proxy.ps1, features/network/proxy-off-detect.ps1, proxy-off-run.ps1 and winhttp-proxy-off-*.ps1 (medkit-data check compares them) ----
 # Every per-connection settings blob under Connections: name -> byte[].
 # Values that are not REG_BINARY or shorter than 12 bytes are skipped.
 function Get-ConnectionBlobs {

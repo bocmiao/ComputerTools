@@ -1,32 +1,31 @@
-# Feature: network.proxy-off -- detect
-# Is a manual proxy that points at this PC, with nothing listening there, still
-# switched on anywhere? This is exactly what network.proxy-dead reports as dead
-# or dead-dialup, and exactly what proxy-off-run.ps1 switches off:
-#   LAN: Internet Settings\Connections\DefaultConnectionSettings (REG_BINARY)
-#        when it has the proxy on with a server string, otherwise the legacy
-#        values Internet Settings\ProxyEnable / ProxyServer
-#   dial-up / VPN: every other binary value under Internet Settings\Connections
-#        (one per connection; SavedLegacySettings and WinHttpSettings are not
-#        connections and are ignored)
-# Local proxies that answer, and proxy servers on other machines, do not count.
-# States:
-#   applied      no dead local manual proxy is left
-#   not-applied  the LAN or at least one dial-up / VPN connection still has one
-# The engine judges this feature with "verify: network.proxy-dead"; this script
-# is used before an undo to see whether the fix is still in place. Read-only.
+# Feature: network.winhttp-proxy-off -- run (and prepare)
+# Switches off the WinHTTP proxy of every view (64-bit, 32-bit) whose proxy
+# points at this PC with nothing listening: flag 0x02 of WinHttpSettings is
+# cleared and its change counter increased, every other byte stays (the proxy
+# server string too), which is "direct access" for WinHTTP. Live local proxies
+# and proxies on other machines are left alone.
+# -Prepare: returns before = { views: { '64': <hex of the blob>, '32': ... } }
+#   for the views it changes.
+# Run: -Before is that JSON. Returns skipped (nothing changed) when there is
+#   nothing to do or a recorded blob changed since. Otherwise writes, reads
+#   back that no dead proxy is left, and puts everything back and throws when
+#   a write fails.
+# Programs already running keep the proxy they read until they start again;
+# Windows Update picks it up on its next scan.
 
 [CmdletBinding()]
 param(
-    [string]$UserHive = 'HKCU:'
+    [bool]$Prepare = $false,
+    [string]$Before = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
+# Local proxies get this long to accept a connection (as in network.proxy-dead).
 $connectTimeoutMs = 500
-$proxyFlag = 2
-$lanValue = 'DefaultConnectionSettings'
-# Binary values under Connections that are not per-connection proxy settings.
-$ignoredValues = @('SavedLegacySettings', 'WinHttpSettings')
+# Read-ConnectionBlob and Get-ConnectionBlobs come with the shared block below;
+# only the blob of WinHttpSettings is read here.
+$ignoredValues = @()
 
 # ---- shared block proxy-test: identical in checks/network/proxy-dead.ps1, checks/network/winhttp-proxy.ps1, features/network/proxy-off-detect.ps1, proxy-off-run.ps1 and winhttp-proxy-off-*.ps1 (medkit-data check compares them) ----
 # Every per-connection settings blob under Connections: name -> byte[].
@@ -259,81 +258,167 @@ function Test-ProxyServer {
 }
 # ---- end of shared block proxy-test ----
 
-# ---- shared block proxy-find-dead: identical in features/network/proxy-off-detect.ps1 and proxy-off-run.ps1 (medkit-data check compares them) ----
-# Which manual proxies point at this PC with nothing listening, judged the same
-# way as checks/network/proxy-dead.ps1: for the LAN, the blob when it has the
-# proxy on with a server string, otherwise the legacy ProxyEnable / ProxyServer;
-# every dial-up / VPN connection on its own. Proxies that answer and proxies on
-# other machines are never reported.
-function Find-DeadProxies {
-    param([string]$SettingsPath, $Blobs)
-    $settings = Get-ItemProperty -LiteralPath $SettingsPath
-    $legacyOn = $false
-    $legacyServer = ''
-    if ($null -ne $settings) {
-        $enableProp = $settings.PSObject.Properties['ProxyEnable']
-        if (($null -ne $enableProp) -and ($null -ne $enableProp.Value)) {
-            $legacyOn = ([int]$enableProp.Value -eq 1)
-        }
-        $serverProp = $settings.PSObject.Properties['ProxyServer']
-        if (($null -ne $serverProp) -and ($null -ne $serverProp.Value)) {
-            $legacyServer = ([string]$serverProp.Value).Trim()
-        }
-    }
-    $lanServer = ''
-    if ($Blobs.Contains($lanValue)) {
-        $lan = Read-ConnectionBlob $Blobs[$lanValue]
-        if ((($lan.Flags -band $proxyFlag) -ne 0) -and ($lan.Server.Length -gt 0)) {
-            $lanServer = $lan.Server
-        }
-    }
-    if (($lanServer.Length -eq 0) -and $legacyOn) {
-        $lanServer = $legacyServer
-    }
-    $lanDead = ($lanServer.Length -gt 0) -and ((Test-ProxyServer $lanServer).State -eq 'dead')
+# ---- shared block winhttp-proxy: identical in checks/network/winhttp-proxy.ps1 and features/network/winhttp-proxy-off-*.ps1 (medkit-data check compares them) ----
+# WinHTTP keeps its proxy (netsh winhttp set proxy / reset proxy) in the
+# REG_BINARY value WinHttpSettings: under the 64-bit view for 64-bit programs
+# (Windows Update, BITS, Delivery Optimization and most services), and a copy
+# under WOW6432Node for 32-bit programs. The layout is that of the WinINet
+# connection blobs read by Read-ConnectionBlob (offset 8 flags, 0x02 = a proxy
+# server is on; offset 12 the length of the proxy server string, then the
+# string); "direct access" is flags 1 with an empty string.
+$winHttpViews = @(
+    @('64', 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\Connections'),
+    @('32', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Internet Settings\Connections')
+)
+$winHttpValue = 'WinHttpSettings'
+$winHttpProxyFlag = 2
 
-    $dialupDead = New-Object System.Collections.Generic.List[string]
-    foreach ($name in @($Blobs.Keys)) {
-        if ($name -eq $lanValue) {
+# The WinHttpSettings blob of one view, or $null when there is none.
+function Get-WinHttpBlob {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+    $value = (Get-Item -LiteralPath $Path).GetValue($winHttpValue)
+    if (($value -is [byte[]]) -and ($value.Length -ge 12)) {
+        # The unary comma keeps the byte[] from being unrolled into single bytes.
+        return , $value
+    }
+    return $null
+}
+
+# Every view with a proxy server on: View ('64' / '32'), Path, Blob, State
+# (dead / alive / remote / unparsed, as Test-ProxyServer tells) and Port (of a
+# local proxy, else '').
+function Get-WinHttpProxies {
+    $list = New-Object System.Collections.Generic.List[object]
+    foreach ($view in $winHttpViews) {
+        $blob = Get-WinHttpBlob $view[1]
+        if ($null -eq $blob) {
             continue
         }
-        $info = Read-ConnectionBlob $Blobs[$name]
-        if ((($info.Flags -band $proxyFlag) -ne 0) -and ($info.Server.Length -gt 0)) {
-            if ((Test-ProxyServer $info.Server).State -eq 'dead') {
-                $dialupDead.Add($name)
-            }
+        $info = Read-ConnectionBlob $blob
+        if ((($info.Flags -band $winHttpProxyFlag) -eq 0) -or ($info.Server.Length -eq 0)) {
+            continue
+        }
+        $test = Test-ProxyServer $info.Server
+        $port = ''
+        if ((@('dead', 'alive') -contains $test.State) -and ($test.Address -match ':(\d+)$')) {
+            $port = $Matches[1]
+        }
+        $list.Add([pscustomobject]@{
+                View  = $view[0]
+                Path  = $view[1]
+                Blob  = $blob
+                State = $test.State
+                Port  = $port
+            })
+    }
+    return , $list.ToArray()
+}
+# ---- end of shared block winhttp-proxy ----
+
+# The bytes as hex text, and back.
+function ConvertTo-HexString {
+    param([byte[]]$Bytes)
+    return [System.BitConverter]::ToString($Bytes).Replace('-', '')
+}
+
+function ConvertFrom-HexString {
+    param([string]$Hex)
+    if ((($Hex.Length % 2) -ne 0) -or ($Hex -notmatch '^[0-9A-Fa-f]+$')) {
+        throw 'A saved WinHTTP setting is not a hex string'
+    }
+    $bytes = New-Object byte[] ($Hex.Length / 2)
+    for ($i = 0; $i -lt $bytes.Length; $i++) {
+        $bytes[$i] = [System.Convert]::ToByte($Hex.Substring($i * 2, 2), 16)
+    }
+    # The unary comma keeps the byte[] from being unrolled into single bytes.
+    return , $bytes
+}
+
+# A copy of the blob with flag 0x02 set or cleared and the change counter
+# (offset 4) increased; every other byte stays.
+function Set-WinHttpProxyFlag {
+    param([byte[]]$Blob, [bool]$On)
+    $copy = [byte[]]$Blob.Clone()
+    $flags = [System.BitConverter]::ToUInt32($copy, 8)
+    if ($On) {
+        $flags = [uint32]($flags -bor $winHttpProxyFlag)
+    }
+    elseif (($flags -band $winHttpProxyFlag) -ne 0) {
+        $flags = [uint32]($flags - $winHttpProxyFlag)
+    }
+    $counter = [System.BitConverter]::ToUInt32($copy, 4)
+    if ($counter -eq [uint32]::MaxValue) {
+        $counter = [uint32]0
+    }
+    else {
+        $counter = [uint32]($counter + 1)
+    }
+    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$counter), 0, $copy, 4, 4)
+    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$flags), 0, $copy, 8, 4)
+    return , $copy
+}
+
+$proxies = Get-WinHttpProxies
+$dead = @($proxies | Where-Object { $_.State -eq 'dead' })
+if ($Prepare) {
+    $views = [ordered]@{}
+    foreach ($proxy in $dead) {
+        $views[$proxy.View] = ConvertTo-HexString $proxy.Blob
+    }
+    return [pscustomobject]@{ before = [ordered]@{ views = $views } }
+}
+
+$recorded = [ordered]@{}
+$parsed = ConvertFrom-Json -InputObject $Before
+if ($null -ne $parsed.views) {
+    foreach ($property in $parsed.views.PSObject.Properties) {
+        $recorded[$property.Name] = [string]$property.Value
+    }
+}
+if ($recorded.Count -eq 0) {
+    return [pscustomobject]@{ skipped = $true }
+}
+$paths = @{}
+foreach ($view in $winHttpViews) {
+    $paths[$view[0]] = $view[1]
+}
+foreach ($name in @($recorded.Keys)) {
+    if (-not $paths.ContainsKey($name)) {
+        return [pscustomobject]@{ skipped = $true }
+    }
+    $now = Get-WinHttpBlob $paths[$name]
+    if (($null -eq $now) -or ((ConvertTo-HexString $now) -ne $recorded[$name])) {
+        return [pscustomobject]@{ skipped = $true }
+    }
+}
+
+$written = New-Object System.Collections.Generic.List[string]
+try {
+    foreach ($name in @($recorded.Keys)) {
+        $old = ConvertFrom-HexString $recorded[$name]
+        $new = Set-WinHttpProxyFlag -Blob $old -On $false
+        $written.Add($name)
+        Set-ItemProperty -LiteralPath $paths[$name] -Name $winHttpValue -Value $new -Type Binary -ErrorAction Stop
+    }
+    $left = Get-WinHttpProxies
+    if (@($left | Where-Object { $_.State -eq 'dead' }).Count -gt 0) {
+        throw 'a WinHTTP proxy still points at a program that is not running'
+    }
+}
+catch {
+    $failure = $_
+    foreach ($name in $written) {
+        try {
+            Set-ItemProperty -LiteralPath $paths[$name] -Name $winHttpValue -Value (ConvertFrom-HexString $recorded[$name]) -Type Binary -ErrorAction Stop
+        }
+        catch {
+            Write-Verbose ('could not put the WinHTTP setting back: ' + $_.Exception.Message)
         }
     }
-    return [pscustomobject]@{
-        LanDead    = $lanDead
-        DialupDead = $dialupDead.ToArray()
-    }
-}
-# ---- end of shared block proxy-find-dead ----
-
-if ([string]::IsNullOrWhiteSpace($UserHive)) {
-    $UserHive = 'HKCU:'
-}
-$settingsPath = Join-Path $UserHive 'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
-$connectionsPath = Join-Path $UserHive 'Software\Microsoft\Windows\CurrentVersion\Internet Settings\Connections'
-
-$blobs = Get-ConnectionBlobs $connectionsPath
-$dead = Find-DeadProxies -SettingsPath $settingsPath -Blobs $blobs
-$dialupDead = @($dead.DialupDead)
-
-$state = 'applied'
-if ($dead.LanDead -or ($dialupDead.Count -gt 0)) {
-    $state = 'not-applied'
+    throw $failure
 }
 
-$facts = [ordered]@{
-    lan_dead_proxy = [bool]$dead.LanDead
-}
-if ($dialupDead.Count -gt 0) {
-    $facts['dialup_dead_proxy'] = ($dialupDead -join ', ')
-}
-
-[pscustomobject]@{
-    state = $state
-    facts = $facts
-}
+[pscustomobject]@{ after = [ordered]@{ fixed = $recorded.Count } }

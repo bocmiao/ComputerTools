@@ -1,0 +1,38 @@
+# 关掉失效的 WinHTTP 代理（脚本类功能）。脚本在 scripts/features/network/ 下，和检测 network.winhttp-proxy 共用共享块
+# proxy-test、winhttp-proxy。只处理「指向本机、试连没有程序在听」的 WinHTTP 代理（64 位和 32 位两份各看各的），判断方法
+# 和 network.proxy-dead 一样；还在运行的代理、别的机器上的代理（单位的代理服务器）一律不动。
+#   winhttp-proxy-off-detect.ps1  撤销前核对：没有失效的 → applied；有 → not-applied
+#   winhttp-proxy-off-run.ps1     -Prepare：before = { views: { '64': 原值十六进制, '32': … } }（只记要改的）；
+#                                 执行：值变了就跳过；清掉偏移 8 的标志 0x02、偏移 4 的计数器加 1，其余字节（代理地址）原样保留，
+#                                 这就是 WinHTTP 的「直接访问」；读回来确认，失败时写回原值再报错
+#   winhttp-proxy-off-undo.ps1    按位恢复：把 0x02 加回去、计数器加 1，其余字节保留现在的；值没了的整段写回；已经又开着的不动
+#   winhttp-proxy-off-break.ps1   只在测试中使用：64 位这份设成 127.0.0.1:9（discard 端口，平时没有程序监听），和
+#                                 netsh winhttp set proxy 写的格式一样
+# 已经在运行的服务会继续用读过的设置，Windows 更新下次检查更新时生效。
+id: network.winhttp-proxy-off
+schema_version: 1
+title: { zh-CN: 关掉失效的 WinHTTP 代理（Windows 更新用的） }
+description:
+  zh-CN: Windows 更新、应用商店这些系统服务用的代理，还指向这台电脑上一个已经不在运行的代理软件、加速器时，把它改回「直接访问」，Windows 更新就能下载了。只改这一个开关，代理地址留着；还在运行的代理、单位的代理服务器都不动，能撤销。
+category: network
+risk: safe
+level: light
+recommend: recommended
+subjective: false
+requires_admin: true
+reboot: none
+target: machine
+detect:
+  script: features/network/winhttp-proxy-off-detect.ps1
+prepare:
+  script: features/network/winhttp-proxy-off-run.ps1
+run:
+  script: features/network/winhttp-proxy-off-run.ps1
+undo:
+  script: features/network/winhttp-proxy-off-undo.ps1
+break:
+  script: features/network/winhttp-proxy-off-break.ps1
+verify: network.winhttp-proxy
+references:
+  - https://learn.microsoft.com/en-us/windows/win32/winhttp/netsh-exe-commands
+  - https://learn.microsoft.com/en-us/windows/win32/winhttp/winhttpsetdefaultproxyconfiguration
