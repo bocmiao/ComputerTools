@@ -4,18 +4,16 @@ import { ocrRecognize } from '../api'
 import type { OcrView } from '../api/types'
 import { openTool } from '../state'
 import { errorText } from '../utils/format'
-import { HEIC_ADVICE, MAX_PIXELS, formatBytes, isHeic } from '../utils/imageBatch'
+import { HEIC_ADVICE, formatBytes } from '../utils/imageBatch'
+import { imageProblem, openImage, pastedFile, toOcrPng } from '../utils/ocrImage'
 import BusySpinner from './BusySpinner.vue'
 
 // 图片转文字：用 Windows 自带的文字识别（后端 ocr_recognize → scripts/ocr/recognize.ps1），不联网、不上传。
-// 图片先在这里转正（照片里记的方向）、画到白底的画布上存成 PNG（透明的截图也认得出；Windows 只读它认得的格式），
-// 再交给后端；后端存成临时文件，认完就删。认出来的字能改、能复制。
+// 图片先转正、画到白底上存成 PNG（utils/ocrImage.ts）再交给后端；后端存成临时文件，认完就删。认出来的字能改、能复制。
 // 没有装中文识别时，给「安装中文文字识别」的按钮（小工具 system.install-ocr-chinese）。
 // 预览用画布转成 data: 地址显示（界面的内容安全策略不放行 blob: 图片）。
 
 const INSTALL_TOOL = 'system.install-ocr-chinese'
-/** 画布每边最多多少像素（WebView2 画不了更大的） */
-const MAX_EDGE = 32767
 const PREVIEW_WIDTH = 560
 const PREVIEW_HEIGHT = 320
 
@@ -40,27 +38,6 @@ const needsChinese = computed(() => {
   return !!r && (r.status === 'no-language' || (r.status === 'ok' && !r.chinese))
 })
 
-function openImage(f: File): Promise<ImageBitmap> {
-  return createImageBitmap(f, { imageOrientation: 'from-image' }).catch(() => createImageBitmap(f))
-}
-
-/** 这张打不开的原因；能认的返回空字符串 */
-function problemOf(f: File): string {
-  const name = f.name.toLowerCase()
-  if (isHeic(f.name, f.type)) {
-    heicRejected.value = true
-    return `「${f.name}」是 HEIC（苹果手机的照片格式），这里打不开，办法见下面。`
-  }
-  if (name.endsWith('.tif') || name.endsWith('.tiff') || f.type === 'image/tiff') {
-    return `「${f.name}」是 TIFF 格式，这里打不开：先用「画图」打开，另存为 PNG 再来。`
-  }
-  if (name.endsWith('.svg') || f.type === 'image/svg+xml') return `「${f.name}」是 SVG 矢量图，这里打不开。`
-  if (!f.type.startsWith('image/') && !/\.(jpe?g|png|webp|gif|bmp|ico|avif)$/.test(name)) {
-    return `「${f.name}」不是图片文件。`
-  }
-  return ''
-}
-
 async function setFile(f: File | null | undefined): Promise<void> {
   if (!f || busy.value) return
   run++
@@ -70,9 +47,10 @@ async function setFile(f: File | null | undefined): Promise<void> {
   result.value = null
   text.value = ''
   copyState.value = ''
-  const problem = problemOf(f)
-  if (problem) {
-    pickProblem.value = problem
+  const problem = imageProblem(f.name, f.type)
+  if (problem.text) {
+    pickProblem.value = problem.text
+    heicRejected.value = problem.heic
     return
   }
   const current = run
@@ -124,31 +102,7 @@ function onPaste(event: ClipboardEvent): void {
     return
   }
   event.preventDefault()
-  const ext = f.type === 'image/jpeg' ? 'jpg' : (f.type.split('/')[1] ?? 'png')
-  void setFile(new File([f], `截图.${ext}`, { type: f.type, lastModified: Date.now() }))
-}
-
-/** 转正、画到白底上，存成 PNG；太大的按比例缩小 */
-async function toPng(f: File): Promise<Uint8Array> {
-  const bitmap = await openImage(f)
-  try {
-    const { width, height } = bitmap
-    const scale = Math.min(1, MAX_EDGE / width, MAX_EDGE / height, Math.sqrt(MAX_PIXELS / (width * height)))
-    shrunk.value = scale < 1
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.floor(width * scale))
-    canvas.height = Math.max(1, Math.floor(height * scale))
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('没能打开这张图片。')
-    ctx.fillStyle = '#fff'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    if (!blob) throw new Error('没能把图片转成 PNG，可能是图片太大了。')
-    return new Uint8Array(await blob.arrayBuffer())
-  } finally {
-    bitmap.close()
-  }
+  void setFile(pastedFile(f))
 }
 
 async function recognize(): Promise<void> {
@@ -161,8 +115,9 @@ async function recognize(): Promise<void> {
   text.value = ''
   copyState.value = ''
   try {
-    const bytes = await toPng(f)
-    const r = await ocrRecognize(bytes)
+    const png = await toOcrPng(f)
+    shrunk.value = png.shrunk
+    const r = await ocrRecognize(png.bytes)
     if (current !== run) return
     result.value = r
     text.value = r.text

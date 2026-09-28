@@ -4,6 +4,7 @@ import { runCheck, startupList, startupSet, symptomDetail, toolOpen } from '../a
 import type { ApplyResult, CheckResult, StartupItem, SymptomDetail, SymptomSummary } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
 import BusySpinner from '../components/BusySpinner.vue'
+import ErrorShotSearch from '../components/ErrorShotSearch.vue'
 import PopupOwner from '../components/PopupOwner.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import ResultLinks from '../components/ResultLinks.vue'
@@ -13,7 +14,7 @@ import { fixerLabel, maturityLabel, riskLabel, riskTone } from '../labels'
 import { catalog, markHealthStale, nav } from '../state'
 import { errorText, normalizeForSearch } from '../utils/format'
 
-// 按症状修：先搜症状，再逐步检查。查出问题（建议处理、需要人工）的那一步给出对应的修复；
+// 按症状修：先搜症状（也能粘贴报错截图，认出字以后对关键词：ErrorShotSearch），再逐步检查。查出问题（建议处理、需要人工）的那一步给出对应的修复；
 // 没查清楚（没查出来、出错）的那一步不急着修，先让用户再查一次。
 // 正常的那一步也可能带一句提示和按钮（例如代理软件开着：「网页打不开的话，先把它退出」），照样显示。
 
@@ -355,6 +356,8 @@ watch(
           autocomplete="off"
         />
       </div>
+
+      <ErrorShotSearch v-if="catalog" @open="open" />
 
       <p v-if="!catalog" class="loading-line" role="status"><BusySpinner size="small" />正在读取症状列表…</p>
       <p v-else-if="filtered.length === 0" class="empty muted" role="status">{{ emptyText }}</p>

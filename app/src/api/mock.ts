@@ -2407,7 +2407,7 @@ const handlers: Handlers = {
     if (bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47) throw '图片要先转成 PNG 才能认字。'
     return {
       status: 'ok',
-      text: '（演示）浏览器里不会真的认字，在 Windows 的小药箱里才会。\n电脑小药箱 使用说明\n发票号码：12345678  金额：¥88.00',
+      text: '（演示）浏览器里不会真的认字，在 Windows 的小药箱里才会。\n连接到打印机\n操作无法完成(错误 0x00000709)。再次检查打印机名称，并确保打印机已连接到网络。',
       lines: 3,
       language: '中文（简体）',
       languages: ['中文（简体）', '英语'],

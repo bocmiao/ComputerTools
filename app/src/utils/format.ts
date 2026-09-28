@@ -69,13 +69,8 @@ function formatSimple(v: SimpleValue): string {
   return v
 }
 
-/** 搜索用：全角转半角、转小写、去掉空格和常见标点 */
-export function normalizeForSearch(s: string): string {
-  return s
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/[\s\-_·•,，.。、!！?？:：;；'"“”‘’「」『』()（）【】[\]]/g, '')
-}
+// 搜索用的写法（全角转半角、转小写、去掉空格和常见标点）放在 symptomMatch.ts：看报错截图也用它
+export { normalizeForSearch } from './symptomMatch'
 
 const ID_RE = /^[a-z0-9]+([.-][a-z0-9]+)*$/
 
