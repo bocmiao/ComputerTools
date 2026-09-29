@@ -256,6 +256,7 @@ impl Engine {
         SymptomSummary {
             id: s.id.clone(),
             title: s.title.get(&self.lang).to_owned(),
+            category: s.category,
             summary: s.summary.as_ref().map(|t| t.get(&self.lang).to_owned()),
             keywords: s.keywords.clone(),
             maturity: s.maturity,
@@ -831,19 +832,25 @@ impl Engine {
                 })
                 .collect::<Result<Vec<_>>>()?
         } else {
-            // 脚本类功能没有逐个位置可列；要改什么见功能说明
-            let current = match detected {
-                Some(Ok((FeatureStateKind::Applied, _))) => "已经是这样了",
-                Some(Ok((FeatureStateKind::NotApplied, _))) => "还没改",
-                Some(Ok((FeatureStateKind::Partial, _))) => "改了一部分",
-                Some(Err(Error::NotApplicable(_))) => "不适用",
-                _ => "没查出来",
-            };
-            vec![PreviewChange {
-                target: "由小药箱的脚本完成".to_owned(),
-                current: current.to_owned(),
-                planned: "按上面的说明修改".to_owned(),
-            }]
+            // 脚本类功能没有逐个位置可列：要做什么见功能说明，现在的情况见 current
+            Vec::new()
+        };
+        // 现在是什么情况：写了 verify 的用那个检测的结论（例如「驱动仓库里有 35 个旧版驱动……」），
+        // 别的脚本类功能用检测脚本给的状态
+        let current = match &detected {
+            Some(Ok((_, details))) if f.verify.is_some() => details.first().cloned(),
+            Some(Ok((state, _))) => Some(
+                match state {
+                    FeatureStateKind::Applied => "已经是这样了",
+                    FeatureStateKind::NotApplied => "还没改",
+                    FeatureStateKind::Partial => "改了一部分",
+                    FeatureStateKind::Unknown => "没查出来现在是什么样",
+                }
+                .to_owned(),
+            ),
+            Some(Err(Error::NotApplicable(_))) => None,
+            Some(Err(_)) => Some("没查出来现在是什么样".to_owned()),
+            None => None,
         };
         if f.target == Target::CurrentUser {
             match (self.platform.interactive_user(), self.platform.process_user()) {
@@ -854,17 +861,15 @@ impl Engine {
                 _ => {}
             }
         }
-        match f.reboot {
-            crate::model::Reboot::None => {}
-            crate::model::Reboot::Explorer => notes.push("改完要重启资源管理器（或注销）才能看到效果。".to_owned()),
-            crate::model::Reboot::Logoff => notes.push("改完要注销再登录才生效。".to_owned()),
-            crate::model::Reboot::Reboot => notes.push("改完要重启电脑才生效。".to_owned()),
-        }
-        if !f.reversible() {
-            let why = f.irreversible_reason.as_ref().map(|t| t.get(&self.lang).to_owned()).unwrap_or_default();
-            notes.push(format!("这一项改了就不能撤销：{why}"));
-        }
-        Ok(Preview { feature: summary, changes, will_create_restore_point: f.risk >= Risk::Caution, notes })
+        // 改完要不要重启、能不能撤销：summary 里有（reboot、reversible、irreversible_reason），界面照着说，这里不再重复
+        Ok(Preview {
+            feature: summary,
+            changes,
+            scripted: !f.is_primitive(),
+            current,
+            will_create_restore_point: f.risk >= Risk::Caution,
+            notes,
+        })
     }
 
     // ───────────── 功能：执行 ─────────────

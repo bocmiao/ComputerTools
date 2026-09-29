@@ -22,6 +22,9 @@ import {
 // 再拼成 PDF（utils/pdf.ts，不加新的依赖）。存到哪里由系统的「另存为」对话框选，原图不动。
 // 缩略图用画布缩成小图、转成 data: 地址显示（界面的内容安全策略不放行 blob: 图片）。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 interface Item {
   id: number
   file: File
@@ -294,7 +297,7 @@ async function reveal(): Promise<void> {
 
 <template>
   <article class="card pdf-card">
-    <h3 class="section-title">图片合成 PDF</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">图片合成 PDF</h3>
     <p class="muted small">
       把拍的证件、合同、作业、发票照片按顺序合成一个 PDF 文件（交材料、发邮件时常要 PDF）。每张图片一页，可以调整顺序、转方向。原图不动；存到哪里、叫什么，在「另存为」里自己选。
     </p>

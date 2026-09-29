@@ -8,6 +8,9 @@ import BusySpinner from './BusySpinner.vue'
 
 // 硬盘测速：顺序写、顺序读、4 KB 随机读（后端 medkit_core::disk_speed：不经过系统缓存，只写一个关掉就删的临时文件）。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const drives = ref<DriveView[]>([])
 const chosen = ref('')
 const loading = ref(false)
@@ -72,7 +75,7 @@ onMounted(load)
 <template>
   <section class="group" aria-labelledby="disk-speed-title">
     <div class="card speed-card">
-      <h2 id="disk-speed-title" class="section-title">硬盘测速</h2>
+      <h2 id="disk-speed-title" :class="hideTitle ? 'visually-hidden' : 'section-title'">硬盘测速</h2>
       <p class="muted small">
         看看硬盘、U 盘实际读写有多快：验机、换了固态硬盘以后用，也能看出硬盘是不是慢得不正常。会在这个盘上写一个临时文件（最多 1 GB，测完马上删掉，对硬盘寿命没有影响），大约要 20 秒；测的时候别复制大文件。
       </p>

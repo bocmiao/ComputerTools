@@ -666,7 +666,15 @@ fn irreversible_feature_cannot_be_undone() {
     w.runner.returns("features/test/one-way-run.ps1", json!({ "before": null, "after": null }));
     let preview = w.engine.feature_preview("test.one-way").unwrap();
     assert!(!preview.feature.reversible);
-    assert!(preview.notes.iter().any(|n| n.contains("删掉的文件找不回来")), "{:?}", preview.notes);
+    // 不能撤销的原因在 feature 里，界面照着说；notes 里不再重复一遍
+    assert!(
+        preview.feature.irreversible_reason.as_deref().is_some_and(|r| r.contains("删掉的文件找不回来")),
+        "{preview:?}"
+    );
+    assert!(preview.notes.is_empty(), "{:?}", preview.notes);
+    // 脚本类功能没有逐个位置可列，现在的情况用检测脚本给的状态说
+    assert!(preview.scripted && preview.changes.is_empty(), "{preview:?}");
+    assert_eq!(preview.current.as_deref(), Some("还没改"));
 
     let r = w.engine.feature_apply("test.one-way").unwrap();
     assert!(r.ok);
@@ -696,7 +704,7 @@ fn verify_check_saying_na_makes_the_feature_not_applicable() {
     assert!(!preview.feature.applicable);
     assert_eq!(preview.feature.not_applicable_reason.as_deref(), Some(why));
     assert_eq!(preview.notes, vec![format!("不能执行：{why}")]);
-    assert_eq!(preview.changes[0].current, "不适用");
+    assert!(preview.changes.is_empty() && preview.current.is_none(), "{preview:?}");
 
     assert!(matches!(w.engine.feature_apply("test.verified"), Err(medkit_core::Error::NotApplicable(r)) if r == why));
     let d = w.engine.feature_detect("test.verified").unwrap();
@@ -727,7 +735,9 @@ fn verify_check_judges_a_script_feature_before_and_after() {
 
     let preview = w.engine.feature_preview("test.verified").unwrap();
     assert!(preview.feature.applicable && preview.notes.is_empty(), "{preview:?}");
-    assert_eq!(preview.changes[0].current, "还没改");
+    // 写了 verify 的：现在的情况就是那个检测的结论
+    let check_message = w.engine.run_check("disk.hib-state").unwrap().message;
+    assert_eq!(preview.current.as_deref(), Some(check_message.as_str()));
     let res = w.engine.feature_apply("test.verified").unwrap();
     assert!(res.ok && res.verified == FeatureStateKind::Applied, "{res:?}");
     assert_eq!(w.engine.feature_detect("test.verified").unwrap().state, FeatureStateKind::Applied);

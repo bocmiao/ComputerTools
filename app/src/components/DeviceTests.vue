@@ -8,8 +8,9 @@ import { MAIN_ROWS, NAV_ROWS, NUMPAD_ROWS, allKeyCodes, type KeyRow } from '../u
 // 全在界面里做，不改电脑的任何设置。麦克风和摄像头第一次用时 WebView2 会弹出询问，点「允许」才用得了。
 // 每一项的 id 是 device-test-<名字>（名字见 labels.ts 的 DEVICE_TEST_LABELS）：症状指引里的 test: 按钮跳到这里，
 // 小工具页滚到那一项、把焦点放上去，highlight 是正在突出显示的那一项。
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件。
 
-defineProps<{ highlight?: string | null }>()
+defineProps<{ highlight?: string | null; hideTitle?: boolean }>()
 
 // ── 屏幕坏点、漏光 ──
 const SCREEN_COLORS = [
@@ -292,7 +293,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="group" aria-labelledby="device-tests-title">
     <div class="group-head">
-      <h2 id="device-tests-title" class="section-title">屏幕、键盘、鼠标、声音测试</h2>
+      <h2 id="device-tests-title" :class="hideTitle ? 'visually-hidden' : 'section-title'">屏幕、键盘、鼠标、声音测试</h2>
       <p class="muted small">买新电脑、二手电脑验机，或者怀疑哪里坏了的时候用。只是测试，不改电脑的任何设置。</p>
     </div>
     <div class="test-list">

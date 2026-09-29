@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { isTauri } from '../api'
-import { goTo, nav, system, systemError, type PageId } from '../state'
+import { goHome, goTo, health, nav, system, systemError, type PageId } from '../state'
 import AppIcon, { type IconName } from './AppIcon.vue'
+import GlobalSearch from './GlobalSearch.vue'
+
+// 左边的导航：品牌、搜索框（症状、设置、工具一个框搜）、六个页面、最下面一张电脑信息的小卡片。
+// 体检查出要处理的项目时，「体检」旁边显示个数。在症状详情、单个工具页里再点一下当前这一页，回到那一页的首页。
 
 const items: { id: PageId; label: string; icon: IconName }[] = [
   { id: 'health', label: '体检', icon: 'health' },
@@ -18,6 +22,10 @@ const demo = !isTauri()
 // 只显示普通人看得懂的：系统名称（已经带着家庭版、专业版这类中文名）、版本号、有没有管理员权限、小药箱版本。
 // edition（注册表里的英文 EditionID）和数据版本（一串哈希）不显示，报告里有。
 const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, '') ?? '')
+
+function badge(id: PageId): number | null {
+  return id === 'health' && health.attention ? health.attention : null
+}
 </script>
 
 <template>
@@ -27,6 +35,8 @@ const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, 
       <span class="brand-name">电脑小药箱</span>
     </div>
 
+    <GlobalSearch />
+
     <nav aria-label="主要功能">
       <ul class="items">
         <li v-for="item in items" :key="item.id">
@@ -35,10 +45,11 @@ const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, 
             class="item"
             :class="{ current: nav.page === item.id }"
             :aria-current="nav.page === item.id ? 'page' : undefined"
-            @click="goTo(item.id)"
+            @click="nav.page === item.id ? goHome(item.id) : goTo(item.id)"
           >
             <AppIcon :name="item.icon" />
-            <span>{{ item.label }}</span>
+            <span class="item-label">{{ item.label }}</span>
+            <span v-if="badge(item.id)" class="badge" :aria-label="`${badge(item.id)} 项要处理`">{{ badge(item.id) }}</span>
           </button>
         </li>
       </ul>
@@ -47,13 +58,13 @@ const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, 
     <div class="footer">
       <p v-if="demo" class="demo">演示模式：显示的是示例数据，不会改动这台电脑</p>
 
-      <section v-if="system" class="sys" aria-label="系统信息">
+      <section v-if="system" class="sys" aria-label="这台电脑">
         <p class="sys-os">{{ osName }}</p>
-        <p class="muted small">版本号 {{ system.build }}</p>
-        <p class="small" :class="system.isAdmin ? 'admin-yes' : 'admin-no'">
+        <p class="muted small">版本 {{ system.build }} · 小药箱 {{ system.appVersion }}</p>
+        <p class="small admin" :class="system.isAdmin ? 'admin-yes' : 'admin-no'">
+          <span class="admin-dot" aria-hidden="true"></span>
           {{ system.isAdmin ? '已用管理员身份运行' : '没有用管理员身份运行，部分修复做不了' }}
         </p>
-        <p class="muted small">小药箱 {{ system.appVersion }}</p>
       </section>
       <!-- 原因在右边的全局错误页里写着，这里只简单说一句 -->
       <p v-else-if="systemError" class="muted small">没读出系统信息</p>
@@ -68,17 +79,16 @@ const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, 
   flex-direction: column;
   gap: 16px;
   height: 100%;
-  padding: 18px 12px 16px;
+  padding: 18px 14px 14px;
   background: var(--color-nav-bg);
   border-right: 1px solid var(--color-border);
-  overflow-y: auto;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 2px 10px 6px;
+  padding: 2px 6px 2px;
 }
 
 .brand-icon {
@@ -87,7 +97,7 @@ const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, 
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: var(--radius);
+  border-radius: 9px;
   background: var(--color-primary);
   color: var(--color-primary-text);
 }
@@ -100,7 +110,7 @@ const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, 
 .items {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   list-style: none;
 }
 
@@ -109,12 +119,12 @@ const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, 
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 44px;
+  min-height: 42px;
   padding: 8px 12px;
   border: none;
-  border-radius: var(--radius);
+  border-radius: 8px;
   background: transparent;
-  font-size: 15.5px;
+  font-size: 15px;
   text-align: left;
   cursor: pointer;
 }
@@ -124,17 +134,35 @@ const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, 
 }
 
 .item.current {
-  background: var(--color-primary-soft);
+  background: var(--color-surface);
   color: var(--color-primary-soft-text);
   font-weight: 600;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.08);
+}
+
+.item-label {
+  flex: 1;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--tone-advice-bg);
+  color: var(--tone-advice-text);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .footer {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   margin-top: auto;
-  padding: 0 6px;
 }
 
 .demo {
@@ -149,12 +177,29 @@ const osName = computed(() => system.value?.osCaption.replace(/^Microsoft\s+/i, 
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
 }
 
 .sys-os {
+  font-size: var(--text-small);
   font-weight: 600;
+}
+
+.admin {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .admin-yes {

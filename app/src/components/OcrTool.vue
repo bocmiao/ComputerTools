@@ -13,6 +13,9 @@ import BusySpinner from './BusySpinner.vue'
 // 没有装中文识别时，给「安装中文文字识别」的按钮（小工具 system.install-ocr-chinese）。
 // 预览用画布转成 data: 地址显示（界面的内容安全策略不放行 blob: 图片）。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const INSTALL_TOOL = 'system.install-ocr-chinese'
 const PREVIEW_WIDTH = 560
 const PREVIEW_HEIGHT = 320
@@ -153,7 +156,7 @@ function clear(): void {
 
 <template>
   <article class="card ocr-card">
-    <h3 class="section-title">图片转文字</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">图片转文字</h3>
     <p class="muted small">
       截图、拍的文件、表格照片里的字认出来，变成能复制、能改的文字：用的是 Windows 自带的文字识别，不联网、不上传。印刷体认得准；手写的字、艺术字、很小很糊的字认不准，认完对一遍再用。
     </p>

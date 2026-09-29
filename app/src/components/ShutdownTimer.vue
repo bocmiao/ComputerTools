@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { shutdownCancel, shutdownGet, shutdownSchedule, type ShutdownPlan } from '../api'
+import { openLocalTool } from '../state'
 import { errorText } from '../utils/format'
 import {
   MAX_MINUTES,
@@ -15,6 +16,9 @@ import {
 
 // 定时关机、定时重启：到时间 Windows 自己关（退出小药箱也照样关），到时间以前随时能取消。
 // 系统查不到别处安排的关机，这里只显示小药箱安排的那一次；「取消」总是能点。
+
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
 
 const restart = ref(false)
 const mode = ref<'after' | 'at'>('after')
@@ -99,9 +103,9 @@ onUnmounted(stop)
 <template>
   <section class="group" aria-labelledby="shutdown-timer-title">
     <div class="card timer-card">
-      <h2 id="shutdown-timer-title" class="section-title">定时关机、定时重启</h2>
+      <h2 id="shutdown-timer-title" :class="hideTitle ? 'visually-hidden' : 'section-title'">定时关机、定时重启</h2>
       <p class="muted small">
-        下载完、看完电影、晚上忘了关电脑：到时间 Windows 自己关机（或者重启），退出小药箱也照样会关，到时间以前随时能取消。电脑在那之前睡着了就不会关：想让它一直开着等到那时候，把上面的「别让电脑自己睡着」也打开。
+        下载完、看完电影、晚上忘了关电脑：到时间 Windows 自己关机（或者重启），退出小药箱也照样会关，到时间以前随时能取消。电脑在那之前睡着了就不会关：想让它一直开着等到那时候，把工具箱里的<button type="button" class="btn btn-link inline-link" @click="openLocalTool('keep-awake')">「别让电脑睡着」</button>也打开。
       </p>
       <p class="banner banner-warning small" role="note">到时间会直接关掉所有程序，没保存的文档会丢：走开以前先保存好。</p>
 
@@ -178,4 +182,6 @@ onUnmounted(stop)
 .minutes { width: 6em; }
 .clock { width: auto; }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* 说明文字里的链接：和旁边的字一样大 */
+.inline-link { display: inline; font-size: inherit; vertical-align: baseline; white-space: normal; }
 </style>

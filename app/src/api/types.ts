@@ -8,6 +8,9 @@ export type Level = 'light' | 'medium' | 'heavy'
 export type Recommend = 'recommended' | 'optional' | 'not-recommended'
 export type Reboot = 'none' | 'explorer' | 'logoff' | 'reboot'
 export type Maturity = 'guide' | 'semi' | 'one-click'
+/** 症状归哪一类（按症状修的首页按它分组） */
+export type SymptomCategory =
+  | 'network' | 'system' | 'software' | 'files' | 'printer' | 'display' | 'desktop' | 'input' | 'hardware'
 export type FeatureStateKind = 'applied' | 'not-applied' | 'partial' | 'unknown'
 
 export interface SystemInfo {
@@ -16,7 +19,7 @@ export interface SystemInfo {
   appVersion: string; catalogVersion: string
 }
 export interface ProfileSummary { id: string; title: string; checkCount: number }
-export interface SymptomSummary { id: string; title: string; summary: string | null; keywords: string[]; maturity: Maturity }
+export interface SymptomSummary { id: string; title: string; category: SymptomCategory; summary: string | null; keywords: string[]; maturity: Maturity }
 export interface FeatureSummary {
   id: string; title: string; description: string; category: string
   risk: Risk; level: Level; recommend: Recommend; subjective: boolean; reboot: Reboot
@@ -44,7 +47,18 @@ export interface CheckResult {
 }
 export interface FeatureState { id: string; state: FeatureStateKind; details: string[]; error: string | null }
 export interface PreviewChange { target: string; current: string; planned: string }
-export interface Preview { feature: FeatureSummary; changes: PreviewChange[]; willCreateRestorePoint: boolean; notes: string[] }
+export interface Preview {
+  feature: FeatureSummary
+  /** 逐个位置要改什么（注册表、服务这些）；脚本类功能是空的 */
+  changes: PreviewChange[]
+  /** 由小药箱的脚本完成，没有逐个位置可列 */
+  scripted: boolean
+  /** 现在是什么情况，一句话（脚本类功能、写了复查检测的功能才有） */
+  current: string | null
+  willCreateRestorePoint: boolean
+  /** 要特别说一句的：不能执行的原因、改动会写到哪个账户上。改完要不要重启、能不能撤销看 feature */
+  notes: string[]
+}
 export interface ApplyResult {
   feature: string; sessionId: string; entryIds: string[]; ok: boolean
   verified: FeatureStateKind; message: string; reboot: Reboot; notes: string[]; error: string | null

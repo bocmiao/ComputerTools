@@ -67,6 +67,21 @@
   --tone-neutral-text: #4a5260;
   --tone-neutral-dot: #a4acb8;
 
+  /* 列表里行与行之间的细线、分段按钮的底色、开关关着时的颜色 */
+  --color-divider: #edf0f4;
+  --color-seg-bg: #e4e8ee;
+  --color-switch-off: #8a94a3;
+
+  /* 滚动条（细、没有上下箭头） */
+  --color-scrollbar: #c3cad5;
+  --color-scrollbar-hover: #9aa3b0;
+
+  /* 下拉框右边的小箭头（颜色同 --color-text-muted） */
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2359626f' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+  /* 内容区最宽多少：再宽就居中 */
+  --content-max: 1280px;
+
   /* 阴影与遮罩 */
   --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05);
   --shadow-dialog: 0 18px 48px rgb(16 24 40 / 0.22);
@@ -79,6 +94,12 @@
     --color-surface: #1e2228;
     --color-surface-2: #262b33;
     --color-nav-bg: #191c21;
+    --color-divider: #2a2f37;
+    --color-seg-bg: #262b33;
+    --color-switch-off: #6b7482;
+    --color-scrollbar: #454d5a;
+    --color-scrollbar-hover: #6b7482;
+    --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0a9b6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     --color-border: #313741;
     --color-border-strong: #454d5a;
     --color-text: #e5e8ec;

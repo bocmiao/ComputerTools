@@ -10,6 +10,9 @@ import BusySpinner from './BusySpinner.vue'
 // 后端（src-tauri/src/hidden.rs）列出被藏起来的东西，勾选的去掉这两个属性（程序和脚本文件照样藏着），能撤销；
 // 病毒放的快捷方式、藏着的程序只提醒，不删。U 盘只能在系统的选择框里选，系统盘不给用。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const report = ref<HiddenReport | null>(null)
 const selected = ref<Set<number>>(new Set())
 const busy = ref<'' | 'pick' | 'rescan' | 'restore' | 'undo'>('')
@@ -95,7 +98,7 @@ function describe(item: HiddenReport['items'][number]): string {
 
 <template>
   <article class="card hidden-card">
-    <h3 class="section-title">U 盘里的文件不见了</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">U 盘里的文件不见了</h3>
     <p class="muted small">
       插上 U 盘，文件夹不见了、变成了快捷方式，可空间还占着？多半是中了 U 盘病毒：它把原来的文件藏起来（设成「隐藏」和「系统」），再放一堆同名的快捷方式，一点就中毒。文件其实都还在，这里能把它们显示回来，改过的随时能改回去。
     </p>

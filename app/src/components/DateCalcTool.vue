@@ -5,6 +5,9 @@ import { between, dayNumber, describeDate, formatDate, fromDayNumber, parseDate,
 // 日期计算：两个日期相差多久（天数、周数、几年几个月几天、中间有几个工作日），从某天往后或往前推几天、几个工作日是哪天。
 // 工作日只按周一到周五算，法定节假日和调休没算进去（界面上写明），规则见 utils/dateCalc.ts。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const now = new Date()
 const today = formatDate({ y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() })
 
@@ -47,7 +50,7 @@ const ymd = computed(() => {
 
 <template>
   <article class="card date-card">
-    <h3 class="section-title">日期计算</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">日期计算</h3>
     <p class="muted small">算两个日期差几天、几个工作日（合同期限、年龄、倒计时），或者从某天往后推多少天、多少个工作日是哪天（「7 个工作日内办结」）。</p>
 
     <h4 class="sub-title">两个日期相差多久</h4>

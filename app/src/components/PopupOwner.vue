@@ -10,6 +10,9 @@ import ResultLinks from './ResultLinks.vue'
 // 弹窗是哪个软件的：点「开始找」，倒数几秒，这段时间里把鼠标移到弹窗上停住，看鼠标指着的窗口是哪个程序的、
 // 属于哪个已安装的软件。只查不改：不关窗口、不结束程序。路径里的用户文件夹名后端已经换成 *。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 /** 等几秒再看（后端最多等 10 秒） */
 const WAIT_SECONDS = 5
 
@@ -67,7 +70,7 @@ const links = computed(() => (report.value ? ownerLinks(report.value) : []))
 
 <template>
   <article class="card popup-card">
-    <h3 class="section-title">弹窗是哪个软件的</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">弹窗是哪个软件的</h3>
     <p class="muted small">
       右下角、屏幕中间老弹广告、资讯，不知道是哪个软件弹的？等它弹出来，点「开始找」，在倒数完之前把鼠标移到弹窗上停住（不用点它），就能看出是哪个程序弹的、属于哪个已安装的软件。只查不改：不关窗口、不结束程序。
     </p>

@@ -7,14 +7,37 @@ import { errorText } from './utils/format'
 
 export type PageId = 'health' | 'symptoms' | 'settings' | 'tools' | 'journal' | 'report'
 
-export const nav = reactive<{ page: PageId; symptomId: string | null; toolId: string | null; testId: string | null }>({
+export const nav = reactive<{
+  page: PageId
+  symptomId: string | null
+  toolId: string | null
+  testId: string | null
+  /** 常用设置里要定位、展开的那一项（导航栏搜索用） */
+  featureId: string | null
+  /** 工具箱里要打开的本地工具（utils/localTools.ts 里的 id） */
+  localToolId: string | null
+  /** 回到某一页的首页（症状详情、单个工具页回到列表），seq 每次加一：见 goHome */
+  home: { page: PageId | null; seq: number }
+}>({
   page: 'health',
   symptomId: null,
   toolId: null,
   testId: null,
+  featureId: null,
+  localToolId: null,
+  home: { page: null, seq: 0 },
 })
 
 export function goTo(page: PageId): void {
+  nav.page = page
+}
+
+/**
+ * 到某一页的首页：在症状详情、单个工具页里又点了导航栏上的这一页（和手机上再点一下当前标签一样），
+ * 或者「全部 N 个症状」这类链接。页面自己盯着 nav.home，回到列表
+ */
+export function goHome(page: PageId): void {
+  nav.home = { page, seq: nav.home.seq + 1 }
   nav.page = page
 }
 
@@ -30,6 +53,18 @@ export function openSymptom(id: string): void {
  */
 export function openTool(id: string): void {
   nav.toolId = id
+  nav.page = 'tools'
+}
+
+/** 跳到「常用设置」并定位、展开某一项（导航栏搜索用） */
+export function openSetting(id: string): void {
+  nav.featureId = id
+  nav.page = 'settings'
+}
+
+/** 跳到「工具箱」并打开某个本地工具（导航栏搜索、最近用过用） */
+export function openLocalTool(id: string): void {
+  nav.localToolId = id
   nav.page = 'tools'
 }
 
@@ -111,7 +146,9 @@ export const health = reactive<{
   stale: boolean
   /** 别的页面请求「重新体检」时加一，体检页据此开始体检 */
   runRequest: number
-}>({ lastRunAt: null, stale: false, runRequest: 0 })
+  /** 最近一次体检里要处理的项目有几个（导航栏「体检」旁边的数字）；还没体检过为 null */
+  attention: number | null
+}>({ lastRunAt: null, stale: false, runRequest: 0, attention: null })
 
 /** 症状页、常用设置、修改日志里改过或撤销过东西以后调用 */
 export function markHealthStale(): void {

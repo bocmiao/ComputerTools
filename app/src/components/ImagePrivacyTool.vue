@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const image = ref<File | null>(null)
 const busy = ref(false)
 const error = ref('')
@@ -53,7 +56,7 @@ async function exportCleanCopy(): Promise<void> {
 
 <template>
   <article class="card image-tool">
-    <h3 class="section-title">图片隐私清理</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">图片隐私清理</h3>
     <p class="muted small">把 JPG、PNG 或 WebP 重新导出为 PNG，去掉原图里的位置、拍摄设备等元数据。新图片可能比原图更大。</p>
     <label class="field-label" for="privacy-image">选择图片</label>
     <input id="privacy-image" type="file" accept="image/jpeg,image/png,image/webp" @change="selectImage" />

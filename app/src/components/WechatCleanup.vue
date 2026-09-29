@@ -13,8 +13,12 @@ import ConfirmDialog from './ConfirmDialog.vue'
 // - 聊天里的图片、视频、文件：只算 N 天以前的，默认不勾，要自己勾；
 // - 放进回收站，和在资源管理器里按 Delete 一样；看过微信里都正常以后再清空回收站，才腾出地方。
 
-// 在工具箱里是一组小工具里的一张卡片（h3），在「C 盘满了」页面上和「检查步骤」同级（h2）
-const props = withDefaults(defineProps<{ level?: 'h2' | 'h3' }>(), { level: 'h2' })
+// 标题的级别：在「C 盘满了」页面上和「检查步骤」同级（h2），放在一组小工具里时用 h3。
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件。
+const props = withDefaults(defineProps<{ level?: 'h2' | 'h3'; hideTitle?: boolean }>(), {
+  level: 'h2',
+  hideTitle: false,
+})
 
 const DAY_OPTIONS = [90, 180, 365, 730]
 
@@ -127,7 +131,9 @@ async function clean(): Promise<void> {
 
 <template>
   <section class="card wechat-card" aria-labelledby="wechat-title">
-    <component :is="props.level" id="wechat-title" class="section-title">微信占的地方</component>
+    <component :is="props.level" id="wechat-title" :class="props.hideTitle ? 'visually-hidden' : 'section-title'">
+      微信占的地方
+    </component>
     <p class="muted small">
       微信的聊天图片、视频、文件和缓存默认都存在 C 盘，用久了能占几十 GB。这里找出这台电脑上微信 3.x、4.x 的每个账号，数一数缓存和很久以前的聊天文件各占多少，勾上的放进回收站。聊天记录（文字）不碰。
     </p>
@@ -219,7 +225,7 @@ async function clean(): Promise<void> {
 <style scoped>
 .wechat-card { display: flex; flex-direction: column; gap: 9px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.days { width: auto; padding: 6px 9px; border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); }
+.days { width: auto; }
 .accounts { display: flex; flex-direction: column; gap: 6px; padding: 0; list-style: none; }
 .account { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-radius: var(--radius); background: var(--color-surface-2); }
 .check { display: inline-flex; gap: 8px; align-items: center; min-width: 0; }

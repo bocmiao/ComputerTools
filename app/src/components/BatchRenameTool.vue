@@ -7,6 +7,9 @@ import { errorText } from '../utils/format'
 // 批量重命名：文件夹只能用系统的选择框选（界面传不了路径）；规则改了就要重新预览；改完能撤销上一次。
 // 规则的顺序和后端一样：查找替换 → 换成「新名字 + 序号」→ 前面、后面加字；扩展名单独处理。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const folder = ref('')
 const rules = reactive<RenameRules>({
   extensions: '',
@@ -103,7 +106,7 @@ function undo(): Promise<void> {
 
 <template>
   <article class="card rename-card">
-    <h3 class="section-title">批量重命名文件</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">批量重命名文件</h3>
     <p class="muted small">
       选一个文件夹，按下面的规则给里面的文件改名（不进子文件夹）。改之前先看预览，改完可以撤销；新名字和已有的文件重名、或者 Windows 不允许时，不会改。
     </p>

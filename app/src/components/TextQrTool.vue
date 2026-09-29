@@ -4,6 +4,10 @@ import QrCode from './QrCode.vue'
 import { QR_MAX_BYTES, qrHint, qrText, utf8Bytes } from '../utils/textQr'
 
 // 文字、网址变二维码：边输入边画，只在这台电脑上生成
+
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const input = ref('')
 const text = computed(() => qrText(input.value))
 const bytes = computed(() => utf8Bytes(text.value))
@@ -13,7 +17,7 @@ const tooLong = computed(() => bytes.value > QR_MAX_BYTES)
 
 <template>
   <article class="card qr-card">
-    <h3 class="section-title">文字、网址变二维码</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">文字、网址变二维码</h3>
     <p class="muted small">
       把电脑上的网址、文字、取件码发到手机上：用手机相机或者微信「扫一扫」扫一下，就能打开网址或者复制文字。只在这台电脑上生成，不上传。
     </p>

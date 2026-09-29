@@ -48,6 +48,7 @@ import type {
   SpeedResult,
   StartupItem,
   Status,
+  SymptomCategory,
   SymptomDetail,
   SystemInfo,
   ToolResult,
@@ -184,6 +185,8 @@ interface MockFeature {
   summary: FeatureSummary
   changes: MockChange[]
   notes: string[]
+  /** 由脚本完成（和引擎一样：预览里不列逐个位置，只说现在的情况 current） */
+  scripted?: { current: string }
   /** 一次性的动作（例如刷新 DNS 缓存）：做完以后状态不会一直保持 */
   oneShot?: boolean
   /** 执行时一定失败，用来演示出错的样子 */
@@ -602,6 +605,7 @@ const FEATURE_LIST: MockFeature[] = [
     },
     {
       changes: [{ target: T.winsock, initial: '有 1 个软件插进去的网络组件', planned: '恢复干净' }],
+      scripted: { current: 'Winsock 里有 1 个别的软件插进去的网络组件（LSP），它的文件已经不在了。' },
       notes: ['360、腾讯电脑管家可能会弹窗询问，请选择「允许」。'],
     },
   ),
@@ -1036,6 +1040,31 @@ const CHECKS: Record<string, MockCheck> = {
       }
     },
   },
+  'hardware.system-disk-type': {
+    title: '系统盘类型',
+    evaluate: () => {
+      if (DEMO_ALL_OK) {
+        return { status: 'ok', resultCode: 'ssd', message: '系统装在固态硬盘上（NVMe），读写速度快。', facts: { bus_type: 'NVMe' } }
+      }
+      return {
+        status: 'advice',
+        resultCode: 'hdd',
+        message: '系统装在机械硬盘上，开机和打开软件都会明显慢一些。',
+        fixer: 'hardware',
+        next: '换一块固态硬盘是最有效的办法。可以找懂哥或电脑店帮忙安装，把系统迁移过去或者重装。',
+        facts: { bus_type: 'SATA', media_type: 'HDD' },
+      }
+    },
+  },
+  'hardware.memory-size': {
+    title: '内存大小',
+    evaluate: () => ({
+      status: 'ok',
+      resultCode: 'ok',
+      message: '内存 16 GB，够用。',
+      facts: { total_gb: 16, slots_total: 2, slots_used: 2, free_slots: 0 },
+    }),
+  },
   'hardware.battery': {
     title: '电池健康',
     evaluate: () => ({ status: 'na', resultCode: 'no-battery', message: '这台电脑没有电池。' }),
@@ -1441,6 +1470,8 @@ const PROFILES: Record<string, { title: string; checks: string[] }> = {
       'system.wmi',
       'system.pending-reboot',
       'hardware.disk-health',
+      'hardware.system-disk-type',
+      'hardware.memory-size',
       'hardware.battery',
       'system.recent-bsod',
       'system.reliability',
@@ -1468,6 +1499,22 @@ interface MockSymptom {
   guide: string | null
   steps: { check: string; stopOn?: Status[]; fixes: string[] }[]
   links?: string[]
+}
+
+/** 演示症状的分类，和 catalog/symptoms 里的 category 一样 */
+const SYMPTOM_CATEGORY: Record<string, SymptomCategory> = {
+  'slow-boot': 'system', network: 'network', 'disk-full': 'files', 'printer-share': 'printer',
+  'printer-709': 'printer', 'printer-11b': 'printer', 'app-cannot-run': 'software', 'file-in-use': 'files',
+  'recycle-bin-corrupted': 'files', 'temp-profile': 'system', 'screen-rotated': 'display', 'deleted-files': 'files',
+  'mobile-hotspot': 'network', touchpad: 'input', 'fullscreen-taskbar': 'desktop', 'blurry-text': 'display',
+  'office-broken': 'software', mouse: 'input', 'edge-broken': 'software', 'taskmgr-blank': 'system',
+  hotkeys: 'input', 'wmi-broken': 'system', 'downloads-grouped': 'files', 'wifi-slow': 'network',
+  'remote-desktop': 'network', 'builtin-app-broken': 'software', 'screen-goes-dark': 'system',
+  'jfif-images': 'files', 'gpu-not-used': 'display',
+}
+
+function symptomCategory(id: string): SymptomCategory {
+  return SYMPTOM_CATEGORY[id] ?? 'system'
 }
 
 const SYMPTOMS: MockSymptom[] = [
@@ -2025,67 +2072,58 @@ function undoOne(entry: JournalEntryView, force: boolean, inSession: boolean): U
 
 // ─────────────────────────── 诊断报告 ───────────────────────────
 
-const REPORT_STATUS: Record<CheckResult['status'], string> = {
+/** 报告里的体检结果：和引擎一样，记最近一次体检，和单独查过的项目（体检里有的，重查以后替换掉体检里的那一项） */
+let lastProfile: { time: number; results: CheckResult[] } | null = null
+const otherResults = new Map<string, CheckResult>()
+
+function rememberCheck(r: CheckResult): void {
+  const i = lastProfile?.results.findIndex((x) => x.id === r.id) ?? -1
+  if (lastProfile && i >= 0) lastProfile.results[i] = r
+  else otherResults.set(r.id, r)
+}
+
+const REPORT_TAG: Record<CheckResult['status'], string> = {
   ok: '正常',
   advice: '建议处理',
   manual: '需要人工',
   unknown: '没查出来',
-  na: '不适用',
+  na: '没查出来',
 }
 
+/** 照引擎的 Engine::report_generate 写，结构一样（诊断报告页上「报告里有什么」照它列） */
 function buildReport(note?: string): string {
-  const profile = PROFILES.healthcheck
-  const results = (profile?.checks ?? []).map(runMockCheck).filter((r) => r.status !== 'na')
-  const order = { manual: 0, advice: 1, unknown: 2, ok: 3, na: 4 } as const
-  results.sort((x, y) => order[x.status] - order[y.status])
-  const okTitles = results.filter((r) => r.status === 'ok').map((r) => r.title)
-
   const lines: string[] = [
-    '电脑小药箱 诊断报告',
+    '电脑小药箱诊断报告',
     `生成时间：${localTime(Date.now())}`,
-    `小药箱版本：${SYSTEM.appVersion}（数据版本 ${SYSTEM.catalogVersion}）`,
+    `程序版本：${SYSTEM.appVersion}（数据 ${SYSTEM.catalogVersion}）`,
+    `系统：${SYSTEM.osCaption}（版本号 ${SYSTEM.build}，${SYSTEM.edition}）`,
+    `管理员权限：${SYSTEM.isAdmin ? '是' : '否'}`,
     '',
-    ...(note?.trim() ? ['== 我遇到的问题 ==', note.trim(), ''] : []),
-    '【这台电脑】',
-    `系统：${SYSTEM.osCaption.replace(/^Microsoft\s+/, '')}，版本号 ${SYSTEM.build}`,
-    `以管理员身份运行：${SYSTEM.isAdmin ? '是' : '否'}`,
-    '用户名：[已隐藏]',
-    '电脑名：[已隐藏]',
-    'CPU：Intel Core i5-10400（6 核 12 线程）',
-    '内存：16 GB',
-    '系统盘：WDC WD10EZEX（机械硬盘，1 TB），序列号 [已隐藏]',
-    '',
-    '【网络】',
-    '网卡：以太网（有线，1000 Mbps）',
-    'IP 地址：[已隐藏]    MAC 地址：[已隐藏]    Wi-Fi 名称：[已隐藏]',
-    `系统代理：${valueOf(T.proxyEnable) === 'DWORD 0' ? '没有开' : '开着，指向 127.0.0.1:7890（没有程序在监听）'}`,
-    `DNS：${valueOf(T.dns)}`,
-    '',
-    '【体检】',
   ]
-  for (const r of results) {
-    if (r.status === 'ok') continue
-    lines.push(`${REPORT_STATUS[r.status]} · ${r.title}：${r.message}`)
-    if (r.error) lines.push(`    出错信息：${r.error}`)
-  }
-  if (okTitles.length > 0) lines.push(`正常 · ${okTitles.join('、')}`)
+  if (note?.trim()) lines.push('== 我遇到的问题 ==', note.trim().slice(0, 1000), '')
 
-  lines.push('', '【最近的修改】')
-  const recent = sessions.filter((s) => s.entries.length > 0).slice(0, 3)
-  if (recent.length === 0) lines.push('没有修改记录。')
-  for (const s of recent) {
-    lines.push(`${localTime(Date.parse(s.startedAt))} 开始，共 ${s.entries.length} 项：`)
-    for (const e of s.entries) {
-      if (e.pending) {
-        lines.push(`  · ${e.featureTitle}：${e.before} → ？（改到一半程序退出了，状态不确定）${e.undone ? '（已恢复原状）' : ''}`)
-        continue
-      }
-      const state = !e.ok ? '（没有改成）' : e.undone ? '（已恢复原状）' : ''
-      lines.push(`  · ${e.featureTitle}：${e.before} → ${e.after}${state}`)
-    }
+  const print = (r: CheckResult): void => {
+    lines.push(`[${REPORT_TAG[r.status]}] ${r.title}：${r.message}`)
+    if (r.error) lines.push(`    原因：${r.error}`)
+  }
+  lines.push('== 最近一次体检 ==')
+  if (!lastProfile) lines.push('（还没有做过体检）')
+  else lines.push(`（体检时间：${localTime(lastProfile.time)}；之后单独重查过的项目已经更新）`)
+  for (const r of lastProfile?.results ?? []) if (r.status !== 'na') print(r)
+  lines.push('')
+  if (otherResults.size > 0) {
+    lines.push('== 单独检查过的项目（例如在「按症状修」里） ==')
+    for (const r of otherResults.values()) if (r.status !== 'na') print(r)
+    lines.push('')
   }
 
-  lines.push('', '——', '本报告已去掉用户名、电脑名、IP / MAC 地址、Wi-Fi 名称和序列号。', '报告只保存在这台电脑上，小药箱不会自动上传。')
+  lines.push('== 最近的修改 ==')
+  const recent = sessions.flatMap((s) => s.entries).slice(0, 30)
+  if (recent.length === 0) lines.push('（没有修改记录）')
+  for (const e of recent) {
+    const status = e.ok ? (e.undone ? '已恢复原状' : '成功') : e.undone ? '失败，已自动退回' : '失败'
+    lines.push(`${localTime(Date.parse(e.time))} ${e.featureTitle}（${e.target}）：${e.before} → ${e.after}，${status}`)
+  }
   return lines.join('\n')
 }
 
@@ -2998,7 +3036,9 @@ const handlers: Handlers = {
 
   catalog_summary: (): CatalogSummary => ({
     profiles: Object.entries(PROFILES).map(([id, p]) => ({ id, title: p.title, checkCount: p.checks.length })),
-    symptoms: SYMPTOMS.map((s) => ({ id: s.id, title: s.title, summary: s.summary, keywords: s.keywords, maturity: s.maturity })),
+    symptoms: SYMPTOMS.map((s) => ({
+      id: s.id, title: s.title, category: symptomCategory(s.id), summary: s.summary, keywords: s.keywords, maturity: s.maturity,
+    })),
     features: FEATURE_LIST.map((f) => f.summary),
     tools: TOOL_LIST.map((t) => t.summary),
   }),
@@ -3008,6 +3048,7 @@ const handlers: Handlers = {
     return {
       id: s.id,
       title: s.title,
+      category: symptomCategory(s.id),
       summary: s.summary,
       keywords: s.keywords,
       maturity: s.maturity,
@@ -3026,10 +3067,16 @@ const handlers: Handlers = {
   run_profile: ({ id }) => {
     const profile = PROFILES[requireId(id)]
     if (!profile) throw `找不到这个检测清单：${id}`
-    return profile.checks.map(runMockCheck)
+    const results = profile.checks.map(runMockCheck)
+    lastProfile = { time: Date.now(), results }
+    return results
   },
 
-  run_check: ({ id }) => runMockCheck(id),
+  run_check: ({ id }) => {
+    const r = runMockCheck(id)
+    rememberCheck(r)
+    return r
+  },
 
   feature_detect: ({ id }): FeatureState => {
     const f = getFeature(id)
@@ -3046,7 +3093,10 @@ const handlers: Handlers = {
     const f = getFeature(id)
     return {
       feature: f.summary,
-      changes: f.changes.map((c) => ({ target: c.target, current: valueOf(c.target), planned: c.planned })),
+      // 和引擎一样：脚本类功能不列逐个位置，只说现在的情况
+      changes: f.scripted ? [] : f.changes.map((c) => ({ target: c.target, current: valueOf(c.target), planned: c.planned })),
+      scripted: Boolean(f.scripted),
+      current: f.scripted ? (pendingChanges(f).length > 0 ? f.scripted.current : '已经是这样了') : null,
       // 本来就是好的功能不用改，也就不建还原点
       willCreateRestorePoint: f.summary.risk !== 'safe' && pendingChanges(f).length > 0,
       // 和引擎一样：用不了的功能在注意事项最前面写上原因

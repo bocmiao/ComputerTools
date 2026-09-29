@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::model::{Audience, Fixer, Level, Maturity, Reboot, Recommend, Risk, Status, ToolGroup};
+use crate::model::{Audience, Fixer, Level, Maturity, Reboot, Recommend, Risk, Status, SymptomCategory, ToolGroup};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -52,6 +52,8 @@ pub struct ProfileSummary {
 pub struct SymptomSummary {
     pub id: String,
     pub title: String,
+    /// 归哪一类（界面按它分组）
+    pub category: SymptomCategory,
     pub summary: Option<String>,
     pub keywords: Vec<String>,
     pub maturity: Maturity,
@@ -209,8 +211,15 @@ pub struct PreviewChange {
 #[serde(rename_all = "camelCase")]
 pub struct Preview {
     pub feature: FeatureSummary,
+    /// 逐个位置要改什么（注册表、服务这类原语功能）；脚本类功能没有逐个位置可列，是空的
     pub changes: Vec<PreviewChange>,
+    /// 由小药箱的脚本完成（没有 changes 可列）
+    pub scripted: bool,
+    /// 现在是什么情况，一句话：写了 verify 的用那个检测的结论，别的脚本类功能说「还没改」「改了一部分」这些
+    pub current: Option<String>,
     pub will_create_restore_point: bool,
+    /// 要特别说一句的：不能执行的原因、改动会写到哪个账户上。
+    /// 改完要不要重启、能不能撤销在 feature 里（reboot、reversible、irreversible_reason），界面自己说，这里不重复
     pub notes: Vec<String>,
 }
 

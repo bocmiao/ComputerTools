@@ -11,6 +11,9 @@ import TagPill from './TagPill.vue'
 // 文件删不掉（「操作无法完成，因为文件已在另一程序中打开」）：查是哪些程序在用它，说清楚怎么让它放手。
 // 只查不改：不关程序、不动文件。要查的文件只能在系统的选择框里选，界面拿不到完整路径。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const report = ref<FileLockReport | null>(null)
 const busy = ref(false)
 const error = ref('')
@@ -35,7 +38,7 @@ const hasExplorer = computed(() => report.value?.users.some((u) => u.kind === 'e
 
 <template>
   <article class="card locker-card">
-    <h3 class="section-title">文件删不掉：是谁占着</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">文件删不掉：是谁占着</h3>
     <p class="muted small">
       删除、移动文件时提示「文件已在另一程序中打开」？选中它（或者整个文件夹），看看是哪个程序在用，再按说明关掉那个程序。这里只查不改：不关程序、不动文件。
     </p>

@@ -510,6 +510,8 @@ export type Level = 'light' | 'medium' | 'heavy'
 export type Recommend = 'recommended' | 'optional' | 'not-recommended'
 export type Reboot = 'none' | 'explorer' | 'logoff' | 'reboot'
 export type Maturity = 'guide' | 'semi' | 'one-click'
+export type SymptomCategory =        // 症状归哪一类，界面按它分组
+  | 'network' | 'system' | 'software' | 'files' | 'printer' | 'display' | 'desktop' | 'input' | 'hardware'
 export type FeatureStateKind = 'applied' | 'not-applied' | 'partial' | 'unknown'
 
 export interface SystemInfo {
@@ -518,7 +520,7 @@ export interface SystemInfo {
   appVersion: string; catalogVersion: string
 }
 export interface ProfileSummary { id: string; title: string; checkCount: number }
-export interface SymptomSummary { id: string; title: string; summary: string | null; keywords: string[]; maturity: Maturity }
+export interface SymptomSummary { id: string; title: string; category: SymptomCategory; summary: string | null; keywords: string[]; maturity: Maturity }
 export interface FeatureSummary {
   id: string; title: string; description: string; category: string
   risk: Risk; level: Level; recommend: Recommend; subjective: boolean; reboot: Reboot
@@ -540,7 +542,14 @@ export interface CheckResult {
 }
 export interface FeatureState { id: string; state: FeatureStateKind; details: string[]; error: string | null }
 export interface PreviewChange { target: string; current: string; planned: string }
-export interface Preview { feature: FeatureSummary; changes: PreviewChange[]; willCreateRestorePoint: boolean; notes: string[] }
+export interface Preview {
+  feature: FeatureSummary
+  changes: PreviewChange[]      // 逐个位置要改什么；脚本类功能没有逐个位置可列，是空的
+  scripted: boolean             // 由小药箱的脚本完成
+  current: string | null        // 现在是什么情况，一句话（写了 verify 的用那个检测的结论）
+  willCreateRestorePoint: boolean
+  notes: string[]               // 只有不能执行的原因、改动写到哪个账户上；重启、能不能撤销看 feature
+}
 export interface ApplyResult {
   feature: string; sessionId: string; entryIds: string[]; ok: boolean
   verified: FeatureStateKind; message: string; reboot: Reboot; notes: string[]; error: string | null

@@ -16,6 +16,8 @@ import BusySpinner from './BusySpinner.vue'
 const INSTALL_TOOL = 'system.install-ocr-chinese'
 
 const emit = defineEmits<{ open: [id: string] }>()
+/** 展开没有：症状页搜索框旁边的「看报错截图」按钮也能打开它 */
+const expanded = defineModel<boolean>('expanded', { default: false })
 
 const busy = ref(false)
 const problem = ref('')
@@ -99,13 +101,14 @@ async function copyText(): Promise<void> {
 </script>
 
 <template>
-  <details class="card shot">
+  <details id="error-shot" class="card shot" :open="expanded" @toggle="expanded = ($event.target as HTMLDetailsElement).open">
     <summary class="shot-summary">有报错窗口？把截图粘贴进来，帮你认一认</summary>
     <div class="shot-body">
       <p class="muted small">
         软件、系统弹出报错时，截个图（Win + Shift + S），点一下下面的框按 Ctrl + V。小药箱用 Windows 自带的文字识别认出上面的字，再对一对是哪种问题；不联网、不上传。
       </p>
       <div
+        id="error-shot-drop"
         class="drop"
         :class="{ over: dragDepth > 0 }"
         tabindex="0"

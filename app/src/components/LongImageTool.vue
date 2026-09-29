@@ -12,6 +12,9 @@ import { byName } from '../utils/pdf'
 // 刚截的图可以直接粘贴：点一下拖放框（它能拿到焦点），按 Ctrl + V。
 // 预览和缩略图都用画布转成 data: 地址显示（界面的内容安全策略不放行 blob: 图片）。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 interface Item {
   id: number
   file: File
@@ -356,7 +359,7 @@ async function reveal(): Promise<void> {
 
 <template>
   <article class="card long-card">
-    <h3 class="section-title">长图拼接</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">长图拼接</h3>
     <p class="muted small">
       把几张截图（聊天记录、网页、订单）上下拼成一张长图，或者左右并排拼在一起，一次发给别人。原图不动；拼好先看一眼，再存到电脑上，或者复制了直接粘贴到微信、QQ 里。
     </p>

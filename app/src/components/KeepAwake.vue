@@ -6,6 +6,9 @@ import { errorText } from '../utils/format'
 // 别让电脑自己睡着：只在小药箱开着的时候有效，关掉开关或者退出小药箱就恢复原样，不改电源设置。
 // 开关的状态以后端为准：每次回到这一页都重新读一次。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const on = ref(false)
 const display = ref(true)
 const busy = ref(false)
@@ -47,7 +50,7 @@ onActivated(refresh)
 <template>
   <section class="group" aria-labelledby="keep-awake-title">
     <div class="card awake-card">
-      <h2 id="keep-awake-title" class="section-title">别让电脑自己睡着</h2>
+      <h2 id="keep-awake-title" :class="hideTitle ? 'visually-hidden' : 'section-title'">别让电脑自己睡着</h2>
       <p class="muted small">
         下载大文件、上网课、传文件的时候，电脑没人碰也不会自己睡着。只在小药箱开着的时候有效：关掉这个开关或者退出小药箱，就恢复原来的样子，不改电源设置。合上笔记本盖子、按电源键照样会睡。
       </p>

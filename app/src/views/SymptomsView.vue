@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
 import { runCheck, startupList, startupSet, symptomDetail, toolOpen } from '../api'
-import type { ApplyResult, CheckResult, StartupItem, SymptomDetail, SymptomSummary } from '../api/types'
+import type { ApplyResult, CheckResult, StartupItem, SymptomCategory, SymptomDetail } from '../api/types'
 import AppIcon from '../components/AppIcon.vue'
 import BrightnessControl from '../components/BrightnessControl.vue'
 import BusySpinner from '../components/BusySpinner.vue'
@@ -16,9 +16,10 @@ import WechatCleanup from '../components/WechatCleanup.vue'
 import ResultLinks from '../components/ResultLinks.vue'
 import StatusLamp, { type LampState } from '../components/StatusLamp.vue'
 import TagPill from '../components/TagPill.vue'
-import { fixerLabel, maturityLabel, riskLabel, riskTone } from '../labels'
-import { catalog, markHealthStale, nav } from '../state'
-import { errorText, normalizeForSearch } from '../utils/format'
+import { fixerLabel, riskLabel, riskTone, symptomCategories } from '../labels'
+import { catalog, findSymptom, goTo, markHealthStale, nav } from '../state'
+import { errorText } from '../utils/format'
+import { symptomMatches } from '../utils/search'
 
 // 按症状修：先搜症状（也能粘贴报错截图，认出字以后对关键词：ErrorShotSearch），再逐步检查。查出问题（建议处理、需要人工）的那一步给出对应的修复；
 // 没查清楚（没查出来、出错）的那一步不急着修，先让用户再查一次。
@@ -28,19 +29,91 @@ import { errorText, normalizeForSearch } from '../utils/format'
 
 const query = ref('')
 const searchInput = useTemplateRef<HTMLInputElement>('searchInput')
+/** 「看报错截图」展开没有；点搜索框旁边的按钮打开时，直接把光标放进粘贴框 */
+const shotOpen = ref(false)
+const shotBtn = useTemplateRef<HTMLButtonElement>('shotBtn')
+// 在截图框自己的标题上收起来时，那一块整个不见了，光标回到按钮上
+watch(shotOpen, async (open) => {
+  if (open || document.activeElement === shotBtn.value) return
+  await nextTick()
+  shotBtn.value?.focus()
+})
 
-function matches(s: SymptomSummary, q: string): boolean {
-  const nq = normalizeForSearch(q)
-  if (!nq) return true
-  return [s.title, ...s.keywords]
-    .map(normalizeForSearch)
-    .filter((h) => h.length > 0)
-    // 「电脑没网了」里包含关键词「没网」也算
-    .some((h) => h.includes(nq) || (h.length >= 2 && nq.includes(h)))
+async function toggleShot(): Promise<void> {
+  shotOpen.value = !shotOpen.value
+  if (!shotOpen.value) return
+  await nextTick()
+  const drop = document.getElementById('error-shot-drop')
+  drop?.scrollIntoView({ block: 'nearest' })
+  drop?.focus({ preventScroll: true })
 }
 
 const symptoms = computed(() => catalog.value?.symptoms ?? [])
-const filtered = computed(() => symptoms.value.filter((s) => matches(s, query.value)))
+const searching = computed(() => query.value.trim() !== '')
+const filtered = computed(() => symptoms.value.filter((s) => symptomMatches(s, query.value)))
+
+// ── 按类别排好（没在搜的时候） ──
+
+/** 每一类里常见的排前面：这个顺序里的先列，别的按目录里的顺序跟在后面 */
+const PRIORITY = [
+  'network', 'no-internet-icon', 'network-drops', 'wifi-slow', 'wifi-missing', 'lan-share', 'mobile-hotspot', 'remote-desktop',
+  'slow-boot', 'slow-pc', 'bluescreen', 'update-failed', 'black-screen', 'boot-press-f1', 'wakes-up', 'screen-goes-dark',
+  'app-missing-dll', 'app-crash', 'popup-ads', 'browser-hijacked', 'app-cannot-run', 'office-broken', 'edge-broken',
+  'disk-full', 'deleted-files', 'file-in-use', 'search-broken', 'recycle-bin-corrupted',
+  'printer-share', 'printer-offline', 'printer-11b', 'printer-709',
+  'screen-display', 'blurry-text', 'screen-colors', 'gpu-not-used',
+  'taskbar-broken', 'desktop-icons-missing', 'fullscreen-taskbar',
+  'keyboard', 'input-method', 'hotkeys', 'mouse', 'touchpad',
+  'no-sound', 'mic-camera', 'bluetooth', 'usb-drive', 'usb-disconnects', 'phone-usb', 'device-error', 'battery',
+]
+
+function rank(id: string): number {
+  const i = PRIORITY.indexOf(id)
+  return i === -1 ? PRIORITY.length : i
+}
+
+/** 每类先显示几个，「全部」再展开 */
+const PER_CATEGORY = 4
+const expandedCats = ref<Set<SymptomCategory>>(new Set())
+
+function toggleCat(id: SymptomCategory): void {
+  const next = new Set(expandedCats.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedCats.value = next
+}
+
+const groups = computed(() =>
+  symptomCategories
+    .map((c) => {
+      const all = symptoms.value
+        .map((s, i) => ({ s, i }))
+        .filter((x) => x.s.category === c.id)
+        .sort((a, b) => rank(a.s.id) - rank(b.s.id) || a.i - b.i)
+        .map((x) => x.s)
+      const open = expandedCats.value.has(c.id)
+      return { ...c, all, shown: open ? all : all.slice(0, PER_CATEGORY), open }
+    })
+    .filter((g) => g.all.length > 0),
+)
+
+/** 「大家常搜」：直接打开这几个症状（目录里有的才显示） */
+const HOT: { id: string; label: string }[] = [
+  { id: 'network', label: '上不了网' },
+  { id: 'disk-full', label: 'C 盘满了' },
+  { id: 'printer-offline', label: '打印机脱机' },
+  { id: 'slow-pc', label: '电脑卡' },
+  { id: 'no-sound', label: '没声音' },
+  { id: 'bluescreen', label: '蓝屏' },
+  { id: 'app-missing-dll', label: '缺少 dll' },
+  { id: 'printer-11b', label: '0x0000011b' },
+]
+const hot = computed(() => (catalog.value ? HOT.filter((h) => findSymptom(h.id)) : []))
+
+/** 症状属于哪一类（详情页的面包屑） */
+function categoryTitle(id: SymptomCategory | undefined): string {
+  return symptomCategories.find((c) => c.id === id)?.title ?? ''
+}
 
 /** 示例搜索词：从真实症状的关键词里取（每个症状取一个），保证照着搜一定搜得到 */
 function exampleWords(n: number): string[] {
@@ -57,11 +130,6 @@ function quoted(words: string[]): string {
   return words.map((w) => `「${w}」`).join('')
 }
 
-const leadText = computed(() =>
-  leadExamples.value.length
-    ? `说说电脑哪里不对劲，比如${quoted(leadExamples.value)}。先检查，找到原因再动手。`
-    : '说说电脑哪里不对劲。先检查，找到原因再动手。',
-)
 const placeholder = computed(() =>
   leadExamples.value[0] ? `输入你遇到的情况，比如：${leadExamples.value[0]}` : '输入你遇到的情况',
 )
@@ -329,6 +397,16 @@ function onApplied(r: ApplyResult): void {
   void runStep(previewStep, runToken)
 }
 
+/** 页头右边的那句话：查到第几步发现问题、都正常 */
+const checkStatus = computed<{ text: string; tone: 'advice' | 'unknown' | 'ok' | 'info' } | null>(() => {
+  if (checking.value) return { text: '正在检查…', tone: 'info' }
+  if (!checkedOnce.value) return null
+  const firstFix = stepViews.value.find((v) => v.kind === 'fix')
+  if (firstFix) return { text: `第 ${firstFix.index + 1} 步发现问题`, tone: 'advice' }
+  if (unclearCount.value) return { text: '有几步没查清楚', tone: 'unknown' }
+  return { text: '查过的都正常', tone: 'ok' }
+})
+
 // 从体检页点「去修」跳过来时，直接打开对应的症状
 watch(
   () => nav.symptomId,
@@ -339,54 +417,129 @@ watch(
   },
   { immediate: true },
 )
+
+// 在症状详情里又点了导航栏上的「按症状修」，或者体检页的「全部 N 个症状」：回到症状首页
+watch(
+  () => nav.home.seq,
+  () => {
+    if (nav.home.page === 'symptoms' && selectedId.value) void back()
+  },
+)
 </script>
 
 <template>
   <div class="page">
-    <!-- 症状列表 -->
+    <!-- 症状首页：搜索 + 按类别排好 -->
     <template v-if="!selectedId">
-      <header class="page-header">
-        <h1 class="page-title" tabindex="-1">按症状修</h1>
-        <p class="page-lead">{{ leadText }}</p>
+      <header class="page-head">
+        <div class="page-head-main">
+          <h1 class="page-title" tabindex="-1">按症状修</h1>
+          <p class="page-lead">说说电脑哪里不对劲，一步步查原因；能修的给修复按钮，修不了的说清楚下一步找谁。</p>
+        </div>
+        <div class="page-actions">
+          <button type="button" class="btn btn-link" @click="goTo('report')">没找到？生成诊断报告发给懂哥</button>
+        </div>
       </header>
 
-      <div class="search">
-        <label for="symptom-search" class="visually-hidden">搜索症状</label>
-        <input
-          id="symptom-search"
-          ref="searchInput"
-          v-model="query"
-          type="search"
-          class="input search-input"
-          :placeholder="placeholder"
-          autocomplete="off"
-        />
-      </div>
+      <section class="card search-card" aria-label="搜索症状">
+        <div class="search-row">
+          <label class="search-box big-search">
+            <AppIcon name="search" :size="20" />
+            <span class="visually-hidden">搜索症状</span>
+            <input
+              id="symptom-search"
+              ref="searchInput"
+              v-model="query"
+              type="search"
+              :placeholder="placeholder"
+              autocomplete="off"
+            />
+          </label>
+          <button
+            v-if="catalog"
+            type="button"
+            class="btn btn-secondary shot-btn"
+            ref="shotBtn"
+            :aria-expanded="shotOpen"
+            :aria-controls="shotOpen ? 'error-shot' : undefined"
+            @click="toggleShot"
+          >
+            <AppIcon name="image" :size="18" />看报错截图
+          </button>
+        </div>
+        <div v-if="hot.length" class="hot">
+          <span class="muted small">大家常搜</span>
+          <button v-for="h in hot" :key="h.id" type="button" class="chip" @click="open(h.id)">{{ h.label }}</button>
+        </div>
+      </section>
 
-      <ErrorShotSearch v-if="catalog" @open="open" />
+      <!-- 点了搜索框旁边的「看报错截图」才显示；收起来就不占地方 -->
+      <ErrorShotSearch v-if="catalog && shotOpen" v-model:expanded="shotOpen" @open="open" />
 
       <p v-if="!catalog" class="loading-line" role="status"><BusySpinner size="small" />正在读取症状列表…</p>
-      <p v-else-if="filtered.length === 0" class="empty muted" role="status">{{ emptyText }}</p>
-      <ul v-else class="symptom-list">
-        <li v-for="s in filtered" :key="s.id">
-          <button type="button" class="symptom card" @click="open(s.id)">
-            <span class="symptom-main">
-              <span class="symptom-title">{{ s.title }}</span>
-              <span v-if="s.summary" class="muted">{{ s.summary }}</span>
-            </span>
-            <TagPill tone="neutral">{{ maturityLabel[s.maturity] }}</TagPill>
+
+      <!-- 在搜：列出搜到的 -->
+      <template v-else-if="searching">
+        <p v-if="filtered.length === 0" class="empty muted" role="status">{{ emptyText }}</p>
+        <section v-else class="card list-card" aria-labelledby="symptom-results-title">
+          <div class="list-head">
+            <h2 id="symptom-results-title" class="list-title">找到 {{ filtered.length }} 个</h2>
+            <button type="button" class="btn btn-ghost btn-small" @click="query = ''">清空搜索</button>
+          </div>
+          <ul class="results">
+            <li v-for="s in filtered" :key="s.id">
+              <button type="button" class="result" @click="open(s.id)">
+                <span class="row-main">
+                  <span class="row-title">{{ s.title }}</span>
+                  <span v-if="s.summary" class="row-sub">{{ s.summary }}</span>
+                </span>
+                <AppIcon name="chevron-right" :size="18" class="go" />
+              </button>
+            </li>
+          </ul>
+        </section>
+      </template>
+
+      <!-- 没在搜：按类别 -->
+      <div v-else class="cat-grid">
+        <section v-for="g in groups" :key="g.id" class="card cat" :aria-labelledby="`cat-${g.id}`">
+          <div class="cat-head">
+            <span class="cat-icon"><AppIcon :name="g.icon" :size="18" /></span>
+            <h2 :id="`cat-${g.id}`" class="cat-title">{{ g.title }}</h2>
+            <span class="muted small">{{ g.all.length }} 个</span>
+          </div>
+          <ul class="cat-list">
+            <li v-for="s in g.shown" :key="s.id">
+              <button type="button" class="cat-item" @click="open(s.id)">
+                <span class="cat-item-title">{{ s.title }}</span>
+                <AppIcon name="chevron-right" :size="14" class="go" />
+              </button>
+            </li>
+          </ul>
+          <button
+            v-if="g.all.length > PER_CATEGORY"
+            type="button"
+            class="btn btn-link small more"
+            :aria-expanded="g.open"
+            @click="toggleCat(g.id)"
+          >
+            {{ g.open ? '收起' : `全部 ${g.all.length} 个` }}
           </button>
-        </li>
-      </ul>
+        </section>
+      </div>
     </template>
 
     <!-- 症状详情 -->
     <template v-else>
-      <div>
-        <button type="button" class="btn btn-ghost back" @click="back">
-          <AppIcon name="back" :size="18" />返回症状列表
+      <nav class="crumbs" aria-label="当前位置">
+        <button type="button" class="crumb-link" @click="back">
+          <AppIcon name="back" :size="14" />按症状修
         </button>
-      </div>
+        <template v-if="detail">
+          <span aria-hidden="true">/</span>
+          <span>{{ categoryTitle(detail.category) }}</span>
+        </template>
+      </nav>
 
       <p v-if="!detail && !detailError" class="loading-line" role="status"><BusySpinner size="small" />正在读取…</p>
 
@@ -398,164 +551,195 @@ watch(
       </div>
 
       <template v-else-if="detail">
-        <header class="page-header">
-          <div class="title-row">
+        <header class="page-head">
+          <div class="page-head-main">
             <h1 ref="detailHeading" class="page-title" tabindex="-1">{{ detail.title }}</h1>
-            <TagPill tone="info">{{ maturityLabel[detail.maturity] }}</TagPill>
+            <p v-if="detail.summary" class="page-lead">{{ detail.summary }}</p>
           </div>
-          <p v-if="detail.summary" class="page-lead">{{ detail.summary }}</p>
-        </header>
-
-        <section v-if="detail.causes.length" class="card block" aria-labelledby="causes-title">
-          <h2 id="causes-title" class="section-title">可能的原因</h2>
-          <ul class="causes">
-            <li v-for="(c, i) in detail.causes" :key="i">{{ c }}</li>
-          </ul>
-        </section>
-
-        <section v-if="detail.steps.length" class="card block" aria-labelledby="steps-title">
-          <div class="steps-head">
-            <h2 id="steps-title" class="section-title">检查步骤</h2>
+          <div v-if="detail.steps.length" class="page-actions">
+            <span role="status"><TagPill v-if="checkStatus" :tone="checkStatus.tone">{{ checkStatus.text }}</TagPill></span>
             <button type="button" class="btn btn-primary" :disabled="checking" @click="startCheck">
               <BusySpinner v-if="checking" size="small" />
+              <AppIcon v-else :name="checkedOnce ? 'refresh' : 'play'" :size="16" />
               {{ checking ? '正在检查…' : checkedOnce ? '重新检查' : '开始检查' }}
             </button>
           </div>
+        </header>
 
-          <p v-if="checkedOnce && !checking" class="muted" role="status">
-            <template v-if="fixCount === 0 && unclearCount === 0">{{ allOkText }}</template>
-            <template v-else>
-              查完了。<template v-if="fixCount">亮橙灯、红灯的那几步，下面有可以试的办法。</template>
-              <template v-if="unclearCount">灰灯的那几步没查清楚，可以再查一次。</template>
-            </template>
-          </p>
+        <div class="two-col">
+          <div class="main-col">
+            <section v-if="detail.steps.length" class="card list-card" aria-labelledby="steps-title">
+              <div class="list-head">
+                <h2 id="steps-title" class="list-title">检查步骤（{{ detail.steps.length }} 步）</h2>
+                <span class="muted small">按顺序查，查到问题就停下来先修</span>
+              </div>
 
-          <ol class="steps">
-            <li
-              v-for="v in stepViews"
-              :key="`${v.step.check}-${v.index}`"
-              class="step"
-              :id="stepId(v.index)"
-              tabindex="-1"
-            >
-              <StatusLamp :state="v.lamp" />
-              <div class="step-body">
-                <p class="step-title">{{ v.step.checkTitle }}</p>
-                <p v-if="v.result" class="step-message">{{ v.result.message }}</p>
-                <p v-else-if="v.error" class="danger-text small">这一步没能检查：{{ v.error }}</p>
-                <p v-else-if="v.skipped" class="muted small">前面已经找到原因，这一步不用查了。</p>
+              <p v-if="!checkedOnce && !checking" class="steps-hint muted small">
+                点右上角的「开始检查」，一步一步查。查的时候只读取信息，不会改动电脑。
+              </p>
+              <p v-else-if="checkedOnce && !checking" class="steps-hint small" role="status">
+                <template v-if="fixCount === 0 && unclearCount === 0">{{ allOkText }}</template>
+                <template v-else>
+                  查完了。<template v-if="fixCount">亮橙灯、红灯的那几步，下面有可以试的办法。</template>
+                  <template v-if="unclearCount">灰灯的那几步没查清楚，可以再查一次。</template>
+                </template>
+              </p>
 
-                <div v-if="v.kind === 'fix'" class="step-fix">
-                  <p v-if="v.result?.error" class="muted small">出错信息：{{ v.result.error }}</p>
-                  <p v-if="v.result?.fixer" class="small"><span class="muted">谁能修：</span>{{ fixerLabel[v.result.fixer] }}</p>
-                  <p v-if="v.result?.next" class="small"><span class="muted">下一步：</span>{{ v.result.next }}</p>
-                  <!-- 这一步的修复办法列在下面；检测结果里只再加上小工具的按钮（去修、预览修复在这里都是重复的） -->
-                  <ResultLinks v-if="v.result" :links="v.result.links" :kinds="['tool']" />
+              <ol class="steps">
+                <li
+                  v-for="v in stepViews"
+                  :id="stepId(v.index)"
+                  :key="`${v.step.check}-${v.index}`"
+                  class="step"
+                  :class="{ 'step-fix-row': v.kind === 'fix' }"
+                  tabindex="-1"
+                >
+                  <StatusLamp :state="v.lamp" />
+                  <div class="step-body">
+                    <p class="step-title">
+                      <span class="step-no">第 {{ v.index + 1 }} 步</span>{{ v.step.checkTitle }}
+                    </p>
+                    <p v-if="v.result" class="step-message">{{ v.result.message }}</p>
+                    <p v-else-if="v.error" class="danger-text small">这一步没能检查：{{ v.error }}</p>
+                    <p v-else-if="v.skipped" class="muted small">前面已经找到原因，这一步不用查了。</p>
 
-                  <ul v-if="v.step.fixes.length" class="fixes">
-                    <li v-for="fix in v.step.fixes" :key="fix.id" class="fix">
-                      <div class="fix-main">
-                        <p class="fix-title">
-                          {{ fix.title }}
-                          <TagPill :tone="riskTone[fix.risk]" dot>{{ riskLabel[fix.risk] }}</TagPill>
-                        </p>
-                        <p class="muted small">{{ fix.description }}</p>
-                        <p v-if="!fix.applicable" class="small">
-                          这台电脑用不了：{{ fix.notApplicableReason ?? '这台电脑的系统不支持这一项。' }}
-                        </p>
+                    <div v-if="v.kind === 'fix'" class="step-extra">
+                      <p v-if="v.result?.error" class="muted small">出错信息：{{ v.result.error }}</p>
+                      <p v-if="v.result?.fixer" class="small"><span class="muted">谁能修：</span>{{ fixerLabel[v.result.fixer] }}</p>
+                      <p v-if="v.result?.next" class="small"><span class="muted">下一步：</span>{{ v.result.next }}</p>
+                      <!-- 这一步的修复办法列在下面；检测结果里只再加上小工具的按钮（去修、预览修复在这里都是重复的） -->
+                      <ResultLinks v-if="v.result" :links="v.result.links" :kinds="['tool']" />
+
+                      <ul v-if="v.step.fixes.length" class="fixes">
+                        <li v-for="fix in v.step.fixes" :key="fix.id" class="fix">
+                          <div class="fix-main">
+                            <p class="fix-title">
+                              {{ fix.title }}
+                              <TagPill v-if="fix.risk !== 'safe'" :tone="riskTone[fix.risk]" dot>{{ riskLabel[fix.risk] }}</TagPill>
+                            </p>
+                            <p class="muted small">{{ fix.description }}</p>
+                            <p v-if="!fix.applicable" class="small">
+                              这台电脑用不了：{{ fix.notApplicableReason ?? '这台电脑的系统不支持这一项。' }}
+                            </p>
+                          </div>
+                          <button
+                            v-if="fix.applicable"
+                            type="button"
+                            class="btn btn-primary btn-small"
+                            @click="openPreview(fix.id, v.index)"
+                          >
+                            看看会改什么
+                          </button>
+                        </li>
+                      </ul>
+                      <p v-else class="muted small">
+                        这一步小药箱没有自动修复的办法{{ detail.guide ? '，可以看看下面「自己动手试试」' : '' }}。
+                      </p>
+                    </div>
+
+                    <!-- 正常（或不适用），但结果里有提示：照样显示，不列修复办法 -->
+                    <div v-else-if="v.result && hasHint(v)" class="step-extra">
+                      <p v-if="v.result.next" class="small"><span class="muted">提示：</span>{{ v.result.next }}</p>
+                      <ResultLinks :links="hintLinks(v.result)" @preview="(featureId) => openPreview(featureId, v.index)" />
+                    </div>
+
+                    <!-- 没查清楚：不给修复，先再查一次 -->
+                    <div v-else-if="v.kind === 'unclear'" class="step-extra">
+                      <p class="small">
+                        这一步没查清楚，先别急着修。可以再查一次；一直查不清楚的话，{{
+                          detail.guide ? '照着「自己动手试试」做' : '可以问问懂哥'
+                        }}。
+                      </p>
+                      <p v-if="v.result?.error" class="muted small">出错信息：{{ v.result.error }}</p>
+                      <p v-if="v.result?.next" class="small"><span class="muted">下一步：</span>{{ v.result.next }}</p>
+                      <ResultLinks v-if="v.result" :links="v.result.links" :kinds="['tool']" />
+                      <div>
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-small"
+                          :disabled="checking || v.running"
+                          @click="recheck(v.index)"
+                        >
+                          <BusySpinner v-if="v.running" size="small" />{{ v.running ? '正在查…' : '再查一次' }}
+                        </button>
                       </div>
-                      <button
-                        v-if="fix.applicable"
-                        type="button"
-                        class="btn btn-secondary btn-small"
-                        @click="openPreview(fix.id, v.index)"
-                      >
-                        预览
-                      </button>
-                    </li>
-                  </ul>
-                  <p v-else class="muted small">
-                    这一步小药箱没有自动修复的办法{{ detail.guide ? '，可以看看下面的手动步骤' : '' }}。
-                  </p>
-                </div>
-
-                <!-- 正常（或不适用），但结果里有提示：照样显示，不列修复办法 -->
-                <div v-else-if="v.result && hasHint(v)" class="step-fix">
-                  <p v-if="v.result.next" class="small"><span class="muted">提示：</span>{{ v.result.next }}</p>
-                  <ResultLinks :links="hintLinks(v.result)" @preview="(featureId) => openPreview(featureId, v.index)" />
-                </div>
-
-                <!-- 没查清楚：不给修复，先再查一次 -->
-                <div v-else-if="v.kind === 'unclear'" class="step-fix">
-                  <p class="small">
-                    这一步没查清楚，先别急着修。可以再查一次；一直查不清楚的话，{{
-                      detail.guide ? '照着下面的手动步骤试试' : '可以问问懂哥'
-                    }}。
-                  </p>
-                  <p v-if="v.result?.error" class="muted small">出错信息：{{ v.result.error }}</p>
-                  <p v-if="v.result?.next" class="small"><span class="muted">下一步：</span>{{ v.result.next }}</p>
-                  <ResultLinks v-if="v.result" :links="v.result.links" :kinds="['tool']" />
-                  <div>
-                    <button
-                      type="button"
-                      class="btn btn-secondary btn-small"
-                      :disabled="checking || v.running"
-                      @click="recheck(v.index)"
-                    >
-                      <BusySpinner v-if="v.running" size="small" />{{ v.running ? '正在查…' : '再查一次' }}
-                    </button>
+                    </div>
                   </div>
+                </li>
+              </ol>
+            </section>
+
+            <PopupOwner v-if="detail.id === 'popup-ads'" class="block" />
+            <RecycleBinRepair v-if="detail.id === 'recycle-bin-corrupted'" class="block" />
+            <WechatCleanup v-if="detail.id === 'disk-full'" class="block" />
+            <FileLockers v-if="detail.id === 'file-in-use'" class="block" />
+            <ExeCheck v-if="detail.id === 'app-cannot-run'" class="block" />
+            <BrightnessControl v-if="detail.id === 'screen-display'" class="block" />
+
+            <section v-if="showsStartup(detail.id)" class="card list-card" aria-labelledby="startup-title">
+              <div class="list-head">
+                <h2 id="startup-title" class="list-title">管理开机启动项</h2>
+                <div class="row-actions">
+                  <button type="button" class="btn btn-secondary btn-small" @click="openStartupSettings()">管理其他启动应用</button>
+                  <button type="button" class="btn btn-secondary btn-small" :disabled="startupLoading || !!startupBusy" @click="loadStartup()">
+                    <AppIcon name="refresh" :size="14" />刷新
+                  </button>
                 </div>
               </div>
-            </li>
-          </ol>
-        </section>
+              <p class="steps-hint muted small">
+                列的是开机自己启动的软件。只停用、不删除，软件本身还在；开关和任务管理器的「启动应用」是同一个，每次改动都记在「修改日志」里。从应用商店装的软件在 Windows 设置里管理。
+              </p>
+              <p v-if="startupLoading" class="loading-line steps-hint" role="status"><BusySpinner size="small" />正在读取启动项…</p>
+              <p v-if="startupError" class="danger-text small steps-hint" role="alert">{{ startupError }}</p>
+              <p v-if="startupNotice" class="small steps-hint" role="status">{{ startupNotice }}</p>
+              <p v-if="!startupLoading && !startupError && startupItems.length === 0" class="muted small steps-hint">没有找到开机启动项。</p>
+              <ul v-if="startupItems.length" class="startup">
+                <li v-for="item in startupItems" :key="item.id" class="list-row">
+                  <div class="row-main">
+                    <p class="row-title">
+                      {{ item.title }}
+                      <TagPill :tone="item.enabled ? 'info' : 'neutral'">{{ item.enabled ? '开机自动启动' : '已停用' }}</TagPill>
+                      <TagPill v-if="item.advice === 'keep'" tone="advice">建议保留</TagPill>
+                    </p>
+                    <p class="row-sub">{{ startupPublisher(item) }} · {{ item.location }}</p>
+                    <p class="small">{{ item.reason }}</p>
+                    <p v-if="item.path" class="row-sub startup-command" :title="item.path">{{ item.path }}</p>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-small" :disabled="!!startupBusy" @click="changeStartup(item)">
+                    <BusySpinner v-if="startupBusy === item.id" size="small" />{{ item.enabled ? '停用自启' : '恢复自启' }}
+                  </button>
+                </li>
+              </ul>
+            </section>
 
-        <PopupOwner v-if="detail.id === 'popup-ads'" class="block" />
-        <RecycleBinRepair v-if="detail.id === 'recycle-bin-corrupted'" class="block" />
-        <WechatCleanup v-if="detail.id === 'disk-full'" class="block" />
-        <FileLockers v-if="detail.id === 'file-in-use'" class="block" />
-        <ExeCheck v-if="detail.id === 'app-cannot-run'" class="block" />
-        <BrightnessControl v-if="detail.id === 'screen-display'" class="block" />
+            <section v-if="detail.guide" class="card block" aria-labelledby="guide-title">
+              <h2 id="guide-title" class="list-title">自己动手试试</h2>
+              <p class="pre-text guide">{{ detail.guide }}</p>
+              <ResultLinks v-if="detail.links.length > 0" :links="detail.links" :kinds="['tool', 'symptom', 'test']" />
+            </section>
 
-        <section v-if="showsStartup(detail.id)" class="card block" aria-labelledby="startup-title">
-          <div class="steps-head">
-            <h2 id="startup-title" class="section-title">管理开机启动项</h2>
-            <button type="button" class="btn btn-secondary btn-small" :disabled="startupLoading || !!startupBusy" @click="loadStartup()">刷新列表</button>
+            <!-- 误删的文件先照手动步骤去回收站这些地方找，都没有才用恢复工具：放在手动步骤后面 -->
+            <FileRecovery v-if="detail.id === 'deleted-files'" class="block" />
           </div>
-          <p class="muted small">这里列的是注册表 Run 项和「启动」文件夹里的启动项。开关和任务管理器的「启动应用」是同一个：在这里停用的，任务管理器里也显示为已禁用，在那边改的这里也看得到。只停用、不删除，软件本身还在，想用时照样能打开；每一次改动都记在「修改日志」里。从应用商店装的软件，在 Windows 设置里管理。</p>
-          <button type="button" class="btn btn-secondary btn-small" @click="openStartupSettings()">管理其他启动应用</button>
-          <p v-if="startupLoading" class="loading-line" role="status"><BusySpinner size="small" />正在读取启动项…</p>
-          <p v-if="startupError" class="danger-text small" role="alert">{{ startupError }}</p>
-          <p v-if="startupNotice" class="small" role="status">{{ startupNotice }}</p>
-          <p v-if="!startupLoading && !startupError && startupItems.length === 0" class="muted small">没有找到开机启动项。</p>
-          <ul v-if="startupItems.length" class="fixes">
-            <li v-for="item in startupItems" :key="item.id" class="fix">
-              <div class="fix-main">
-                <p class="fix-title">
-                  {{ item.title }}
-                  <TagPill :tone="item.enabled ? 'info' : 'neutral'">{{ item.enabled ? '开机自动启动' : '已停用' }}</TagPill>
-                  <TagPill v-if="item.advice === 'keep'" tone="advice">建议保留</TagPill>
-                </p>
-                <p class="muted small">{{ startupPublisher(item) }} · {{ item.location }}</p>
-                <p class="small">{{ item.reason }}</p>
-                <p v-if="item.path" class="muted small startup-command" :title="item.path">{{ item.path }}</p>
+
+          <aside class="side" aria-label="常见原因和帮助">
+            <section v-if="detail.causes.length" class="card side-card" aria-labelledby="causes-title">
+              <h2 id="causes-title" class="list-title">常见原因</h2>
+              <ul class="causes">
+                <li v-for="(c, i) in detail.causes" :key="i">{{ c }}</li>
+              </ul>
+            </section>
+            <section class="card side-card" aria-labelledby="help-title">
+              <h2 id="help-title" class="list-title">还是不行？</h2>
+              <p class="muted small">生成一份去掉隐私信息的诊断报告，发给懂哥，或者复制给 AI 问问。</p>
+              <div>
+                <button type="button" class="btn btn-secondary btn-small" @click="goTo('report')">
+                  <AppIcon name="report" :size="16" />生成诊断报告
+                </button>
               </div>
-              <button type="button" class="btn btn-secondary btn-small" :disabled="!!startupBusy" @click="changeStartup(item)">
-                <BusySpinner v-if="startupBusy === item.id" size="small" />{{ item.enabled ? '停用自启' : '恢复自启' }}
-              </button>
-            </li>
-          </ul>
-        </section>
-
-        <section v-if="detail.guide" class="card block" aria-labelledby="guide-title">
-          <h2 id="guide-title" class="section-title">手动步骤</h2>
-          <p class="pre-text guide">{{ detail.guide }}</p>
-          <ResultLinks v-if="detail.links.length > 0" :links="detail.links" :kinds="['tool', 'symptom', 'test']" />
-        </section>
-
-        <!-- 误删的文件先照手动步骤去回收站这些地方找，都没有才用恢复工具：放在手动步骤后面 -->
-        <FileRecovery v-if="detail.id === 'deleted-files'" class="block" />
+            </section>
+          </aside>
+        </div>
       </template>
     </template>
 
@@ -564,61 +748,160 @@ watch(
 </template>
 
 <style scoped>
-.search-input {
-  font-size: var(--text-large);
+.search-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 22px;
+}
+
+.search-row {
+  display: flex;
+  gap: 12px;
+}
+
+.big-search {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 16px;
+  border-width: 2px;
+  border-color: var(--color-primary);
+}
+
+.big-search input {
   min-height: 48px;
+  font-size: var(--text-large);
+}
+
+.shot-btn {
+  flex: none;
+  min-height: 52px;
+}
+
+.hot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hot .muted {
+  margin-right: 4px;
 }
 
 .empty {
   padding: 8px 2px;
 }
 
-.symptom-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.results {
   list-style: none;
 }
 
-.symptom {
+.result {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   width: 100%;
+  padding: 13px 20px;
+  border: none;
+  border-top: 1px solid var(--color-divider);
+  background: none;
   text-align: left;
   cursor: pointer;
 }
 
-.symptom:hover {
-  border-color: var(--color-primary);
+.results li:first-child .result {
+  border-top: none;
 }
 
-.symptom-main {
+.result:hover,
+.cat-item:hover {
+  background: var(--color-surface-2);
+}
+
+.go {
+  color: var(--color-text-muted);
+}
+
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 1280px) {
+  .cat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.cat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+.cat-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cat-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-text);
+}
+
+.cat-title {
+  flex: 1;
+  font-size: var(--text-base);
+}
+
+.cat-list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.cat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 6px;
+  border: none;
+  border-bottom: 1px solid var(--color-divider);
+  border-radius: 0;
+  background: none;
+  font-size: var(--text-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cat-item-title {
   min-width: 0;
 }
 
-.symptom-title {
-  font-size: var(--text-large);
-  font-weight: 600;
+.more {
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
-.back {
-  padding-left: 8px;
-}
-
-.title-row {
+.main-col {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
-.title-row h1:focus {
-  outline: none;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 
 .block {
@@ -627,51 +910,58 @@ watch(
   gap: 12px;
 }
 
-.causes {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-left: 1.3em;
-}
-
-.steps-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.steps-hint {
+  padding: 12px 20px 0;
 }
 
 .steps {
   display: flex;
   flex-direction: column;
+  padding: 6px 0 4px;
   list-style: none;
 }
 
 .step {
   display: flex;
   gap: 14px;
-  padding: 12px 0;
-  border-top: 1px solid var(--color-border);
+  padding: 13px 20px;
+  border-top: 1px solid var(--color-divider);
 }
 
 .step:first-child {
   border-top: none;
 }
 
+.step:focus {
+  outline: none;
+}
+
 .step-body {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  flex: 1;
 }
 
 .step-title {
   font-weight: 600;
 }
 
-.step-fix {
+.step-no {
+  margin-right: 8px;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: 400;
+}
+
+.step-message {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  line-height: 1.7;
+}
+
+.step-extra {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -682,8 +972,8 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 8px;
-  list-style: none;
   margin-top: 4px;
+  list-style: none;
 }
 
 .fix {
@@ -691,7 +981,8 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-primary-soft);
   border-radius: var(--radius);
   background: var(--color-surface-2);
 }
@@ -707,10 +998,6 @@ watch(
   min-width: 0;
 }
 
-.startup-command {
-  overflow-wrap: anywhere;
-}
-
 .fix-title {
   display: flex;
   flex-wrap: wrap;
@@ -719,7 +1006,32 @@ watch(
   font-weight: 600;
 }
 
+.startup {
+  list-style: none;
+  margin-top: 8px;
+}
+
+.startup-command {
+  overflow-wrap: anywhere;
+}
+
 .guide {
   line-height: 1.8;
+}
+
+.side-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+}
+
+.causes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 1.2em;
+  font-size: var(--text-small);
+  line-height: 1.7;
 }
 </style>

@@ -5,6 +5,9 @@ import { diffTexts, withContext, type DiffLine, type ShownLine, type TextDiffRes
 // 文本对比：合同、通知、文章改过以后，看看到底改了哪里。逐行比较，改过的行再逐字标出不一样的字（utils/textDiff.ts）。
 // 只在本机计算；默认只显示改动和前后两行，中间相同的折起来。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const before = ref('')
 const after = ref('')
 const ignoreSpaces = ref(false)
@@ -45,7 +48,7 @@ function swap(): void {
 
 <template>
   <article class="card diff-card">
-    <h3 class="section-title">文本对比</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">文本对比</h3>
     <p class="muted small">
       合同、通知、文章改过以后，把原来的和改过的分别粘进来，看看到底改了哪里：删掉的行标红，多出来的行标绿，改过的行里不一样的字加粗。只在这台电脑里比较，不上传。
     </p>

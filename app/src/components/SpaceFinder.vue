@@ -11,6 +11,9 @@ import TagPill from './TagPill.vue'
 // 找大文件和重复文件：只查不删。要删的话点「显示」，用户自己在资源管理器里删（先进回收站）。
 // 文件夹只能在系统的选择框里选；「显示」只传结果里的编号。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const report = ref<SpaceReport | null>(null)
 const busy = ref(false)
 const error = ref('')
@@ -44,7 +47,7 @@ const notes = computed(() => (report.value ? spaceNotes(report.value) : []))
 
 <template>
   <article class="card space-card">
-    <h3 class="section-title">找大文件和重复文件</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">找大文件和重复文件</h3>
     <p class="muted small">
       选一个文件夹（比如「下载」、整个 D 盘），列出里面最大的文件，和内容完全一样的文件（逐字节比较过，不是只看名字）。这里只查不删：要删的话点「显示」，在打开的资源管理器里删，删掉的先进回收站。
     </p>

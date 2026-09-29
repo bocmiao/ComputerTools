@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, useTemplateRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue'
 import AppIcon from './components/AppIcon.vue'
 import AppNav from './components/AppNav.vue'
 import { loadCatalog, loadSystemInfo, nav, startupError, system, type PageId } from './state'
@@ -28,10 +28,21 @@ watch(
   () => main.value?.scrollTo({ top: 0 }),
 )
 
+/** Ctrl + K：跳到导航栏的搜索框（对话框开着时不管） */
+function onKeydown(e: KeyboardEvent): void {
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return
+  if (document.querySelector('[aria-modal="true"]')) return
+  e.preventDefault()
+  document.getElementById('nav-search')?.focus()
+}
+
 onMounted(() => {
   void loadSystemInfo()
   void loadCatalog()
+  window.addEventListener('keydown', onKeydown)
 })
+
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 // 引擎没能启动时（startupError），各页都用不了，只显示原因和处理办法。
 // 不给「再试一次」：后端只在启动时组装一次引擎，之后每个命令都返回同一个原因，重试不会有用。
@@ -87,7 +98,7 @@ onMounted(() => {
 <style scoped>
 .shell {
   display: grid;
-  grid-template-columns: 216px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   height: 100%;
 }
 
@@ -96,12 +107,14 @@ onMounted(() => {
   overflow-y: auto;
 }
 
+/* 内容区跟着窗口变宽，最宽 --content-max，再宽就居中 */
 .content {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 900px;
-  padding: 28px 36px 56px;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 28px 40px 56px;
 }
 
 .mismatch {
@@ -123,7 +136,7 @@ onMounted(() => {
 
 @media (max-width: 980px) {
   .shell {
-    grid-template-columns: 188px minmax(0, 1fr);
+    grid-template-columns: 200px minmax(0, 1fr);
   }
 
   .content {

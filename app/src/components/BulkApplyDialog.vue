@@ -11,7 +11,7 @@ import ExplorerRestart from './ExplorerRestart.vue'
 import ModalDialog from './ModalDialog.vue'
 import StatusLamp, { type LampState } from './StatusLamp.vue'
 
-// 一次改好几项：一个一个预览太繁琐，这里列出汇总，确认后依次执行。「常用设置」的「只应用推荐项」、
+// 一次改好几项：一个一个预览太繁琐，这里列出汇总，确认后依次执行。「常用设置」的「应用推荐的 N 项」、
 // 体检的「修复选中的问题」都用它，标题和几句说明由调用的地方给。
 // 每一项按四种结果显示（已经改好 / 改了但没确认生效 / 不用改 / 没改成）；一项没改成不影响后面的项。
 
@@ -27,7 +27,7 @@ const props = withDefaults(
     verb?: string
   }>(),
   {
-    title: '只应用推荐项',
+    title: '应用推荐的设置',
     intro: '下面这 {n} 项推荐设置还没有设置好，确认后会一项一项地应用：',
     doneTitle: '推荐的设置都应用好了',
     verb: '应用',
@@ -141,8 +141,10 @@ function close(): void {
     </div>
 
     <ol class="items">
-      <li v-for="item in items" :key="item.feature.id" class="item">
-        <StatusLamp :state="lampState[item.status]" :label="lampLabel(item)" />
+      <li v-for="(item, index) in items" :key="item.feature.id" class="item">
+        <!-- 确认前按顺序编号（会一项一项地做），开始以后换成每一项的状态灯 -->
+        <span v-if="phase === 'confirm'" class="item-no" aria-hidden="true">{{ index + 1 }}</span>
+        <StatusLamp v-else :state="lampState[item.status]" :label="lampLabel(item)" />
         <div class="item-body">
           <p class="item-title">{{ item.feature.title }}</p>
           <p class="muted small">{{ item.feature.description }}</p>
@@ -167,7 +169,9 @@ function close(): void {
     </ol>
 
     <template v-if="phase === 'confirm'">
-      <p class="muted">每一项都会记进「修改日志」，随时可以恢复原状。</p>
+      <p class="muted">
+        {{ irreversible.length ? '每一项都会记进「修改日志」；除了下面说的，都能在那里撤销。' : '每一项都会记进「修改日志」，随时可以恢复原状。' }}
+      </p>
       <p v-if="withRestorePoint" class="muted">其中 {{ withRestorePoint }} 项执行前会先创建系统还原点。</p>
       <p v-for="item in irreversible" :key="item.feature.id" class="danger-text">
         「{{ item.feature.title }}」不能撤销：{{ item.feature.irreversibleReason ?? '这一项改了就退不回去。' }}
@@ -176,9 +180,9 @@ function close(): void {
 
     <template #footer>
       <template v-if="phase !== 'done'">
-        <button type="button" class="btn btn-secondary" :disabled="phase === 'applying'" @click="close">取消</button>
+        <button type="button" class="btn btn-secondary" :disabled="phase === 'applying'" @click="close">先不改</button>
         <button type="button" class="btn btn-primary" :disabled="phase === 'applying'" @click="start">
-          确认{{ verb }} {{ items.length }} 项
+          {{ verb }}这 {{ items.length }} 项
         </button>
       </template>
       <button v-else type="button" class="btn btn-primary" v-autofocus @click="close">完成</button>
@@ -204,6 +208,21 @@ function close(): void {
 
 .item:last-child {
   border-bottom: none;
+}
+
+.item-no {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-text);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .item-body {

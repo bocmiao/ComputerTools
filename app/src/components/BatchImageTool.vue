@@ -33,6 +33,9 @@ import {
 // 重新编码以后，拍摄时间、地点、设备这些信息都不会带过去（「存原图」的那几张除外）。
 // 水印：文字斜着铺满整张图（交身份证复印件时写上用途）；加了水印就不存原图（原图上没有水印）。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 type ItemStatus = 'waiting' | 'working' | 'done' | 'skipped' | 'failed'
 interface Item {
   id: number
@@ -314,7 +317,7 @@ async function start(): Promise<void> {
 
 <template>
   <article class="card image-card">
-    <h3 class="section-title">图片批量压缩、转格式、改尺寸、加水印</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">图片批量压缩、转格式、改尺寸、加水印</h3>
     <p class="muted small">
       选一些图片（也可以直接拖到下面的框里），按设置处理，存进你选的文件夹。原图不动，也不会覆盖任何已有的文件（重名的在名字后面加「 (2)」）。处理后的图片不带拍摄时间、地点、设备这些信息。
     </p>

@@ -8,6 +8,9 @@ import BusySpinner from './BusySpinner.vue'
 // DDC/CI 很慢，拖的过程中不连续发；正在调的时候又动了滑块，记下最后的值，调完再调一次。调完以显示器读回来的亮度为准。
 // 笔记本自带的屏幕、不支持的显示器也列出来，说明用哪个键、哪个按钮调。改的是显示器自己的亮度，不记修改日志。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const monitors = ref<MonitorBrightness[]>([])
 const loading = ref(false)
 const loaded = ref(false)
@@ -88,7 +91,7 @@ onMounted(refresh)
 <template>
   <section class="group" aria-labelledby="brightness-title">
     <div class="card brightness-card">
-      <h2 id="brightness-title" class="section-title">显示器亮度</h2>
+      <h2 id="brightness-title" :class="hideTitle ? 'visually-hidden' : 'section-title'">显示器亮度</h2>
       <p class="muted small">
         台式机接的显示器可以在这里直接调亮度，不用去按显示器上的按钮（要显示器支持 DDC/CI，大多数显示器都支持，一般默认开着）。改的是显示器自己的亮度，和按显示器上的按钮一样，拖回去就行。笔记本自带的屏幕用键盘上画着太阳的键，或者「设置 → 屏幕」里的亮度条调。
       </p>

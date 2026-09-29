@@ -4,6 +4,9 @@ import { amountInWords, dateInWords } from '../utils/rmb'
 
 // 金额、日期转中文大写：写支票、发票、收据、借条时用，规则见 utils/rmb.ts（照人民银行的规定）。
 
+// 工具箱的单个工具页页头已经写着名字：hideTitle 时标题只留给读屏软件
+defineProps<{ hideTitle?: boolean }>()
+
 const pad = (n: number): string => String(n).padStart(2, '0')
 const today = new Date()
 
@@ -28,7 +31,7 @@ async function copy(text: string): Promise<void> {
 
 <template>
   <article class="card words-card">
-    <h3 class="section-title">金额、日期转大写</h3>
+    <h3 :class="hideTitle ? 'visually-hidden' : 'section-title'">金额、日期转大写</h3>
     <p class="muted small">
       写支票、发票、收据、借条时用：金额照人民银行的规定写成「壹万贰仟叁佰肆拾伍元陆角柒分」这样的大写，支票上的日期也要大写。
     </p>

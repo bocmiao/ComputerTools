@@ -8,8 +8,10 @@ import type {
   Recommend,
   Risk,
   Status,
+  SymptomCategory,
   ToolSummary,
 } from './api/types'
+import type { IconName } from './components/AppIcon.vue'
 
 /** 标签的配色，对应 styles/tokens.css 里的 --tone-* 变量 */
 export type Tone = 'ok' | 'advice' | 'manual' | 'unknown' | 'info' | 'neutral'
@@ -145,6 +147,19 @@ export const rebootWeight: Record<Reboot, number> = {
   logoff: 2,
   reboot: 3,
 }
+
+/** 按症状修首页的分类：顺序、名字、图标，和 crates/medkit-core/src/model.rs 的 SymptomCategory 一样 */
+export const symptomCategories: { id: SymptomCategory; title: string; icon: IconName }[] = [
+  { id: 'network', title: '上网和共享', icon: 'wifi' },
+  { id: 'system', title: '开机和系统', icon: 'power' },
+  { id: 'software', title: '软件和浏览器', icon: 'window' },
+  { id: 'files', title: '文件和 C 盘', icon: 'folder' },
+  { id: 'printer', title: '打印机', icon: 'printer' },
+  { id: 'display', title: '屏幕和显卡', icon: 'monitor' },
+  { id: 'desktop', title: '桌面、任务栏和开始菜单', icon: 'layout' },
+  { id: 'input', title: '键盘、鼠标和输入法', icon: 'keyboard' },
+  { id: 'hardware', title: '声音、蓝牙、U 盘和其他设备', icon: 'speaker' },
+]
 
 /** 常用设置页只列这几类，按这个顺序分组 */
 export const settingsCategories = [

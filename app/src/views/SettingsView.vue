@@ -1,42 +1,46 @@
 <script setup lang="ts">
-import { computed, onActivated, reactive, ref, watch } from 'vue'
-import { featureDetect, journalList } from '../api'
-import type { ApplyResult, FeatureState, FeatureSummary } from '../api/types'
+import { computed, nextTick, onActivated, reactive, ref, watch } from 'vue'
+import { featureDetect, journalList, journalUndo } from '../api'
+import type { ApplyResult, FeatureState, FeatureSummary, JournalEntryView, Reboot } from '../api/types'
+import AppIcon from '../components/AppIcon.vue'
 import BulkApplyDialog from '../components/BulkApplyDialog.vue'
 import BusySpinner from '../components/BusySpinner.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import ContextMenuManager from '../components/ContextMenuManager.vue'
+import ExplorerRestart from '../components/ExplorerRestart.vue'
 import KeyRemapManager from '../components/KeyRemapManager.vue'
 import NewMenuManager from '../components/NewMenuManager.vue'
 import PreviewDialog from '../components/PreviewDialog.vue'
 import ShellPlacesManager from '../components/ShellPlacesManager.vue'
 import TagPill from '../components/TagPill.vue'
-import {
-  featureStateLabel,
-  featureStateTone,
-  recommendLabel,
-  recommendTone,
-  rebootLabel,
-  settingsCategories,
-} from '../labels'
-import { catalog, goTo, markHealthStale } from '../state'
-import { errorText } from '../utils/format'
+import { rebootLabel, settingsCategories } from '../labels'
+import { catalog, goTo, markHealthStale, nav } from '../state'
+import { errorText, normalizeForSearch } from '../utils/format'
 
-// 常用设置：只列资源管理器、桌面、任务栏、开始菜单、推荐和广告、键盘和鼠标、电源、Windows 更新这几类。每次进入页面都重新检测一遍当前状态。
-// 最下面是右键菜单里软件加的项目（ContextMenuManager）、「新建」菜单里的项目（NewMenuManager）、资源管理器里
-// 软件加的图标（ShellPlacesManager）和改键（KeyRemapManager），都是点了才列。
-// 这台电脑用不了的项（系统版本不对等）照样列出来，但只说明原因：不检测、不给执行、不放进「只应用推荐项」。
+// 常用设置：左边分类栏，右边这一类的设置，每项一行：名字、一句话、开关（和 Windows「设置」里的一样，旁边写「开」「关」）。
+// - 打开开关：先弹出预览，看清楚会改什么、要不要重启、能不能撤销，确认后才改（PreviewDialog）；
+// - 关掉开关：只有小药箱改的才能关（修改日志里有还能恢复的记录），问一下再恢复原状；电脑原来就是这样的，开关不能点，说明原因；
+// - 点一行后面的箭头展开：完整说明、改完要做什么、能不能撤销、当前状态的细节。
+// 顶上能搜、能只看推荐的或还没设置的；「应用推荐的 N 项」一次把推荐、这台电脑能用、还没设置好的都设置好。
+// 分类栏最下面是右键菜单、「新建」菜单、资源管理器里多出来的图标、改键，点了在右边显示。
+// 这台电脑用不了的项（系统版本不对等）照样列出来，但只说明原因：不检测、不给执行、不放进「应用推荐的」。
+
+type Filter = 'all' | 'recommended' | 'pending'
+type ManagerId = 'context-menu' | 'new-menu' | 'shell-places' | 'key-remap'
+type PanelId = string | ManagerId
+
+const MANAGERS: { id: ManagerId; title: string }[] = [
+  { id: 'context-menu', title: '右键菜单里的软件' },
+  { id: 'new-menu', title: '右键「新建」菜单' },
+  { id: 'shell-places', title: '多出来的图标' },
+  { id: 'key-remap', title: '改键' },
+]
 
 const categoryIds = new Set<string>(settingsCategories.map((c) => c.id))
 
 const features = computed<FeatureSummary[]>(() => (catalog.value?.features ?? []).filter((f) => categoryIds.has(f.category)))
 /** 这台电脑能用的项 */
 const usable = computed(() => features.value.filter((f) => f.applicable))
-
-const groups = computed(() =>
-  settingsCategories
-    .map((c) => ({ ...c, features: features.value.filter((f) => f.category === c.id) }))
-    .filter((g) => g.features.length > 0),
-)
 
 // ── 当前状态 ──
 
@@ -82,10 +86,10 @@ function detectAll(): void {
 }
 
 // ── 哪些项是小药箱改的（修改日志里有还能恢复的记录） ──
-// 「已经设置好」可能是小药箱改的，也可能是电脑原来就这样；只有前一种能去修改日志里恢复。
+// 「开」可能是小药箱改的，也可能是电脑原来就这样；只有前一种能关（恢复原状）。
 
-/** 修改日志里有还能恢复的记录的功能；null 表示还没读出来（或读不出来），这时只能笼统地说 */
-const restorable = ref<Set<string> | null>(null)
+/** 功能 → 还能恢复的记录（新的在前）；null 表示还没读出来（或读不出来） */
+const restorable = ref<Map<string, JournalEntryView[]> | null>(null)
 let restorableSeq = 0
 
 async function loadRestorable(): Promise<void> {
@@ -93,7 +97,11 @@ async function loadRestorable(): Promise<void> {
   try {
     const sessions = await journalList()
     if (seq !== restorableSeq) return
-    restorable.value = new Set(sessions.flatMap((s) => s.entries.filter((e) => e.canUndo).map((e) => e.feature)))
+    const map = new Map<string, JournalEntryView[]>()
+    const entries = sessions.flatMap((s) => s.entries).filter((e) => e.canUndo)
+    entries.sort((a, b) => b.time.localeCompare(a.time))
+    for (const e of entries) map.set(e.feature, [...(map.get(e.feature) ?? []), e])
+    restorable.value = map
   } catch {
     if (seq === restorableSeq) restorable.value = null
   }
@@ -110,40 +118,172 @@ watch(features, detectAll)
 
 const detecting = computed(() => usable.value.some((f) => detects[f.id]?.loading ?? true))
 
-/** details 是逐个位置的技术说明（注册表路径等），只在没全设置好、查不出来或出错时才有看的必要 */
-function showDetails(s: FeatureState): boolean {
-  return s.details.length > 0 && (s.state === 'partial' || s.state === 'unknown' || s.error !== null)
-}
-
-/** 模板里用：每个分组、每一项和它的检测结果 */
-const rows = computed(() =>
-  groups.value.map((g) => ({
-    ...g,
-    items: g.features.map((f) => {
-      const d = detects[f.id]
-      return { f, loading: d?.loading ?? true, state: d?.state ?? null, error: d?.error ?? null }
-    }),
-  })),
-)
-
 function stateOf(id: string) {
   return detects[id]?.state?.state ?? null
 }
 
-/** 「已经设置好」下面那句话，和要不要给「去修改日志」按钮 */
-function appliedHint(id: string): { text: string; journal: boolean } {
-  const set = restorable.value
-  if (set === null) {
-    return {
-      text: '已经设置好了。如果是小药箱改的，可以到「修改日志」里恢复原状；如果本来就是这样，说明这是电脑原来的设置。',
-      journal: true,
-    }
-  }
-  if (set.has(id)) return { text: '已经设置好了，是小药箱改的。想改回去，可以到「修改日志」里恢复原状。', journal: true }
-  return { text: '已经设置好了。修改日志里没有小药箱改这一项的记录，这是电脑原来的设置。', journal: false }
+// ── 分类栏、搜索、筛选 ──
+
+const panel = ref<PanelId>(settingsCategories[0].id)
+const query = ref('')
+const filter = ref<Filter>('all')
+
+const counts = computed(() => ({
+  all: features.value.length,
+  recommended: features.value.filter((f) => f.recommend === 'recommended').length,
+  pending: usable.value.filter((f) => stateOf(f.id) !== 'applied').length,
+}))
+
+function categoryCount(id: string): number {
+  return features.value.filter((f) => f.category === id).length
 }
 
-// ── 只应用推荐项 ──
+const isManager = computed(() => MANAGERS.some((m) => m.id === panel.value))
+/** 在搜或在筛选：右边列出所有分类里对得上的 */
+const narrowing = computed(() => query.value.trim() !== '' || filter.value !== 'all')
+
+/** 每一行右边的小字：改完什么时候生效 */
+const rebootWhen: Record<Reboot, string> = {
+  none: '',
+  explorer: '重启资源管理器后生效',
+  logoff: '注销后生效',
+  reboot: '重启电脑后生效',
+}
+
+function matchesQuery(f: FeatureSummary): boolean {
+  const q = normalizeForSearch(query.value)
+  if (!q) return true
+  return [f.title, f.description].some((t) => normalizeForSearch(t).includes(q))
+}
+
+function matchesFilter(f: FeatureSummary): boolean {
+  if (filter.value === 'recommended') return f.recommend === 'recommended'
+  if (filter.value === 'pending') return f.applicable && stateOf(f.id) !== 'applied'
+  return true
+}
+
+/** 推荐的排在前面，别的保持目录里的顺序 */
+function ordered(list: FeatureSummary[]): FeatureSummary[] {
+  return list
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => Number(b.f.recommend === 'recommended') - Number(a.f.recommend === 'recommended') || a.i - b.i)
+    .map((x) => x.f)
+}
+
+const shownFeatures = computed(() => {
+  if (narrowing.value) return ordered(features.value.filter((f) => matchesQuery(f) && matchesFilter(f)))
+  return ordered(features.value.filter((f) => f.category === panel.value))
+})
+
+const panelTitle = computed(() => {
+  if (narrowing.value) return query.value.trim() ? `搜到 ${shownFeatures.value.length} 项` : `${filterLabel.value} ${shownFeatures.value.length} 项`
+  return settingsCategories.find((c) => c.id === panel.value)?.title ?? ''
+})
+
+const filterLabel = computed(() => ({ all: '全部', recommended: '推荐的', pending: '还没设置的' })[filter.value])
+
+const panelNote = computed(() => {
+  if (narrowing.value) return '所有分类里对得上的'
+  const list = shownFeatures.value
+  const done = list.filter((f) => stateOf(f.id) === 'applied').length
+  return `${list.length} 项 · 已经设置好 ${done} 项 · 推荐的排在前面`
+})
+
+function categoryTitle(id: string): string {
+  return settingsCategories.find((c) => c.id === id)?.title ?? ''
+}
+
+function choosePanel(id: PanelId): void {
+  panel.value = id
+  query.value = ''
+  filter.value = 'all'
+}
+
+// ── 每一行 ──
+
+const expanded = ref<Set<string>>(new Set())
+
+function toggleExpand(id: string): void {
+  const next = new Set(expanded.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expanded.value = next
+}
+
+/** 这一行开关的状态和说明 */
+function rowInfo(f: FeatureSummary) {
+  const d = detects[f.id]
+  const state = d?.state?.state ?? null
+  const on = state === 'applied'
+  const entries = restorable.value?.get(f.id) ?? []
+  // 开着、但不是小药箱改的（或者还没读出修改日志）：不能关
+  const locked = on && entries.length === 0
+  let note = ''
+  if (!f.applicable) note = `这台电脑用不了：${f.notApplicableReason ?? '这台电脑的系统不支持这一项。'}`
+  else if (d?.error) note = '没检测出来现在是什么样'
+  else if (state === 'partial') note = '只设置好了一部分，打开开关补全'
+  else if (state === 'unknown') note = '没查出来现在是什么样'
+  else if (locked) note = restorable.value === null ? '已经是这样了' : '电脑原来就是这样的，小药箱没改过'
+  return { state, on, loading: d?.loading ?? true, locked, note, entries, error: d?.error ?? null, details: d?.state?.details ?? [] }
+}
+
+// ── 打开：预览后执行 ──
+
+const previewId = ref<string | null>(null)
+/** 这一页里改过「需要重启资源管理器」的设置：顶上提醒一下 */
+const needsExplorer = ref(false)
+
+function onApplied(r: ApplyResult): void {
+  if (r.entryIds.length > 0) markHealthStale()
+  if (r.ok && r.reboot === 'explorer' && r.entryIds.length > 0) needsExplorer.value = true
+  if (previewId.value) void detectOne(previewId.value)
+  void loadRestorable()
+}
+
+// ── 关掉：恢复原状（只有小药箱改的） ──
+
+const undoTarget = ref<FeatureSummary | null>(null)
+const undoBusy = ref(false)
+const undoNotice = ref<{ ok: boolean; text: string; journal?: boolean } | null>(null)
+
+function clickSwitch(f: FeatureSummary): void {
+  const info = rowInfo(f)
+  undoNotice.value = null
+  if (!f.applicable || info.loading || info.locked) return
+  if (info.on) undoTarget.value = f
+  else previewId.value = f.id
+}
+
+async function confirmUndo(): Promise<void> {
+  const f = undoTarget.value
+  if (!f) return
+  undoBusy.value = true
+  let notice: { ok: boolean; text: string; journal?: boolean } = { ok: true, text: `「${f.title}」已经改回原来的样子。` }
+  try {
+    for (const e of rowInfo(f).entries) {
+      const r = await journalUndo(e.id, false)
+      if (r.drift) {
+        notice = { ok: false, text: `「${f.title}」在小药箱以外又被改过，要恢复的话请到「修改日志」里处理。`, journal: true }
+        break
+      }
+      if (!r.ok) {
+        notice = { ok: false, text: [r.message, r.error].filter(Boolean).join(' ') || '没能改回去。', journal: true }
+        break
+      }
+      if (r.reboot === 'explorer') needsExplorer.value = true
+    }
+    markHealthStale()
+  } catch (e) {
+    notice = { ok: false, text: `没能改回去：${errorText(e)}`, journal: true }
+  }
+  undoBusy.value = false
+  undoTarget.value = null
+  undoNotice.value = notice
+  void detectOne(f.id)
+  void loadRestorable()
+}
+
+// ── 应用推荐的 ──
 
 /** 推荐、这台电脑能用、还没设置好的项目。「谨慎」级的要单独预览确认，不放进来 */
 const pendingRecommended = computed(() =>
@@ -152,11 +292,10 @@ const pendingRecommended = computed(() =>
 
 const bulkOpen = ref(false)
 
-const bulkHint = computed(() => {
-  if (!catalog.value) return ''
-  if (detecting.value) return '正在检测当前状态…'
-  if (pendingRecommended.value.length === 0) return '推荐的设置都已经设置好了。'
-  return `有 ${pendingRecommended.value.length} 项推荐设置还没设置好。`
+const bulkLabel = computed(() => {
+  if (detecting.value) return '正在检测…'
+  if (pendingRecommended.value.length === 0) return '推荐的都设置好了'
+  return `应用推荐的 ${pendingRecommended.value.length} 项`
 })
 
 function onBulkFinished(changed: boolean): void {
@@ -164,92 +303,204 @@ function onBulkFinished(changed: boolean): void {
   refresh()
 }
 
-// ── 单项预览 ──
+// ── 从导航栏的搜索跳过来：定位到某一项并展开 ──
 
-const previewId = ref<string | null>(null)
-
-function onApplied(r: ApplyResult): void {
-  if (r.entryIds.length > 0) markHealthStale()
-  if (previewId.value) void detectOne(previewId.value)
-  void loadRestorable()
+async function focusFeature(id: string): Promise<void> {
+  const f = features.value.find((x) => x.id === id)
+  if (!f) return
+  query.value = ''
+  filter.value = 'all'
+  panel.value = f.category
+  expanded.value = new Set([id])
+  await nextTick()
+  const row = document.getElementById(`setting-${id}`)
+  row?.scrollIntoView({ block: 'center' })
+  row?.focus({ preventScroll: true })
 }
+
+watch(
+  [() => nav.featureId, features],
+  ([id]) => {
+    if (!id || features.value.length === 0) return
+    nav.featureId = null
+    void focusFeature(id)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <div class="page">
-    <header class="page-header">
-      <h1 class="page-title" tabindex="-1">常用设置</h1>
-      <p class="page-lead">
-        一些常见的系统设置开关。小药箱改过的每一项都能在「修改日志」里恢复原状；标着「个人偏好」的看自己习惯，不改也没关系。
-      </p>
+    <header class="page-head">
+      <div class="page-head-main">
+        <h1 class="page-title" tabindex="-1">常用设置</h1>
+        <p class="page-lead">常见的系统开关。打开前先预览会改什么，改完能在「修改日志」里撤销。</p>
+      </div>
+      <div class="page-actions">
+        <button
+          type="button"
+          class="btn btn-primary"
+          :disabled="detecting || pendingRecommended.length === 0"
+          @click="bulkOpen = true"
+        >
+          <AppIcon name="check" :size="16" />{{ bulkLabel }}
+        </button>
+      </div>
     </header>
 
-    <div class="toolbar card">
-      <button
-        type="button"
-        class="btn btn-primary"
-        :disabled="detecting || pendingRecommended.length === 0"
-        @click="bulkOpen = true"
-      >
-        只应用推荐项
-      </button>
-      <p class="muted" role="status">{{ bulkHint }}</p>
+    <div class="toolbar">
+      <label class="search-box toolbar-search">
+        <AppIcon name="search" :size="16" />
+        <span class="visually-hidden">搜索设置</span>
+        <input v-model="query" type="search" placeholder="搜索设置，比如：扩展名、右键菜单" autocomplete="off" />
+      </label>
+      <div class="seg" role="group" aria-label="只看">
+        <button type="button" class="seg-btn" :aria-pressed="filter === 'all'" @click="filter = 'all'">全部 {{ counts.all }}</button>
+        <button type="button" class="seg-btn" :aria-pressed="filter === 'recommended'" @click="filter = 'recommended'">
+          推荐 {{ counts.recommended }}
+        </button>
+        <button type="button" class="seg-btn" :aria-pressed="filter === 'pending'" @click="filter = 'pending'">
+          还没设置 {{ counts.pending }}
+        </button>
+      </div>
     </div>
+
+    <div v-if="needsExplorer" class="banner banner-warning explorer" role="status">
+      <AppIcon name="refresh" :size="20" />
+      <div class="explorer-text">
+        <p class="banner-title">有改动要重启资源管理器才生效</p>
+        <p class="small">重启时桌面和任务栏会闪一下，打开的文件夹窗口会关掉；也可以等下次注销、重启电脑时自动生效。</p>
+        <ExplorerRestart />
+      </div>
+    </div>
+
+    <p v-if="undoNotice" class="banner" :class="undoNotice.ok ? 'banner-ok' : 'banner-warning'" role="status">
+      <span class="notice-text">{{ undoNotice.text }}</span>
+      <button v-if="undoNotice.journal" type="button" class="btn btn-secondary btn-small" @click="goTo('journal')">去修改日志</button>
+    </p>
 
     <p v-if="!catalog" class="loading-line" role="status"><BusySpinner size="small" />正在读取设置列表…</p>
 
-    <section v-for="g in rows" :key="g.id" class="group" :aria-labelledby="`settings-${g.id}`">
-      <h2 :id="`settings-${g.id}`" class="section-title">{{ g.title }}</h2>
-      <ul class="items">
-        <li v-for="{ f, loading, state, error } in g.items" :key="f.id" class="item card">
-          <div class="item-main">
-            <div class="item-head">
-              <h3 class="item-title">{{ f.title }}</h3>
-              <TagPill :tone="recommendTone[f.recommend]">{{ recommendLabel[f.recommend] }}</TagPill>
-              <TagPill v-if="f.subjective" tone="neutral">个人偏好</TagPill>
-            </div>
-            <p class="item-desc">{{ f.description }}</p>
-            <p v-if="!f.applicable" class="item-state small muted">
-              这台电脑用不了：{{ f.notApplicableReason ?? '这台电脑的系统不支持这一项。' }}
-            </p>
-            <template v-else>
-              <p class="item-state small">
-                <span class="muted">当前：</span>
-                <TagPill v-if="state" :tone="featureStateTone[state.state]" dot>{{ featureStateLabel[state.state] }}</TagPill>
-                <span v-else-if="error" class="muted">没检测出来</span>
-                <span v-else class="muted">检测中…</span>
-                <BusySpinner v-if="loading && state" size="small" />
-                <span v-if="f.reboot !== 'none'" class="muted">· 改完{{ rebootLabel[f.reboot] }}</span>
-              </p>
-              <ul v-if="state && showDetails(state)" class="details small muted">
-                <li v-for="(d, i) in state.details" :key="i">{{ d }}</li>
-              </ul>
-              <p v-if="state?.error" class="small muted">{{ state.error }}</p>
-              <p v-if="error" class="small muted">{{ error }}</p>
-            </template>
-          </div>
-          <div v-if="f.applicable" class="item-action">
-            <template v-if="state?.state === 'applied'">
-              <p class="small muted">{{ appliedHint(f.id).text }}</p>
-              <button
-                v-if="appliedHint(f.id).journal"
-                type="button"
-                class="btn btn-secondary btn-small"
-                @click="goTo('journal')"
-              >
-                去修改日志
-              </button>
-            </template>
-            <button v-else type="button" class="btn btn-secondary" @click="previewId = f.id">预览并设置</button>
-          </div>
-        </li>
-      </ul>
-    </section>
+    <div v-else class="layout">
+      <nav class="rail" aria-label="设置分类">
+        <button
+          v-for="c in settingsCategories"
+          :key="c.id"
+          type="button"
+          class="rail-item"
+          :class="{ current: !narrowing && panel === c.id }"
+          :aria-current="!narrowing && panel === c.id ? 'true' : undefined"
+          @click="choosePanel(c.id)"
+        >
+          <span>{{ c.title }}</span>
+          <span class="rail-count">{{ categoryCount(c.id) }}</span>
+        </button>
+        <p class="rail-group">管理</p>
+        <button
+          v-for="m in MANAGERS"
+          :key="m.id"
+          type="button"
+          class="rail-item"
+          :class="{ current: !narrowing && panel === m.id }"
+          :aria-current="!narrowing && panel === m.id ? 'true' : undefined"
+          @click="choosePanel(m.id)"
+        >
+          <span>{{ m.title }}</span>
+        </button>
+      </nav>
 
-    <ContextMenuManager v-if="catalog" />
-    <NewMenuManager v-if="catalog" />
-    <ShellPlacesManager v-if="catalog" />
-    <KeyRemapManager v-if="catalog" />
+      <div class="panel">
+        <template v-if="!narrowing && isManager">
+          <ContextMenuManager v-if="panel === 'context-menu'" />
+          <NewMenuManager v-else-if="panel === 'new-menu'" />
+          <ShellPlacesManager v-else-if="panel === 'shell-places'" />
+          <KeyRemapManager v-else-if="panel === 'key-remap'" />
+        </template>
+
+        <section v-else class="card list-card" aria-labelledby="settings-panel-title">
+          <div class="list-head">
+            <h2 id="settings-panel-title" class="list-title">{{ panelTitle }}</h2>
+            <span class="muted small">{{ panelNote }}</span>
+          </div>
+          <p v-if="shownFeatures.length === 0" class="empty muted" role="status">
+            {{ query.trim() ? '没搜到。换个说法试试。' : '这里没有要列的设置。' }}
+          </p>
+          <ul class="rows">
+            <li
+              v-for="f in shownFeatures"
+              :id="`setting-${f.id}`"
+              :key="f.id"
+              class="row"
+              :class="{ open: expanded.has(f.id) }"
+              tabindex="-1"
+            >
+              <div class="row-line">
+                <div class="row-main">
+                  <p class="row-title">
+                    <span>{{ f.title }}</span>
+                    <TagPill v-if="f.recommend === 'recommended'" tone="info">推荐</TagPill>
+                    <TagPill v-else-if="f.recommend === 'not-recommended'" tone="advice">不推荐</TagPill>
+                    <TagPill v-if="narrowing" tone="neutral">{{ categoryTitle(f.category) }}</TagPill>
+                  </p>
+                  <p class="row-sub one-line">{{ f.description }}</p>
+                  <p v-if="rowInfo(f).note" class="row-sub state-note">{{ rowInfo(f).note }}</p>
+                </div>
+                <span v-if="f.applicable && f.reboot !== 'none'" class="reboot small muted">{{ rebootWhen[f.reboot] }}</span>
+                <template v-if="f.applicable">
+                  <BusySpinner v-if="rowInfo(f).loading" size="small" />
+                  <span v-else class="state-word">{{ rowInfo(f).on ? '开' : '关' }}</span>
+                  <button
+                    type="button"
+                    class="switch"
+                    role="switch"
+                    :aria-checked="rowInfo(f).on"
+                    :aria-label="f.title"
+                    :disabled="rowInfo(f).loading || rowInfo(f).locked || !!rowInfo(f).error"
+                    :title="rowInfo(f).locked ? rowInfo(f).note : undefined"
+                    @click="clickSwitch(f)"
+                  ></button>
+                </template>
+                <button
+                  type="button"
+                  class="expand"
+                  :aria-expanded="expanded.has(f.id)"
+                  :aria-controls="expanded.has(f.id) ? `setting-${f.id}-more` : undefined"
+                  :aria-label="`${expanded.has(f.id) ? '收起' : '展开'}：${f.title}`"
+                  @click="toggleExpand(f.id)"
+                >
+                  <AppIcon :name="expanded.has(f.id) ? 'chevron-up' : 'chevron-down'" :size="16" />
+                </button>
+              </div>
+              <div v-if="expanded.has(f.id)" :id="`setting-${f.id}-more`" class="more">
+                <p class="more-desc">{{ f.description }}</p>
+                <div class="facts">
+                  <div class="fact">
+                    <span class="fact-k">改完</span>
+                    <span>{{ f.reboot === 'none' ? '马上生效' : `${rebootLabel[f.reboot]}，之后生效` }}</span>
+                  </div>
+                  <div class="fact">
+                    <span class="fact-k">能不能撤销</span>
+                    <span v-if="f.reversible">能，在「修改日志」里点「撤销」，或者在这里关掉开关</span>
+                    <span v-else class="danger-text">不能：{{ f.irreversibleReason ?? '改了就退不回去' }}</span>
+                  </div>
+                  <div class="fact">
+                    <span class="fact-k">这一项</span>
+                    <span>{{ f.subjective ? '看个人习惯，不改也没关系' : f.recommend === 'recommended' ? '建议设置' : '可选' }}</span>
+                  </div>
+                </div>
+                <ul v-if="rowInfo(f).details.length && rowInfo(f).state !== 'applied' && rowInfo(f).state !== 'not-applied'" class="details small muted">
+                  <li v-for="(d, i) in rowInfo(f).details" :key="i">{{ d }}</li>
+                </ul>
+                <p v-if="rowInfo(f).error" class="small muted">{{ rowInfo(f).error }}</p>
+                <div v-if="f.applicable && !rowInfo(f).on" class="more-actions">
+                  <button type="button" class="btn btn-primary btn-small" @click="previewId = f.id">预览并设置</button>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </div>
 
     <PreviewDialog v-if="previewId" :feature-id="previewId" @close="previewId = null" @applied="onApplied" />
     <BulkApplyDialog
@@ -258,6 +509,17 @@ function onApplied(r: ApplyResult): void {
       @close="bulkOpen = false"
       @finished="onBulkFinished"
     />
+    <ConfirmDialog
+      v-if="undoTarget"
+      :title="`把「${undoTarget.title}」改回原来的样子？`"
+      confirm-text="改回去"
+      :busy="undoBusy"
+      @confirm="confirmUndo"
+      @close="undoTarget = null"
+    >
+      <p>会恢复成小药箱改之前的样子，和在「修改日志」里点「撤销」一样。</p>
+      <p v-if="undoTarget.reboot !== 'none'" class="muted">改回去以后{{ rebootLabel[undoTarget.reboot] }}才生效。</p>
+    </ConfirmDialog>
   </div>
 </template>
 
@@ -266,66 +528,222 @@ function onApplied(r: ApplyResult): void {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 16px;
+  gap: 12px;
 }
 
-.group {
+.toolbar-search {
+  width: 320px;
+  max-width: 100%;
+}
+
+.explorer {
+  align-items: flex-start;
+}
+
+.explorer-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notice-text {
+  flex: 1;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.rail {
+  position: sticky;
+  top: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 2px;
 }
 
-.items {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  list-style: none;
-}
-
-.item {
+.rail-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-size: var(--text-small);
+  text-align: left;
+  cursor: pointer;
 }
 
-.item-main {
+.rail-item:hover {
+  background: var(--color-surface-2);
+}
+
+.rail-item.current {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-text);
+  font-weight: 600;
+}
+
+.rail-count {
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+}
+
+.rail-item.current .rail-count {
+  color: inherit;
+}
+
+.rail-group {
+  margin: 12px 12px 4px;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.panel {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 16px;
   min-width: 0;
 }
 
-.item-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+.empty {
+  padding: 16px 20px;
 }
 
-.item-title {
-  font-size: var(--text-large);
+.rows {
+  list-style: none;
 }
 
-.item-state {
+.row {
+  border-top: 1px solid var(--color-divider);
+}
+
+.row:first-child {
+  border-top: none;
+}
+
+.row:focus {
+  outline: none;
+}
+
+.row.open {
+  background: var(--color-surface-2);
+}
+
+.row-line {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 2px;
+  gap: 12px;
+  padding: 12px 16px 12px 20px;
+}
+
+.one-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row.open .one-line {
+  display: none;
+}
+
+.state-note {
+  color: var(--tone-info-text);
+}
+
+.reboot {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* 窗口窄时一行放不下：什么时候生效展开以后也写着，这里先不显示，留地方给说明 */
+@media (max-width: 1200px) {
+  .reboot {
+    display: none;
+  }
+}
+
+.state-word {
+  flex: none;
+  width: 1.2em;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  text-align: right;
+}
+
+.expand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.expand:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.more {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 20px 16px;
+}
+
+.more-desc {
+  font-size: var(--text-small);
+  line-height: 1.7;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 1100px) {
+  .facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: var(--text-small);
+}
+
+.fact-k {
+  color: var(--color-text-muted);
+  font-size: 12px;
 }
 
 .details {
   padding-left: 1.3em;
 }
 
-.item-action {
+.more-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  flex: none;
-  max-width: 220px;
-  text-align: right;
+  gap: 10px;
 }
 </style>
