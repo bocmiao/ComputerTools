@@ -6,6 +6,7 @@
 id: browser-hijacked
 schema_version: 1
 title: { zh-CN: 浏览器主页被改了 }
+category: software
 summary:
   zh-CN: 一打开浏览器就是 2345、hao123 之类的导航网站；在浏览器里改回主页，过一会儿又变回去了。
 keywords:

@@ -4,6 +4,7 @@
 id: vt-disabled
 schema_version: 1
 title: { zh-CN: 安卓模拟器、虚拟机要开 VT }
+category: hardware
 summary:
   zh-CN: 雷电、MuMu、BlueStacks 这些安卓模拟器提示「请开启 VT」「虚拟化技术未开启」，或者很卡；WSL 2、虚拟机打不开，报 0x80370102 这类错误。
 keywords:

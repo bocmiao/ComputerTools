@@ -6,6 +6,7 @@
 id: wifi-missing
 schema_version: 1
 title: { zh-CN: WiFi 不见了、飞行模式关不掉 }
+category: network
 summary:
   zh-CN: 任务栏右下角、设置里找不到 WiFi，搜不到任何无线网络，只剩有线网络；或者飞行模式的按钮是灰的、关不掉。
 keywords:

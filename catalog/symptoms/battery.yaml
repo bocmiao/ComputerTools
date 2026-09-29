@@ -6,6 +6,7 @@
 id: battery
 schema_version: 1
 title: { zh-CN: 笔记本电池不耐用、充不进电 }
+category: hardware
 summary:
   zh-CN: 笔记本充满电用不了多久就没电了；或者插着电源，右下角却写着「已接通电源，未充电」，电量充不上去。
 keywords:

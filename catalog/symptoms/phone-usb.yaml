@@ -5,6 +5,7 @@
 id: phone-usb
 schema_version: 1
 title: { zh-CN: 手机连电脑只充电，传不了照片和文件 }
+category: hardware
 summary:
   zh-CN: 手机用数据线插上电脑，只显示在充电，「此电脑」里看不到手机，照片、文件拷不出来。
 keywords:

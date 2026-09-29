@@ -6,6 +6,7 @@
 id: taskbar-broken
 schema_version: 1
 title: { zh-CN: 任务栏卡住、开始菜单打不开、右下角图标不见了 }
+category: desktop
 summary:
   zh-CN: 点开始按钮、按 Win 键没反应，开始菜单、搜索打开是空白的；任务栏卡住点不动、右键没反应；右下角的音量、网络、电池图标或者时间不见了，通知中心打不开。
 keywords:

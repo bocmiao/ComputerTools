@@ -5,6 +5,7 @@
 id: shortcuts-broken
 schema_version: 1
 title: { zh-CN: 右键「管理」、任务栏图标打不开 }
+category: system
 summary:
   zh-CN: 「此电脑」右键点「管理」提示「该文件没有与之关联的应用来执行该操作」；任务栏上固定的图标、Win + X 菜单点了没反应；快捷方式固定不到任务栏和开始菜单。
 keywords:

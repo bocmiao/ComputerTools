@@ -12,6 +12,7 @@
 id: remote-desktop
 schema_version: 1
 title: { zh-CN: 远程桌面连不上 }
+category: network
 summary:
   zh-CN: 用 Windows 自带的「远程桌面连接」连不上别的电脑，或者别的电脑连不进这台电脑；提示「你的凭据不工作」「出现身份验证错误」「CredSSP 加密数据库修正」「无法连接到远程计算机」；不知道远程桌面怎么打开。
 keywords:

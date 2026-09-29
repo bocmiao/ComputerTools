@@ -1,6 +1,7 @@
 id: printer-709
 schema_version: 1
 title: { zh-CN: 连接共享打印机报 0x00000709 }
+category: printer
 summary:
   zh-CN: 这台电脑连接另一台电脑共享的打印机时，显示 0x00000709（也可能是 0x0000007c、0x000006e4）。
 keywords: [打印机709, "0x00000709", 709打印机, 共享打印机连接失败, "0x0000007c", "0x000006e4", 打印机7c, 打印机6e4]

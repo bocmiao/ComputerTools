@@ -11,6 +11,7 @@
 id: blurry-text
 schema_version: 1
 title: { zh-CN: 字发虚、软件界面模糊 }
+category: display
 summary:
   zh-CN: 屏幕上的字看着发虚、有重影、边上带彩边；有的软件整个界面都是糊的，别的软件却很清楚；接了外接显示器、改了缩放以后变糊了。
 keywords:

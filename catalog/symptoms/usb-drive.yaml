@@ -7,6 +7,7 @@
 id: usb-drive
 schema_version: 1
 title: { zh-CN: U 盘插上没反应 }
+category: hardware
 summary:
   zh-CN: U 盘、移动硬盘、读卡器插上电脑以后「此电脑」里看不到，或者能看到却打不开、存不进去（提示「磁盘被写保护」「需要格式化」）。
 keywords:

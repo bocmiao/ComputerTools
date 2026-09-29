@@ -4,6 +4,7 @@
 id: touchpad
 schema_version: 1
 title: { zh-CN: 笔记本触摸板没反应 }
+category: input
 summary:
   zh-CN: 笔记本的触摸板用手指划了没反应，鼠标指针不动，或者一插上鼠标触摸板就不能用了。
 keywords:

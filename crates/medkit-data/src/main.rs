@@ -1,4 +1,6 @@
-//! 数据工具：校验 catalog 和脚本、生成 JSON Schema、打包。贡献者和 CI 都用它。
+//! 数据工具：校验 catalog 和脚本、生成 JSON Schema 和功能清单、打包。贡献者和 CI 都用它。
+
+mod features_doc;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -12,6 +14,7 @@ const USAGE: &str = "\
 用法：
   medkit-data check  [--root <仓库根目录>]               校验 catalog/ 和 scripts/
   medkit-data schema [--check] [--root <仓库根目录>]     生成 schema/*.schema.json；--check 只比较、不写入
+  medkit-data features [--check] [--root <仓库根目录>]   生成 docs/features.md 和 README.md 里的总表；--check 只比较、不写入
   medkit-data bundle --out <文件> [--root <仓库根目录>]  把数据和脚本打包成一个 JSON
 
 不写 --root 时用当前目录。";
@@ -53,6 +56,7 @@ fn main() -> ExitCode {
     let ok = match args.command.as_str() {
         "check" => check(&args.root).is_some(),
         "schema" => schema(&args.root, args.check),
+        "features" => features(&args.root, args.check),
         "bundle" => match &args.out {
             Some(out) => bundle(&args.root, out),
             None => {
@@ -142,24 +146,63 @@ fn schema(root: &Path, check_only: bool) -> bool {
     let mut ok = true;
     for (name, content) in schemas() {
         let path = dir.join(name);
-        // 比较时忽略换行符差异（Windows 上 git 可能转换成 CRLF）
-        let current = std::fs::read_to_string(&path).ok().map(|s| s.replace("\r\n", "\n"));
-        if current.as_deref() == Some(content.as_str()) {
-            continue;
-        }
-        if check_only {
-            eprintln!("schema/{name} 和代码里的类型对不上；运行 cargo run -p medkit-data -- schema 更新");
-            ok = false;
-            continue;
-        }
-        if let Err(e) = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&path, &content)) {
-            eprintln!("写 schema/{name} 失败：{e}");
-            ok = false;
-        } else {
-            eprintln!("已更新 schema/{name}");
-        }
+        ok &= write_or_check(&path, &format!("schema/{name}"), &content, check_only, "schema");
     }
     ok
+}
+
+/// 文件内容和 `content` 一样就不动；不一样时 `check_only` 报错，否则写入。比较时忽略换行符差异（Windows 上 git 可能转换成 CRLF）。
+fn write_or_check(path: &Path, shown: &str, content: &str, check_only: bool, command: &str) -> bool {
+    let current = std::fs::read_to_string(path).ok().map(|s| s.replace("\r\n", "\n"));
+    if current.as_deref() == Some(content) {
+        return true;
+    }
+    if check_only {
+        eprintln!("{shown} 不是最新的；运行 cargo run -p medkit-data -- {command} 更新");
+        return false;
+    }
+    let dir = path.parent().unwrap_or(Path::new("."));
+    if let Err(e) = std::fs::create_dir_all(dir).and_then(|()| std::fs::write(path, content)) {
+        eprintln!("写 {shown} 失败：{e}");
+        false
+    } else {
+        eprintln!("已更新 {shown}");
+        true
+    }
+}
+
+fn features(root: &Path, check_only: bool) -> bool {
+    let Some(b) = check(root) else { return false };
+    let rendered = match features_doc::render(&b.catalog) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{e}");
+            return false;
+        }
+    };
+    let doc_ok = write_or_check(
+        &root.join(features_doc::DOC_PATH),
+        features_doc::DOC_PATH,
+        &rendered.doc,
+        check_only,
+        "features",
+    );
+    let readme_path = root.join(features_doc::README_PATH);
+    let readme = match std::fs::read_to_string(&readme_path) {
+        Ok(s) => s.replace("\r\n", "\n"),
+        Err(e) => {
+            eprintln!("读 {} 失败：{e}", features_doc::README_PATH);
+            return false;
+        }
+    };
+    let readme_ok = match features_doc::update_readme(&readme, &rendered.readme_table) {
+        Ok(new) => write_or_check(&readme_path, features_doc::README_PATH, &new, check_only, "features"),
+        Err(e) => {
+            eprintln!("{e}");
+            false
+        }
+    };
+    doc_ok && readme_ok
 }
 
 fn bundle(root: &Path, out: &Path) -> bool {

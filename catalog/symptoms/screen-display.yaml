@@ -8,6 +8,7 @@
 id: screen-display
 schema_version: 1
 title: { zh-CN: 分辨率不对、屏幕闪、外接显示器没画面 }
+category: display
 summary:
   zh-CN: 分辨率不对或者调不了，字和图标太大太小；接了投影仪、第二个显示器没画面；屏幕闪、突然黑一下；画面倒过来了；调不了亮度。
 keywords:

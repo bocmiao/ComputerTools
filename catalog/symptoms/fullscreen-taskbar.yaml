@@ -4,6 +4,7 @@
 id: fullscreen-taskbar
 schema_version: 1
 title: { zh-CN: 全屏看视频、玩游戏时任务栏不隐藏 }
+category: desktop
 summary:
   zh-CN: 视频、游戏已经全屏了，屏幕最下面的任务栏还在，挡住字幕、进度条和游戏界面。
 keywords:

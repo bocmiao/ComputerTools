@@ -4,6 +4,7 @@
 id: wakes-up
 schema_version: 1
 title: { zh-CN: 电脑自己开机、睡着了又自己醒 }
+category: system
 summary:
   zh-CN: 电脑睡着了没多久又自己亮了，半夜自己开机，或者关机以后过一会儿又自己启动了。
 keywords:

@@ -4,6 +4,7 @@
 id: wmi-broken
 schema_version: 1
 title: { zh-CN: 软件报 WMI 错误、「系统信息」打不开 }
+category: system
 summary:
   zh-CN: 装软件、玩游戏、打开「系统信息」时报「WMI 错误」「无效类」「无法连接到 WMI」，错误代码 0x80041010、0x80041002；或者任务管理器里「WMI Provider Host」一直占着处理器。
 keywords:

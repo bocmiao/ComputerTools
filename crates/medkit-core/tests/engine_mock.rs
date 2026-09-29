@@ -277,6 +277,7 @@ const SYMPTOMS: &[&str] = &[r#"
 id: disk-full
 schema_version: 1
 title: { zh-CN: C 盘满了 }
+category: files
 keywords: [ C盘红了 ]
 maturity: one-click
 steps:

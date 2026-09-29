@@ -6,6 +6,7 @@
 id: no-internet-icon
 schema_version: 1
 title: { zh-CN: 显示「无 Internet」，其实能上网 }
+category: network
 summary:
   zh-CN: 任务栏右下角的网络图标变成小地球或者带黄色感叹号，说「无 Internet」「无网络访问」，可网页明明能打开；Office、应用商店、微软账户也说没联网。
 keywords:

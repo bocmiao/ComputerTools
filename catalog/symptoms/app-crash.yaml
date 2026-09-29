@@ -4,6 +4,7 @@
 id: app-crash
 schema_version: 1
 title: { zh-CN: 软件、游戏闪退、卡死 }
+category: software
 summary:
   zh-CN: 软件、游戏用着用着就退回桌面，弹出「已停止工作」，或者窗口卡住、标题上写着「未响应」。
 keywords:

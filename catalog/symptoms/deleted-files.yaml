@@ -7,6 +7,7 @@
 id: deleted-files
 schema_version: 1
 title: { zh-CN: 误删了文件，怎么找回来 }
+category: files
 summary:
   zh-CN: 文件不小心删了、清空了回收站、按 Shift + Delete 删的，或者 U 盘、存储卡上的文件删了，想找回来。
 keywords:

@@ -6,6 +6,7 @@
 id: black-screen
 schema_version: 1
 title: { zh-CN: 开机黑屏，只有鼠标 }
+category: system
 summary:
   zh-CN: 开机、登录以后屏幕一直是黑的，只有一个鼠标箭头能动，没有桌面图标和任务栏；或者桌面、任务栏时有时无，一会儿就消失。
 keywords:

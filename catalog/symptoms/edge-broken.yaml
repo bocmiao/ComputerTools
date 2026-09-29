@@ -7,6 +7,7 @@
 id: edge-broken
 schema_version: 1
 title: { zh-CN: Edge 浏览器打不开、闪退、网页崩溃 }
+category: software
 summary:
   zh-CN: 点了 Edge 没反应、一打开就闪退；网页一打开就显示「此页面存在问题」，错误代码是 STATUS_ACCESS_VIOLATION、STATUS_INVALID_IMAGE_HASH、Out of Memory 这些。
 keywords:

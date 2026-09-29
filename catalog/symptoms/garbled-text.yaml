@@ -4,6 +4,7 @@
 id: garbled-text
 schema_version: 1
 title: { zh-CN: 软件、文件名显示乱码 }
+category: system
 summary:
   zh-CN: 软件的界面和菜单、解压出来的文件名、老游戏里的中文变成「锟斤拷」「娴嬭瘯」这样的乱码，或者变成问号、方框。
 keywords:

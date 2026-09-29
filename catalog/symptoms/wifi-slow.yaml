@@ -6,6 +6,7 @@
 id: wifi-slow
 schema_version: 1
 title: { zh-CN: WiFi 信号差、网速慢 }
+category: network
 summary:
   zh-CN: WiFi 只有一两格信号，网页打开慢、视频卡、下载慢；离路由器远一点就不行；Windows 提示这个 WiFi「不安全」「使用较旧的安全标准」。
 keywords:

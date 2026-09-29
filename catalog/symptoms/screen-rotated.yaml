@@ -3,6 +3,7 @@
 id: screen-rotated
 schema_version: 1
 title: { zh-CN: 屏幕倒过来了、横过来了 }
+category: display
 summary:
   zh-CN: 画面上下颠倒了，或者转了 90 度变成竖着的，鼠标也跟着反了方向。
 keywords:

@@ -5,6 +5,7 @@
 id: update-failed
 schema_version: 1
 title: { zh-CN: 系统更新失败、卡住 }
+category: system
 summary:
   zh-CN: Windows 更新装不上、报错代码，一直卡在「正在下载」「正在安装」，或者更新被关掉了、打不开。
 keywords:

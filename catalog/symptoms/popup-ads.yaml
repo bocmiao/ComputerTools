@@ -5,6 +5,7 @@
 id: popup-ads
 schema_version: 1
 title: { zh-CN: 电脑老弹广告、弹窗 }
+category: software
 summary:
   zh-CN: 右下角、屏幕中间时不时弹出广告、资讯、「今日热点」，开机就弹网页，锁屏和开始菜单里也有推广。
 keywords:

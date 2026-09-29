@@ -4,6 +4,7 @@
 id: bluescreen
 schema_version: 1
 title: { zh-CN: 电脑蓝屏、自己重启 }
+category: system
 summary:
   zh-CN: 突然蓝屏，屏幕上写着「你的设备遇到问题，需要重启」；或者没有蓝屏，电脑自己重启、自己关机了。
 keywords:

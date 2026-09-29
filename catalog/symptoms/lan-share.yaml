@@ -7,6 +7,7 @@
 id: lan-share
 schema_version: 1
 title: { zh-CN: 共享文件夹打不开、看不到别的电脑 }
+category: network
 summary:
   zh-CN: 打开别的电脑、NAS、路由器上的共享文件夹时提示「找不到网络路径」（0x80070035）、「未指定的错误」（0x80004005）、「你不能访问此共享文件夹」；或者「网络」里看不到别的电脑，别人也看不到这台。
 keywords:

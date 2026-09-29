@@ -1,6 +1,7 @@
 id: printer-11b
 schema_version: 1
 title: { zh-CN: 共享打印机报 0x0000011b }
+category: printer
 summary:
   zh-CN: 别的电脑连接这台电脑共享的打印机时报 0x0000011b。
 keywords: [打印机11b, "0x0000011b", 11b打印机, 打印机共享失败]

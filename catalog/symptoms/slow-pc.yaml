@@ -5,6 +5,7 @@
 id: slow-pc
 schema_version: 1
 title: { zh-CN: 电脑卡、风扇狂转 }
+category: system
 summary:
   zh-CN: 点什么都要等半天，打字、翻网页一顿一顿的，风扇呼呼转，机身发烫。
 keywords:

@@ -5,6 +5,7 @@
 id: input-method
 schema_version: 1
 title: { zh-CN: 输入法不见了、打不出中文 }
+category: input
 summary:
   zh-CN: 右下角的输入法图标不见了，切换不出中文，只能打英文，打出来都是繁体字，或者输入法的候选框卡住不动。
 keywords:

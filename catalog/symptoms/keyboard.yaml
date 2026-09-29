@@ -6,6 +6,7 @@
 id: keyboard
 schema_version: 1
 title: { zh-CN: 键盘按了没反应 }
+category: input
 summary:
   zh-CN: 键盘打不了字、按键要按住很久才出字、字母莫名变成大写，或者右边的数字键按了不出数字。
 keywords:

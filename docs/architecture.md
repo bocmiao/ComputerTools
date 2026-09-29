@@ -290,6 +290,9 @@ verify:  disk.hiberfile                                         # 能不能执�
 id: network
 schema_version: 1
 title: { zh-CN: 上不了网 }
+category: network            # 分类：network（上网和共享）、system（开机和系统）、software（软件和浏览器）、files（文件和 C 盘）、
+                             # printer（打印机）、display（屏幕和显卡）、desktop（桌面、任务栏和开始菜单）、input（键盘、鼠标和输入法）、
+                             # hardware（声音、蓝牙、U 盘和其他设备）；功能清单 docs/features.md 按它分组
 summary: { zh-CN: 网页打不开、微信能用但浏览器不行、Wi-Fi 连上了却没网。 }
 keywords: [没网, 断网, wifi连不上, 网页打不开, 微信能用网页打不开]
 causes:

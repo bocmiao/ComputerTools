@@ -14,6 +14,7 @@
 id: network
 schema_version: 1
 title: { zh-CN: 上不了网 }
+category: network
 summary:
   zh-CN: 网页打不开、微信能用但浏览器不行、Wi-Fi 连上了却没网。
 keywords:

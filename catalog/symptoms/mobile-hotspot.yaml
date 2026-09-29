@@ -4,6 +4,7 @@
 id: mobile-hotspot
 schema_version: 1
 title: { zh-CN: 电脑开不了移动热点，手机连不上 }
+category: network
 summary:
   zh-CN: 想让电脑开个热点给手机用，打开「移动热点」提示「我们无法设置移动热点」；或者开了以后手机搜不到、连上了却上不了网。
 keywords:

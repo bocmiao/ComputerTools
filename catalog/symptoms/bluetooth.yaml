@@ -5,6 +5,7 @@
 id: bluetooth
 schema_version: 1
 title: { zh-CN: 蓝牙用不了、连不上蓝牙耳机 }
+category: hardware
 summary:
   zh-CN: 设置里找不到蓝牙开关，搜不到蓝牙耳机、鼠标、键盘，或者连上了没声音、麦克风用不了、老是断开。
 keywords:

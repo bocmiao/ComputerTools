@@ -9,6 +9,7 @@
 id: office-broken
 schema_version: 1
 title: { zh-CN: Word、Excel 打不开、闪退、装不上 }
+category: software
 summary:
   zh-CN: Word、Excel、PPT 打不开，一打开就闪退、报错；Office 装不上、装到最后报错误代码；卸不掉、卸不干净；标题栏显示「未经授权的产品」。
 keywords:

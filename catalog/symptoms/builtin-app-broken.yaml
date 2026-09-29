@@ -6,6 +6,7 @@
 id: builtin-app-broken
 schema_version: 1
 title: { zh-CN: 照片、计算器这些自带的应用打不开 }
+category: software
 summary:
   zh-CN: Windows 自带的照片、计算器、截图工具、相机、媒体播放器这些应用，点了没反应、一打开就闪退，或者一直停在启动画面上转圈。
 keywords:

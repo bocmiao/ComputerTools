@@ -4,6 +4,7 @@
 id: screen-colors
 schema_version: 1
 title: { zh-CN: 屏幕突然变成黑白、颜色不对 }
+category: display
 summary:
   zh-CN: 屏幕突然变成黑白（灰色）、颜色像底片一样反了、窗口变成黑底亮色的字，或者整个屏幕发黄、发红、偏色。
 keywords:

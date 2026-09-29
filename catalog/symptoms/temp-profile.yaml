@@ -4,6 +4,7 @@
 id: temp-profile
 schema_version: 1
 title: { zh-CN: 提示「你已使用临时配置文件登录」，桌面和文件全没了 }
+category: system
 summary:
   zh-CN: 开机登录以后右下角提示「你已使用临时配置文件登录。你无法访问你的文件，并且在此配置文件中创建的文件将在你注销时删除」，桌面、文档、浏览器收藏都空了，像是个新账户。
 keywords:

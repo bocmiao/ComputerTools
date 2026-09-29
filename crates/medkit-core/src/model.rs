@@ -349,6 +349,59 @@ pub struct ServiceAction {
     pub start_type: StartType,
 }
 
+/// 症状归哪一类（功能清单 docs/features.md 按它分组）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum SymptomCategory {
+    /// 上网和共享
+    Network,
+    /// 开机和系统
+    System,
+    /// 软件和浏览器
+    Software,
+    /// 文件和 C 盘
+    Files,
+    /// 打印机
+    Printer,
+    /// 屏幕和显卡
+    Display,
+    /// 桌面、任务栏和开始菜单
+    Desktop,
+    /// 键盘、鼠标和输入法
+    Input,
+    /// 声音、蓝牙、U 盘和其他设备
+    Hardware,
+}
+
+impl SymptomCategory {
+    /// 按这个顺序分组
+    pub const ALL: [Self; 9] = [
+        Self::Network,
+        Self::System,
+        Self::Software,
+        Self::Files,
+        Self::Printer,
+        Self::Display,
+        Self::Desktop,
+        Self::Input,
+        Self::Hardware,
+    ];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Network => "上网和共享",
+            Self::System => "开机和系统",
+            Self::Software => "软件和浏览器",
+            Self::Files => "文件和 C 盘",
+            Self::Printer => "打印机",
+            Self::Display => "屏幕和显卡",
+            Self::Desktop => "桌面、任务栏和开始菜单",
+            Self::Input => "键盘、鼠标和输入法",
+            Self::Hardware => "声音、蓝牙、U 盘和其他设备",
+        }
+    }
+}
+
 /// 症状诊断树。
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -356,6 +409,8 @@ pub struct Symptom {
     pub id: String,
     pub schema_version: u32,
     pub title: Text,
+    /// 归哪一类：network、system、software、files、printer、display、desktop、input、hardware
+    pub category: SymptomCategory,
     #[serde(default)]
     pub summary: Option<Text>,
     #[serde(default)]

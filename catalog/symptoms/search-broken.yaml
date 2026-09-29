@@ -5,6 +5,7 @@
 id: search-broken
 schema_version: 1
 title: { zh-CN: 搜不到文件 }
+category: files
 summary:
   zh-CN: 在开始菜单或者资源管理器里搜索，半天出不来结果，或者明明有的文件搜不到。
 keywords:

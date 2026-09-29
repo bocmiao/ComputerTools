@@ -5,6 +5,7 @@
 id: screen-goes-dark
 schema_version: 1
 title: { zh-CN: 电脑一会儿不动就黑屏、睡着了 }
+category: system
 summary:
   zh-CN: 看文档、看网课时，一会儿不动屏幕就黑了，或者电脑睡着了、要重新输密码；笔记本接着显示器合上盖子，电脑就停了。
 keywords:

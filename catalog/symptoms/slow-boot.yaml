@@ -5,6 +5,7 @@
 id: slow-boot
 schema_version: 1
 title: { zh-CN: 开机慢 }
+category: system
 summary:
   zh-CN: 开机要等好几分钟，进了桌面还卡半天，点什么都没反应。
 keywords:

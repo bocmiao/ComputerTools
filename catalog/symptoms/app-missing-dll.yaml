@@ -11,6 +11,7 @@
 id: app-missing-dll
 schema_version: 1
 title: { zh-CN: 软件打不开，提示缺少 dll }
+category: software
 summary:
   zh-CN: 打开软件、游戏时弹出「找不到 VCRUNTIME140.dll」「丢失 MSVCP140.dll」「应用程序无法正常启动(0xc000007b)」「应用程序的并行配置不正确」，或者提示要装 .NET Framework。
 keywords:

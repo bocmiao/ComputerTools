@@ -4,6 +4,7 @@
 id: update-restarts
 schema_version: 1
 title: { zh-CN: 装了更新以后出问题、老是自己重启更新 }
+category: system
 summary:
   zh-CN: 装完 Windows 更新以后电脑变卡、打印机用不了、蓝屏、软件打不开；或者 Windows 老在你用电脑的时候自己重启装更新。
 keywords:

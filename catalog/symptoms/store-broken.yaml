@@ -4,6 +4,7 @@
 id: store-broken
 schema_version: 1
 title: { zh-CN: 应用商店打不开、下载不了 }
+category: software
 summary:
   zh-CN: Microsoft Store（应用商店）打不开、一直转圈、页面空白，或者下载安装应用时卡住、报错（0x80131500、0x80072EFD、0x80072F8F、0x80070422 这类）。
 keywords:

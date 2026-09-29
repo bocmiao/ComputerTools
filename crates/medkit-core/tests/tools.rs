@@ -246,7 +246,7 @@ fn tool_scripts_and_links_must_exist() {
 fn symptom_links_must_exist() {
     let symptom = |links: &[&str], guide: bool| -> Symptom {
         let mut yaml = String::from(
-            "id: test-screen\nschema_version: 1\ntitle: { zh-CN: 测试 }\nkeywords: [测试]\nmaturity: semi\n\
+            "id: test-screen\nschema_version: 1\ntitle: { zh-CN: 测试 }\ncategory: display\nkeywords: [测试]\nmaturity: semi\n\
              steps:\n  - check: disk.free-space\n",
         );
         if guide {

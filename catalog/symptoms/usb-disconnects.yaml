@@ -5,6 +5,7 @@
 id: usb-disconnects
 schema_version: 1
 title: { zh-CN: 鼠标卡顿、USB 设备老断开 }
+category: hardware
 summary:
   zh-CN: 鼠标一顿一顿、偶尔不动，键盘偶尔没反应；U 盘、移动硬盘、USB 网卡用着用着就断开，还会听到「叮咚」的插拔声。
 keywords:

@@ -26,6 +26,7 @@
 
 ```sh
 cargo run -p medkit-data -- check      # 校验 catalog、检查脚本
+cargo run -p medkit-data -- features   # 更新功能清单（加了检测、症状、功能、小工具以后）
 cargo test                             # 引擎测试
 pnpm install && pnpm --dir app build   # 界面能构建
 ```

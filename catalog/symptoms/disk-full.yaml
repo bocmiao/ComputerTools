@@ -8,6 +8,7 @@
 id: disk-full
 schema_version: 1
 title: { zh-CN: C 盘满了 }
+category: files
 summary:
   zh-CN: C 盘变红、提示磁盘空间不足、系统更新装不上、软件打不开。
 keywords:

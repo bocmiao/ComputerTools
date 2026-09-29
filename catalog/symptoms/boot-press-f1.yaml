@@ -5,6 +5,7 @@
 id: boot-press-f1
 schema_version: 1
 title: { zh-CN: 开机要按 F1 才能进系统 }
+category: system
 summary:
   zh-CN: 开机时黑屏上出现一行英文，比如「CMOS checksum error」「CPU Fan Error!」「Press F1 to continue」，每次都要按 F1 才能进 Windows，有的时间也老是不对。
 keywords:

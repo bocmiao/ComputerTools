@@ -4,6 +4,10 @@
   "description": "症状诊断树。",
   "type": "object",
   "properties": {
+    "category": {
+      "description": "归哪一类：network、system、software、files、printer、display、desktop、input、hardware",
+      "$ref": "#/$defs/SymptomCategory"
+    },
     "causes": {
       "type": "array",
       "default": [],
@@ -75,6 +79,7 @@
     "id",
     "schema_version",
     "title",
+    "category",
     "maturity"
   ],
   "$defs": {
@@ -141,6 +146,56 @@
       "additionalProperties": false,
       "required": [
         "check"
+      ]
+    },
+    "SymptomCategory": {
+      "description": "症状归哪一类（功能清单 docs/features.md 按它分组）。",
+      "oneOf": [
+        {
+          "description": "上网和共享",
+          "type": "string",
+          "const": "network"
+        },
+        {
+          "description": "开机和系统",
+          "type": "string",
+          "const": "system"
+        },
+        {
+          "description": "软件和浏览器",
+          "type": "string",
+          "const": "software"
+        },
+        {
+          "description": "文件和 C 盘",
+          "type": "string",
+          "const": "files"
+        },
+        {
+          "description": "打印机",
+          "type": "string",
+          "const": "printer"
+        },
+        {
+          "description": "屏幕和显卡",
+          "type": "string",
+          "const": "display"
+        },
+        {
+          "description": "桌面、任务栏和开始菜单",
+          "type": "string",
+          "const": "desktop"
+        },
+        {
+          "description": "键盘、鼠标和输入法",
+          "type": "string",
+          "const": "input"
+        },
+        {
+          "description": "声音、蓝牙、U 盘和其他设备",
+          "type": "string",
+          "const": "hardware"
+        }
       ]
     },
     "Text": {

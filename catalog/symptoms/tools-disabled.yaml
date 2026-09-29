@@ -5,6 +5,7 @@
 id: tools-disabled
 schema_version: 1
 title: { zh-CN: 任务管理器、注册表打不开，提示被管理员停用 }
+category: system
 summary:
   zh-CN: 按 Ctrl + Shift + Esc 打不开任务管理器，打开注册表编辑器、命令提示符时提示「已被系统管理员停用」；或者开始菜单里的「运行」、控制面板、右键菜单、关机按钮不见了，杀毒软件也打不开。
 keywords:

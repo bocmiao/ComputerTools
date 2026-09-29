@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    # 推送 v 开头的标签（比如 v0.0.1）时，全部通过以后自动发布预览版（最后的 release 作业）
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -46,6 +48,9 @@ jobs:
 
       - name: JSON Schema 是最新的
         run: cargo run -q -p medkit-data -- schema --check
+
+      - name: 功能清单是最新的（docs/features.md、README 里的总表）
+        run: cargo run -q -p medkit-data -- features --check
 
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
@@ -203,3 +208,66 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
+
+  release:
+    name: 发布预览版
+    # 只在推送 v 开头的标签时运行，上面的作业全部通过才发布
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows-test, windows-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: 下载这次构建的安装包和便携版
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name medkit-windows-x64 --dir dist
+
+      - name: 发布到 Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PUBLIC: ${{ github.event.repository.visibility == 'public' }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          setup=(dist/*_"${version}"_x64-setup.exe)
+          if [ ! -f "${setup[0]}" ]; then
+            echo "::error::标签 $TAG 和程序的版本号对不上（Cargo.toml 的 workspace.package.version）：$(ls dist | tr '\n' ' ')"
+            exit 1
+          fi
+          mkdir release
+          # 附件名用英文：GitHub 会改掉附件名里的中文这类特殊字符
+          cp "${setup[0]}" "release/medkit-${version}-x64-setup.exe"
+          cp dist/medkit-portable.exe "release/medkit-${version}-x64-portable.exe"
+          (cd release && sha256sum -- *.exe > SHA256SUMS.txt)
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          {
+            echo "电脑小药箱的预览版，只供测试：诊断和修复还在真机上验证，建议先在虚拟机或者不要紧的电脑上试。"
+            echo
+            echo "**下载哪个**"
+            echo
+            echo "- \`medkit-${version}-x64-setup.exe\`：安装版，装好以后在开始菜单里打开；电脑上没有 WebView2 运行时的，安装时会联网装上。"
+            echo "- \`medkit-${version}-x64-portable.exe\`：便携版，不用安装，双击直接运行，可以放在 U 盘里带着走；要用电脑上已有的 WebView2 运行时（Windows 11 自带，大多数 Windows 10 也有）。"
+            echo
+            echo "**打开之前**"
+            echo
+            echo "- 要求 64 位的 Windows 10 或 Windows 11；小药箱启动时会请求管理员权限。"
+            echo "- 还没有代码签名，Windows 会提示「Windows 已保护你的电脑」：点「更多信息」→「仍要运行」。"
+            echo "- 改设置之前都会先预览，改完能在「修改日志」里撤销；不能撤销的会事先说明。"
+            echo
+            echo "**核对文件**"
+            echo
+            echo "- \`SHA256SUMS.txt\` 里是两个文件的 SHA-256。"
+            echo "- 由 GitHub Actions 从提交 \`${GITHUB_SHA}\` 构建，所有检查都通过了：[构建记录](${run_url})。"
+            if [ "$PUBLIC" = "true" ]; then
+              echo "- 可以用 \`gh attestation verify <文件> --repo ${GITHUB_REPOSITORY}\` 核对构建来源证明。"
+            fi
+            echo
+            echo "能做什么见[功能清单](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${TAG}/docs/features.md)。"
+          } > notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+            --title "电脑小药箱 ${TAG}（预览版）" --notes-file notes.md \
+            release/*.exe release/SHA256SUMS.txt

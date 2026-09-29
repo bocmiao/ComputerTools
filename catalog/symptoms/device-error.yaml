@@ -5,6 +5,7 @@
 id: device-error
 schema_version: 1
 title: { zh-CN: 设备用不了、设备管理器里有黄色感叹号 }
+category: hardware
 summary:
   zh-CN: 某个设备（网卡、声卡、显卡、摄像头、USB 设备……）用不了，设备管理器里它上面有黄色感叹号，属性里写着「代码 10」「代码 43」「代码 28」这类提示。
 keywords:

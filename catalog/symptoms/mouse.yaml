@@ -6,6 +6,7 @@
 id: mouse
 schema_version: 1
 title: { zh-CN: 鼠标不听使唤：左右键反了、单击变双击、指针乱跳 }
+category: input
 summary:
   zh-CN: 鼠标左右键反了；点一下变成两下、双击打不开；拖东西松开了还粘着；指针乱跳、太快太慢、后面拖着影子；滚轮不滚；或者鼠标完全没反应。
 keywords:

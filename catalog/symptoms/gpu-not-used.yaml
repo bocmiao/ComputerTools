@@ -8,6 +8,7 @@
 id: gpu-not-used
 schema_version: 1
 title: { zh-CN: 玩游戏卡，没用上独立显卡 }
+category: display
 summary:
   zh-CN: 明明有独立显卡，玩游戏还是卡、帧数低；任务管理器里游戏用的是集成显卡；或者打开 NVIDIA 控制面板，提示「您当前未使用连接到 NVIDIA GPU 的显示器」。
 keywords:

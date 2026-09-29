@@ -4,6 +4,7 @@
 id: file-in-use
 schema_version: 1
 title: { zh-CN: 删不掉、改不了名：提示「文件已在另一程序中打开」 }
+category: files
 summary:
   zh-CN: 删除、重命名、移动文件或文件夹时提示「操作无法完成，因为文件已在另一程序中打开」「文件夹正在使用」，或者「进程无法访问此文件，因为另一个程序正在使用此文件」。
 keywords:

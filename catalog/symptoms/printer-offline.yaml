@@ -4,6 +4,7 @@
 id: printer-offline
 schema_version: 1
 title: { zh-CN: 打印机显示脱机 }
+category: printer
 summary:
   zh-CN: 打印机图标上写着「脱机」「脱机使用打印机」或者「已暂停」，点打印没反应，文档一直排在队列里。
 keywords:

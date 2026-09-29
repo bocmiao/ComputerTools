@@ -4,6 +4,7 @@
 id: no-sound
 schema_version: 1
 title: { zh-CN: 电脑没声音 }
+category: hardware
 summary:
   zh-CN: 放视频、听歌没有声音，喇叭图标上有红叉，或者只有某个软件没声音。
 keywords:

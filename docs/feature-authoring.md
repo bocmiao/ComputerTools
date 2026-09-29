@@ -212,6 +212,7 @@ else {
 id: disk-full
 schema_version: 1
 title: { zh-CN: C 盘满了 }
+category: files
 summary: { zh-CN: C 盘变红、提示空间不足、更新装不上。 }
 keywords: [ C盘红了, C盘满了, 空间不足, 磁盘已满 ]
 causes:
@@ -224,6 +225,7 @@ steps:
     fixes: [ disk.reduce-hiberfile ]
 ```
 
+- `category`：归哪一类，功能清单按它分组，可选的值见[架构文档第 6 节](architecture.md#6-症状catalogsymptomsyaml)。
 - `keywords` 写用户会怎么说，搜索主要靠它。多问问身边不懂电脑的人。
 - `maturity`：`one-click`（能一键修）、`semi`（部分要用户动手）、`guide`（只有图文指引，这时必须写 `guide`）。
 - `stop_on`：这一步的结论在列表里时，就不再往下查。
@@ -276,6 +278,7 @@ $sections.Add([ordered]@{ id = 'disk'; name = $friendlyName; rows = $rows.ToArra
 
 ```sh
 cargo run -p medkit-data -- check     # 格式、引用、黑名单、脚本检查
+cargo run -p medkit-data -- features  # 更新功能清单（docs/features.md 和 README 里的总表）
 cargo test                            # 引擎测试（任何系统都能跑）
 ```
 
@@ -303,4 +306,5 @@ CI 会在 Windows 上跑同样的测试。CI 的 Windows 机器是服务器版�
 - [ ] 修复能撤销；不能撤销的写了 `irreversible_reason`。
 - [ ] 界面文字是写给普通人看的，没有术语堆砌，也没有吓唬人的说法。
 - [ ] `cargo run -p medkit-data -- check` 通过。
+- [ ] 加了检测、症状、功能、小工具的，运行过 `cargo run -p medkit-data -- features`，功能清单跟着更新了。
 - [ ] 提交带了 `Signed-off-by`（`git commit -s`）。

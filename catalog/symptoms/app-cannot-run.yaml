@@ -5,6 +5,7 @@
 id: app-cannot-run
 schema_version: 1
 title: { zh-CN: 双击程序提示「此应用无法在你的电脑上运行」 }
+category: software
 summary:
   zh-CN: 打开刚下载的软件、安装包时弹出「此应用无法在你的电脑上运行。若要找到适用于你的电脑的版本，请咨询软件发布者」，或者「不是有效的 Win32 应用程序」「不支持的 16 位应用程序」。
 keywords:

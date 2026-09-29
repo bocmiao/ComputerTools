@@ -7,6 +7,7 @@
 id: hotkeys
 schema_version: 1
 title: { zh-CN: 快捷键没反应：截图键、Ctrl / Alt 组合键、F1～F12 }
+category: input
 summary:
   zh-CN: 在某个软件里按快捷键没反应，或者弹出来的是别的软件（按 Ctrl + Alt + A 打开的是 QQ 截图）；按 Print Screen 截不了图；F1～F12 变成了调音量、调亮度；Win 键、Ctrl + C / Ctrl + V 不好使。
 keywords:

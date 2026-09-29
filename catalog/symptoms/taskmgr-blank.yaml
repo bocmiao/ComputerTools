@@ -4,6 +4,7 @@
 id: taskmgr-blank
 schema_version: 1
 title: { zh-CN: 任务管理器「性能」页空白、CPU 一直 0% }
+category: system
 summary:
   zh-CN: 任务管理器的「性能」页没有图表，CPU、磁盘一直显示 0%；资源监视器打不开，性能监视器里没有数据。
 keywords:

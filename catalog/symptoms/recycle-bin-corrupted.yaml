@@ -5,6 +5,7 @@
 id: recycle-bin-corrupted
 schema_version: 1
 title: { zh-CN: 提示「回收站已损坏」 }
+category: files
 summary:
   zh-CN: 删文件、打开回收站或者开机时弹出「C:\ 上的回收站已损坏。是否清空该驱动器上的回收站?」，点了「是」还是一再弹出来；或者回收站打不开、清空不了。
 keywords:

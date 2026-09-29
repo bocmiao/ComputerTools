@@ -3,6 +3,7 @@
 id: jfif-images
 schema_version: 1
 title: { zh-CN: 保存的图片变成了 .jfif，上传不了 }
+category: files
 summary:
   zh-CN: 在浏览器里「图片另存为」、下载的照片，文件名后面是 .jfif 不是 .jpg，传到网站、发给别的软件时提示格式不对、打不开。
 keywords:
