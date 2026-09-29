@@ -119,7 +119,7 @@ pnpm tauri dev                          # Windows 上真实运行：要在「以
 pnpm tauri build                        # Windows 上：生成安装包
 ```
 
-每次推送到 `main`，CI 都会在 Windows 上构建安装包和便携版：在 [Actions](https://github.com/bocmiao/ComputerTools/actions/workflows/ci.yml) 页面打开最新一次运行，下载 `medkit-windows-x64`（未签名，只供测试）。推送 `v` 开头的标签（比如 `v0.0.1`）时，所有检查都通过以后会自动发布到 Releases（预览版）。
+每次推送到 `main`，CI 都会在 Windows 上构建安装包和便携版：在 [Actions](https://github.com/bocmiao/ComputerTools/actions/workflows/ci.yml) 页面打开最新一次运行，下载 `medkit-windows-x64`（未签名，只供测试）。推送 `v` 开头的标签（比如 `v0.0.1`），或者在 Releases 页面新建版本时填一个新的 `v` 标签，所有检查都通过以后安装包、便携版和校验值会自动发布到这个版本下面。
 
 目录结构：
 

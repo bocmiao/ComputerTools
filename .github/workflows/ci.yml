@@ -211,7 +211,7 @@ jobs:
 
   release:
     name: 发布预览版
-    # 只在推送 v 开头的标签时运行，上面的作业全部通过才发布
+    # 只在推送 v 开头的标签时运行（在 Releases 页面新建版本、填一个新的 v 标签也算），上面的作业全部通过才发布
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [linux, windows-test, windows-build]
     runs-on: ubuntu-latest
@@ -268,6 +268,15 @@ jobs:
             echo
             echo "能做什么见[功能清单](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${TAG}/docs/features.md)。"
           } > notes.md
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
-            --title "电脑小药箱 ${TAG}（预览版）" --notes-file notes.md \
-            release/*.exe release/SHA256SUMS.txt
+          files=(release/*.exe release/SHA256SUMS.txt)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # 已经在 Releases 页面上建好了这个版本（新建版本时填了新标签，标签也会触发这里）：只把文件传上去；
+            # 说明是空的才填上，写了的不动
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+            if [ -z "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body)" ]; then
+              gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+            fi
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+              --title "电脑小药箱 ${TAG}（预览版）" --notes-file notes.md "${files[@]}"
+          fi
